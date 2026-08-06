@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/alalapi-0/manga-localizer/security/advisories/new
+    about: Report security issues privately. Do not attach private manga pages or credentials.

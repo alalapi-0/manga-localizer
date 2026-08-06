@@ -1,0 +1,45 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "manga-localizer-backend"
+version = "0.2.0"
+description = "Local-first manga localization API"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "numpy>=2.2,<3",
+  "opencv-python-headless>=4.11,<5",
+  "pillow>=11.2,<13",
+  "pydantic-settings>=2.9,<3",
+  "python-multipart>=0.0.20,<1",
+  "sqlalchemy>=2.0.41,<3",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+  "pytest-asyncio>=0.26,<2",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+manga-localizer-api = "manga_localizer.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/manga_localizer"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+ignore = ["B008"]

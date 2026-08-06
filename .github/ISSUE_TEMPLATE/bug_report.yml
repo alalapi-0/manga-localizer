@@ -1,0 +1,50 @@
+name: Bug report
+description: Report reproducible incorrect behavior using copyright-safe fixtures.
+title: "[Bug]: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not attach commercial manga, API keys, project databases, or unredacted logs.
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: v0.2.0 or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows, Linux, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and steps to reproduce
+      description: Prefer the repository's generated test image.
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Sanitized capability/error details
+      description: Remove absolute paths, filenames, recognized text, and secrets.
+  - type: checkboxes
+    id: safety
+    attributes:
+      label: Safety confirmation
+      options:
+        - label: I removed credentials and private paths.
+          required: true
+        - label: I have permission to redistribute every attached image.
+          required: true
+

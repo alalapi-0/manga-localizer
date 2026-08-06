@@ -1,0 +1,1439 @@
+import { create } from 'zustand';
+
+import { ApiError, api } from '../api/client';
+import type {
+  AppCapabilities,
+  CanvasMode,
+  CanvasTool,
+  ExportOptions,
+  ImageAsset,
+  Job,
+  JobKind,
+  Project,
+  ProjectSettings,
+  ProjectSummary,
+  Region,
+  RightPanelTab,
+  StageState,
+  Theme,
+} from '../types';
+import {
+  DEFAULT_PROJECT_SETTINGS,
+  DEFAULT_REGION_STYLE,
+  DEFAULT_REPAIR_SETTINGS,
+  EMPTY_PIPELINE_STATUS,
+} from '../types';
+
+type LoadState = 'idle' | 'loading' | 'ready' | 'error';
+
+interface HistoryFrame {
+  regionsByImage: Record<string, Region[]>;
+}
+
+interface RegionMutation {
+  mutationId: string;
+  kind: 'create' | 'update' | 'delete';
+  imageId: string;
+  region: Region;
+  expectedRevision: number;
+}
+
+interface ProjectMutation {
+  mutationId: string;
+  settings: ProjectSettings;
+  expectedRevision: number;
+}
+
+interface WorkbenchState {
+  loadState: LoadState;
+  loadMessage: string;
+  globalError: string;
+  capabilities: AppCapabilities;
+  projects: ProjectSummary[];
+  currentProject: Project | null;
+  images: ImageAsset[];
+  regionsByImage: Record<string, Region[]>;
+  serverRegionRevisions: Record<string, number>;
+  regionsLoading: Record<string, boolean>;
+  activeImageId: string | null;
+  selectedImageIds: string[];
+  selectedRegionIds: string[];
+  imageSearch: string;
+  imageFilter: 'all' | 'needs_review' | 'failed' | 'complete' | 'no_text';
+  canvasMode: CanvasMode;
+  canvasTool: CanvasTool;
+  compareMode: boolean;
+  showRegions: boolean;
+  showOrder: boolean;
+  showConfidence: boolean;
+  fitRequest: number;
+  rightTab: RightPanelTab;
+  theme: Theme;
+  drawerOpen: boolean;
+  shortcutsOpen: boolean;
+  spacePressed: boolean;
+  jobs: Job[];
+  pendingRegionMutations: RegionMutation[];
+  pendingProjectMutation: ProjectMutation | null;
+  saving: boolean;
+  saveError: string;
+  lastSavedAt: string | null;
+  revisionConflict: boolean;
+  past: HistoryFrame[];
+  future: HistoryFrame[];
+
+  initialize: () => Promise<void>;
+  retryInitialize: () => Promise<void>;
+  createProject: (name: string, outputPath?: string) => Promise<boolean>;
+  openProjectPath: (manifestPath: string) => Promise<boolean>;
+  selectProject: (projectId: string, forceReload?: boolean) => Promise<boolean>;
+  importFiles: (files: File[]) => Promise<boolean>;
+  loadRegions: (imageId: string, force?: boolean) => Promise<void>;
+  reloadActiveImage: () => Promise<void>;
+  selectImage: (imageId: string) => Promise<boolean>;
+  navigateImage: (direction: -1 | 1) => Promise<boolean>;
+  toggleImageSelection: (imageId: string, additive?: boolean) => void;
+  selectAllVisibleImages: (imageIds: string[]) => void;
+  clearImageSelection: () => void;
+  setImageSearch: (value: string) => void;
+  setImageFilter: (value: WorkbenchState['imageFilter']) => void;
+  selectRegion: (regionId: string, additive?: boolean) => void;
+  clearRegionSelection: () => void;
+  createRegion: (geometry: Pick<Region, 'x' | 'y' | 'width' | 'height'>) => string | null;
+  updateRegion: (regionId: string, patch: Partial<Region>, recordHistory?: boolean) => void;
+  deleteSelectedRegions: () => void;
+  mergeSelectedRegions: () => void;
+  splitSelectedRegion: (axis: 'horizontal' | 'vertical') => void;
+  undo: () => void;
+  redo: () => void;
+  flushAutosave: () => Promise<boolean>;
+  updateProjectSettings: (patch: Partial<ProjectSettings>) => void;
+  setCanvasMode: (mode: CanvasMode) => void;
+  setCanvasTool: (tool: CanvasTool) => void;
+  toggleCompareMode: () => void;
+  setShowRegions: (value: boolean) => void;
+  setShowOrder: (value: boolean) => void;
+  setShowConfidence: (value: boolean) => void;
+  requestFit: () => void;
+  setRightTab: (tab: RightPanelTab) => void;
+  setTheme: (theme: Theme) => void;
+  setDrawerOpen: (value: boolean) => void;
+  setShortcutsOpen: (value: boolean) => void;
+  setSpacePressed: (value: boolean) => void;
+  startBatch: (
+    kinds: JobKind[],
+    imageIds: string[],
+    exportOptions: ExportOptions,
+    concurrency?: number,
+  ) => Promise<boolean>;
+  refreshJobs: () => Promise<void>;
+  runJobAction: (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'retry') => Promise<void>;
+  dismissError: () => void;
+}
+
+const emptyCapabilities: AppCapabilities = { providers: [] };
+let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+let activeSave: Promise<boolean> | null = null;
+const inFlightRegionMutationIds = new Set<string>();
+
+function storedTheme(): Theme {
+  try {
+    return typeof window !== 'undefined' && window.localStorage?.getItem('manga-localizer-theme') === 'light'
+      ? 'light'
+      : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
+function id(prefix: string): string {
+  const random = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}-${random}`;
+}
+
+function cloneRegions(regionsByImage: Record<string, Region[]>): Record<string, Region[]> {
+  return structuredClone(regionsByImage);
+}
+
+function makeHistoryFrame(regionsByImage: Record<string, Region[]>): HistoryFrame {
+  return { regionsByImage: cloneRegions(regionsByImage) };
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return '发生未知错误';
+}
+
+function hydrateProject(project: Project): Project {
+  const rawSettings = (project.settings ?? {}) as ProjectSettings & Record<string, unknown>;
+  const exportSettings = rawSettings.export && typeof rawSettings.export === 'object'
+    ? rawSettings.export as Record<string, unknown>
+    : {};
+
+  function mappingToLines(value: unknown): string {
+    if (typeof value === 'string') return value;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+    return Object.entries(value as Record<string, unknown>)
+      .map(([source, target]) => `${source} = ${String(target)}`)
+      .join('\n');
+  }
+
+  return {
+    ...project,
+    revision: Number(project.revision ?? 0),
+    imageCount: Number(project.imageCount ?? 0),
+    settings: {
+      ...DEFAULT_PROJECT_SETTINGS,
+      ...rawSettings,
+      glossary: mappingToLines(rawSettings.glossary),
+      characterNames: mappingToLines(rawSettings.characterNames),
+      preserveTree: typeof exportSettings.preserveTree === 'boolean'
+        ? exportSettings.preserveTree
+        : Boolean(rawSettings.preserveTree ?? DEFAULT_PROJECT_SETTINGS.preserveTree),
+      apiKeyConfigured: false,
+    },
+  };
+}
+
+function stageState(value: unknown): StageState {
+  const allowed: StageState[] = [
+    'not_started',
+    'queued',
+    'running',
+    'done',
+    'failed',
+    'unavailable',
+  ];
+  if (value === 'complete' || value === 'completed') return 'done';
+  if (value === 'pending') return 'not_started';
+  if (value === 'error') return 'failed';
+  return allowed.includes(value as StageState) ? (value as StageState) : 'not_started';
+}
+
+function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset {
+  const rawStatus = image.status ?? EMPTY_PIPELINE_STATUS;
+  const ocrState = stageState(rawStatus.ocr);
+  const translationState = stageState(rawStatus.translation);
+  return {
+    ...image,
+    name: image.name || image.relativePath?.split('/').at(-1) || '未命名图像',
+    relativePath: image.relativePath || image.name,
+    width: Number(image.width ?? 1),
+    height: Number(image.height ?? 1),
+    regionCount: Number(image.regionCount ?? 0),
+    confirmedCount: Number(image.confirmedCount ?? 0),
+    ignoredCount: Number(image.ignoredCount ?? 0),
+    revision: Number(image.revision ?? 0),
+    status: {
+      import: stageState(rawStatus.import ?? 'done'),
+      detection: stageState(rawStatus.detection),
+      ocr: ocrState,
+      translation: translationState,
+      inpaint: stageState(rawStatus.inpaint),
+      typeset: stageState(rawStatus.typeset),
+      export: stageState(rawStatus.export),
+    },
+    detectorProvider: image.detectorProvider ?? (ocrState === 'done' ? settings?.detectorProvider ?? 'tesseract' : undefined),
+    ocrProvider: image.ocrProvider ?? (ocrState === 'done' ? settings?.ocrProvider ?? 'tesseract' : undefined),
+    translatorProvider: image.translatorProvider ?? (translationState === 'done' ? settings?.translatorProvider : undefined),
+  };
+}
+
+function hydrateJob(job: Job): Job {
+  return {
+    ...job,
+    progress: Number(job.progress ?? 0),
+    total: Number(job.total ?? 0),
+    completed: Number(job.completed ?? 0),
+    items: (job.items ?? []).map((item) => ({
+      ...item,
+      label: item.label || item.imageId || item.id,
+      progress: Number(item.progress ?? 0),
+    })),
+  };
+}
+
+function parseKeyValueLines(value: string): Record<string, string> {
+  const entries: Array<[string, string]> = [];
+  for (const line of value.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const separator = trimmed.includes('=') ? '=' : trimmed.includes('：') ? '：' : ':';
+    const [source, ...rest] = trimmed.split(separator);
+    const target = rest.join(separator).trim();
+    if (source?.trim()) entries.push([source.trim(), target || source.trim()]);
+  }
+  return Object.fromEntries(entries);
+}
+
+function hydrateRegion(region: Region): Region {
+  const rawRepair = (region.repair ?? {}) as Region['repair'] & {
+    padding?: number;
+  };
+  const repairMethod = String(rawRepair.method ?? DEFAULT_REPAIR_SETTINGS.method)
+    .toLowerCase()
+    .replaceAll('-', '_');
+  return {
+    ...region,
+    x: Number(region.x ?? 0),
+    y: Number(region.y ?? 0),
+    width: Math.max(1, Number(region.width ?? 1)),
+    height: Math.max(1, Number(region.height ?? 1)),
+    rotation: Number(region.rotation ?? 0),
+    sourceText: region.sourceText ?? '',
+    translationText: region.translationText ?? '',
+    type: region.type ?? 'dialogue',
+    direction: region.direction ?? 'auto',
+    order: Number(region.order ?? 0),
+    confidence: region.confidence === null || region.confidence === undefined
+      ? null
+      : Number(region.confidence),
+    ignored: Boolean(region.ignored),
+    confirmed: Boolean(region.confirmed),
+    style: { ...DEFAULT_REGION_STYLE, ...(region.style ?? {}) },
+    repair: {
+      ...DEFAULT_REPAIR_SETTINGS,
+      ...rawRepair,
+      method: repairMethod === 'navier_stokes'
+        ? 'navier_stokes'
+        : repairMethod === 'solid'
+          ? 'solid'
+          : 'telea',
+      maskPadding: Number(rawRepair.maskPadding ?? rawRepair.padding ?? DEFAULT_REPAIR_SETTINGS.maskPadding),
+    },
+    revision: Number(region.revision ?? 0),
+  };
+}
+
+function updateImageCounts(images: ImageAsset[], imageId: string, regions: Region[]): ImageAsset[] {
+  return images.map((image) =>
+    image.id === imageId
+      ? {
+          ...image,
+          regionCount: regions.length,
+          confirmedCount: regions.filter((region) => region.confirmed).length,
+          ignoredCount: regions.filter((region) => region.ignored).length,
+        }
+      : image,
+  );
+}
+
+function updateAllImageCounts(
+  images: ImageAsset[],
+  regionsByImage: Record<string, Region[]>,
+): ImageAsset[] {
+  return images.map((image) => {
+    const regions = regionsByImage[image.id];
+    return regions ? updateImageCounts([image], image.id, regions)[0] ?? image : image;
+  });
+}
+
+function scheduleAutosave(): void {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    autosaveTimer = null;
+    void useWorkbenchStore.getState().flushAutosave();
+  }, 650);
+}
+
+function replaceRegionMutation(
+  pending: RegionMutation[],
+  next: RegionMutation,
+): RegionMutation[] {
+  const existing = pending.find((mutation) => mutation.region.id === next.region.id);
+  if (!existing) return [...pending, next];
+  if (existing.kind === 'create' && next.kind === 'update') {
+    return pending.map((mutation) =>
+      mutation.region.id === next.region.id
+        ? { ...next, kind: 'create', expectedRevision: 0 }
+        : mutation,
+    );
+  }
+  if (existing.kind === 'create' && next.kind === 'delete') {
+    if (inFlightRegionMutationIds.has(existing.mutationId)) {
+      return pending.map((mutation) =>
+        mutation.region.id === next.region.id ? next : mutation,
+      );
+    }
+    return pending.filter((mutation) => mutation.region.id !== next.region.id);
+  }
+  return pending.map((mutation) => (mutation.region.id === next.region.id ? next : mutation));
+}
+
+function syncMutationsForFrame(
+  current: Record<string, Region[]>,
+  target: Record<string, Region[]>,
+  pending: RegionMutation[],
+  serverRegionRevisions: Record<string, number>,
+): {
+  regionsByImage: Record<string, Region[]>;
+  pendingRegionMutations: RegionMutation[];
+} {
+  const imageIds = new Set([...Object.keys(current), ...Object.keys(target)]);
+  const regionsByImage = cloneRegions(target);
+  let result = [...pending];
+  for (const imageId of imageIds) {
+    const before = new Map((current[imageId] ?? []).map((region) => [region.id, region]));
+    const historicalAfter = target[imageId] ?? [];
+    const normalizedAfter = historicalAfter.map((region) => {
+      const serverRevision = serverRegionRevisions[region.id];
+      if (serverRevision !== undefined) return { ...region, revision: serverRevision };
+      if (region.id.startsWith('local-')) return { ...region, revision: 0 };
+      return {
+        ...region,
+        id: id('local'),
+        revision: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      };
+    });
+    regionsByImage[imageId] = normalizedAfter;
+    const after = new Map(normalizedAfter.map((region) => [region.id, region]));
+    const involved = new Set([
+      ...before.keys(),
+      ...historicalAfter.map((region) => region.id),
+      ...after.keys(),
+    ]);
+    result = result.filter((mutation) => !involved.has(mutation.region.id));
+    for (const [regionId, region] of after) {
+      const serverRevision = serverRegionRevisions[regionId];
+      result.push({
+        mutationId: id('mutation'),
+        kind: serverRevision === undefined ? 'create' : 'update',
+        imageId,
+        region,
+        expectedRevision: serverRevision ?? 0,
+      });
+    }
+    for (const [regionId, region] of before) {
+      const serverRevision = serverRegionRevisions[regionId];
+      if (!after.has(regionId) && serverRevision !== undefined) {
+        result.push({
+          mutationId: id('mutation'),
+          kind: 'delete',
+          imageId,
+          region: { ...region, revision: serverRevision },
+          expectedRevision: serverRevision,
+        });
+      }
+    }
+  }
+  return { regionsByImage, pendingRegionMutations: result };
+}
+
+function mergeProjectSnapshot(state: WorkbenchState, snapshot: Project): Partial<WorkbenchState> {
+  const projects = state.projects.map((project) =>
+    project.id === snapshot.id ? snapshot : project,
+  );
+  if (state.currentProject?.id !== snapshot.id) return { projects };
+  if (snapshot.revision < state.currentProject.revision) return {};
+
+  const pending = state.pendingProjectMutation;
+  const currentProject = pending
+    ? { ...snapshot, settings: pending.settings }
+    : snapshot;
+  return {
+    currentProject,
+    pendingProjectMutation: pending
+      ? { ...pending, expectedRevision: snapshot.revision }
+      : null,
+    projects,
+  };
+}
+
+async function synchronizeProject(projectId: string): Promise<Project> {
+  const snapshot = hydrateProject(await api.getProject(projectId));
+  useWorkbenchStore.setState((state) => mergeProjectSnapshot(state, snapshot));
+  return snapshot;
+}
+
+async function synchronizeImages(projectId: string): Promise<void> {
+  const current = useWorkbenchStore.getState().currentProject;
+  if (!current || current.id !== projectId) return;
+  const response = await api.listImages(projectId);
+  useWorkbenchStore.setState((state) => {
+    if (state.currentProject?.id !== projectId) return {};
+    const images = response
+      .map((image) => hydrateImage(image, state.currentProject?.settings))
+      .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
+    return { images: updateAllImageCounts(images, state.regionsByImage) };
+  });
+}
+
+function applySavedProject(savedProject: Project, mutationId: string): void {
+  useWorkbenchStore.setState((state) => {
+    const pending = state.pendingProjectMutation;
+    const savedMutationIsCurrent = pending?.mutationId === mutationId;
+    const newerPending = pending && !savedMutationIsCurrent ? pending : null;
+    const currentProject = state.currentProject?.id === savedProject.id
+      ? newerPending
+        ? { ...savedProject, settings: newerPending.settings }
+        : savedProject
+      : state.currentProject;
+    return {
+      currentProject,
+      pendingProjectMutation: newerPending
+        ? { ...newerPending, expectedRevision: savedProject.revision }
+        : savedMutationIsCurrent
+          ? null
+          : pending,
+      projects: state.projects.map((project) =>
+        project.id === savedProject.id ? savedProject : project,
+      ),
+    };
+  });
+}
+
+async function flushProjectMutation(): Promise<void> {
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const project = useWorkbenchStore.getState().currentProject;
+    if (!project || !useWorkbenchStore.getState().pendingProjectMutation) return;
+    await synchronizeProject(project.id);
+    const latest = useWorkbenchStore.getState();
+    const mutation = latest.pendingProjectMutation;
+    if (!mutation || latest.currentProject?.id !== project.id) return;
+    try {
+      const savedProject = hydrateProject(
+        await api.updateProject(project.id, {
+          settings: mutation.settings,
+          expectedRevision: mutation.expectedRevision,
+        }),
+      );
+      applySavedProject(savedProject, mutation.mutationId);
+      return;
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 409 && attempt < maxAttempts - 1)) {
+        throw error;
+      }
+    }
+  }
+}
+
+async function performFlush(): Promise<boolean> {
+  if (autosaveTimer) {
+    clearTimeout(autosaveTimer);
+    autosaveTimer = null;
+  }
+  if (activeSave) {
+    const activeResult = await activeSave;
+    if (!activeResult) return false;
+    const remaining = useWorkbenchStore.getState();
+    return remaining.pendingRegionMutations.length || remaining.pendingProjectMutation
+      ? performFlush()
+      : true;
+  }
+
+  activeSave = (async () => {
+    const beforeSave = useWorkbenchStore.getState();
+    if (!beforeSave.pendingRegionMutations.length && !beforeSave.pendingProjectMutation) return true;
+    const hadProjectMutation = Boolean(beforeSave.pendingProjectMutation);
+    useWorkbenchStore.setState({ saving: true, saveError: '', revisionConflict: false });
+
+    try {
+      await flushProjectMutation();
+
+      const pendingRegions = [...useWorkbenchStore.getState().pendingRegionMutations];
+      for (const mutation of pendingRegions) {
+        inFlightRegionMutationIds.add(mutation.mutationId);
+      }
+      for (const mutation of pendingRegions) {
+        let saved: Region | null = null;
+        try {
+          if (mutation.kind === 'create') {
+            saved = hydrateRegion(await api.createRegion(mutation.imageId, mutation.region));
+          } else if (mutation.kind === 'update') {
+            saved = hydrateRegion(
+              await api.updateRegion(mutation.region.id, {
+                ...mutation.region,
+                expectedRevision: mutation.expectedRevision,
+              }),
+            );
+          } else {
+            await api.deleteRegion(mutation.region.id, mutation.expectedRevision);
+          }
+        } catch (error) {
+          if (mutation.kind === 'create') {
+            useWorkbenchStore.setState((state) => ({
+              pendingRegionMutations: state.pendingRegionMutations.filter((entry) =>
+                !(entry.region.id === mutation.region.id && entry.kind === 'delete')
+              ),
+            }));
+          }
+          throw error;
+        } finally {
+          inFlightRegionMutationIds.delete(mutation.mutationId);
+        }
+
+        useWorkbenchStore.setState((state) => {
+          const oldId = mutation.region.id;
+          const withoutCompleted = state.pendingRegionMutations.filter(
+            (entry) => entry.mutationId !== mutation.mutationId,
+          );
+          const newer = withoutCompleted.find((entry) => entry.region.id === oldId);
+          let pendingRegionMutations = withoutCompleted;
+          const serverRegionRevisions = { ...state.serverRegionRevisions };
+          if (!saved) {
+            delete serverRegionRevisions[oldId];
+            if (newer?.kind === 'delete') {
+              pendingRegionMutations = withoutCompleted.filter(
+                (entry) => entry.mutationId !== newer.mutationId,
+              );
+            } else if (newer) {
+              pendingRegionMutations = withoutCompleted.map((entry) =>
+                entry.mutationId === newer.mutationId
+                  ? {
+                      ...entry,
+                      kind: 'create',
+                      expectedRevision: 0,
+                      region: { ...entry.region, revision: 0 },
+                    }
+                  : entry,
+              );
+            }
+            return { pendingRegionMutations, serverRegionRevisions };
+          }
+
+          delete serverRegionRevisions[oldId];
+          serverRegionRevisions[saved.id] = saved.revision;
+          let replacement = saved as Region;
+          if (newer) {
+            const rebasedRegion = {
+              ...newer.region,
+              id: saved.id,
+              revision: saved.revision,
+              createdAt: saved.createdAt,
+              updatedAt: saved.updatedAt,
+            };
+            replacement = rebasedRegion;
+            pendingRegionMutations = withoutCompleted.map((entry) =>
+              entry.mutationId === newer.mutationId
+                ? {
+                    ...entry,
+                    kind: newer.kind === 'delete' ? 'delete' : 'update',
+                    expectedRevision: saved.revision,
+                    region: rebasedRegion,
+                  }
+                : entry,
+            );
+          }
+          const currentRegions = state.regionsByImage[mutation.imageId] ?? [];
+          let regions = currentRegions.map((region) =>
+            region.id === oldId ? replacement : region,
+          );
+          if (newer && newer.kind !== 'delete' && !currentRegions.some((region) => region.id === oldId)) {
+            regions = [...regions, replacement].sort((left, right) => left.order - right.order);
+          }
+          return {
+            pendingRegionMutations,
+            serverRegionRevisions,
+            regionsByImage: { ...state.regionsByImage, [mutation.imageId]: regions },
+            selectedRegionIds: state.selectedRegionIds.map((regionId) =>
+              regionId === oldId ? (saved as Region).id : regionId,
+            ),
+            images: updateImageCounts(state.images, mutation.imageId, regions),
+          };
+        });
+      }
+
+      const projectId = useWorkbenchStore.getState().currentProject?.id;
+      if (projectId && (hadProjectMutation || pendingRegions.length)) {
+        await Promise.all([
+          synchronizeProject(projectId),
+          synchronizeImages(projectId),
+        ]);
+      }
+
+      useWorkbenchStore.setState({
+        saving: false,
+        saveError: '',
+        lastSavedAt: new Date().toISOString(),
+      });
+      return true;
+    } catch (error) {
+      inFlightRegionMutationIds.clear();
+      useWorkbenchStore.setState({
+        saving: false,
+        saveError: errorMessage(error),
+        revisionConflict: error instanceof ApiError && error.status === 409,
+      });
+      return false;
+    }
+  })().finally(() => {
+    activeSave = null;
+  });
+
+  const result = await activeSave;
+  if (result) {
+    const remaining = useWorkbenchStore.getState();
+    if (remaining.pendingRegionMutations.length || remaining.pendingProjectMutation) {
+      return performFlush();
+    }
+  }
+  return result;
+}
+
+const initialUiState = {
+  loadState: 'idle' as LoadState,
+  loadMessage: '正在连接本地服务…',
+  globalError: '',
+  capabilities: emptyCapabilities,
+  projects: [] as ProjectSummary[],
+  currentProject: null as Project | null,
+  images: [] as ImageAsset[],
+  regionsByImage: {} as Record<string, Region[]>,
+  serverRegionRevisions: {} as Record<string, number>,
+  regionsLoading: {} as Record<string, boolean>,
+  activeImageId: null as string | null,
+  selectedImageIds: [] as string[],
+  selectedRegionIds: [] as string[],
+  imageSearch: '',
+  imageFilter: 'all' as const,
+  canvasMode: 'original' as CanvasMode,
+  canvasTool: 'select' as CanvasTool,
+  compareMode: false,
+  showRegions: true,
+  showOrder: true,
+  showConfidence: true,
+  fitRequest: 0,
+  rightTab: 'text' as RightPanelTab,
+  theme: storedTheme(),
+  drawerOpen: false,
+  shortcutsOpen: false,
+  spacePressed: false,
+  jobs: [] as Job[],
+  pendingRegionMutations: [] as RegionMutation[],
+  pendingProjectMutation: null as ProjectMutation | null,
+  saving: false,
+  saveError: '',
+  lastSavedAt: null as string | null,
+  revisionConflict: false,
+  past: [] as HistoryFrame[],
+  future: [] as HistoryFrame[],
+};
+
+export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
+  ...initialUiState,
+
+  initialize: async () => {
+    set({ loadState: 'loading', loadMessage: '正在读取本地项目…', globalError: '' });
+    try {
+      const [capabilities, projects] = await Promise.all([
+        api.getCapabilities(),
+        api.listProjects(),
+      ]);
+      set({
+        capabilities: { ...capabilities, providers: capabilities.providers ?? [] },
+        projects,
+        loadState: 'ready',
+      });
+      if (projects[0]) await get().selectProject(projects[0].id);
+    } catch (error) {
+      set({
+        loadState: 'error',
+        loadMessage: '本地服务不可用',
+        globalError: errorMessage(error),
+      });
+    }
+  },
+
+  retryInitialize: async () => get().initialize(),
+
+  createProject: async (name, outputPath) => {
+    set({ globalError: '' });
+    try {
+      const project = hydrateProject(await api.createProject({ name, outputPath }));
+      set((state) => ({ projects: [project, ...state.projects] }));
+      return get().selectProject(project.id);
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
+  openProjectPath: async (manifestPath) => {
+    set({ globalError: '' });
+    try {
+      if (!(await get().flushAutosave())) return false;
+      const project = hydrateProject(await api.openProject(manifestPath));
+      set((state) => ({
+        projects: [project, ...state.projects.filter((entry) => entry.id !== project.id)],
+      }));
+      return get().selectProject(project.id, true);
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
+  selectProject: async (projectId, forceReload = false) => {
+    if (!forceReload && get().currentProject?.id === projectId) return true;
+    if (!(await get().flushAutosave())) return false;
+    set({ loadState: 'loading', loadMessage: '正在打开项目…', globalError: '' });
+    try {
+      const [projectResponse, imageResponse, jobs] = await Promise.all([
+        api.getProject(projectId),
+        api.listImages(projectId),
+        api.listJobs(projectId),
+      ]);
+      const project = hydrateProject(projectResponse);
+      const images = imageResponse.map((image) => hydrateImage(image, project.settings)).sort((a, b) =>
+        a.relativePath.localeCompare(b.relativePath, 'zh-CN', { numeric: true }),
+      );
+      const firstImageId = images[0]?.id ?? null;
+      set({
+        loadState: 'ready',
+        currentProject: project,
+        projects: get().projects.map((entry) => (entry.id === project.id ? project : entry)),
+        images,
+        jobs: jobs.map(hydrateJob),
+        activeImageId: firstImageId,
+        selectedImageIds: firstImageId ? [firstImageId] : [],
+        selectedRegionIds: [],
+        regionsByImage: {},
+        serverRegionRevisions: {},
+        pendingRegionMutations: [],
+        pendingProjectMutation: null,
+        past: [],
+        future: [],
+      });
+      if (firstImageId) await get().loadRegions(firstImageId);
+      return true;
+    } catch (error) {
+      set({ loadState: 'error', loadMessage: '项目打开失败', globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
+  importFiles: async (files) => {
+    const project = get().currentProject;
+    if (!project || files.length === 0) return false;
+    set({ globalError: '' });
+    try {
+      const imported = (await api.uploadImages(project.id, files)).map((image) => hydrateImage(image, project.settings));
+      set((state) => {
+        const merged = new Map(state.images.map((image) => [image.id, image]));
+        imported.forEach((image) => merged.set(image.id, image));
+        return {
+          images: [...merged.values()].sort((a, b) =>
+            a.relativePath.localeCompare(b.relativePath, 'zh-CN', { numeric: true }),
+          ),
+          activeImageId: state.activeImageId ?? imported[0]?.id ?? null,
+          selectedImageIds: imported.map((image) => image.id),
+          currentProject: state.currentProject
+            ? {
+                ...state.currentProject,
+                imageCount: merged.size,
+              }
+            : null,
+        };
+      });
+      await synchronizeProject(project.id);
+      const activeImageId = get().activeImageId;
+      if (activeImageId) await get().loadRegions(activeImageId);
+      return true;
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
+  loadRegions: async (imageId, force = false) => {
+    if (!force && get().regionsByImage[imageId]) return;
+    set((state) => ({
+      regionsLoading: { ...state.regionsLoading, [imageId]: true },
+      globalError: '',
+    }));
+    try {
+      const regions = (await api.listRegions(imageId)).map(hydrateRegion).sort((a, b) => a.order - b.order);
+      set((state) => {
+        const serverRegionRevisions = { ...state.serverRegionRevisions };
+        for (const previous of state.regionsByImage[imageId] ?? []) {
+          delete serverRegionRevisions[previous.id];
+        }
+        for (const region of regions) serverRegionRevisions[region.id] = region.revision;
+        return {
+          regionsByImage: { ...state.regionsByImage, [imageId]: regions },
+          serverRegionRevisions,
+          regionsLoading: { ...state.regionsLoading, [imageId]: false },
+          images: updateImageCounts(state.images, imageId, regions),
+        };
+      });
+    } catch (error) {
+      set((state) => ({
+        regionsLoading: { ...state.regionsLoading, [imageId]: false },
+        globalError: errorMessage(error),
+      }));
+    }
+  },
+
+  reloadActiveImage: async () => {
+    const imageId = get().activeImageId;
+    if (!imageId) return;
+    set((state) => ({
+      pendingRegionMutations: state.pendingRegionMutations.filter(
+        (mutation) => mutation.imageId !== imageId,
+      ),
+      saveError: '',
+      revisionConflict: false,
+      selectedRegionIds: [],
+    }));
+    await get().loadRegions(imageId, true);
+  },
+
+  selectImage: async (imageId) => {
+    if (imageId === get().activeImageId) return true;
+    if (!(await get().flushAutosave())) return false;
+    set({ activeImageId: imageId, selectedRegionIds: [] });
+    await get().loadRegions(imageId);
+    return true;
+  },
+
+  navigateImage: async (direction) => {
+    const { images, activeImageId } = get();
+    if (!images.length) return false;
+    const currentIndex = Math.max(0, images.findIndex((image) => image.id === activeImageId));
+    const nextIndex = Math.min(images.length - 1, Math.max(0, currentIndex + direction));
+    const nextImage = images[nextIndex];
+    if (!nextImage || nextImage.id === activeImageId) return false;
+    return get().selectImage(nextImage.id);
+  },
+
+  toggleImageSelection: (imageId, additive = true) => {
+    set((state) => {
+      if (!additive) return { selectedImageIds: [imageId] };
+      return {
+        selectedImageIds: state.selectedImageIds.includes(imageId)
+          ? state.selectedImageIds.filter((entry) => entry !== imageId)
+          : [...state.selectedImageIds, imageId],
+      };
+    });
+  },
+
+  selectAllVisibleImages: (imageIds) => set({ selectedImageIds: imageIds }),
+  clearImageSelection: () => set({ selectedImageIds: [] }),
+  setImageSearch: (imageSearch) => set({ imageSearch }),
+  setImageFilter: (imageFilter) => set({ imageFilter }),
+
+  selectRegion: (regionId, additive = false) => {
+    set((state) => ({
+      selectedRegionIds: additive
+        ? state.selectedRegionIds.includes(regionId)
+          ? state.selectedRegionIds.filter((entry) => entry !== regionId)
+          : [...state.selectedRegionIds, regionId]
+        : [regionId],
+    }));
+  },
+
+  clearRegionSelection: () => set({ selectedRegionIds: [] }),
+
+  createRegion: (geometry) => {
+    const imageId = get().activeImageId;
+    if (!imageId) return null;
+    const current = get().regionsByImage[imageId] ?? [];
+    const region: Region = {
+      id: id('local'),
+      imageId,
+      x: Math.max(0, Math.round(geometry.x)),
+      y: Math.max(0, Math.round(geometry.y)),
+      width: Math.max(4, Math.round(geometry.width)),
+      height: Math.max(4, Math.round(geometry.height)),
+      rotation: 0,
+      sourceText: '',
+      translationText: '',
+      type: 'dialogue',
+      direction: 'auto',
+      order: current.reduce((max, entry) => Math.max(max, entry.order), 0) + 1,
+      confidence: null,
+      ignored: false,
+      confirmed: false,
+      style: { ...DEFAULT_REGION_STYLE },
+      repair: { ...DEFAULT_REPAIR_SETTINGS },
+      revision: 0,
+    };
+    const next = [...current, region];
+    set((state) => ({
+      regionsByImage: { ...state.regionsByImage, [imageId]: next },
+      images: updateImageCounts(state.images, imageId, next),
+      selectedRegionIds: [region.id],
+      past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
+      future: [],
+      pendingRegionMutations: replaceRegionMutation(state.pendingRegionMutations, {
+        mutationId: id('mutation'),
+        kind: 'create',
+        imageId,
+        region,
+        expectedRevision: 0,
+      }),
+    }));
+    scheduleAutosave();
+    return region.id;
+  },
+
+  updateRegion: (regionId, patch, recordHistory = true) => {
+    const state = get();
+    const imageId = state.activeImageId;
+    if (!imageId) return;
+    const current = state.regionsByImage[imageId] ?? [];
+    const original = current.find((region) => region.id === regionId);
+    if (!original) return;
+    const updated = hydrateRegion({
+      ...original,
+      ...patch,
+      style: patch.style ? { ...original.style, ...patch.style } : original.style,
+      repair: patch.repair ? { ...original.repair, ...patch.repair } : original.repair,
+    });
+    const next = current.map((region) => (region.id === regionId ? updated : region));
+    set((currentState) => ({
+      regionsByImage: { ...currentState.regionsByImage, [imageId]: next },
+      images: updateImageCounts(currentState.images, imageId, next),
+      past: recordHistory
+        ? [...currentState.past.slice(-49), makeHistoryFrame(currentState.regionsByImage)]
+        : currentState.past,
+      future: recordHistory ? [] : currentState.future,
+      pendingRegionMutations: replaceRegionMutation(currentState.pendingRegionMutations, {
+        mutationId: id('mutation'),
+        kind: 'update',
+        imageId,
+        region: updated,
+        expectedRevision: currentState.serverRegionRevisions[original.id] ?? original.revision,
+      }),
+    }));
+    scheduleAutosave();
+  },
+
+  deleteSelectedRegions: () => {
+    const state = get();
+    const imageId = state.activeImageId;
+    if (!imageId || !state.selectedRegionIds.length) return;
+    const selected = new Set(state.selectedRegionIds);
+    const current = state.regionsByImage[imageId] ?? [];
+    const removed = current.filter((region) => selected.has(region.id));
+    const next = current.filter((region) => !selected.has(region.id));
+    let mutations = state.pendingRegionMutations;
+    for (const region of removed) {
+      mutations = replaceRegionMutation(mutations, {
+        mutationId: id('mutation'),
+        kind: 'delete',
+        imageId,
+        region,
+        expectedRevision: state.serverRegionRevisions[region.id] ?? region.revision,
+      });
+    }
+    set((currentState) => ({
+      regionsByImage: { ...currentState.regionsByImage, [imageId]: next },
+      images: updateImageCounts(currentState.images, imageId, next),
+      selectedRegionIds: [],
+      past: [...currentState.past.slice(-49), makeHistoryFrame(currentState.regionsByImage)],
+      future: [],
+      pendingRegionMutations: mutations,
+    }));
+    scheduleAutosave();
+  },
+
+  mergeSelectedRegions: () => {
+    const state = get();
+    const imageId = state.activeImageId;
+    if (!imageId || state.selectedRegionIds.length < 2) return;
+    const selectedIds = new Set(state.selectedRegionIds);
+    const current = state.regionsByImage[imageId] ?? [];
+    const selected = current.filter((region) => selectedIds.has(region.id));
+    if (selected.length < 2) return;
+    const first = [...selected].sort((a, b) => a.order - b.order)[0];
+    if (!first) return;
+    const x = Math.min(...selected.map((region) => region.x));
+    const y = Math.min(...selected.map((region) => region.y));
+    const right = Math.max(...selected.map((region) => region.x + region.width));
+    const bottom = Math.max(...selected.map((region) => region.y + region.height));
+    const confidenceValues = selected
+      .map((region) => region.confidence)
+      .filter((value): value is number => value !== null);
+    const merged: Region = {
+      ...first,
+      id: id('local'),
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.max(4, Math.round(right - x)),
+      height: Math.max(4, Math.round(bottom - y)),
+      rotation: 0,
+      sourceText: [...selected]
+        .sort((a, b) => a.order - b.order)
+        .map((region) => region.sourceText)
+        .filter(Boolean)
+        .join('\n'),
+      translationText: [...selected]
+        .sort((a, b) => a.order - b.order)
+        .map((region) => region.translationText)
+        .filter(Boolean)
+        .join('\n'),
+      order: Math.min(...selected.map((region) => region.order)),
+      confidence: confidenceValues.length
+        ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
+        : null,
+      ignored: selected.every((region) => region.ignored),
+      confirmed: selected.every((region) => region.confirmed),
+      revision: 0,
+      createdAt: undefined,
+      updatedAt: undefined,
+    };
+    const next = [...current.filter((region) => !selectedIds.has(region.id)), merged].sort(
+      (a, b) => a.order - b.order,
+    );
+    let mutations = state.pendingRegionMutations;
+    for (const region of selected) {
+      mutations = replaceRegionMutation(mutations, {
+        mutationId: id('mutation'),
+        kind: 'delete',
+        imageId,
+        region,
+        expectedRevision: state.serverRegionRevisions[region.id] ?? region.revision,
+      });
+    }
+    mutations = replaceRegionMutation(mutations, {
+      mutationId: id('mutation'),
+      kind: 'create',
+      imageId,
+      region: merged,
+      expectedRevision: 0,
+    });
+    set({
+      regionsByImage: { ...state.regionsByImage, [imageId]: next },
+      images: updateImageCounts(state.images, imageId, next),
+      selectedRegionIds: [merged.id],
+      past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
+      future: [],
+      pendingRegionMutations: mutations,
+    });
+    scheduleAutosave();
+  },
+
+  splitSelectedRegion: (axis) => {
+    const state = get();
+    const imageId = state.activeImageId;
+    if (!imageId || state.selectedRegionIds.length !== 1) return;
+    const current = state.regionsByImage[imageId] ?? [];
+    const original = current.find((region) => region.id === state.selectedRegionIds[0]);
+    if (!original) return;
+
+    function splitText(text: string): [string, string] {
+      if (!text) return ['', ''];
+      const lines = text.split('\n');
+      if (lines.length > 1) {
+        const midpoint = Math.ceil(lines.length / 2);
+        return [lines.slice(0, midpoint).join('\n'), lines.slice(midpoint).join('\n')];
+      }
+      const midpoint = Math.ceil([...text].length / 2);
+      return [[...text].slice(0, midpoint).join(''), [...text].slice(midpoint).join('')];
+    }
+
+    const [sourceA, sourceB] = splitText(original.sourceText);
+    const [translationA, translationB] = splitText(original.translationText);
+    const first: Region = {
+      ...original,
+      id: id('local'),
+      width: axis === 'vertical' ? Math.max(4, Math.round(original.width / 2)) : original.width,
+      height: axis === 'horizontal' ? Math.max(4, Math.round(original.height / 2)) : original.height,
+      rotation: 0,
+      sourceText: sourceA,
+      translationText: translationA,
+      revision: 0,
+      createdAt: undefined,
+      updatedAt: undefined,
+    };
+    const second: Region = {
+      ...first,
+      id: id('local'),
+      x: axis === 'vertical' ? original.x + first.width : original.x,
+      y: axis === 'horizontal' ? original.y + first.height : original.y,
+      width: axis === 'vertical' ? Math.max(4, original.width - first.width) : original.width,
+      height: axis === 'horizontal' ? Math.max(4, original.height - first.height) : original.height,
+      sourceText: sourceB,
+      translationText: translationB,
+      order: original.order + 1,
+    };
+    const next = [
+      ...current.filter((region) => region.id !== original.id),
+      first,
+      second,
+    ].sort((a, b) => a.order - b.order);
+    let mutations = replaceRegionMutation(state.pendingRegionMutations, {
+      mutationId: id('mutation'),
+      kind: 'delete',
+      imageId,
+      region: original,
+      expectedRevision: state.serverRegionRevisions[original.id] ?? original.revision,
+    });
+    for (const region of [first, second]) {
+      mutations = replaceRegionMutation(mutations, {
+        mutationId: id('mutation'),
+        kind: 'create',
+        imageId,
+        region,
+        expectedRevision: 0,
+      });
+    }
+    set({
+      regionsByImage: { ...state.regionsByImage, [imageId]: next },
+      images: updateImageCounts(state.images, imageId, next),
+      selectedRegionIds: [first.id, second.id],
+      past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
+      future: [],
+      pendingRegionMutations: mutations,
+    });
+    scheduleAutosave();
+  },
+
+  undo: () => {
+    const state = get();
+    const previous = state.past.at(-1);
+    if (!previous) return;
+    const restored = syncMutationsForFrame(
+      state.regionsByImage,
+      previous.regionsByImage,
+      state.pendingRegionMutations,
+      state.serverRegionRevisions,
+    );
+    set({
+      regionsByImage: restored.regionsByImage,
+      images: updateAllImageCounts(state.images, restored.regionsByImage),
+      past: state.past.slice(0, -1),
+      future: [makeHistoryFrame(state.regionsByImage), ...state.future.slice(0, 49)],
+      pendingRegionMutations: restored.pendingRegionMutations,
+      selectedRegionIds: [],
+    });
+    scheduleAutosave();
+  },
+
+  redo: () => {
+    const state = get();
+    const next = state.future[0];
+    if (!next) return;
+    const restored = syncMutationsForFrame(
+      state.regionsByImage,
+      next.regionsByImage,
+      state.pendingRegionMutations,
+      state.serverRegionRevisions,
+    );
+    set({
+      regionsByImage: restored.regionsByImage,
+      images: updateAllImageCounts(state.images, restored.regionsByImage),
+      past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
+      future: state.future.slice(1),
+      pendingRegionMutations: restored.pendingRegionMutations,
+      selectedRegionIds: [],
+    });
+    scheduleAutosave();
+  },
+
+  flushAutosave: performFlush,
+
+  updateProjectSettings: (patch) => {
+    const project = get().currentProject;
+    if (!project) return;
+    const settings = { ...project.settings, ...patch };
+    set({
+      currentProject: { ...project, settings },
+      pendingProjectMutation: {
+        mutationId: id('project-mutation'),
+        settings,
+        expectedRevision: project.revision,
+      },
+    });
+    scheduleAutosave();
+  },
+
+  setCanvasMode: (canvasMode) => set({ canvasMode }),
+  setCanvasTool: (canvasTool) => set({ canvasTool }),
+  toggleCompareMode: () => set((state) => ({ compareMode: !state.compareMode })),
+  setShowRegions: (showRegions) => set({ showRegions }),
+  setShowOrder: (showOrder) => set({ showOrder }),
+  setShowConfidence: (showConfidence) => set({ showConfidence }),
+  requestFit: () => set((state) => ({ fitRequest: state.fitRequest + 1 })),
+  setRightTab: (rightTab) => set({ rightTab }),
+  setTheme: (theme) => {
+    try {
+      window.localStorage?.setItem('manga-localizer-theme', theme);
+    } catch {
+      // Theme persistence is optional in privacy-restricted browser contexts.
+    }
+    set({ theme });
+  },
+  setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setSpacePressed: (spacePressed) => set({ spacePressed }),
+
+  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1) => {
+    if (!get().currentProject || !imageIds.length || !kinds.length) return false;
+    if (!(await get().flushAutosave())) return false;
+    const project = get().currentProject;
+    if (!project) return false;
+    set({ globalError: '' });
+    try {
+      const created: Job[] = [];
+      const operationOrder: JobKind[] = ['detect', 'ocr', 'translate', 'inpaint', 'typeset', 'export'];
+      const orderedKinds = operationOrder.filter((kind) => kinds.includes(kind));
+      for (const kind of orderedKinds) {
+        const options: Record<string, unknown> = kind === 'detect'
+          ? {
+              provider: project.settings.detectorProvider,
+              direction: 'auto',
+            }
+          : kind === 'ocr'
+            ? {
+                provider: project.settings.ocrProvider,
+                direction: 'auto',
+              }
+          : kind === 'translate'
+            ? {
+                provider: project.settings.translatorProvider,
+                glossary: parseKeyValueLines(project.settings.glossary),
+                characterNames: parseKeyValueLines(project.settings.characterNames),
+                contextPages: project.settings.contextPages,
+                targetLanguage: project.settings.targetLanguage,
+                baseUrl: project.settings.remoteEndpoint || undefined,
+                model: project.settings.remoteModel || undefined,
+              }
+            : kind === 'inpaint'
+              ? { provider: project.settings.inpainterProvider }
+              : kind === 'typeset'
+                ? { provider: 'pillow' }
+                : {};
+        const request = { imageIds, options: { ...options, concurrency } };
+        const job = kind === 'export'
+          ? await api.exportProject(project.id, {
+              ...request,
+              options: { ...exportOptions, concurrency: 1 },
+            })
+          : await api.startJob(project.id, kind, request);
+        created.push(hydrateJob(job));
+      }
+      set((state) => ({
+        jobs: [...created, ...state.jobs.filter((job) => !created.some((entry) => entry.id === job.id))],
+        images: state.images.map((image) => {
+          if (!imageIds.includes(image.id)) return image;
+          const status = { ...image.status };
+          for (const kind of orderedKinds) {
+            if (kind === 'detect') status.detection = 'queued';
+            else if (kind === 'ocr') status.ocr = 'queued';
+            else if (kind === 'translate') status.translation = 'queued';
+            else if (kind === 'inpaint') status.inpaint = 'queued';
+            else if (kind === 'typeset') status.typeset = 'queued';
+            else status.export = 'queued';
+          }
+          return {
+            ...image,
+            status,
+            detectorProvider: orderedKinds.includes('detect') ? project.settings.detectorProvider : image.detectorProvider,
+            ocrProvider: orderedKinds.includes('ocr') ? project.settings.ocrProvider : image.ocrProvider,
+            translatorProvider: orderedKinds.includes('translate') ? project.settings.translatorProvider : image.translatorProvider,
+            inpaintingProvider: orderedKinds.includes('inpaint') ? project.settings.inpainterProvider : image.inpaintingProvider,
+            typesettingProvider: orderedKinds.includes('typeset') ? 'pillow' : image.typesettingProvider,
+          };
+        }),
+      }));
+      await synchronizeProject(project.id);
+      return true;
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
+  refreshJobs: async () => {
+    const project = get().currentProject;
+    if (!project) return;
+    try {
+      const [jobResponse, imageResponse, projectResponse] = await Promise.all([
+        api.listJobs(project.id),
+        api.listImages(project.id),
+        api.getProject(project.id),
+      ]);
+      const jobs = jobResponse.map(hydrateJob);
+      const refreshedImages = imageResponse.map((image) =>
+        hydrateImage(image, project.settings),
+      );
+      const projectSnapshot = hydrateProject(projectResponse);
+      set((state) => ({
+        ...mergeProjectSnapshot(state, projectSnapshot),
+        jobs,
+        images: refreshedImages.map((image) => {
+          const previous = state.images.find((entry) => entry.id === image.id);
+          return {
+            ...image,
+            detectorProvider: image.detectorProvider ?? previous?.detectorProvider,
+            ocrProvider: image.ocrProvider ?? previous?.ocrProvider,
+            translatorProvider: image.translatorProvider ?? previous?.translatorProvider,
+            inpaintingProvider: image.inpaintingProvider ?? previous?.inpaintingProvider,
+            typesettingProvider: image.typesettingProvider ?? previous?.typesettingProvider,
+          };
+        }),
+      }));
+      const activeImageId = get().activeImageId;
+      if (activeImageId && jobs.some((job) => job.status === 'completed')) {
+        await get().loadRegions(activeImageId, true);
+      }
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+    }
+  },
+
+  runJobAction: async (jobId, action) => {
+    try {
+      const updated = hydrateJob(await api.jobAction(jobId, action));
+      set((state) => ({
+        jobs: state.jobs.map((job) => (job.id === updated.id ? updated : job)),
+      }));
+      const projectId = get().currentProject?.id;
+      if (projectId) await synchronizeProject(projectId);
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+    }
+  },
+
+  dismissError: () => set({ globalError: '' }),
+}));
+
+export function resetWorkbenchStore(): void {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = null;
+  activeSave = null;
+  inFlightRegionMutationIds.clear();
+  useWorkbenchStore.setState({ ...initialUiState, theme: 'dark' });
+}
+
+export function activeImage(state: WorkbenchState): ImageAsset | null {
+  return state.images.find((image) => image.id === state.activeImageId) ?? null;
+}
+
+const STABLE_EMPTY_REGIONS: Region[] = [];
+
+export function activeRegions(state: WorkbenchState): Region[] {
+  return state.activeImageId
+    ? state.regionsByImage[state.activeImageId] ?? STABLE_EMPTY_REGIONS
+    : STABLE_EMPTY_REGIONS;
+}
+
+export function selectedRegions(state: WorkbenchState): Region[] {
+  const ids = new Set(state.selectedRegionIds);
+  return activeRegions(state).filter((region) => ids.has(region.id));
+}
+
+export function hasPendingChanges(state: WorkbenchState): boolean {
+  return Boolean(state.pendingProjectMutation || state.pendingRegionMutations.length);
+}
+
+export function providerAvailable(
+  state: WorkbenchState,
+  kind: AppCapabilities['providers'][number]['kind'],
+  providerId: string | undefined,
+): boolean {
+  if (!providerId) return false;
+  return Boolean(
+    state.capabilities.providers.find(
+      (provider) => provider.kind === kind && provider.id === providerId && provider.available,
+    ),
+  );
+}

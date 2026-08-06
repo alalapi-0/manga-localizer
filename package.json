@@ -1,0 +1,23 @@
+{
+  "name": "manga-localizer",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Local-first manga OCR, translation, review, inpainting, and typesetting workbench",
+  "scripts": {
+    "setup": "uv sync --project backend --group dev && npm --prefix frontend install",
+    "setup:test": "npm run setup && npx playwright install chromium",
+    "dev": "node scripts/dev.mjs",
+    "check": "npm run check:launcher && npm run check:backend && npm run check:frontend",
+    "check:launcher": "node --test scripts/dev-platform.test.mjs",
+    "check:backend": "uv run --project backend ruff check backend scripts/audit_release.py && uv run --project backend ruff format --check backend scripts/audit_release.py && uv run --project backend pytest backend/tests",
+    "check:frontend": "npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run test -- --run && npm --prefix frontend run build",
+    "test:e2e": "playwright test",
+    "audit:release": "uv run --project backend python scripts/audit_release.py"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  }
+}

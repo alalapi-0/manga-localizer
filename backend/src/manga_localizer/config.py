@@ -1,0 +1,109 @@
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import AliasChoices, Field, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from manga_localizer.security import is_loopback_host, validate_remote_base_url
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_prefix="MANGA_LOCALIZER_",
+        env_file=None,
+        extra="ignore",
+    )
+
+    data_dir: Path = Field(default_factory=lambda: Path.home() / ".manga-localizer")
+    host: str = Field(
+        default="127.0.0.1",
+        validation_alias=AliasChoices("MANGA_LOCALIZER_HOST", "HOST"),
+    )
+    port: int = Field(
+        default=8000,
+        ge=1,
+        le=65535,
+        validation_alias=AliasChoices("MANGA_LOCALIZER_PORT", "PORT"),
+    )
+    log_level: str = Field(
+        default="info",
+        validation_alias=AliasChoices("MANGA_LOCALIZER_LOG_LEVEL", "LOG_LEVEL"),
+    )
+    ocr_languages: str = Field(
+        default="jpn,jpn_vert",
+        validation_alias=AliasChoices("MANGA_LOCALIZER_OCR_LANGUAGES", "OCR_LANGUAGES"),
+    )
+    ocr_default_direction: str = "auto"
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    tesseract_command: str = Field(
+        default="tesseract",
+        validation_alias=AliasChoices(
+            "MANGA_LOCALIZER_TESSERACT_COMMAND",
+            "MANGA_LOCALIZER_TESSERACT_CMD",
+            "TESSERACT_CMD",
+        ),
+    )
+    max_upload_bytes: int = 100 * 1024 * 1024
+    thumbnail_size: int = 384
+    worker_poll_seconds: float = 0.15
+    remote_context_items: int = 6
+    remote_context_chars: int = 4_000
+    openai_api_key: str | None = Field(default=None, repr=False)
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4.1-mini"
+
+    @property
+    def catalog_path(self) -> Path:
+        return self.data_dir / "catalog.json"
+
+    @property
+    def ocr_language_list(self) -> list[str]:
+        return [language.strip() for language in self.ocr_languages.split(",") if language.strip()]
+
+    @field_validator("ocr_languages")
+    @classmethod
+    def valid_ocr_languages(cls, value: str) -> str:
+        languages = [language.strip() for language in value.split(",") if language.strip()]
+        if not languages:
+            raise ValueError("ocr_languages must contain at least one Tesseract language")
+        return ",".join(languages)
+
+    @field_validator("log_level")
+    @classmethod
+    def valid_log_level(cls, value: str) -> str:
+        normalized = value.lower()
+        if normalized not in {"critical", "error", "warning", "info", "debug"}:
+            raise ValueError("log_level must be critical, error, warning, info, or debug")
+        return normalized
+
+    @field_validator("host")
+    @classmethod
+    def loopback_only(cls, value: str) -> str:
+        value = value.strip()
+        if not is_loopback_host(value):
+            raise ValueError("host must resolve explicitly to a loopback address")
+        return value
+
+    @field_validator("openai_model")
+    @classmethod
+    def nonempty_openai_model(cls, value: str) -> str:
+        return value.strip() or "gpt-4.1-mini"
+
+    @field_validator("openai_base_url")
+    @classmethod
+    def valid_openai_base_url(cls, value: str) -> str:
+        return validate_remote_base_url(value)
+
+    @field_validator("ocr_default_direction")
+    @classmethod
+    def valid_ocr_direction(cls, value: str) -> str:
+        if value not in {"auto", "horizontal", "vertical"}:
+            raise ValueError("ocr_default_direction must be auto, horizontal, or vertical")
+        return value
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

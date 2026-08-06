@@ -1,0 +1,248 @@
+export type Theme = 'dark' | 'light';
+export type CanvasMode = 'original' | 'erased' | 'typeset';
+export type CanvasTool = 'select' | 'region' | 'hand';
+export type RightPanelTab = 'text' | 'typesetting' | 'repair' | 'project';
+
+export type StageState =
+  | 'not_started'
+  | 'queued'
+  | 'running'
+  | 'done'
+  | 'failed'
+  | 'unavailable';
+
+export type RegionType =
+  | 'dialogue'
+  | 'narration'
+  | 'sound_effect'
+  | 'title'
+  | 'ruby'
+  | 'background'
+  | 'unknown'
+  | 'thought'
+  | 'sign'
+  | 'other';
+
+export type TextDirection = 'vertical' | 'horizontal' | 'auto';
+
+export interface ProviderCapability {
+  id: string;
+  label: string;
+  kind: 'detector' | 'ocr' | 'translator' | 'inpainter' | 'typesetter';
+  available: boolean;
+  configurable?: boolean;
+  local: boolean;
+  isMock: boolean;
+  reason?: string;
+}
+
+export interface AppCapabilities {
+  providers: ProviderCapability[];
+  version?: string;
+  system?: Record<string, string | boolean | number>;
+}
+
+export interface ProjectSettings {
+  sourceLanguage: string;
+  targetLanguage: string;
+  detectorProvider: string;
+  ocrProvider: string;
+  translatorProvider: string;
+  inpainterProvider: string;
+  contextPages: number;
+  glossary: string;
+  characterNames: string;
+  remoteEndpoint: string;
+  remoteModel: string;
+  apiKeyConfigured: boolean;
+  preserveTree: boolean;
+}
+
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  rootPath?: string;
+  manifestPath?: string;
+  imageCount: number;
+  updatedAt?: string;
+  revision: number;
+}
+
+export interface Project extends ProjectSummary {
+  settings: ProjectSettings;
+  createdAt?: string;
+}
+
+export interface PipelineStatus {
+  import: StageState;
+  detection: StageState;
+  ocr: StageState;
+  translation: StageState;
+  inpaint: StageState;
+  typeset: StageState;
+  export: StageState;
+}
+
+export interface ImageAsset {
+  id: string;
+  projectId: string;
+  name: string;
+  relativePath: string;
+  width: number;
+  height: number;
+  regionCount: number;
+  confirmedCount: number;
+  ignoredCount: number;
+  status: PipelineStatus;
+  detectorProvider?: string;
+  ocrProvider?: string;
+  translatorProvider?: string;
+  inpaintingProvider?: string;
+  typesettingProvider?: string;
+  revision: number;
+  error?: string;
+}
+
+export interface RegionStyle {
+  fontFamily: string;
+  fontSize: number;
+  autoFit: boolean;
+  color: string;
+  strokeColor: string;
+  strokeWidth: number;
+  lineHeight: number;
+  letterSpacing: number;
+  align: 'start' | 'center' | 'end';
+  padding: number;
+}
+
+export interface RepairSettings {
+  method: 'telea' | 'navier_stokes' | 'solid';
+  maskPadding: number;
+  dilation: number;
+  radius: number;
+  fillColor: string;
+}
+
+export interface Region {
+  id: string;
+  imageId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  sourceText: string;
+  translationText: string;
+  type: RegionType;
+  direction: TextDirection;
+  order: number;
+  confidence: number | null;
+  ignored: boolean;
+  confirmed: boolean;
+  style: RegionStyle;
+  repair: RepairSettings;
+  revision: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type JobKind = 'detect' | 'ocr' | 'translate' | 'inpaint' | 'typeset' | 'export';
+export type JobStatus =
+  | 'queued'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'unavailable';
+
+export interface JobItem {
+  id: string;
+  imageId?: string;
+  label: string;
+  status: JobStatus;
+  progress: number;
+  error?: string;
+}
+
+export interface Job {
+  id: string;
+  projectId: string;
+  kind: JobKind;
+  status: JobStatus;
+  progress: number;
+  total: number;
+  completed: number;
+  error?: string;
+  items: JobItem[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ExportOptions {
+  format: 'images' | 'json' | 'both';
+  outputPath?: string;
+  conflict: 'rename' | 'overwrite' | 'skip';
+  preserveTree: boolean;
+  concurrency?: number;
+}
+
+export interface BatchRequest {
+  imageIds: string[];
+  regionIds?: string[];
+  options?: Record<string, unknown>;
+}
+
+export interface RevisionConflict {
+  expectedRevision?: number;
+  actualRevision?: number;
+  resource?: unknown;
+}
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
+  sourceLanguage: 'ja',
+  targetLanguage: 'zh-CN',
+  detectorProvider: 'tesseract',
+  ocrProvider: 'tesseract',
+  translatorProvider: 'manual',
+  inpainterProvider: 'opencv',
+  contextPages: 1,
+  glossary: '',
+  characterNames: '',
+  remoteEndpoint: '',
+  remoteModel: '',
+  apiKeyConfigured: false,
+  preserveTree: true,
+};
+
+export const DEFAULT_REGION_STYLE: RegionStyle = {
+  fontFamily: 'system-ui',
+  fontSize: 28,
+  autoFit: true,
+  color: '#171717',
+  strokeColor: '#ffffff',
+  strokeWidth: 1,
+  lineHeight: 1.15,
+  letterSpacing: 0,
+  align: 'center',
+  padding: 8,
+};
+
+export const DEFAULT_REPAIR_SETTINGS: RepairSettings = {
+  method: 'telea',
+  maskPadding: 4,
+  dilation: 2,
+  radius: 3,
+  fillColor: '#ffffff',
+};
+
+export const EMPTY_PIPELINE_STATUS: PipelineStatus = {
+  import: 'done',
+  detection: 'not_started',
+  ocr: 'not_started',
+  translation: 'not_started',
+  inpaint: 'not_started',
+  typeset: 'not_started',
+  export: 'not_started',
+};

@@ -2,6 +2,13 @@
 .env
 .env.*
 !.env.example
+.npmrc
+.pypirc
+.netrc
+*.pem
+*.key
+*.p12
+*.log
 
 # Python
 __pycache__/
@@ -19,6 +26,7 @@ dist/
 coverage/
 playwright-report/
 test-results/
+tests/e2e/.generated/
 
 # Runtime and user content
 .manga-localizer/
@@ -35,7 +43,30 @@ output/
 *.onnx
 *.pt
 *.pth
+*.ckpt
+*.gguf
+*.tflite
+*.h5
+*.hdf5
+*.pkl
+*.joblib
 *.safetensors
+*.ttf
+*.ttc
+*.otf
+*.woff
+*.woff2
+*.eot
+
+# Portable project/output trees created anywhere inside the checkout
+source/
+translated/
+original-text/
+translated-text/
+masks/
+project/
+generated/
+exports/
 
 # Editors / OS
 .DS_Store

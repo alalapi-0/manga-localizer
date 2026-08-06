@@ -1,0 +1,44 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Node
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Runtime and user content
+.manga-localizer/
+runtime/
+projects/
+output/
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.traineddata
+*.onnx
+*.pt
+*.pth
+*.safetensors
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp

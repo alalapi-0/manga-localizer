@@ -256,25 +256,30 @@ docs/           architecture, model, provider, privacy, and contributor document
 
 ## FAQ
 
-**Does OCR also translate?**  
+### Does OCR also translate?
+
 No. Detection, OCR, reading order, and translation are explicit separate stages.
 
-**Why is the repaired background imperfect?**  
+### Why is the repaired background imperfect?
+
 The default OpenCV algorithm interpolates nearby pixels; it does not understand line art. Adjust the
 text box and its mask padding/dilation, preserve the source region, or use an external editor for
 difficult textures. The MVP has no manual mask brush.
 
-**Can I use a commercial font?**  
+### Can I use a commercial font?
+
 Configure a font you are licensed to use. This repository does not ship fonts.
 
-**Where are my projects?**  
+### Where are my projects?
+
 The output root you chose contains the portable database and JSON manifest. If you leave it blank,
 projects are created below `MANGA_LOCALIZER_DATA_DIR/projects/`; that data directory defaults to
 `~/.manga-localizer`. Copying `.env.example` intentionally overrides it with the repository-relative
 `.manga-localizer` directory unless you edit that value. A local catalog there remembers recent project
 manifests. The JSON snapshot is inspectable, but reopening still requires the adjacent SQLite database.
 
-**The OCR health check fails.**  
+### The OCR health check fails
+
 Run `tesseract --version` and `tesseract --list-langs`, confirm `jpn` is present, and see
 [Troubleshooting](docs/troubleshooting.md).
 

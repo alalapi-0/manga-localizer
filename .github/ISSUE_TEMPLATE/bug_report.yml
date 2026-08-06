@@ -47,4 +47,3 @@ body:
           required: true
         - label: I have permission to redistribute every attached image.
           required: true
-

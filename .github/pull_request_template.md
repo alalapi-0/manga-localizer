@@ -25,4 +25,3 @@ every attached asset.
 ## Documentation
 
 Note README, provider, privacy, roadmap, or changelog changes—or explain why none are needed.
-

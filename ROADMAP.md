@@ -30,4 +30,3 @@
 - PDF/EPUB workflows, opt-in encrypted sync, and collaboration
 
 Roadmap items are intentions, not current capabilities or delivery commitments.
-

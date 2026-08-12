@@ -4,7 +4,7 @@ This is the detailed private real-data evidence and round log routed from `.agen
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 
-Last updated: 2026-08-08
+Last updated: 2026-08-12
 
 ## Current phase
 
@@ -210,6 +210,6 @@ before unattended publication would be appropriate.
   visibility, and full representative real pipeline.
 - **Round 6:** used new real failures to remove unsafe edge defaults, stale polygons, detector fallback,
   and unsafe typesetting over skipped regions; reran every affected comparison.
-- **Round 7:** completed public documentation and cleanup; passed 117 backend tests, 47 frontend tests,
+- **Round 7:** completed public documentation and cleanup; passed 130 backend tests, 64 frontend tests,
   two Playwright Chromium journeys, production builds, release/privacy scans, and the final three-image
   real-provider regression.

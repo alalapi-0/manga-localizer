@@ -300,10 +300,10 @@ npm run audit:release       # secrets, personal paths, weights, fonts, DBs, larg
 Run `npm run setup:test` once before the first Playwright run. Backend-only and frontend-only
 commands are documented in [Development](docs/development.md).
 
-The current Unreleased candidate was verified on 2026-08-08:
+The current Unreleased candidate was verified on 2026-08-12:
 
-- `npm run check`: 2 launcher tests, Ruff lint/format, 117 backend pytest cases, ESLint, TypeScript,
-  47 frontend Vitest cases, and the production Vite build
+- `npm run check`: 2 launcher tests, Ruff lint/format, 130 backend pytest cases, ESLint, TypeScript,
+  64 frontend Vitest cases, and the production Vite build
 - Playwright: 2 Chromium journeys, including preprocessing, real local detection/OCR, actual mask
   preview, repair, typesetting, export, and project reopen
 - Private real-data regression: all 130 supplied images completed the comparison runs; the exact final

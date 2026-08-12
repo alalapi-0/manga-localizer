@@ -22,9 +22,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 Real-data Round 7 — implementation, failure-driven repair, documentation, exact-candidate regression,
 and public-tree cleanup are complete. `TASK_CONTRACT v1` governs exact-candidate closure. Root has
 reproduced the public automated, browser, release, lock, compile, and diff checks; privacy/integrity
-registration and fresh exact-state Judge/Governor decisions remain before delivery. The candidate is on
-local non-default branch `agent/manga-round7-governance-20260812`; no commit, push, release, deployment,
-or publication has yet been performed in this closure round.
+registration and fresh exact-state Judge/Governor decisions remain before delivery. The implementation
+commit `bf8c75e971c0d73243b1394ddc97febc0c14e2a2` and its documentation-consistency child are local-only
+on non-default branch `agent/manga-round7-governance-20260812`; no push, release, deployment, or
+publication has occurred.
 
 ## Environment evidence
 
@@ -122,5 +123,5 @@ Independent exact-state review is the acceptance mechanism for delivery, not a p
   reconstruction artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, a pixel brush/eraser, line-art-aware restoration comparisons, and a
   real Real-ESRGAN run remain roadmap work.
-- The worktree remains local and uncommitted pending exact candidate registration and independent review.
-  No commit, tag, remote creation, push, release, or deployment has been performed or inferred.
+- The exact candidate is a local-only commit pending renewed independent review after documentation
+  synchronization. No tag, remote creation, push, release, or deployment has been performed or inferred.

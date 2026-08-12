@@ -23,9 +23,9 @@ Real-data Round 7 — implementation, failure-driven repair, documentation, exac
 and public-tree cleanup are complete. `TASK_CONTRACT v1` governs exact-candidate closure. Root has
 reproduced the public automated, browser, release, lock, compile, and diff checks; privacy/integrity
 registration and fresh exact-state Judge/Governor decisions remain before delivery. The implementation
-commit `bf8c75e971c0d73243b1394ddc97febc0c14e2a2` and its documentation-consistency child are local-only
-on non-default branch `agent/manga-round7-governance-20260812`; no push, release, deployment, or
-publication has occurred.
+commit `bf8c75e971c0d73243b1394ddc97febc0c14e2a2` and its forward documentation-consistency repairs are
+local-only on non-default branch `agent/manga-round7-governance-20260812`; the exact current tip is
+registered in task evidence. No push, release, deployment, or publication has occurred.
 
 ## Environment evidence
 
@@ -105,8 +105,8 @@ publication has occurred.
   / 31 non-empty OCR regions, 13 OCR retries / 5 original selections, 15 eligible / 15 repaired / 20
   skipped regions, zero source checksum or dimension failures, and zero changed pixels outside masks.
   One zero-mask negative remained pixel-identical from source through repair and typesetting.
-- Release/privacy reproduced on 2026-08-12: `npm run audit:release` scanned 108 candidate files and 160
-  historical blobs with zero findings. `uv lock --check`, compileall, and `git diff --check` passed;
+- Release/privacy reproduced on 2026-08-12: `npm run audit:release` scanned 108 candidate files and all
+  reachable historical blobs with zero findings. `uv lock --check`, compileall, and `git diff --check` passed;
   ignored/private/model/DB
   paths have zero tracked files and the public candidate contains no private sample name or personal
   absolute path.

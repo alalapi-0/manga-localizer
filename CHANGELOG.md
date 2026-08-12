@@ -54,7 +54,7 @@ Semantic Versioning.
 - Added focused backend/frontend regression coverage for preprocessing, coordinate mapping, OCR retry,
   empty-detection semantics, provider routing, LaMa contracts, text masks, safe editing, partial batch
   creation, and pending-edit refresh behavior.
-- The final candidate passed 117 backend tests, 47 frontend tests, two Playwright Chromium journeys,
+- The final candidate passed 130 backend tests, 64 frontend tests, two Playwright Chromium journeys,
   production builds, release/privacy checks, and a repeated three-image real PP-OCRv3/LaMa pipeline with
   zero stage failures or mask-outside pixel changes.
 

@@ -36,6 +36,7 @@ class OCRRegion:
     text: str
     confidence: float | None
     direction: str
+    polygon: tuple[tuple[float, float], ...] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -73,6 +74,8 @@ class OCRProvider(Protocol):
 
 
 class TesseractOCRProvider:
+    name = "tesseract"
+
     """A real local Tesseract adapter; unavailable language packs never fall back to mock OCR."""
 
     def __init__(self, command: str = "tesseract", timeout: float = 120.0):

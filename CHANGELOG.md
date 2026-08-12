@@ -5,6 +5,68 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Added
+
+- Persisted, batch-capable image preprocessing with OpenCV/Pillow profiles and independent upscale,
+  denoise, sharpen, contrast, edge, and binarization controls; enhanced-image preview and canonical
+  coordinate mapping.
+- Optional Real-ESRGAN NCNN preprocessing adapter with an honest unavailable state and no implicit
+  downloads.
+- Optional PP-OCRv3 OpenCV-DNN polygon detector, separated from Tesseract recognition.
+- Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact
+  mask-outside preservation, and an explicit checksum-verifying model installer.
+- Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
+  editable region boundaries for manual mask correction.
+- Private path-parameterized real-data evaluator with a non-sensitive run-configuration snapshot,
+  aggregate/per-image OCR coverage, stage failures, source checksum, dimensions, mask coverage, and
+  mask-outside change metrics; OCR text and model paths are omitted.
+
+### Changed
+
+- OCR retries low/empty preprocessed crops against the immutable original and records attempt/input
+  provenance.
+- Inpainting now selects the requested registry provider exactly, rejects unknown IDs, records actual
+  provenance, and defaults to a safe eligibility policy that skips empty or untrusted automatic regions.
+- OpenCV repair soft-composites feathered masks instead of discarding the feather through
+  binarization; typesetting and inpainting provider selection are now independent. Typesetting requires
+  both safe-repair eligibility and intersection with the actual generated mask.
+- Completed zero-detection pages remain authoritative and are no longer silently re-detected by the
+  project fallback during OCR.
+- Moving, resizing, merging, or splitting a detector-created region discards its stale polygon so its
+  current geometry controls the manual mask.
+- Repair settings now have one persisted canonical default across API, queue, and UI; full-region mode
+  explicitly ignores detector polygons.
+- Batch jobs enter the frontend state as each stage is created, and task refresh rechecks request
+  freshness and pending edits before applying a server response. The batch action footer remains
+  reachable on short viewports.
+- Generated preview and comparison controls, including keyboard shortcuts and cross-page state, stay
+  disabled or return to the original until a real enhanced, repaired, or typeset artifact exists.
+- OCR-friendly edge enhancement is opt-in after real line-art testing showed severe false positives.
+
+### Verification
+
+- Copied 130 private JPEG inputs into the ignored project test boundary and completed multiple full
+  detection/OCR comparisons plus a complete original end-to-end baseline; no real image, output, OCR
+  text, model weight, or personal path is tracked.
+- Ran the real LaMa model on a complex background crop: source checksum and dimensions were preserved
+  and zero pixels outside the mask changed. Visual reconstruction improved substantially over the
+  destructive baseline but still showed a visible light reconstruction band.
+- Added focused backend/frontend regression coverage for preprocessing, coordinate mapping, OCR retry,
+  empty-detection semantics, provider routing, LaMa contracts, text masks, safe editing, partial batch
+  creation, and pending-edit refresh behavior.
+- The final candidate passed 117 backend tests, 47 frontend tests, two Playwright Chromium journeys,
+  production builds, release/privacy checks, and a repeated three-image real PP-OCRv3/LaMa pipeline with
+  zero stage failures or mask-outside pixel changes.
+
+### Known limitations
+
+- The private set has no box/transcription ground truth, so region coverage, confidence, and character
+  counts are proxies rather than detection recall or OCR accuracy.
+- AI preprocessing via Real-ESRGAN still requires a separately installed executable/model, and LaMa
+  remains CPU-expensive and imperfect on line art fully hidden by lettering.
+- Mask correction uses editable region geometry and mode/settings; a pixel-level brush/eraser is still
+  roadmap work.
+
 ## [0.2.0] - 2026-08-06
 
 ### Added

@@ -82,7 +82,7 @@ def _portable_assets(
             )
         )
         image_relative = safe_relative_path(image.relative_path).with_suffix(".png")
-        for variant in ("inpainted", "typeset", "masks"):
+        for variant in ("preprocessed", "inpainted", "typeset", "masks"):
             relative = Path("generated") / variant / image_relative
             source = resolve_write_target(
                 store.root,
@@ -142,9 +142,16 @@ def _validate_export_artifact_targets(
         options = dict(job.options)
     preserve_tree = bool(options.get("preserveTree", True))
     export_format = str(options.get("format", "both"))
-    for bundle_target in ("project/project.json", "project/project.sqlite3"):
+    image_variant = str(options.get("imageVariant", "typeset"))
+    if export_format == "both":
+        for bundle_target in ("project/project.json", "project/project.sqlite3"):
+            _assert_not_original(
+                _export_write_target(store, export_root, bundle_target),
+                protection,
+            )
+    elif export_format == "json":
         _assert_not_original(
-            _export_write_target(store, export_root, bundle_target),
+            _export_write_target(store, export_root, "export.json"),
             protection,
         )
     for image in images:
@@ -152,12 +159,11 @@ def _validate_export_artifact_targets(
         relative = source_relative if preserve_tree else Path(source_relative.name)
         targets: list[Path] = []
         if export_format in {"images", "both"}:
-            targets.extend(
-                (
-                    Path("translated") / relative.with_suffix(".png"),
-                    Path("masks") / relative.with_suffix(".png"),
-                )
-            )
+            if image_variant in {"typeset", "both"}:
+                targets.append(Path("translated") / relative.with_suffix(".png"))
+            if image_variant in {"inpainted", "both"}:
+                targets.append(Path("clean") / relative.with_suffix(".png"))
+            targets.append(Path("masks") / relative.with_suffix(".png"))
         if export_format in {"json", "both"}:
             targets.extend(
                 (
@@ -438,7 +444,13 @@ def validate_project_bundle_target(
     return True
 
 
-def choose_export_root(store: ProjectStore, output_path: str | None, job_id: str) -> Path:
+def choose_export_root(
+    store: ProjectStore,
+    output_path: str | None,
+    job_id: str,
+    *,
+    include_assets: bool = True,
+) -> Path:
     root_entry = Path(output_path).expanduser() if output_path else store.root
     if root_entry.is_symlink():
         raise UnsafePathError("Export root must not be a symlink")
@@ -461,7 +473,7 @@ def choose_export_root(store: ProjectStore, output_path: str | None, job_id: str
         root,
         recovery_job_id=job_id,
     )
-    if root != store.root.resolve():
+    if root != store.root.resolve() and include_assets:
         _validate_portable_asset_targets(
             store,
             root,
@@ -481,7 +493,7 @@ def ensure_project_bundle(
     *,
     finalized_job_id: str | None = None,
 ) -> None:
-    """Place a sanitized, reopenable project snapshot and its local assets in a custom export."""
+    """Place a sanitized, reopenable project snapshot and its local image assets."""
     if export_root.resolve() == store.root.resolve():
         store.write_snapshot()
         return
@@ -580,6 +592,8 @@ def _portable_existing_path(path: Path) -> Path | None:
 
 
 def _conflict_path(path: Path, conflict: str) -> tuple[Path | None, str]:
+    if conflict not in {"rename", "overwrite", "skip"}:
+        raise ProjectError("Export conflict strategy must be rename, overwrite, or skip")
     existing = _portable_existing_path(path)
     if existing is None:
         return path, "created"
@@ -587,8 +601,6 @@ def _conflict_path(path: Path, conflict: str) -> tuple[Path | None, str]:
         return None, "skipped"
     if conflict == "overwrite":
         return existing, "overwritten"
-    if conflict != "rename":
-        raise ProjectError("Export conflict strategy must be rename, overwrite, or skip")
     counter = 2
     candidate = path
     while _portable_existing_path(candidate) is not None:
@@ -618,6 +630,69 @@ def _write_json(payload: dict[str, Any], target: Path, conflict: str) -> tuple[P
     return destination, resolution
 
 
+def write_json_export_summary(
+    store: ProjectStore,
+    export_root: Path,
+    job_id: str,
+) -> dict[str, str | None]:
+    """Write the path-only aggregate index for a metadata-only export."""
+    with store.session() as session:
+        job = session.get(Job, job_id)
+        if job is None or job.kind != "export":
+            raise ProjectError("JSON export job was not found")
+        project = store.project(session)
+        options = dict(job.options)
+        items = sorted(job.items, key=lambda item: item.position)
+
+        def item_artifact(output: dict[str, Any], key: str) -> str | None:
+            entry = output.get(key)
+            artifact = entry.get("artifact") if isinstance(entry, dict) else None
+            if artifact is None:
+                return None
+            if not isinstance(artifact, str):
+                raise ProjectError("JSON export item contains an invalid artifact path")
+            return safe_relative_path(artifact).as_posix()
+
+        images = []
+        for item in items:
+            output = dict(item.output or {})
+            relative_path = output.get("relativePath")
+            export_relative_path = output.get("exportRelativePath")
+            if not isinstance(relative_path, str) or not isinstance(export_relative_path, str):
+                raise ProjectError("JSON export item is missing relative path metadata")
+            images.append(
+                {
+                    "imageId": item.image_id,
+                    "relativePath": safe_relative_path(relative_path).as_posix(),
+                    "exportRelativePath": safe_relative_path(export_relative_path).as_posix(),
+                    "originalText": item_artifact(output, "originalText"),
+                    "translatedText": item_artifact(output, "translatedText"),
+                }
+            )
+        payload = {
+            "formatVersion": 1,
+            "kind": "manga-localizer-json-export",
+            "project": {
+                "id": project.id,
+                "name": project.name,
+                "schemaVersion": project.schema_version,
+            },
+            "export": {
+                "jobId": job.id,
+                "format": "json",
+                "preserveTree": options.get("preserveTree", True),
+            },
+            "images": images,
+        }
+        conflict = str(options.get("conflict", "rename"))
+    target = _export_write_target(store, export_root, "export.json")
+    path, resolution = _write_json(payload, target, conflict)
+    return {
+        "artifact": _artifact_path(export_root, path),
+        "conflict": resolution,
+    }
+
+
 def export_image(
     store: ProjectStore,
     image_id: str,
@@ -626,9 +701,12 @@ def export_image(
     export_format: str,
     conflict: str,
     preserve_tree: bool = True,
+    image_variant: str = "typeset",
 ) -> dict[str, Any]:
     if export_format not in {"images", "json", "both"}:
         raise ProjectError("Export format must be images, json, or both")
+    if image_variant not in {"typeset", "inpainted", "both"}:
+        raise ProjectError("Export imageVariant must be typeset, inpainted, or both")
     with store.session() as session:
         image = session.get(ImageAsset, image_id)
         if image is None:
@@ -646,32 +724,48 @@ def export_image(
         "imageId": image.id,
         "relativePath": source_relative.as_posix(),
         "exportRelativePath": relative.as_posix(),
+        "imageVariant": image_variant,
     }
     if export_format in {"images", "both"}:
-        if image.status.get("typeset") != "done" or image.status.get("inpaint") != "done":
-            raise ProjectError(
-                f"Rendered output is stale for {image.relative_path}; page was not exported"
+        image_sources: list[tuple[str, str, Path]] = []
+        if image_variant in {"typeset", "both"}:
+            if image.status.get("typeset") != "done" or image.status.get("inpaint") != "done":
+                raise ProjectError(
+                    f"Rendered output is stale for {image.relative_path}; page was not exported"
+                )
+            image_sources.append(
+                (
+                    "translatedImage",
+                    "translated",
+                    resolve_write_target(
+                        store.root,
+                        Path("generated") / "typeset" / source_relative.with_suffix(".png"),
+                        protected_roots=(store.source_root,),
+                    ),
+                )
             )
-        generated_relative = Path("generated") / "typeset" / source_relative.with_suffix(".png")
-        generated = resolve_write_target(
-            store.root,
-            generated_relative,
-            protected_roots=(store.source_root,),
-        )
-        if not generated.is_file():
-            raise ProjectError(
-                f"Typeset output is missing for {image.relative_path}; page was not exported"
+        if image_variant in {"inpainted", "both"}:
+            if image.status.get("inpaint") != "done":
+                raise ProjectError(
+                    f"Inpainted output is stale for {image.relative_path}; page was not exported"
+                )
+            image_sources.append(
+                (
+                    "cleanImage",
+                    "clean",
+                    resolve_write_target(
+                        store.root,
+                        Path("generated") / "inpainted" / source_relative.with_suffix(".png"),
+                        protected_roots=(store.source_root,),
+                    ),
+                )
             )
-        image_target = _export_write_target(
-            store,
-            export_root,
-            Path("translated") / relative.with_suffix(".png"),
-        )
-        path, resolution = _write_copy(generated, image_target, conflict)
-        output["translatedImage"] = {
-            "artifact": _artifact_path(export_root, path),
-            "conflict": resolution,
-        }
+        for output_key, _directory, generated in image_sources:
+            if not generated.is_file():
+                label = "Typeset" if output_key == "translatedImage" else "Inpainted"
+                raise ProjectError(
+                    f"{label} output is missing for {image.relative_path}; page was not exported"
+                )
         generated_mask = resolve_write_target(
             store.root,
             Path("generated") / "masks" / source_relative.with_suffix(".png"),
@@ -681,6 +775,24 @@ def export_image(
             raise ProjectError(
                 f"Render mask is missing for {image.relative_path}; page was not exported"
             )
+        if image.status.get("reviewState", "pending") not in {
+            "reviewed",
+            "no-text-reviewed",
+        }:
+            raise ProjectError(
+                f"Page review is pending for {image.relative_path}; page was not exported"
+            )
+        for output_key, directory, generated in image_sources:
+            image_target = _export_write_target(
+                store,
+                export_root,
+                Path(directory) / relative.with_suffix(".png"),
+            )
+            path, resolution = _write_copy(generated, image_target, conflict)
+            output[output_key] = {
+                "artifact": _artifact_path(export_root, path),
+                "conflict": resolution,
+            }
         mask_target = _export_write_target(
             store,
             export_root,
@@ -752,8 +864,9 @@ def export_image(
                 "artifact": _artifact_path(export_root, path),
                 "conflict": resolution,
             }
-    output["project"] = {
-        "manifest": "project/project.json",
-        "database": "project/project.sqlite3",
-    }
+    if export_format == "both":
+        output["project"] = {
+            "manifest": "project/project.json",
+            "database": "project/project.sqlite3",
+        }
     return output

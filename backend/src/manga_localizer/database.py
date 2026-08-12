@@ -74,12 +74,16 @@ class ImageAsset(Base):
     status: Mapped[dict[str, str]] = mapped_column(
         JSON,
         default=lambda: {
+            "preprocess": "pending",
             "detection": "pending",
             "ocr": "pending",
             "translation": "pending",
             "inpaint": "pending",
             "typeset": "pending",
             "export": "pending",
+            "reviewState": "pending",
+            "reviewedAt": "",
+            "preprocessingProvider": "",
             "detectorProvider": "",
             "ocrProvider": "",
             "translatorProvider": "",

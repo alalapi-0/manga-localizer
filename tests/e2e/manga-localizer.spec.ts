@@ -86,7 +86,13 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   const createDialog = page.getByRole('dialog', { name: '新建本地项目' });
   await createDialog.getByLabel('项目名称').fill(projectName);
   await createDialog.getByLabel('输出目录（可选）').fill(projectRoot);
+  const createResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'POST' && response.url().endsWith('/api/projects'),
+  );
   await createDialog.getByRole('button', { name: '创建项目' }).click();
+  const createResponse = await createResponsePromise;
+  expect(createResponse.status()).toBe(201);
+  const project = await createResponse.json() as { id: string };
   await expect(createDialog).toBeHidden();
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
 
@@ -99,30 +105,26 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   await page.getByLabel('日文原文').fill(sourceText);
   await page.getByLabel('中文译文').fill(translatedText);
   await page.getByLabel('文本方向').selectOption('horizontal');
-  await page.getByLabel('确认此文本框').check();
+  await page.getByLabel('确认此文本框').click();
+  await expect(page.getByLabel('确认此文本框')).toBeChecked();
   await page.keyboard.press('ControlOrMeta+S');
   await expect(page.locator('.save-status')).toContainText(/已保存|已同步/);
 
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const batchDialog = page.getByRole('dialog', { name: '批处理与导出' });
   await batchDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
-
-  const step = (label: string) => batchDialog
-    .locator('.pipeline-steps label')
-    .filter({ hasText: label })
-    .getByRole('checkbox');
-  await step('文字检测').uncheck();
-  await step('日文 OCR').uncheck();
-  await step('擦字修复').check();
-  await step('嵌字排版').check();
-  await step('安全导出').check();
-  await batchDialog.getByRole('button', { name: /加入队列/ }).click();
-
-  for (const label of ['擦字修复', '嵌字排版', '安全导出']) {
-    await expect(
-      batchDialog.locator('.job-card').filter({ hasText: label }),
-    ).toContainText('已完成', { timeout: 90_000 });
-  }
+  await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
+  await runOnlyStage(page, project.id, '嵌字排版', 'typeset');
+  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  const reviewResponse = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH'
+      && response.url().includes('/api/images/')
+      && response.url().endsWith('/review'),
+  );
+  await page.getByRole('button', { name: '标记本页已检查' }).click();
+  expect((await reviewResponse).status()).toBe(200);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+  await runOnlyStage(page, project.id, '安全导出', 'export');
 
   const translatedImage = path.join(projectRoot, 'translated', importedRelative, '001.png');
   const originalJson = path.join(projectRoot, 'original-text', importedRelative, '001.json');
@@ -226,6 +228,12 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   const batchDialog = page.getByRole('dialog', { name: '批处理与导出' });
   await batchDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
 
+  await runOnlyStage(page, project.id, '图片增强', 'preprocess');
+  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await page.getByRole('button', { name: '增强', exact: true }).click();
+  await expect(page.getByRole('application', { name: '增强画布' })).toBeVisible();
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+
   const detected = await runOnlyStage(page, project.id, '文字检测', 'detect');
   const detectedOutput = (detected.items as Array<{ output: { count: number } }>)[0]?.output;
   expect(detectedOutput?.count).toBeGreaterThan(0);
@@ -254,15 +262,58 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   await expect(inspector.getByLabel('日文原文')).not.toHaveValue('');
   await expect(inspector.getByLabel('中文译文')).not.toHaveValue('');
   await inspector.getByLabel('中文译文').fill(reviewedTranslation);
-  await inspector.getByLabel('确认此文本框').check();
+  await inspector.getByLabel('确认此文本框').click();
+  await expect(inspector.getByLabel('确认此文本框')).toBeChecked();
   await page.keyboard.press('ControlOrMeta+S');
   await expect(page.locator('.save-status')).toContainText(/已保存|已同步/);
+
+  const latestRegionsResponse = await page.request.get(
+    `/api/images/${recognizedImages[0]?.id}/regions`,
+  );
+  const latestRegions = await latestRegionsResponse.json() as Array<{
+    id: string;
+    ignored: boolean;
+    confirmed: boolean;
+    revision: number;
+  }>;
+  for (const region of latestRegions.filter((entry) => !entry.ignored && !entry.confirmed)) {
+    const response = await page.request.patch(`/api/regions/${region.id}`, {
+      data: { confirmed: true, ignored: false, expectedRevision: region.revision },
+    });
+    expect(response.ok()).toBe(true);
+  }
+  await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
+  await inspector.getByRole('tab', { name: '文本' }).click();
+  await inspector
+    .locator('.region-index button')
+    .filter({ hasText: recognizedRegion!.sourceText })
+    .first()
+    .click();
 
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const renderDialog = page.getByRole('dialog', { name: '批处理与导出' });
   await renderDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
   await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
+  await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await inspector.getByRole('tab', { name: '修复' }).click();
+  const maskResponsePromise = page.waitForResponse(
+    (response) => response.request().method() === 'GET'
+      && response.url().includes('/generated/mask'),
+  );
+  await inspector.getByLabel('显示实际蒙版').check();
+  expect((await maskResponsePromise).status()).toBe(200);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '嵌字排版', 'typeset');
+  await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  const reviewResponse = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH'
+      && response.url().includes('/api/images/')
+      && response.url().endsWith('/review'),
+  );
+  await inspector.getByRole('button', { name: '标记本页已检查' }).click();
+  expect((await reviewResponse).status()).toBe(200);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '安全导出', 'export');
 
   const translatedImage = path.join(projectRoot, 'translated', importedRelative, '001.png');
@@ -274,16 +325,20 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   );
   expect(existsSync(translatedImage)).toBe(true);
   expect(existsSync(translatedJson)).toBe(true);
+  expect(existsSync(path.join(projectRoot, 'generated', 'preprocessed', importedRelative, '001.png'))).toBe(true);
   expect(readFileSync(translatedJson, 'utf8')).toContain(reviewedTranslation);
   expect(checksum(fixtureImage)).toBe(originalChecksum);
 
   const imagesResponse = await page.request.get(`/api/projects/${project.id}/images`);
   const images = await imagesResponse.json() as Array<{
     status: Record<string, string>;
+    preprocessingProvider?: string;
     ocrProvider?: string;
   }>;
+  expect(images[0]?.preprocessingProvider).toBe('opencv-pillow');
   expect(images[0]?.ocrProvider).toBe('tesseract');
   expect(images[0]?.status).toMatchObject({
+    preprocess: 'done',
     detection: 'done',
     ocr: 'done',
     translation: 'done',

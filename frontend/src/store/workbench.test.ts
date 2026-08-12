@@ -202,6 +202,149 @@ describe('workbench store', () => {
     expect(remove).toHaveBeenCalledWith('region-1', 5);
   });
 
+  it('immediately clears stale confirmation for every substantive region edit and autosaves false', async () => {
+    const confirmed = regionFixture('region-1', { confirmed: true });
+    const cases: Array<[string, Partial<ReturnType<typeof regionFixture>>]> = [
+      ['geometry', { x: confirmed.x + 5 }],
+      ['text', { sourceText: '修改后的原文' }],
+      ['style', { style: { ...confirmed.style, fontSize: confirmed.style.fontSize + 2 } }],
+      ['repair', {
+        repair: {
+          ...confirmed.repair,
+          maskEdits: {
+            version: 1,
+            strokes: [{ mode: 'add', radius: 9, points: [[130, 150], [150, 170]] }],
+          },
+        },
+      }],
+      ['ignored', { ignored: true }],
+    ];
+
+    for (const [label, patch] of cases) {
+      seedWorkbench({
+        regions: [confirmed],
+        images: [imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, reviewState: 'reviewed' },
+        })],
+      });
+      useWorkbenchStore.getState().updateRegion('region-1', patch);
+
+      expect(
+        useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed,
+        label,
+      ).toBe(false);
+      expect(useWorkbenchStore.getState().images[0]?.status.reviewState, label).toBe('pending');
+      expect(
+        useWorkbenchStore.getState().pendingRegionMutations[0]?.region.confirmed,
+        label,
+      ).toBe(false);
+    }
+
+    seedWorkbench({ regions: [confirmed] });
+    useWorkbenchStore.getState().updateRegion('region-1', { sourceText: '需要撤销的编辑' });
+    useWorkbenchStore.getState().undo();
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      sourceText: confirmed.sourceText,
+      confirmed: false,
+    });
+
+    seedWorkbench({ regions: [confirmed] });
+    const update = vi.spyOn(api, 'updateRegion').mockImplementation(async (_id, patch) => ({
+      ...confirmed,
+      ...patch,
+      revision: 5,
+    }));
+    useWorkbenchStore.getState().updateRegion('region-1', { translationText: '新的译文' });
+    expect(await useWorkbenchStore.getState().flushAutosave()).toBe(true);
+    expect(update).toHaveBeenCalledWith('region-1', expect.objectContaining({
+      translationText: '新的译文',
+      confirmed: false,
+      expectedRevision: 4,
+    }));
+  });
+
+  it('flushes a delayed substantive edit before sending a sparse reconfirmation', async () => {
+    vi.useFakeTimers();
+    const confirmed = regionFixture('region-1', { confirmed: true });
+    seedWorkbench({ regions: [confirmed] });
+    const firstSave = deferred<ReturnType<typeof regionFixture>>();
+    let callCount = 0;
+    const update = vi.spyOn(api, 'updateRegion').mockImplementation(async (_id, patch) => {
+      callCount += 1;
+      if (callCount === 1) return firstSave.promise;
+      return {
+        ...confirmed,
+        translationText: '编辑后译文',
+        confirmed: true,
+        revision: 6,
+        ...patch,
+      };
+    });
+
+    useWorkbenchStore.getState().updateRegion('region-1', {
+      translationText: '编辑后译文',
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed).toBe(false);
+
+    const reconfirming = useWorkbenchStore.getState().setRegionConfirmed('region-1', true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenNthCalledWith(1, 'region-1', expect.objectContaining({
+      translationText: '编辑后译文',
+      confirmed: false,
+      expectedRevision: 4,
+    }));
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed).toBe(false);
+
+    firstSave.resolve({
+      ...confirmed,
+      translationText: '编辑后译文',
+      confirmed: false,
+      revision: 5,
+    });
+    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
+
+    expect(update).toHaveBeenNthCalledWith(2, 'region-1', {
+      confirmed: true,
+      expectedRevision: 5,
+    });
+    expect(await reconfirming).toBe(true);
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      translationText: '编辑后译文',
+      confirmed: true,
+      revision: 6,
+    });
+    expect(useWorkbenchStore.getState().pendingRegionMutations).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('keeps a region unconfirmed and surfaces the error when sparse reconfirmation fails', async () => {
+    seedWorkbench({ regions: [regionFixture('region-1', { confirmed: false })] });
+    vi.spyOn(api, 'updateRegion').mockRejectedValue(new Error('确认写入失败'));
+
+    expect(await useWorkbenchStore.getState().setRegionConfirmed('region-1', true)).toBe(false);
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed).toBe(false);
+    expect(useWorkbenchStore.getState().pendingRegionMutations).toHaveLength(0);
+    expect(useWorkbenchStore.getState().saveError).toBe('确认写入失败');
+  });
+
+  it('rejects page review states that do not match active region eligibility', async () => {
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1', { confirmed: true }),
+        regionFixture('region-2', { confirmed: false }),
+      ],
+    });
+    const review = vi.spyOn(api, 'reviewImage');
+
+    expect(await useWorkbenchStore.getState().reviewActiveImage('reviewed')).toBe(false);
+    expect(useWorkbenchStore.getState().globalError).toBe('还有 1 个活动文本框尚未确认。');
+    expect(await useWorkbenchStore.getState().reviewActiveImage('no-text-reviewed')).toBe(false);
+    expect(review).not.toHaveBeenCalled();
+  });
+
   it('reconciles image revision and invalidated render status after a region save', async () => {
     const rendered = imageFixture('image-1', {
       revision: 10,
@@ -329,6 +472,8 @@ describe('workbench store', () => {
         inpaint: 'done',
         typeset: 'done',
         export: 'done',
+        reviewState: 'reviewed',
+        reviewedAt: '2026-08-10T10:00:00Z',
       },
     });
     seedWorkbench({ images: [rendered] });
@@ -343,16 +488,31 @@ describe('workbench store', () => {
         translation: 'not_started',
         typeset: 'not_started',
         export: 'not_started',
+        reviewState: 'pending',
+        reviewedAt: null,
       },
     })]);
 
     useWorkbenchStore.getState().updateProjectSettings({ targetLanguage: 'zh-TW' });
+    expect(useWorkbenchStore.getState().images[0]).toMatchObject({
+      status: {
+        reviewState: 'pending',
+        translation: 'not_started',
+        typeset: 'not_started',
+        export: 'not_started',
+      },
+    });
     expect(await useWorkbenchStore.getState().flushAutosave()).toBe(true);
 
     expect(api.listImages).toHaveBeenCalledWith('project-1');
     expect(useWorkbenchStore.getState().images[0]).toMatchObject({
       revision: 11,
-      status: { translation: 'not_started', typeset: 'not_started', export: 'not_started' },
+      status: {
+        reviewState: 'pending',
+        translation: 'not_started',
+        typeset: 'not_started',
+        export: 'not_started',
+      },
     });
   });
 
@@ -380,7 +540,18 @@ describe('workbench store', () => {
   });
 
   it('merges selected regions, then undo restores the original boxes', () => {
-    seedWorkbench({ selectedRegionIds: ['region-1', 'region-2'] });
+    const polygon = [[100, 120], [320, 120], [320, 240], [100, 240]] as Array<[number, number]>;
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1', {
+          repair: { ...regionFixture('region-1').repair, detectorGenerated: true, maskPolygon: polygon },
+        }),
+        regionFixture('region-2', {
+          repair: { ...regionFixture('region-2').repair, detectorGenerated: true, maskPolygon: polygon },
+        }),
+      ],
+      selectedRegionIds: ['region-1', 'region-2'],
+    });
 
     useWorkbenchStore.getState().mergeSelectedRegions();
 
@@ -393,22 +564,44 @@ describe('workbench store', () => {
       height: 400,
       sourceText: 'こんにちは\nありがとう',
     });
+    expect(merged?.[0]?.repair).not.toHaveProperty('maskPolygon');
     expect(useWorkbenchStore.getState().pendingRegionMutations.map((entry) => entry.kind)).toEqual([
       'delete', 'delete', 'create',
     ]);
+    expect(
+      useWorkbenchStore.getState().pendingRegionMutations.find((entry) => entry.kind === 'create')
+        ?.region.repair,
+    ).not.toHaveProperty('maskPolygon');
 
     useWorkbenchStore.getState().undo();
     expect(useWorkbenchStore.getState().regionsByImage['image-1']).toHaveLength(2);
   });
 
   it('splits one region at a real midpoint and supports undo/redo', () => {
-    seedWorkbench({ regions: [regionFixture('region-1')], selectedRegionIds: ['region-1'] });
+    const original = regionFixture('region-1');
+    seedWorkbench({
+      regions: [{
+        ...original,
+        repair: {
+          ...original.repair,
+          detectorGenerated: true,
+          maskPolygon: [[100, 120], [320, 120], [320, 240], [100, 240]],
+        },
+      }],
+      selectedRegionIds: ['region-1'],
+    });
 
     useWorkbenchStore.getState().splitSelectedRegion('vertical');
     const split = useWorkbenchStore.getState().regionsByImage['image-1'];
     expect(split).toHaveLength(2);
     expect(split?.[0]?.width).toBe(110);
     expect(split?.[1]).toMatchObject({ x: 210, width: 110 });
+    expect(split?.every((region) => region.repair.maskPolygon === undefined)).toBe(true);
+    expect(
+      useWorkbenchStore.getState().pendingRegionMutations
+        .filter((entry) => entry.kind === 'create')
+        .every((entry) => entry.region.repair.maskPolygon === undefined),
+    ).toBe(true);
 
     useWorkbenchStore.getState().undo();
     expect(useWorkbenchStore.getState().regionsByImage['image-1']).toHaveLength(1);
@@ -554,7 +747,7 @@ describe('workbench store', () => {
     expect(await useWorkbenchStore.getState().startBatch(
       ['export', 'typeset', 'detect', 'translate', 'ocr', 'inpaint'],
       ['image-1'],
-      { format: 'both', conflict: 'rename', preserveTree: true },
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
       3,
     )).toBe(true);
 
@@ -569,6 +762,159 @@ describe('workbench store', () => {
         }),
       }));
     expect(vi.mocked(api.exportProject).mock.calls[0]?.[1].options.concurrency).toBe(1);
+  });
+
+  it('serializes preprocessing settings and marks the selected images as queued', async () => {
+    const preprocessing = {
+      profile: 'visual-quality' as const,
+      enableUpscale: true,
+      upscaleFactor: 4 as const,
+      enableDenoise: false,
+      enableSharpen: true,
+      enableContrastEnhance: false,
+      enableEdgeOptimize: true,
+      enableBinarize: true,
+      threshold: 203,
+    };
+    seedWorkbench({
+      project: projectFixture({
+        settings: {
+          ...projectFixture().settings,
+          preprocessorProvider: 'realesrgan-ncnn',
+          preprocessing,
+        },
+      }),
+    });
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-preprocess',
+      kind: 'preprocess',
+    }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['preprocess'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+      4,
+    )).toBe(true);
+
+    expect(startJob).toHaveBeenCalledWith('project-1', 'preprocess', {
+      imageIds: ['image-1'],
+      options: {
+        provider: 'realesrgan-ncnn',
+        preprocessing,
+        concurrency: 4,
+      },
+    });
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      jobs: [expect.objectContaining({ id: 'job-preprocess', kind: 'preprocess' })],
+      images: [
+        expect.objectContaining({
+          id: 'image-1',
+          preprocessingProvider: 'realesrgan-ncnn',
+          status: expect.objectContaining({ preprocess: 'queued' }),
+        }),
+        expect.objectContaining({
+          id: 'image-2',
+          status: expect.objectContaining({ preprocess: 'not_started' }),
+        }),
+      ],
+    });
+  });
+
+  it('reuses the OCR job endpoint for only the selected region ids', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-region-ocr',
+      kind: 'ocr',
+    }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['ocr'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+      1,
+      ['region-1'],
+    )).toBe(true);
+
+    expect(startJob).toHaveBeenCalledWith('project-1', 'ocr', {
+      imageIds: ['image-1'],
+      regionIds: ['region-1'],
+      options: expect.objectContaining({ provider: 'tesseract', concurrency: 1 }),
+    });
+  });
+
+  it('keeps an already-created stage visible when the next stage creation fails', async () => {
+    seedWorkbench();
+    const startJob = vi.spyOn(api, 'startJob')
+      .mockResolvedValueOnce(jobFixture({ id: 'job-preprocess', kind: 'preprocess' }))
+      .mockRejectedValueOnce(new Error('detector unavailable'));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['detect', 'preprocess'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+    )).toBe(false);
+
+    expect(startJob.mock.calls.map((call) => call[1])).toEqual(['preprocess', 'detect']);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      globalError: 'detector unavailable',
+      jobs: [expect.objectContaining({ id: 'job-preprocess', kind: 'preprocess' })],
+      images: [
+        expect.objectContaining({
+          id: 'image-1',
+          status: expect.objectContaining({
+            preprocess: 'queued',
+            detection: 'not_started',
+          }),
+        }),
+        expect.any(Object),
+      ],
+    });
+  });
+
+  it('does not overwrite a pending active-image edit while refreshing completed jobs', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({ id: 'job-ocr', kind: 'ocr', status: 'completed' }),
+    ]);
+    const listRegions = vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('region-1', { sourceText: '服务器旧文本' }),
+    ]);
+
+    useWorkbenchStore.getState().updateRegion('region-1', { sourceText: '尚未提交的本地编辑' });
+    await useWorkbenchStore.getState().refreshJobs();
+
+    expect(listRegions).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      id: 'region-1',
+      sourceText: '尚未提交的本地编辑',
+    });
+    expect(useWorkbenchStore.getState().pendingRegionMutations).toEqual([
+      expect.objectContaining({ imageId: 'image-1', kind: 'update' }),
+    ]);
+  });
+
+  it('does not apply a region response that became stale during its request', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({ id: 'job-ocr', kind: 'ocr', status: 'completed' }),
+    ]);
+    const response = deferred<ReturnType<typeof regionFixture>[]>();
+    const listRegions = vi.spyOn(api, 'listRegions').mockReturnValue(response.promise);
+
+    const refreshing = useWorkbenchStore.getState().refreshJobs();
+    await vi.waitFor(() => expect(listRegions).toHaveBeenCalledWith('image-1'));
+    useWorkbenchStore.getState().updateRegion('region-1', { sourceText: '请求期间的本地编辑' });
+    response.resolve([regionFixture('region-1', { sourceText: '服务器旧文本' })]);
+    await refreshing;
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      id: 'region-1',
+      sourceText: '请求期间的本地编辑',
+    });
+    expect(useWorkbenchStore.getState().pendingRegionMutations).toEqual([
+      expect.objectContaining({ imageId: 'image-1', kind: 'update' }),
+    ]);
   });
 
   it('drains edits made during an active save before starting a batch', async () => {
@@ -593,6 +939,7 @@ describe('workbench store', () => {
     useWorkbenchStore.getState().updateRegion('region-1', { sourceText: '第二次编辑' });
     const batch = useWorkbenchStore.getState().startBatch(['ocr'], ['image-1'], {
       format: 'both',
+      imageVariant: 'typeset',
       conflict: 'rename',
       preserveTree: true,
     });

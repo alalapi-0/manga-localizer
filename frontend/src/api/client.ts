@@ -8,6 +8,7 @@ import type {
   ProjectSettings,
   ProjectSummary,
   Region,
+  ReviewState,
   RevisionConflict,
 } from '../types';
 
@@ -147,6 +148,10 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
   const providers: AppCapabilities['providers'] = [];
   const labels: Record<string, string> = {
     tesseract: 'Tesseract',
+    'opencv-pillow': 'OpenCV / Pillow 基础增强',
+    'realesrgan-ncnn': 'Real-ESRGAN NCNN',
+    'ppocr-v3': 'PP-OCRv3',
+    'lama-onnx': 'LaMa ONNX',
     opencv: 'OpenCV',
     manual: '手动翻译',
     mock: '确定性演示翻译',
@@ -182,9 +187,12 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
     }
   };
 
+  addGroup('preprocessing', 'preprocessor');
   addGroup('ocr', 'ocr');
-  const ocrGroup = capabilityRecord(providerGroups.ocr);
-  for (const [providerId, raw] of Object.entries(ocrGroup)) {
+  const detectionGroup = Object.keys(capabilityRecord(providerGroups.detection)).length
+    ? capabilityRecord(providerGroups.detection)
+    : capabilityRecord(providerGroups.ocr);
+  for (const [providerId, raw] of Object.entries(detectionGroup)) {
     const detail = capabilityRecord(raw);
     providers.push({
       id: providerId,
@@ -350,19 +358,42 @@ export const api = {
 
   contentUrl(
     imageId: string,
-    variant: 'original' | 'erased' | 'typeset' = 'original',
+    variant: 'original' | 'preprocessed' | 'erased' | 'typeset' = 'original',
     revision?: number,
   ): string {
     if (variant === 'original') return `${API_BASE}/images/${encodeURIComponent(imageId)}/content`;
-    const stage = variant === 'erased' ? 'inpainted' : 'typeset';
+    const stage = variant === 'preprocessed'
+      ? 'preprocessed'
+      : variant === 'erased'
+        ? 'inpainted'
+        : 'typeset';
     const version = revision === undefined ? '' : `?v=${encodeURIComponent(String(revision))}`;
     return `${API_BASE}/images/${encodeURIComponent(imageId)}/generated/${stage}${version}`;
+  },
+
+  maskUrl(imageId: string, revision?: number): string {
+    const version = revision === undefined ? '' : `?v=${encodeURIComponent(String(revision))}`;
+    return `${API_BASE}/images/${encodeURIComponent(imageId)}/generated/mask${version}`;
   },
 
   async listRegions(imageId: string): Promise<Region[]> {
     return listFrom(
       await request(`/images/${encodeURIComponent(imageId)}/regions`),
       'regions',
+    );
+  },
+
+  async reviewImage(
+    imageId: string,
+    reviewState: ReviewState,
+    expectedRevision: number,
+  ): Promise<ImageAsset> {
+    return unwrap(
+      await request(`/images/${encodeURIComponent(imageId)}/review`, {
+        method: 'PATCH',
+        headers: { 'If-Match': String(expectedRevision) },
+        body: { reviewState, expectedRevision },
+      }),
     );
   },
 

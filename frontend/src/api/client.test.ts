@@ -112,6 +112,11 @@ describe('api client contract', () => {
         ...regionFixture().repair,
         method: 'navier_stokes',
         maskPadding: 9,
+        inpainterProvider: 'lama-onnx',
+        maskEdits: {
+          version: 1,
+          strokes: [{ mode: 'erase', radius: 8, points: [[101.5, 202.25], [110, 220]] }],
+        },
       },
       expectedRevision: 4,
     });
@@ -119,8 +124,35 @@ describe('api client contract', () => {
     const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
       repair: Record<string, unknown>;
     };
-    expect(body.repair).toMatchObject({ method: 'navier_stokes', maskPadding: 9 });
+    expect(body.repair).toMatchObject({
+      method: 'navier_stokes',
+      maskPadding: 9,
+      inpainterProvider: 'lama-onnx',
+      maskEdits: {
+        version: 1,
+        strokes: [{ mode: 'erase', radius: 8, points: [[101.5, 202.25], [110, 220]] }],
+      },
+    });
     expect(body.repair).not.toHaveProperty('padding');
+  });
+
+  it('sends the explicit page review state with its required image revision', async () => {
+    const reviewed = {
+      ...regionFixture(),
+      id: 'image-1',
+      status: { reviewState: 'no-text-reviewed', reviewedAt: '2026-08-10T10:00:00Z' },
+      revision: 8,
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(reviewed));
+
+    await api.reviewImage('image-1', 'no-text-reviewed', 7);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/images/image-1/review');
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('PATCH');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      reviewState: 'no-text-reviewed',
+      expectedRevision: 7,
+    });
   });
 
   it('keeps the delete revision guard in the expectedRevision query', async () => {

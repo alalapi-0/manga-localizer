@@ -13,6 +13,7 @@ import type {
   ProjectSettings,
   ProjectSummary,
   Region,
+  ReviewState,
   RightPanelTab,
   StageState,
   Theme,
@@ -32,7 +33,7 @@ interface HistoryFrame {
 
 interface RegionMutation {
   mutationId: string;
-  kind: 'create' | 'update' | 'delete';
+  kind: 'create' | 'update' | 'confirm' | 'delete';
   imageId: string;
   region: Region;
   expectedRevision: number;
@@ -66,6 +67,8 @@ interface WorkbenchState {
   showRegions: boolean;
   showOrder: boolean;
   showConfidence: boolean;
+  showMask: boolean;
+  maskBrushRadius: number;
   fitRequest: number;
   rightTab: RightPanelTab;
   theme: Theme;
@@ -101,6 +104,7 @@ interface WorkbenchState {
   clearRegionSelection: () => void;
   createRegion: (geometry: Pick<Region, 'x' | 'y' | 'width' | 'height'>) => string | null;
   updateRegion: (regionId: string, patch: Partial<Region>, recordHistory?: boolean) => void;
+  setRegionConfirmed: (regionId: string, confirmed: boolean) => Promise<boolean>;
   deleteSelectedRegions: () => void;
   mergeSelectedRegions: () => void;
   splitSelectedRegion: (axis: 'horizontal' | 'vertical') => void;
@@ -108,12 +112,15 @@ interface WorkbenchState {
   redo: () => void;
   flushAutosave: () => Promise<boolean>;
   updateProjectSettings: (patch: Partial<ProjectSettings>) => void;
+  reviewActiveImage: (reviewState: ReviewState) => Promise<boolean>;
   setCanvasMode: (mode: CanvasMode) => void;
   setCanvasTool: (tool: CanvasTool) => void;
   toggleCompareMode: () => void;
   setShowRegions: (value: boolean) => void;
   setShowOrder: (value: boolean) => void;
   setShowConfidence: (value: boolean) => void;
+  setShowMask: (value: boolean) => void;
+  setMaskBrushRadius: (value: number) => void;
   requestFit: () => void;
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
@@ -125,6 +132,7 @@ interface WorkbenchState {
     imageIds: string[],
     exportOptions: ExportOptions,
     concurrency?: number,
+    regionIds?: string[],
   ) => Promise<boolean>;
   refreshJobs: () => Promise<void>;
   runJobAction: (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'retry') => Promise<void>;
@@ -135,6 +143,18 @@ const emptyCapabilities: AppCapabilities = { providers: [] };
 let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
 let activeSave: Promise<boolean> | null = null;
 const inFlightRegionMutationIds = new Set<string>();
+const regionLoadTokens = new Map<string, symbol>();
+const savedRegionIdAliases = new Map<string, string>();
+
+function resolvedRegionId(regionId: string): string {
+  let resolved = regionId;
+  const visited = new Set<string>();
+  while (savedRegionIdAliases.has(resolved) && !visited.has(resolved)) {
+    visited.add(resolved);
+    resolved = savedRegionIdAliases.get(resolved) ?? resolved;
+  }
+  return resolved;
+}
 
 function storedTheme(): Theme {
   try {
@@ -188,6 +208,10 @@ function hydrateProject(project: Project): Project {
     settings: {
       ...DEFAULT_PROJECT_SETTINGS,
       ...rawSettings,
+      preprocessing: {
+        ...DEFAULT_PROJECT_SETTINGS.preprocessing,
+        ...(rawSettings.preprocessing ?? {}),
+      },
       glossary: mappingToLines(rawSettings.glossary),
       characterNames: mappingToLines(rawSettings.characterNames),
       preserveTree: typeof exportSettings.preserveTree === 'boolean'
@@ -213,8 +237,16 @@ function stageState(value: unknown): StageState {
   return allowed.includes(value as StageState) ? (value as StageState) : 'not_started';
 }
 
+function reviewState(value: unknown): ReviewState {
+  return value === 'reviewed' || value === 'no-text-reviewed' ? value : 'pending';
+}
+
 function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset {
-  const rawStatus = image.status ?? EMPTY_PIPELINE_STATUS;
+  const rawStatus = (image.status ?? EMPTY_PIPELINE_STATUS) as ImageAsset['status'] & Record<string, unknown>;
+  const legacyImage = image as ImageAsset & {
+    reviewState?: ReviewState;
+    reviewedAt?: string | null;
+  };
   const ocrState = stageState(rawStatus.ocr);
   const translationState = stageState(rawStatus.translation);
   return {
@@ -229,13 +261,20 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     revision: Number(image.revision ?? 0),
     status: {
       import: stageState(rawStatus.import ?? 'done'),
+      preprocess: stageState(rawStatus.preprocess),
       detection: stageState(rawStatus.detection),
       ocr: ocrState,
       translation: translationState,
       inpaint: stageState(rawStatus.inpaint),
       typeset: stageState(rawStatus.typeset),
       export: stageState(rawStatus.export),
+      reviewState: reviewState(rawStatus.reviewState ?? legacyImage.reviewState),
+      reviewedAt: typeof (rawStatus.reviewedAt ?? legacyImage.reviewedAt) === 'string'
+        ? String(rawStatus.reviewedAt ?? legacyImage.reviewedAt)
+        : null,
     },
+    preprocessingProvider: image.preprocessingProvider
+      ?? (stageState(rawStatus.preprocess) === 'done' ? settings?.preprocessorProvider : undefined),
     detectorProvider: image.detectorProvider ?? (ocrState === 'done' ? settings?.detectorProvider ?? 'tesseract' : undefined),
     ocrProvider: image.ocrProvider ?? (ocrState === 'done' ? settings?.ocrProvider ?? 'tesseract' : undefined),
     translatorProvider: image.translatorProvider ?? (translationState === 'done' ? settings?.translatorProvider : undefined),
@@ -276,6 +315,7 @@ function hydrateRegion(region: Region): Region {
   const repairMethod = String(rawRepair.method ?? DEFAULT_REPAIR_SETTINGS.method)
     .toLowerCase()
     .replaceAll('-', '_');
+  const confirmed = Boolean(region.confirmed);
   return {
     ...region,
     x: Number(region.x ?? 0),
@@ -291,8 +331,8 @@ function hydrateRegion(region: Region): Region {
     confidence: region.confidence === null || region.confidence === undefined
       ? null
       : Number(region.confidence),
-    ignored: Boolean(region.ignored),
-    confirmed: Boolean(region.confirmed),
+    ignored: confirmed ? false : Boolean(region.ignored),
+    confirmed,
     style: { ...DEFAULT_REGION_STYLE, ...(region.style ?? {}) },
     repair: {
       ...DEFAULT_REPAIR_SETTINGS,
@@ -303,12 +343,46 @@ function hydrateRegion(region: Region): Region {
           ? 'solid'
           : 'telea',
       maskPadding: Number(rawRepair.maskPadding ?? rawRepair.padding ?? DEFAULT_REPAIR_SETTINGS.maskPadding),
+      maskMode: rawRepair.maskMode === 'region' ? 'region' : 'text',
+      feather: Number(rawRepair.feather ?? DEFAULT_REPAIR_SETTINGS.feather),
     },
     revision: Number(region.revision ?? 0),
   };
 }
 
-function updateImageCounts(images: ImageAsset[], imageId: string, regions: Region[]): ImageAsset[] {
+function hasSubstantiveRegionChange(before: Region, after: Region): boolean {
+  const scalarKeys: Array<keyof Region> = [
+    'x',
+    'y',
+    'width',
+    'height',
+    'rotation',
+    'sourceText',
+    'translationText',
+    'type',
+    'direction',
+    'order',
+    'confidence',
+    'ignored',
+  ];
+  return scalarKeys.some((key) => before[key] !== after[key])
+    || JSON.stringify(before.style) !== JSON.stringify(after.style)
+    || JSON.stringify(before.repair) !== JSON.stringify(after.repair);
+}
+
+function repairWithoutMaskPolygon(repair: Region['repair']): Region['repair'] {
+  const normalized = { ...repair };
+  delete normalized.maskPolygon;
+  delete normalized.maskEdits;
+  return normalized;
+}
+
+function updateImageCounts(
+  images: ImageAsset[],
+  imageId: string,
+  regions: Region[],
+  resetReview = false,
+): ImageAsset[] {
   return images.map((image) =>
     image.id === imageId
       ? {
@@ -316,6 +390,9 @@ function updateImageCounts(images: ImageAsset[], imageId: string, regions: Regio
           regionCount: regions.length,
           confirmedCount: regions.filter((region) => region.confirmed).length,
           ignoredCount: regions.filter((region) => region.ignored).length,
+          status: resetReview
+            ? { ...image.status, reviewState: 'pending', reviewedAt: null }
+            : image.status,
         }
       : image,
   );
@@ -324,10 +401,101 @@ function updateImageCounts(images: ImageAsset[], imageId: string, regions: Regio
 function updateAllImageCounts(
   images: ImageAsset[],
   regionsByImage: Record<string, Region[]>,
+  resetReview = false,
 ): ImageAsset[] {
   return images.map((image) => {
     const regions = regionsByImage[image.id];
-    return regions ? updateImageCounts([image], image.id, regions)[0] ?? image : image;
+    return regions
+      ? updateImageCounts([image], image.id, regions, resetReview)[0] ?? image
+      : image;
+  });
+}
+
+type InvalidatedImageStage =
+  | 'preprocess'
+  | 'detection'
+  | 'ocr'
+  | 'translation'
+  | 'inpaint'
+  | 'typeset'
+  | 'export';
+
+function projectSettingsInvalidatedStages(
+  before: ProjectSettings,
+  after: ProjectSettings,
+): Set<InvalidatedImageStage> {
+  const changed = (keys: Array<keyof ProjectSettings>) => keys.some(
+    (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+  );
+  const stages = new Set<InvalidatedImageStage>();
+  if (changed(['preprocessorProvider', 'preprocessing'])) {
+    stages.add('preprocess');
+    stages.add('detection');
+    stages.add('ocr');
+    stages.add('translation');
+    stages.add('inpaint');
+    stages.add('typeset');
+    stages.add('export');
+  }
+  if (changed(['detectorProvider'])) {
+    stages.add('detection');
+    stages.add('ocr');
+    stages.add('translation');
+    stages.add('inpaint');
+    stages.add('typeset');
+    stages.add('export');
+  }
+  if (changed(['ocrProvider', 'sourceLanguage'])) {
+    stages.add('ocr');
+    stages.add('translation');
+    stages.add('inpaint');
+    stages.add('typeset');
+    stages.add('export');
+  }
+  if (changed([
+    'translatorProvider',
+    'targetLanguage',
+    'glossary',
+    'characterNames',
+    'contextPages',
+    'remoteEndpoint',
+    'remoteModel',
+  ])) {
+    stages.add('translation');
+    stages.add('typeset');
+    stages.add('export');
+  }
+  if (changed(['inpainterProvider'])) {
+    stages.add('inpaint');
+    stages.add('typeset');
+    stages.add('export');
+  }
+  return stages;
+}
+
+function invalidateImagesForSettings(
+  images: ImageAsset[],
+  stages: Set<InvalidatedImageStage>,
+): ImageAsset[] {
+  if (!stages.size) return images;
+  const resetReview = [...stages].some((stage) => stage !== 'preprocess' && stage !== 'export');
+  return images.map((image) => {
+    const status = { ...image.status };
+    for (const stage of stages) status[stage] = 'not_started';
+    if (resetReview) {
+      status.reviewState = 'pending';
+      status.reviewedAt = null;
+    }
+    return {
+      ...image,
+      status,
+      preprocessingProvider: stages.has('preprocess') ? undefined : image.preprocessingProvider,
+      detectorProvider: stages.has('detection') ? undefined : image.detectorProvider,
+      ocrProvider: stages.has('ocr') ? undefined : image.ocrProvider,
+      translatorProvider: stages.has('translation') ? undefined : image.translatorProvider,
+      inpaintingProvider: stages.has('inpaint') ? undefined : image.inpaintingProvider,
+      typesettingProvider: stages.has('typeset') ? undefined : image.typesettingProvider,
+    };
   });
 }
 
@@ -345,7 +513,7 @@ function replaceRegionMutation(
 ): RegionMutation[] {
   const existing = pending.find((mutation) => mutation.region.id === next.region.id);
   if (!existing) return [...pending, next];
-  if (existing.kind === 'create' && next.kind === 'update') {
+  if (existing.kind === 'create' && (next.kind === 'update' || next.kind === 'confirm')) {
     return pending.map((mutation) =>
       mutation.region.id === next.region.id
         ? { ...next, kind: 'create', expectedRevision: 0 }
@@ -379,16 +547,23 @@ function syncMutationsForFrame(
     const before = new Map((current[imageId] ?? []).map((region) => [region.id, region]));
     const historicalAfter = target[imageId] ?? [];
     const normalizedAfter = historicalAfter.map((region) => {
+      const currentRegion = before.get(region.id);
       const serverRevision = serverRegionRevisions[region.id];
-      if (serverRevision !== undefined) return { ...region, revision: serverRevision };
-      if (region.id.startsWith('local-')) return { ...region, revision: 0 };
-      return {
-        ...region,
-        id: id('local'),
-        revision: 0,
-        createdAt: undefined,
-        updatedAt: undefined,
-      };
+      const normalized = serverRevision !== undefined
+        ? { ...region, revision: serverRevision }
+        : region.id.startsWith('local-')
+          ? { ...region, revision: 0 }
+          : {
+              ...region,
+              id: id('local'),
+              revision: 0,
+              createdAt: undefined,
+              updatedAt: undefined,
+            };
+      return normalized.confirmed
+        && (!currentRegion || hasSubstantiveRegionChange(currentRegion, normalized))
+        ? { ...normalized, confirmed: false }
+        : normalized;
     });
     regionsByImage[imageId] = normalizedAfter;
     const after = new Map(normalizedAfter.map((region) => [region.id, region]));
@@ -552,6 +727,13 @@ async function performFlush(): Promise<boolean> {
                 expectedRevision: mutation.expectedRevision,
               }),
             );
+          } else if (mutation.kind === 'confirm') {
+            saved = hydrateRegion(
+              await api.updateRegion(mutation.region.id, {
+                confirmed: true,
+                expectedRevision: mutation.expectedRevision,
+              }),
+            );
           } else {
             await api.deleteRegion(mutation.region.id, mutation.expectedRevision);
           }
@@ -562,12 +744,21 @@ async function performFlush(): Promise<boolean> {
                 !(entry.region.id === mutation.region.id && entry.kind === 'delete')
               ),
             }));
+          } else if (mutation.kind === 'confirm') {
+            useWorkbenchStore.setState((state) => ({
+              pendingRegionMutations: state.pendingRegionMutations.filter(
+                (entry) => entry.mutationId !== mutation.mutationId,
+              ),
+            }));
           }
           throw error;
         } finally {
           inFlightRegionMutationIds.delete(mutation.mutationId);
         }
 
+        if (saved && saved.id !== mutation.region.id) {
+          savedRegionIdAliases.set(mutation.region.id, saved.id);
+        }
         useWorkbenchStore.setState((state) => {
           const oldId = mutation.region.id;
           const withoutCompleted = state.pendingRegionMutations.filter(
@@ -613,7 +804,11 @@ async function performFlush(): Promise<boolean> {
               entry.mutationId === newer.mutationId
                 ? {
                     ...entry,
-                    kind: newer.kind === 'delete' ? 'delete' : 'update',
+                    kind: newer.kind === 'delete'
+                      ? 'delete'
+                      : newer.kind === 'confirm'
+                        ? 'confirm'
+                        : 'update',
                     expectedRevision: saved.revision,
                     region: rebasedRegion,
                   }
@@ -635,6 +830,10 @@ async function performFlush(): Promise<boolean> {
               regionId === oldId ? (saved as Region).id : regionId,
             ),
             images: updateImageCounts(state.images, mutation.imageId, regions),
+            past: mutation.kind === 'confirm' && !newer
+              ? [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)]
+              : state.past,
+            future: mutation.kind === 'confirm' && !newer ? [] : state.future,
           };
         });
       }
@@ -698,6 +897,8 @@ const initialUiState = {
   showRegions: true,
   showOrder: true,
   showConfidence: true,
+  showMask: false,
+  maskBrushRadius: 12,
   fitRequest: 0,
   rightTab: 'text' as RightPanelTab,
   theme: storedTheme(),
@@ -843,6 +1044,9 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
 
   loadRegions: async (imageId, force = false) => {
     if (!force && get().regionsByImage[imageId]) return;
+    const requestToken = Symbol(imageId);
+    const regionsAtRequest = get().regionsByImage[imageId];
+    regionLoadTokens.set(imageId, requestToken);
     set((state) => ({
       regionsLoading: { ...state.regionsLoading, [imageId]: true },
       globalError: '',
@@ -850,6 +1054,16 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     try {
       const regions = (await api.listRegions(imageId)).map(hydrateRegion).sort((a, b) => a.order - b.order);
       set((state) => {
+        if (regionLoadTokens.get(imageId) !== requestToken) return {};
+        const localStateChanged = state.regionsByImage[imageId] !== regionsAtRequest;
+        const hasPendingEdit = state.pendingRegionMutations.some(
+          (mutation) => mutation.imageId === imageId,
+        );
+        if (localStateChanged || hasPendingEdit) {
+          return {
+            regionsLoading: { ...state.regionsLoading, [imageId]: false },
+          };
+        }
         const serverRegionRevisions = { ...state.serverRegionRevisions };
         for (const previous of state.regionsByImage[imageId] ?? []) {
           delete serverRegionRevisions[previous.id];
@@ -863,10 +1077,15 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         };
       });
     } catch (error) {
+      if (regionLoadTokens.get(imageId) !== requestToken) return;
       set((state) => ({
         regionsLoading: { ...state.regionsLoading, [imageId]: false },
         globalError: errorMessage(error),
       }));
+    } finally {
+      if (regionLoadTokens.get(imageId) === requestToken) {
+        regionLoadTokens.delete(imageId);
+      }
     }
   },
 
@@ -957,7 +1176,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const next = [...current, region];
     set((state) => ({
       regionsByImage: { ...state.regionsByImage, [imageId]: next },
-      images: updateImageCounts(state.images, imageId, next),
+      images: updateImageCounts(state.images, imageId, next, true),
       selectedRegionIds: [region.id],
       past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
       future: [],
@@ -980,16 +1199,28 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const current = state.regionsByImage[imageId] ?? [];
     const original = current.find((region) => region.id === regionId);
     if (!original) return;
-    const updated = hydrateRegion({
+    const exclusivePatch = patch.confirmed === true
+      ? { ...patch, ignored: false }
+      : patch.ignored === true
+        ? { ...patch, confirmed: false }
+        : patch;
+    let updated = hydrateRegion({
       ...original,
-      ...patch,
-      style: patch.style ? { ...original.style, ...patch.style } : original.style,
-      repair: patch.repair ? { ...original.repair, ...patch.repair } : original.repair,
+      ...exclusivePatch,
+      style: exclusivePatch.style
+        ? { ...original.style, ...exclusivePatch.style }
+        : original.style,
+      repair: exclusivePatch.repair
+        ? { ...original.repair, ...exclusivePatch.repair }
+        : original.repair,
     });
+    if (original.confirmed && hasSubstantiveRegionChange(original, updated)) {
+      updated = { ...updated, confirmed: false };
+    }
     const next = current.map((region) => (region.id === regionId ? updated : region));
     set((currentState) => ({
       regionsByImage: { ...currentState.regionsByImage, [imageId]: next },
-      images: updateImageCounts(currentState.images, imageId, next),
+      images: updateImageCounts(currentState.images, imageId, next, true),
       past: recordHistory
         ? [...currentState.past.slice(-49), makeHistoryFrame(currentState.regionsByImage)]
         : currentState.past,
@@ -1003,6 +1234,55 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       }),
     }));
     scheduleAutosave();
+  },
+
+  setRegionConfirmed: async (regionId, confirmed) => {
+    const state = get();
+    const imageId = state.activeImageId;
+    const region = imageId
+      ? (state.regionsByImage[imageId] ?? []).find((entry) => entry.id === regionId)
+      : undefined;
+    if (!imageId || !region) return false;
+    if (!confirmed) {
+      get().updateRegion(regionId, { confirmed: false });
+      return true;
+    }
+    if (region.confirmed) return true;
+
+    // Unignoring is itself substantive and must reach the server before the sparse reconfirmation.
+    if (region.ignored) get().updateRegion(regionId, { ignored: false });
+    if (!(await get().flushAutosave())) return false;
+
+    const savedId = resolvedRegionId(regionId);
+    const refreshedState = get();
+    const refreshed = (refreshedState.regionsByImage[imageId] ?? []).find(
+      (entry) => entry.id === savedId,
+    );
+    if (!refreshed) {
+      set({
+        saveError: '文本框在确认前已被删除或重载。',
+        revisionConflict: false,
+      });
+      return false;
+    }
+    if (refreshed.confirmed) return true;
+
+    set((currentState) => ({
+      pendingRegionMutations: replaceRegionMutation(currentState.pendingRegionMutations, {
+        mutationId: id('mutation'),
+        kind: 'confirm',
+        imageId,
+        region: { ...refreshed, confirmed: true, ignored: false },
+        expectedRevision: currentState.serverRegionRevisions[savedId] ?? refreshed.revision,
+      }),
+      saveError: '',
+      revisionConflict: false,
+    }));
+    const saved = await get().flushAutosave();
+    if (!saved) return false;
+    return Boolean(
+      (get().regionsByImage[imageId] ?? []).find((entry) => entry.id === savedId)?.confirmed,
+    );
   },
 
   deleteSelectedRegions: () => {
@@ -1025,7 +1305,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }
     set((currentState) => ({
       regionsByImage: { ...currentState.regionsByImage, [imageId]: next },
-      images: updateImageCounts(currentState.images, imageId, next),
+      images: updateImageCounts(currentState.images, imageId, next, true),
       selectedRegionIds: [],
       past: [...currentState.past.slice(-49), makeHistoryFrame(currentState.regionsByImage)],
       future: [],
@@ -1074,7 +1354,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
         : null,
       ignored: selected.every((region) => region.ignored),
-      confirmed: selected.every((region) => region.confirmed),
+      confirmed: false,
+      repair: repairWithoutMaskPolygon(first.repair),
       revision: 0,
       createdAt: undefined,
       updatedAt: undefined,
@@ -1101,7 +1382,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     });
     set({
       regionsByImage: { ...state.regionsByImage, [imageId]: next },
-      images: updateImageCounts(state.images, imageId, next),
+      images: updateImageCounts(state.images, imageId, next, true),
       selectedRegionIds: [merged.id],
       past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
       future: [],
@@ -1139,6 +1420,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       rotation: 0,
       sourceText: sourceA,
       translationText: translationA,
+      confirmed: false,
+      repair: repairWithoutMaskPolygon(original.repair),
       revision: 0,
       createdAt: undefined,
       updatedAt: undefined,
@@ -1177,7 +1460,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }
     set({
       regionsByImage: { ...state.regionsByImage, [imageId]: next },
-      images: updateImageCounts(state.images, imageId, next),
+      images: updateImageCounts(state.images, imageId, next, true),
       selectedRegionIds: [first.id, second.id],
       past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
       future: [],
@@ -1198,7 +1481,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     );
     set({
       regionsByImage: restored.regionsByImage,
-      images: updateAllImageCounts(state.images, restored.regionsByImage),
+      images: updateAllImageCounts(state.images, restored.regionsByImage, true),
       past: state.past.slice(0, -1),
       future: [makeHistoryFrame(state.regionsByImage), ...state.future.slice(0, 49)],
       pendingRegionMutations: restored.pendingRegionMutations,
@@ -1219,7 +1502,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     );
     set({
       regionsByImage: restored.regionsByImage,
-      images: updateAllImageCounts(state.images, restored.regionsByImage),
+      images: updateAllImageCounts(state.images, restored.regionsByImage, true),
       past: [...state.past.slice(-49), makeHistoryFrame(state.regionsByImage)],
       future: state.future.slice(1),
       pendingRegionMutations: restored.pendingRegionMutations,
@@ -1234,8 +1517,10 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const project = get().currentProject;
     if (!project) return;
     const settings = { ...project.settings, ...patch };
+    const invalidatedStages = projectSettingsInvalidatedStages(project.settings, settings);
     set({
       currentProject: { ...project, settings },
+      images: invalidateImagesForSettings(get().images, invalidatedStages),
       pendingProjectMutation: {
         mutationId: id('project-mutation'),
         settings,
@@ -1245,12 +1530,62 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     scheduleAutosave();
   },
 
+  reviewActiveImage: async (nextReviewState) => {
+    if (!(await get().flushAutosave())) return false;
+    const state = get();
+    const image = activeImage(state);
+    if (!image) return false;
+    const reviewRegions = state.regionsByImage[image.id];
+    if (!reviewRegions) {
+      set({ globalError: '当前页文本框尚未加载，请稍后再复核。' });
+      return false;
+    }
+    const activeRegionsForReview = reviewRegions.filter(
+      (region) => !region.ignored,
+    );
+    const unconfirmedCount = activeRegionsForReview.filter((region) => !region.confirmed).length;
+    if (nextReviewState === 'no-text-reviewed' && activeRegionsForReview.length > 0) {
+      set({ globalError: '当前页仍有活动文本框，不能标记为“确认无文字”。' });
+      return false;
+    }
+    if (nextReviewState === 'reviewed' && activeRegionsForReview.length === 0) {
+      set({ globalError: '当前页没有活动文本框，请使用“确认无文字”。' });
+      return false;
+    }
+    if (nextReviewState === 'reviewed' && unconfirmedCount > 0) {
+      set({ globalError: `还有 ${unconfirmedCount} 个活动文本框尚未确认。` });
+      return false;
+    }
+    set({ globalError: '' });
+    try {
+      const response = await api.reviewImage(image.id, nextReviewState, image.revision);
+      const merged = hydrateImage({
+        ...image,
+        ...response,
+        status: { ...image.status, ...(response.status ?? {}) },
+      }, state.currentProject?.settings);
+      set((currentState) => ({
+        images: currentState.images.map((entry) => entry.id === merged.id ? merged : entry),
+      }));
+      return true;
+    } catch (error) {
+      set({ globalError: errorMessage(error) });
+      return false;
+    }
+  },
+
   setCanvasMode: (canvasMode) => set({ canvasMode }),
   setCanvasTool: (canvasTool) => set({ canvasTool }),
-  toggleCompareMode: () => set((state) => ({ compareMode: !state.compareMode })),
+  toggleCompareMode: () => set((state) => ({
+    compareMode: hasGeneratedPreview(activeImage(state)) ? !state.compareMode : false,
+  })),
   setShowRegions: (showRegions) => set({ showRegions }),
   setShowOrder: (showOrder) => set({ showOrder }),
   setShowConfidence: (showConfidence) => set({ showConfidence }),
+  setShowMask: (showMask) => set({ showMask }),
+  setMaskBrushRadius: (maskBrushRadius) => set({
+    maskBrushRadius: Math.max(1, Math.min(200, Math.round(maskBrushRadius))),
+  }),
   requestFit: () => set((state) => ({ fitRequest: state.fitRequest + 1 })),
   setRightTab: (rightTab) => set({ rightTab }),
   setTheme: (theme) => {
@@ -1265,7 +1600,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSpacePressed: (spacePressed) => set({ spacePressed }),
 
-  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1) => {
+  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1, regionIds) => {
     if (!get().currentProject || !imageIds.length || !kinds.length) return false;
     if (!(await get().flushAutosave())) return false;
     const project = get().currentProject;
@@ -1273,10 +1608,23 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     set({ globalError: '' });
     try {
       const created: Job[] = [];
-      const operationOrder: JobKind[] = ['detect', 'ocr', 'translate', 'inpaint', 'typeset', 'export'];
+      const operationOrder: JobKind[] = [
+        'preprocess',
+        'detect',
+        'ocr',
+        'translate',
+        'inpaint',
+        'typeset',
+        'export',
+      ];
       const orderedKinds = operationOrder.filter((kind) => kinds.includes(kind));
       for (const kind of orderedKinds) {
-        const options: Record<string, unknown> = kind === 'detect'
+        const options: Record<string, unknown> = kind === 'preprocess'
+          ? {
+              provider: project.settings.preprocessorProvider,
+              preprocessing: project.settings.preprocessing,
+            }
+          : kind === 'detect'
           ? {
               provider: project.settings.detectorProvider,
               direction: 'auto',
@@ -1297,18 +1645,55 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
                 model: project.settings.remoteModel || undefined,
               }
             : kind === 'inpaint'
-              ? { provider: project.settings.inpainterProvider }
+              ? { provider: project.settings.inpainterProvider, repairPolicy: 'safe' }
               : kind === 'typeset'
-                ? { provider: 'pillow' }
+                ? { provider: 'pillow', repairPolicy: 'safe' }
                 : {};
-        const request = { imageIds, options: { ...options, concurrency } };
+        const request = {
+          imageIds,
+          ...(regionIds?.length ? { regionIds } : {}),
+          options: { ...options, concurrency },
+        };
         const job = kind === 'export'
           ? await api.exportProject(project.id, {
               ...request,
               options: { ...exportOptions, concurrency: 1 },
             })
           : await api.startJob(project.id, kind, request);
-        created.push(hydrateJob(job));
+        const hydrated = hydrateJob(job);
+        created.push(hydrated);
+        set((state) => ({
+          jobs: [hydrated, ...state.jobs.filter((entry) => entry.id !== hydrated.id)],
+          images: state.images.map((image) => {
+            if (!imageIds.includes(image.id)) return image;
+            const status = { ...image.status };
+            if (kind === 'preprocess') status.preprocess = 'queued';
+            else if (kind === 'detect') status.detection = 'queued';
+            else if (kind === 'ocr') status.ocr = 'queued';
+            else if (kind === 'translate') status.translation = 'queued';
+            else if (kind === 'inpaint') status.inpaint = 'queued';
+            else if (kind === 'typeset') status.typeset = 'queued';
+            else status.export = 'queued';
+            return {
+              ...image,
+              status,
+              preprocessingProvider: kind === 'preprocess'
+                ? project.settings.preprocessorProvider
+                : image.preprocessingProvider,
+              detectorProvider: kind === 'detect'
+                ? project.settings.detectorProvider
+                : image.detectorProvider,
+              ocrProvider: kind === 'ocr' ? project.settings.ocrProvider : image.ocrProvider,
+              translatorProvider: kind === 'translate'
+                ? project.settings.translatorProvider
+                : image.translatorProvider,
+              inpaintingProvider: kind === 'inpaint'
+                ? project.settings.inpainterProvider
+                : image.inpaintingProvider,
+              typesettingProvider: kind === 'typeset' ? 'pillow' : image.typesettingProvider,
+            };
+          }),
+        }));
       }
       set((state) => ({
         jobs: [...created, ...state.jobs.filter((job) => !created.some((entry) => entry.id === job.id))],
@@ -1316,7 +1701,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           if (!imageIds.includes(image.id)) return image;
           const status = { ...image.status };
           for (const kind of orderedKinds) {
-            if (kind === 'detect') status.detection = 'queued';
+            if (kind === 'preprocess') status.preprocess = 'queued';
+            else if (kind === 'detect') status.detection = 'queued';
             else if (kind === 'ocr') status.ocr = 'queued';
             else if (kind === 'translate') status.translation = 'queued';
             else if (kind === 'inpaint') status.inpaint = 'queued';
@@ -1326,6 +1712,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           return {
             ...image,
             status,
+            preprocessingProvider: orderedKinds.includes('preprocess') ? project.settings.preprocessorProvider : image.preprocessingProvider,
             detectorProvider: orderedKinds.includes('detect') ? project.settings.detectorProvider : image.detectorProvider,
             ocrProvider: orderedKinds.includes('ocr') ? project.settings.ocrProvider : image.ocrProvider,
             translatorProvider: orderedKinds.includes('translate') ? project.settings.translatorProvider : image.translatorProvider,
@@ -1352,6 +1739,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         api.getProject(project.id),
       ]);
       const jobs = jobResponse.map(hydrateJob);
+      const previousJobs = get().jobs;
+      const newlyCompleted = jobs.some(
+        (job) => job.status === 'completed'
+          && previousJobs.find((previous) => previous.id === job.id)?.status !== 'completed',
+      );
       const refreshedImages = imageResponse.map((image) =>
         hydrateImage(image, project.settings),
       );
@@ -1363,6 +1755,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           const previous = state.images.find((entry) => entry.id === image.id);
           return {
             ...image,
+            preprocessingProvider: image.preprocessingProvider ?? previous?.preprocessingProvider,
             detectorProvider: image.detectorProvider ?? previous?.detectorProvider,
             ocrProvider: image.ocrProvider ?? previous?.ocrProvider,
             translatorProvider: image.translatorProvider ?? previous?.translatorProvider,
@@ -1372,7 +1765,14 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         }),
       }));
       const activeImageId = get().activeImageId;
-      if (activeImageId && jobs.some((job) => job.status === 'completed')) {
+      const hasPendingActiveEdits = activeImageId
+        ? get().pendingRegionMutations.some((mutation) => mutation.imageId === activeImageId)
+        : false;
+      if (
+        activeImageId
+        && !hasPendingActiveEdits
+        && newlyCompleted
+      ) {
         await get().loadRegions(activeImageId, true);
       }
     } catch (error) {
@@ -1401,11 +1801,24 @@ export function resetWorkbenchStore(): void {
   autosaveTimer = null;
   activeSave = null;
   inFlightRegionMutationIds.clear();
+  regionLoadTokens.clear();
+  savedRegionIdAliases.clear();
   useWorkbenchStore.setState({ ...initialUiState, theme: 'dark' });
 }
 
 export function activeImage(state: WorkbenchState): ImageAsset | null {
   return state.images.find((image) => image.id === state.activeImageId) ?? null;
+}
+
+export function hasGeneratedPreview(image: ImageAsset | null | undefined): boolean {
+  return Boolean(
+    image
+      && (
+        image.status.preprocess === 'done'
+        || image.status.inpaint === 'done'
+        || image.status.typeset === 'done'
+      ),
+  );
 }
 
 const STABLE_EMPTY_REGIONS: Region[] = [];

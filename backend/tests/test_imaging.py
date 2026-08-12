@@ -34,6 +34,134 @@ def test_opencv_mask_inpaint_and_exact_provider_interface() -> None:
     assert "solid" in provider.get_capabilities()["methods"]
 
 
+def test_text_mask_keeps_sparse_strokes_but_closes_dense_outlined_lettering() -> None:
+    sparse = np.full((100, 140, 3), 255, dtype=np.uint8)
+    sparse[30:70, 65:72] = 0
+    sparse_region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+    sparse_mask = create_mask(
+        Image.fromarray(sparse),
+        sparse_region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+    sparse_geometry = create_mask(
+        Image.fromarray(sparse),
+        sparse_region,
+        padding=0,
+        dilation=0,
+        mask_mode="region",
+    )
+    assert 0 < np.count_nonzero(sparse_mask) < np.count_nonzero(sparse_geometry)
+
+    dense = np.full((100, 140, 3), 245, dtype=np.uint8)
+    rows, columns = np.indices((60, 60))
+    outlined_pattern = ((columns // 3 + rows // 3) % 2) * 230 + 15
+    dense[20:80, 40:100] = outlined_pattern[..., np.newaxis]
+    dense_mask = create_mask(
+        Image.fromarray(dense),
+        sparse_region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+    assert np.array_equal(dense_mask, sparse_geometry)
+
+
+def test_full_region_mask_ignores_a_stale_detector_polygon() -> None:
+    image = Image.new("RGB", (100, 80), "white")
+    region = {
+        "x": 10,
+        "y": 12,
+        "width": 70,
+        "height": 50,
+        "maskPolygon": [[10, 12], [25, 12], [25, 27], [10, 27]],
+        "maskMode": "region",
+    }
+
+    mask = create_mask(image, [region], padding=0, dilation=0)
+
+    assert mask[20, 20] == 255
+    assert mask[50, 70] == 255
+
+
+def test_versioned_mask_strokes_add_then_erase_in_canonical_coordinates() -> None:
+    image = Image.new("RGB", (100, 80), "white")
+    region = {
+        "x": 35,
+        "y": 25,
+        "width": 30,
+        "height": 30,
+        "maskMode": "region",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [
+                {"mode": "add", "radius": 3, "points": [[8, 8], [25, 8]]},
+                {"mode": "erase", "radius": 5, "points": [[50, 40]]},
+            ],
+        },
+    }
+
+    mask = create_mask(image, [region], padding=0, dilation=0, feather=0)
+
+    assert mask[8, 15] == 255
+    assert mask[40, 50] == 0
+    assert mask[28, 38] == 255
+    assert mask[75, 95] == 0
+
+
+def test_mask_erase_stays_zero_after_base_feathering() -> None:
+    image = Image.new("RGB", (64, 64), "white")
+    region = {
+        "x": 12,
+        "y": 12,
+        "width": 40,
+        "height": 40,
+        "maskMode": "region",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [
+                {"mode": "add", "radius": 3, "points": [[5, 5]]},
+                {"mode": "erase", "radius": 5, "points": [[32, 32]]},
+            ],
+        },
+    }
+
+    mask = create_mask(image, [region], padding=0, dilation=0, feather=3)
+
+    assert mask[5, 5] > mask[5, 9] > 0
+    assert mask[32, 32] == 0
+    assert mask[32, 36] == 0
+    assert mask[32, 38] == 255
+    assert 0 < mask[32, 11] < 255
+
+
+@pytest.mark.parametrize(
+    "mask_edits",
+    (
+        {"version": True, "strokes": []},
+        {"version": 1, "strokes": [{"mode": "add", "radius": float("nan"), "points": [[1, 1]]}]},
+        {"version": 1, "strokes": [{"mode": "erase", "radius": 2, "points": [[101, 1]]}]},
+    ),
+)
+def test_mask_edit_validation_rejects_noncanonical_payloads(mask_edits: dict) -> None:
+    with pytest.raises(ValueError):
+        create_mask(
+            (100, 80),
+            [
+                {
+                    "x": 10,
+                    "y": 10,
+                    "width": 20,
+                    "height": 20,
+                    "maskEdits": mask_edits,
+                }
+            ],
+            padding=0,
+            dilation=0,
+        )
+
+
 def test_typesetting_horizontal_vertical_rotation_stroke_and_overflow() -> None:
     capabilities = font_capabilities()
     if not capabilities["available"]:

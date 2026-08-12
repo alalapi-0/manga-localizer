@@ -28,6 +28,9 @@ playwright-report/
 test-results/
 tests/e2e/.generated/
 
+# Private real-world validation inputs, reports, and generated artifacts
+tests/real-data/
+
 # Runtime and user content
 .manga-localizer/
 runtime/

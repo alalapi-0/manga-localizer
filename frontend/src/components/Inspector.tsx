@@ -25,6 +25,7 @@ const regionTypeLabels: Record<RegionType, string> = {
   unknown: '未知',
   thought: '内心',
   sign: '标牌',
+  speech: '气泡对白',
   other: '其他',
 };
 
@@ -34,21 +35,132 @@ const directionLabels: Record<TextDirection, string> = {
   horizontal: '横排',
 };
 
+const preprocessingProfileDefaults: Record<
+  ProjectSettings['preprocessing']['profile'],
+  Partial<ProjectSettings['preprocessing']>
+> = {
+  off: {
+    enableUpscale: false,
+    enableDenoise: false,
+    enableSharpen: false,
+    enableContrastEnhance: false,
+    enableEdgeOptimize: false,
+    enableBinarize: false,
+  },
+  'ocr-friendly': {
+    enableUpscale: true,
+    enableDenoise: true,
+    enableSharpen: true,
+    enableContrastEnhance: true,
+    enableEdgeOptimize: false,
+    enableBinarize: false,
+  },
+  balanced: {
+    enableUpscale: false,
+    enableDenoise: true,
+    enableSharpen: true,
+    enableContrastEnhance: true,
+    enableEdgeOptimize: false,
+    enableBinarize: false,
+  },
+  'visual-quality': {
+    enableUpscale: true,
+    enableDenoise: true,
+    enableSharpen: true,
+    enableContrastEnhance: true,
+    enableEdgeOptimize: false,
+    enableBinarize: false,
+  },
+};
+
 const defaultExportOptions: ExportOptions = {
   format: 'both',
+  imageVariant: 'typeset',
   conflict: 'rename',
   preserveTree: true,
 };
 
 const EMPTY_REGIONS: Region[] = [];
 
+function PageReviewControl({ regions }: { regions: Region[] }) {
+  const image = useWorkbenchStore(activeImage);
+  const reviewActiveImage = useWorkbenchStore((state) => state.reviewActiveImage);
+  const regionsLoading = useWorkbenchStore((state) =>
+    state.activeImageId ? Boolean(state.regionsLoading[state.activeImageId]) : false,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  if (!image) return null;
+  const state = image.status.reviewState;
+  const activeRegions = regions.filter((region) => !region.ignored);
+  const unconfirmedCount = activeRegions.filter((region) => !region.confirmed).length;
+  const actionState = activeRegions.length === 0 ? 'no-text-reviewed' : 'reviewed';
+  const reviewed = state !== 'pending';
+  const label = state === 'reviewed'
+    ? '本页已标记检查完毕'
+    : state === 'no-text-reviewed'
+      ? '本页已确认无文字'
+      : activeRegions.length === 0
+        ? '本页没有活动文本框，可确认无文字'
+        : unconfirmedCount > 0
+          ? `还有 ${unconfirmedCount} 个活动文本框尚未确认`
+          : `${activeRegions.length} 个活动文本框均已确认，可完成页面检查`;
+
+  async function submit() {
+    setSubmitting(true);
+    await reviewActiveImage(reviewed ? 'pending' : actionState);
+    setSubmitting(false);
+  }
+
+  return (
+    <section className={`page-review page-review--${reviewed ? 'done' : 'pending'}`} aria-label="页面复核状态">
+      <div>
+        <span>{reviewed ? '已检查' : '待检查'}</span>
+        <strong>{label}</strong>
+      </div>
+      <button
+        className={`button button--compact ${reviewed ? '' : 'button--accent'}`}
+        disabled={submitting || regionsLoading || (!reviewed && unconfirmedCount > 0)}
+        onClick={() => void submit()}
+        type="button"
+      >
+        {regionsLoading
+          ? '正在读取文本框…'
+          : submitting
+          ? '正在保存…'
+          : reviewed
+            ? '撤回检查标记'
+            : activeRegions.length === 0
+              ? '确认本页无文字'
+              : unconfirmedCount > 0
+                ? `还需确认 ${unconfirmedCount} 个文本框`
+                : '标记本页已检查'}
+      </button>
+    </section>
+  );
+}
+
 function TextInspector({ regions, selected }: { regions: Region[]; selected: Region[] }) {
   const image = useWorkbenchStore(activeImage);
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
+  const setRegionConfirmed = useWorkbenchStore((state) => state.setRegionConfirmed);
   const deleteSelectedRegions = useWorkbenchStore((state) => state.deleteSelectedRegions);
   const mergeSelectedRegions = useWorkbenchStore((state) => state.mergeSelectedRegions);
   const splitSelectedRegion = useWorkbenchStore((state) => state.splitSelectedRegion);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
+
+  function rerunSelectedOcr() {
+    if (!image || !selected.length) return;
+    setDrawerOpen(true);
+    void startBatch(
+      ['ocr'],
+      [image.id],
+      defaultExportOptions,
+      1,
+      selected.map((region) => region.id),
+    );
+  }
 
   if (!selected.length) {
     if (!regions.length) {
@@ -59,7 +171,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           title={ocrDone ? '本页未检测到文本' : '未选择文本框'}
           description={
             ocrDone
-              ? '零文本是正常结果。你仍可在画布上手动框选。'
+              ? '未检测到文字不等于完成检查；请在上方确认无文字，或在画布上手动框选。'
               : regions.length ? '在画布或下方列表中选择文本框。' : '运行 OCR 或在画布上绘制文本框。'
           }
         />
@@ -109,13 +221,16 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
         <Toggle
           checked={allConfirmed}
           label="全部确认"
-          onChange={(event) => selected.forEach((region) => updateRegion(region.id, { confirmed: event.target.checked }))}
+          onChange={(event) => selected.forEach((region) => {
+            void setRegionConfirmed(region.id, event.target.checked);
+          })}
         />
         <Toggle
           checked={allIgnored}
           label="全部忽略"
           onChange={(event) => selected.forEach((region) => updateRegion(region.id, { ignored: event.target.checked }))}
         />
+        <button className="button" onClick={rerunSelectedOcr} type="button">重新 OCR 选中区域</button>
         <button className="button" onClick={mergeSelectedRegions} type="button">合并为一个文本框</button>
         <button className="button button--danger" onClick={deleteSelectedRegions} type="button">删除所选文本框</button>
       </div>
@@ -188,8 +303,11 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           />
         </Field>
       </div>
-      <Toggle checked={region.confirmed} description="计入页面复核进度" label="确认此文本框" onChange={(event) => updateRegion(region.id, { confirmed: event.target.checked })} />
+      <Toggle checked={region.confirmed} description="计入页面复核进度" label="确认此文本框" onChange={(event) => {
+        void setRegionConfirmed(region.id, event.target.checked);
+      }} />
       <Toggle checked={region.ignored} description="图像处理会跳过；导出 JSON 仍保留此记录" label="忽略此文本框" onChange={(event) => updateRegion(region.id, { ignored: event.target.checked })} />
+      <button className="button" onClick={rerunSelectedOcr} type="button">重新 OCR 选中区域</button>
       <div className="split-actions" aria-label="拆分文本框">
         <button className="button" onClick={() => splitSelectedRegion('horizontal')} type="button">水平中线拆分</button>
         <button className="button" onClick={() => splitSelectedRegion('vertical')} type="button">垂直中线拆分</button>
@@ -235,37 +353,83 @@ function TypesettingInspector({ region }: { region: Region | undefined }) {
 
 function RepairInspector({ region }: { region: Region | undefined }) {
   const image = useWorkbenchStore(activeImage);
+  const project = useWorkbenchStore((state) => state.currentProject);
+  const showMask = useWorkbenchStore((state) => state.showMask);
+  const setShowMask = useWorkbenchStore((state) => state.setShowMask);
+  const providers = useWorkbenchStore((state) => state.capabilities.providers);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
   if (!region) return <EmptyState icon="◌" title="选择一个文本框" description="蒙版与修复参数会按区域保存。" />;
   const repair = region.repair;
   const updateRepair = (patch: Partial<Region['repair']>) => updateRegion(region.id, { repair: { ...repair, ...patch } });
+  const inheritedProvider = project?.settings.inpainterProvider ?? 'opencv';
+  const provider = repair.inpainterProvider || inheritedProvider;
+  const isLama = provider === 'lama' || provider === 'lama-onnx';
+  const inpainters = providers.filter((capability) => capability.kind === 'inpainter');
+  const providerCapability = providers.find(
+    (capability) => capability.kind === 'inpainter' && capability.id === provider,
+  );
+  const providerUnavailable = providerCapability?.available === false;
   return (
     <div className="form-stack">
-      <div className="notice notice--local"><b>本地处理</b><span>擦字只把区域坐标交给本机 OpenCV provider，不会发送图像。</span></div>
-      <Field label="修复方法">
-        <select onChange={(event) => updateRepair({ method: event.target.value as Region['repair']['method'] })} value={repair.method}>
-          <option value="telea">OpenCV Telea</option>
-          <option value="navier_stokes">OpenCV Navier–Stokes</option>
-          <option value="solid">纯色填充</option>
+      <div className="notice notice--local"><b>本地处理 · {provider}</b><span>图像、蒙版和修复结果只在本机处理；可在画布用蒙版画笔与橡皮擦精修选中区域。</span></div>
+      <div className="notice notice--local"><b>安全修复策略</b><span>只处理已确认、可信自动识别或手工识别区域；完成后任务抽屉会显示实际修复与跳过数量。</span></div>
+      {providerUnavailable ? <div className="notice notice--warning"><b>当前修复 Provider 不可用</b><span>{providerCapability?.reason}</span></div> : null}
+      <Field label="区域修复 Provider" hint="继承使用项目默认；区域覆盖只影响当前文本框。">
+        <select
+          aria-label="区域修复 Provider"
+          onChange={(event) => updateRepair({ inpainterProvider: event.target.value || undefined })}
+          value={repair.inpainterProvider ?? ''}
+        >
+          <option value="">继承项目设置（{inheritedProvider}）</option>
+          {repair.inpainterProvider
+            && !inpainters.some((capability) => capability.id === repair.inpainterProvider) ? (
+              <option value={repair.inpainterProvider}>{repair.inpainterProvider}（能力未报告）</option>
+            ) : null}
+          {inpainters.map((capability) => (
+            <option disabled={!capability.available} key={capability.id} value={capability.id}>
+              {capability.label}{capability.available ? '' : '（不可用）'}
+            </option>
+          ))}
         </select>
       </Field>
+      <Field label="蒙版策略" hint="文本轮廓优先使用检测多边形并细化字形；区域模式会覆盖整个文本框。">
+        <select onChange={(event) => updateRepair({ maskMode: event.target.value as Region['repair']['maskMode'] })} value={repair.maskMode}>
+          <option value="text">文本轮廓（推荐）</option>
+          <option value="region">完整区域</option>
+        </select>
+      </Field>
+      {isLama ? (
+        <div className="notice notice--local"><b>LaMa AI 背景修复</b><span>使用当前蒙版的局部上下文推理；OpenCV 方法、半径与填充色不参与本次修复。</span></div>
+      ) : (
+        <Field label="修复方法">
+          <select onChange={(event) => updateRepair({ method: event.target.value as Region['repair']['method'] })} value={repair.method}>
+            <option value="telea">OpenCV Telea</option>
+            <option value="navier_stokes">OpenCV Navier–Stokes</option>
+            <option value="solid">纯色填充</option>
+          </select>
+        </Field>
+      )}
       <div className="field-grid">
-        <Field label="蒙版外扩 px"><input min={0} onChange={(event) => updateRepair({ maskPadding: Number(event.target.value) })} type="number" value={repair.maskPadding} /></Field>
-        <Field label="膨胀 px"><input min={0} onChange={(event) => updateRepair({ dilation: Number(event.target.value) })} type="number" value={repair.dilation} /></Field>
-        <Field label="修复半径"><input min={1} onChange={(event) => updateRepair({ radius: Number(event.target.value) })} type="number" value={repair.radius} /></Field>
-        <Field label="填充色"><input aria-label="修复填充色" onChange={(event) => updateRepair({ fillColor: event.target.value })} type="color" value={repair.fillColor} /></Field>
+        <Field label="蒙版外扩 px"><input max={512} min={0} onChange={(event) => updateRepair({ maskPadding: Math.min(512, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.maskPadding} /></Field>
+        <Field label="膨胀 px"><input max={128} min={0} onChange={(event) => updateRepair({ dilation: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.dilation} /></Field>
+        <Field label="羽化 px"><input max={128} min={0} onChange={(event) => updateRepair({ feather: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.feather} /></Field>
+        {!isLama ? <Field label="修复半径"><input max={256} min={1} onChange={(event) => updateRepair({ radius: Math.min(256, Math.max(1, Number(event.target.value))) })} type="number" value={repair.radius} /></Field> : null}
+        {!isLama ? <Field label="填充色"><input aria-label="修复填充色" onChange={(event) => updateRepair({ fillColor: event.target.value })} type="color" value={repair.fillColor} /></Field> : null}
       </div>
-      <div className="mask-preview">
-        <span style={{ inset: `${Math.max(8, 22 - repair.maskPadding)}px` }}>MASK</span>
-      </div>
+      <Toggle checked={showMask} description="在画布上叠加上一次实际生成的蒙版；重新修复后会刷新。" label="显示实际蒙版" onChange={(event) => setShowMask(event.target.checked)} />
       <button
         className="button button--accent"
-        disabled={!image}
-        onClick={() => image && void startBatch(['inpaint'], [image.id], defaultExportOptions)}
+        disabled={!image || providerUnavailable}
+        onClick={() => {
+          if (!image) return;
+          setDrawerOpen(true);
+          void startBatch(['inpaint'], [image.id], defaultExportOptions);
+        }}
         type="button"
       >
-        修复当前页
+        重建当前页
       </button>
     </div>
   );
@@ -314,6 +478,9 @@ function ProjectInspector() {
   if (!project) return <EmptyState icon="⚙" title="未打开项目" />;
   const settings = project.settings;
   const update = (patch: Partial<ProjectSettings>) => updateProjectSettings(patch);
+  const updatePreprocessing = (patch: Partial<ProjectSettings['preprocessing']>) => update({
+    preprocessing: { ...settings.preprocessing, ...patch },
+  });
   const translator = providers.find((provider) => provider.kind === 'translator' && provider.id === settings.translatorProvider);
   const isRemote = translator ? !translator.local : Boolean(settings.remoteEndpoint);
 
@@ -347,10 +514,35 @@ function ProjectInspector() {
       </section>
       <section className="inspector-section">
         <h3>处理 Provider</h3>
+        <ProviderSelect kind="preprocessor" label="图片增强" onChange={(preprocessorProvider) => update({ preprocessorProvider })} providers={providers} value={settings.preprocessorProvider} />
         <ProviderSelect kind="detector" label="文本检测" onChange={(detectorProvider) => update({ detectorProvider })} providers={providers} value={settings.detectorProvider} />
         <ProviderSelect kind="ocr" label="日文 OCR" onChange={(ocrProvider) => update({ ocrProvider })} providers={providers} value={settings.ocrProvider} />
         <ProviderSelect kind="translator" label="翻译" onChange={(translatorProvider) => update({ translatorProvider })} providers={providers} value={settings.translatorProvider} />
         <ProviderSelect kind="inpainter" label="图像修复" onChange={(inpainterProvider) => update({ inpainterProvider })} providers={providers} value={settings.inpainterProvider} />
+      </section>
+      <section className="inspector-section">
+        <h3>OCR 前图片增强</h3>
+        <Field label="预处理配置">
+          <select onChange={(event) => {
+            const profile = event.target.value as ProjectSettings['preprocessing']['profile'];
+            updatePreprocessing({ profile, ...preprocessingProfileDefaults[profile] });
+          }} value={settings.preprocessing.profile}>
+            <option value="off">关闭</option>
+            <option value="ocr-friendly">OCR 友好</option>
+            <option value="balanced">平衡</option>
+            <option value="visual-quality">视觉质量</option>
+          </select>
+        </Field>
+        <div className="field-grid">
+          <Field label="超分倍数"><select disabled={!settings.preprocessing.enableUpscale} onChange={(event) => updatePreprocessing({ upscaleFactor: Number(event.target.value) as 2 | 3 | 4 })} value={settings.preprocessing.upscaleFactor}><option value={2}>2×</option><option value={3}>3×</option><option value={4}>4×</option></select></Field>
+          <Field label="二值化阈值"><input disabled={!settings.preprocessing.enableBinarize} max={255} min={0} onChange={(event) => updatePreprocessing({ threshold: Number(event.target.value) })} type="number" value={settings.preprocessing.threshold} /></Field>
+        </div>
+        <Toggle checked={settings.preprocessing.enableUpscale} label="超分放大" onChange={(event) => updatePreprocessing({ enableUpscale: event.target.checked })} />
+        <Toggle checked={settings.preprocessing.enableDenoise} label="去噪" onChange={(event) => updatePreprocessing({ enableDenoise: event.target.checked })} />
+        <Toggle checked={settings.preprocessing.enableSharpen} label="锐化" onChange={(event) => updatePreprocessing({ enableSharpen: event.target.checked })} />
+        <Toggle checked={settings.preprocessing.enableContrastEnhance} label="增强对比度" onChange={(event) => updatePreprocessing({ enableContrastEnhance: event.target.checked })} />
+        <Toggle checked={settings.preprocessing.enableEdgeOptimize} label="边缘优化" onChange={(event) => updatePreprocessing({ enableEdgeOptimize: event.target.checked })} />
+        <Toggle checked={settings.preprocessing.enableBinarize} label="OCR 二值化" onChange={(event) => updatePreprocessing({ enableBinarize: event.target.checked })} />
       </section>
       {translator?.isMock ? (
         <div className="notice notice--mock"><b>演示 MOCK 翻译</b><span>输出是确定性演示文本，不代表真实翻译质量，导出前必须复核。</span></div>
@@ -405,6 +597,7 @@ export function Inspector() {
         ))}
       </nav>
       <div className="inspector__content" role="tabpanel">
+        <PageReviewControl regions={regions} />
         {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}
         {tab === 'typesetting' ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}
         {tab === 'repair' ? <RepairInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}

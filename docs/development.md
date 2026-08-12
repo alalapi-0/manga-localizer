@@ -28,6 +28,21 @@ them. The provided `.env.example` deliberately sets that variable to the reposit
 and `MANGA_LOCALIZER_WEB_PORT` change the API and Web ports, and the launcher derives the Vite proxy
 target automatically unless `VITE_DEV_API_TARGET` is set.
 
+### Optional local models
+
+No model is downloaded by bootstrap or startup. To install the PP-OCR and LaMa models explicitly with
+fixed SHA-256 verification, target the same data directory used by the application:
+
+```bash
+npm run setup:models -- --data-dir .manga-localizer ppocr lama
+uv sync --project backend --extra ai --group dev
+```
+
+Without a repository `.env`, omit `--data-dir .manga-localizer` to use the normal
+`~/.manga-localizer` default, or run `npm run setup:ai`. Real-ESRGAN is a CLI adapter; install
+`realesrgan-ncnn-vulkan` and its model files separately and configure its executable when it is not on
+`PATH`.
+
 The 0.2.0 launcher was exercised through `npm run dev`: the root Web page, direct FastAPI
 health endpoint, and the Vite `/api` proxy all responded successfully. Launcher platform logic also has
 two Node tests in the unified `npm run check` gate.
@@ -48,6 +63,25 @@ npm run audit:release
 
 Tests create temporary Unicode directories and generated images; they never depend on network calls,
 credentials, model downloads, or commercial manga.
+
+### Private real-data evaluation
+
+Real material and all outputs must live under the ignored `tests/real-data/` boundary. Copy inputs there
+before processing; never hard-code a personal source path. The evaluator exercises the real API and
+stores aggregate/per-file metrics without OCR text:
+
+```bash
+uv run --project backend --extra ai python scripts/evaluate_real_data.py \
+  --input tests/real-data/<dataset>/input \
+  --output tests/real-data/<dataset>/runs/<new-run> \
+  --stages preprocess,detect,ocr,inpaint,typeset,export \
+  --detector-provider ppocr-v3 \
+  --inpainter-provider lama-onnx
+```
+
+It refuses a non-empty run directory and records source-checksum preservation, generated dimensions,
+mask coverage, and changed pixels outside masks. These reports are stability/coverage evidence unless a
+private ground-truth transcription/box set is supplied; region count and OCR confidence are not accuracy.
 
 The current automated browser suite uses Chromium. The GitHub Actions workflow targets Ubuntu; macOS
 is the primary local development environment, while Windows has documented startup steps but no CI job.

@@ -64,7 +64,7 @@ function useGlobalShortcuts() {
         const regionId = state.selectedRegionIds[0];
         if (regionId) {
           event.preventDefault();
-          state.updateRegion(regionId, { confirmed: true });
+          void state.setRegionConfirmed(regionId, true);
         }
         return;
       }
@@ -110,11 +110,14 @@ function useGlobalShortcuts() {
         case 'n':
         case 'r': state.setCanvasTool('region'); break;
         case 'h': state.setCanvasTool('hand'); break;
+        case 'm': state.setCanvasTool('mask-brush'); break;
+        case 'e': state.setCanvasTool('mask-eraser'); break;
         case 'f': state.requestFit(); break;
         case 'b': state.toggleCompareMode(); break;
         case '1': state.setCanvasMode('original'); break;
-        case '2': state.setCanvasMode('erased'); break;
-        case '3': state.setCanvasMode('typeset'); break;
+        case '2': state.setCanvasMode('preprocessed'); break;
+        case '3': state.setCanvasMode('erased'); break;
+        case '4': state.setCanvasMode('typeset'); break;
       }
     }
 

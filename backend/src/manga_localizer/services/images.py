@@ -5,6 +5,7 @@ import io
 import os
 import shutil
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
@@ -21,7 +22,12 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
-from manga_localizer.services.projects import ProjectError, ProjectStore, add_revision
+from manga_localizer.services.projects import (
+    ProjectError,
+    ProjectStore,
+    RevisionConflict,
+    add_revision,
+)
 
 SUPPORTED_FORMATS = {"JPEG", "PNG", "WEBP", "TIFF", "BMP", "GIF"}
 
@@ -31,6 +37,7 @@ class InvalidImage(ProjectError):
 
 
 _PROVIDER_STATUS_KEYS = {
+    "preprocess": "preprocessingProvider",
     "detection": "detectorProvider",
     "ocr": "ocrProvider",
     "translation": "translatorProvider",
@@ -39,6 +46,7 @@ _PROVIDER_STATUS_KEYS = {
 }
 
 _ERROR_STAGE_KEYS = {
+    "preprocess": {"preprocess"},
     "detection": {"detect"},
     "ocr": {"ocr"},
     "translation": {"translate"},
@@ -47,6 +55,34 @@ _ERROR_STAGE_KEYS = {
     "export": {"export"},
 }
 
+REVIEW_STATES = {"pending", "reviewed", "no-text-reviewed"}
+
+
+def reset_image_review(image: ImageAsset) -> bool:
+    """Reset explicit page review without changing the owning entity revision."""
+    status = dict(image.status or {})
+    changed = status.get("reviewState", "pending") != "pending" or bool(status.get("reviewedAt"))
+    status["reviewState"] = "pending"
+    status["reviewedAt"] = ""
+    image.status = status
+    return changed
+
+
+def _validate_image_review_state(image: ImageAsset, review_state: str) -> None:
+    non_ignored_regions = [region for region in image.regions if not region.ignored]
+    if review_state == "no-text-reviewed" and non_ignored_regions:
+        raise ProjectError("Cannot mark image as no-text-reviewed while non-ignored regions remain")
+    if review_state != "reviewed":
+        return
+    if not non_ignored_regions:
+        raise ProjectError("Cannot mark image as reviewed without at least one non-ignored region")
+    unconfirmed_count = sum(not region.confirmed for region in non_ignored_regions)
+    if unconfirmed_count:
+        raise ProjectError(
+            "Cannot mark image as reviewed until every non-ignored region is confirmed "
+            f"({unconfirmed_count} unconfirmed)"
+        )
+
 
 def invalidate_image_pipeline(
     store: ProjectStore,
@@ -54,9 +90,19 @@ def invalidate_image_pipeline(
     stages: set[str],
 ) -> None:
     """Mark derived state stale and remove local artifacts that could be reused accidentally."""
-    allowed = {"detection", "ocr", "translation", "inpaint", "typeset", "export"}
+    allowed = {
+        "preprocess",
+        "detection",
+        "ocr",
+        "translation",
+        "inpaint",
+        "typeset",
+        "export",
+    }
     if not stages <= allowed:
         raise ValueError("Unknown pipeline stage invalidation")
+    if stages & {"detection", "ocr", "translation", "inpaint", "typeset"}:
+        reset_image_review(image)
     status = dict(image.status)
     for stage in stages:
         status[stage] = "pending"
@@ -73,6 +119,8 @@ def invalidate_image_pipeline(
 
     relative = safe_relative_path(image.relative_path).with_suffix(".png")
     artifact_directories: set[str] = set()
+    if "preprocess" in stages:
+        artifact_directories.add("preprocessed")
     if "inpaint" in stages:
         artifact_directories.update(("inpainted", "masks", "typeset"))
     elif "typeset" in stages:
@@ -320,6 +368,62 @@ def list_images(store: ProjectStore) -> list[ImageAsset]:
                 .order_by(ImageAsset.relative_path, ImageAsset.created_at)
             ).all()
         )
+
+
+def review_image(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    review_state: str,
+    expected_revision: int,
+) -> ImageAsset:
+    if review_state not in REVIEW_STATES:
+        raise ProjectError("Unknown image review state")
+    with store.session() as session:
+        image = session.scalar(
+            select(ImageAsset)
+            .options(selectinload(ImageAsset.regions))
+            .where(ImageAsset.id == image_id)
+        )
+        if image is None:
+            raise ProjectError("Image was not found in this project")
+        if image.revision != expected_revision:
+            raise RevisionConflict(
+                f"Image revision is {image.revision}, expected {expected_revision}",
+                expected_revision=expected_revision,
+                actual_revision=image.revision,
+                resource=f"image:{image.id}",
+            )
+        _validate_image_review_state(image, review_state)
+        project = store.project(session)
+        before = {
+            "reviewState": image.status.get("reviewState", "pending"),
+            "reviewedAt": image.status.get("reviewedAt") or "",
+        }
+        status = dict(image.status or {})
+        status["reviewState"] = review_state
+        status["reviewedAt"] = "" if review_state == "pending" else datetime.now(UTC).isoformat()
+        status["export"] = "pending"
+        image.status = status
+        image.processing_errors = [
+            error for error in (image.processing_errors or []) if error.get("stage") != "export"
+        ]
+        image.revision += 1
+        session.flush()
+        add_revision(
+            session,
+            project,
+            entity_type="image",
+            entity_id=image.id,
+            operation="review",
+            before=before,
+            after={
+                "reviewState": status["reviewState"],
+                "reviewedAt": status["reviewedAt"],
+            },
+        )
+    store.write_snapshot()
+    return image
 
 
 def copy_file_without_overwrite(source: Path, destination: Path) -> None:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -14,8 +15,9 @@ from sqlalchemy.orm import selectinload
 
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, Job, JobItem, JobStatus, TextRegion
-from manga_localizer.imaging import typeset_image
+from manga_localizer.imaging import DEFAULT_REPAIR_SETTINGS, typeset_image
 from manga_localizer.logging_utils import without_secrets
+from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.security import (
     atomic_write_bytes,
@@ -27,8 +29,13 @@ from manga_localizer.services.exporting import (
     choose_export_root,
     ensure_project_bundle,
     export_image,
+    write_json_export_summary,
 )
-from manga_localizer.services.images import image_path, invalidate_image_pipeline
+from manga_localizer.services.images import (
+    image_path,
+    invalidate_image_pipeline,
+    reset_image_review,
+)
 from manga_localizer.services.projects import (
     ProjectError,
     ProjectRegistry,
@@ -153,7 +160,7 @@ class PersistentJobQueue:
                 self._fail_job(
                     store,
                     job_id,
-                    f"Project bundle finalization failed: {safe_error(error)}",
+                    f"Export finalization failed: {safe_error(error)}",
                 )
                 store.write_snapshot()
 
@@ -177,18 +184,37 @@ class PersistentJobQueue:
                     return
                 if finished_job.options.get("bundleFinalized") is True:
                     return
-            export_root = choose_export_root(store, job_options.get("outputPath"), job_id)
-            ensure_project_bundle(store, export_root, finalized_job_id=job_id)
+            export_format = str(job_options.get("format", "both"))
+            include_assets = export_format == "both"
+            export_root = choose_export_root(
+                store,
+                job_options.get("outputPath"),
+                job_id,
+                include_assets=include_assets,
+            )
+            summary: dict[str, str | None] | None = None
+            if export_format == "both":
+                ensure_project_bundle(
+                    store,
+                    export_root,
+                    finalized_job_id=job_id,
+                )
+            elif export_format == "json":
+                summary = write_json_export_summary(store, export_root, job_id)
             with store.session() as session:
                 finished_job = session.scalar(
                     select(Job).options(selectinload(Job.items)).where(Job.id == job_id)
                 )
                 if finished_job is None:
                     raise ProjectError("Export job disappeared during bundle finalization")
-                finished_job.options = {
+                finalized_options = {
                     **dict(finished_job.options),
                     "bundleFinalized": True,
                 }
+                if summary is not None:
+                    finalized_options["summaryArtifact"] = summary["artifact"]
+                    finalized_options["summaryConflict"] = summary["conflict"]
+                finished_job.options = finalized_options
                 PersistentJobQueue._recompute_in_session(finished_job)
             store.write_snapshot()
 
@@ -302,6 +328,7 @@ class PersistentJobQueue:
                     )
                     image.processing_errors = processing_errors[-50:]
                     stage = {
+                        "preprocess": "preprocess",
                         "detect": "detection",
                         "ocr": "ocr",
                         "translate": "translation",
@@ -372,12 +399,49 @@ class PersistentJobQueue:
         region_ids: list[str],
         options: dict[str, Any],
     ) -> Job:
-        if kind not in {"detect", "ocr", "translate", "render", "export", "inpaint", "typeset"}:
+        if kind not in {
+            "preprocess",
+            "detect",
+            "ocr",
+            "translate",
+            "render",
+            "export",
+            "inpaint",
+            "typeset",
+        }:
             raise ProjectError(f"Unsupported job kind: {kind}")
         if len(set(image_ids)) != len(image_ids) or len(set(region_ids)) != len(region_ids):
             raise ProjectError("Job targets must not contain duplicate ids")
         safe_options = normalize_remote_endpoints(without_secrets(options))
         if kind == "export":
+            export_format = safe_options.get("format", "both")
+            if not isinstance(export_format, str) or export_format not in {
+                "images",
+                "json",
+                "both",
+            }:
+                raise ProjectError("Export format must be images, json, or both")
+            safe_options["format"] = export_format
+            image_variant = safe_options.get("imageVariant", "typeset")
+            if not isinstance(image_variant, str) or image_variant not in {
+                "typeset",
+                "inpainted",
+                "both",
+            }:
+                raise ProjectError("Export imageVariant must be typeset, inpainted, or both")
+            safe_options["imageVariant"] = image_variant
+            conflict = safe_options.get("conflict", "rename")
+            if not isinstance(conflict, str) or conflict not in {
+                "rename",
+                "overwrite",
+                "skip",
+            }:
+                raise ProjectError("Export conflict must be rename, overwrite, or skip")
+            safe_options["conflict"] = conflict
+            preserve_tree = safe_options.get("preserveTree", True)
+            if type(preserve_tree) is not bool:
+                raise ProjectError("Export preserveTree must be a boolean")
+            safe_options["preserveTree"] = preserve_tree
             output_path = safe_options.get("outputPath")
             if output_path is not None:
                 if not isinstance(output_path, str) or not output_path.strip():
@@ -552,6 +616,8 @@ class PersistentJobQueue:
             region_id = item.region_id
         if image_id is None:
             raise ProjectError("Job item has no image")
+        if kind == "preprocess":
+            return self._process_preprocess(store, image_id, options)
         if kind == "detect":
             return self._process_detect(store, image_id, options)
         if kind == "ocr":
@@ -561,14 +627,21 @@ class PersistentJobQueue:
         if kind in {"render", "inpaint", "typeset"}:
             return self._process_render(store, image_id, options, kind)
         if kind == "export":
-            root = choose_export_root(store, options.get("outputPath"), job_id)
+            export_format = str(options.get("format", "both"))
+            root = choose_export_root(
+                store,
+                options.get("outputPath"),
+                job_id,
+                include_assets=export_format == "both",
+            )
             return export_image(
                 store,
                 image_id,
                 export_root=root,
-                export_format=str(options.get("format", "both")),
+                export_format=export_format,
                 conflict=str(options.get("conflict", "rename")),
                 preserve_tree=bool(options.get("preserveTree", True)),
+                image_variant=str(options.get("imageVariant", "typeset")),
             )
         raise ProjectError(f"Unsupported job kind: {kind}")
 
@@ -580,6 +653,159 @@ class PersistentJobQueue:
         candidate = "jpn_vert" if direction == "vertical" else "jpn"
         configured = self.settings.ocr_language_list
         return candidate if candidate in configured else configured[0]
+
+    @staticmethod
+    def _preprocess_options(
+        options: dict[str, Any],
+        project_settings: dict[str, Any],
+    ) -> dict[str, Any]:
+        aliases = {
+            "profile": "profile",
+            "enableUpscale": "enable_upscale",
+            "enable_upscale": "enable_upscale",
+            "upscaleFactor": "upscale_factor",
+            "upscale_factor": "upscale_factor",
+            "enableDenoise": "enable_denoise",
+            "enable_denoise": "enable_denoise",
+            "enableSharpen": "enable_sharpen",
+            "enable_sharpen": "enable_sharpen",
+            "enableContrastEnhance": "enable_contrast_enhance",
+            "enable_contrast_enhance": "enable_contrast_enhance",
+            "enableEdgeOptimize": "enable_edge_optimize",
+            "enable_edge_optimize": "enable_edge_optimize",
+            "enableBinarize": "enable_binarize",
+            "enable_binarize": "enable_binarize",
+            "threshold": "threshold",
+        }
+        merged: dict[str, Any] = {}
+        for candidate in (
+            project_settings.get("preprocessing"),
+            options.get("preprocessing"),
+            options,
+        ):
+            if not isinstance(candidate, dict):
+                continue
+            # A profile at a higher-precedence layer selects a fresh preset.
+            # Do not leak explicit switches from the project default into a
+            # per-job/evaluator profile; switches supplied alongside this
+            # profile are applied immediately below as deliberate overrides.
+            if "profile" in candidate:
+                merged.clear()
+            for key, target in aliases.items():
+                if key in candidate:
+                    merged[target] = candidate[key]
+        return merged
+
+    @staticmethod
+    def _preprocessed_path(store: ProjectStore, relative_path: str) -> Path:
+        relative = safe_relative_path(relative_path).with_suffix(".png")
+        return resolve_write_target(
+            store.root,
+            Path("generated") / "preprocessed" / relative,
+            protected_roots=(store.source_root,),
+        )
+
+    @classmethod
+    def _processing_source(
+        cls,
+        store: ProjectStore,
+        image: ImageAsset,
+    ) -> tuple[Path, float, float, str]:
+        original = image_path(store, image)
+        processed = cls._preprocessed_path(store, image.relative_path)
+        if image.status.get("preprocess") != "done" or not processed.is_file():
+            return original, 1.0, 1.0, "original"
+        try:
+            with Image.open(processed) as opened:
+                processed_width, processed_height = opened.size
+        except (OSError, ValueError):
+            return original, 1.0, 1.0, "original"
+        if processed_width <= 0 or processed_height <= 0:
+            return original, 1.0, 1.0, "original"
+        return (
+            processed,
+            processed_width / image.width,
+            processed_height / image.height,
+            "preprocessed",
+        )
+
+    @staticmethod
+    def _clamp_box(
+        box: dict[str, Any],
+        width: int,
+        height: int,
+    ) -> dict[str, float]:
+        left = max(0.0, min(float(width), float(box["x"])))
+        top = max(0.0, min(float(height), float(box["y"])))
+        right = max(left, min(float(width), float(box["x"]) + float(box["width"])))
+        bottom = max(top, min(float(height), float(box["y"]) + float(box["height"])))
+        if right - left < 1 or bottom - top < 1:
+            raise ProjectError("Text region is outside the image after coordinate normalization")
+        return {"x": left, "y": top, "width": right - left, "height": bottom - top}
+
+    def _process_preprocess(
+        self,
+        store: ProjectStore,
+        image_id: str,
+        options: dict[str, Any],
+    ) -> dict[str, Any]:
+        with store.session() as session:
+            image = session.get(ImageAsset, image_id)
+            if image is None:
+                raise ProjectError("Preprocessing image was not found")
+            project = store.project(session)
+            project_settings = dict(project.settings)
+            requested_provider_name = str(
+                options.get("provider")
+                or options.get("preprocessorProvider")
+                or project_settings.get("preprocessorProvider")
+                or "opencv-pillow"
+            )
+            source = image_path(store, image)
+            expected_image_revision = image.revision
+            target = self._preprocessed_path(store, image.relative_path)
+            relative = target.relative_to(store.root)
+        try:
+            provider = self.providers.preprocessor(requested_provider_name)
+        except ValueError as error:
+            raise ProjectError(str(error)) from None
+        provider_name = str(getattr(provider, "name", requested_provider_name))
+        preprocess_options = self._preprocess_options(options, project_settings)
+        result = provider.preprocess(source, **preprocess_options)
+        artifact = self._png_bytes(result.image)
+        with store.session() as session:
+            image = self._assert_image_unchanged(
+                session,
+                image_id,
+                expected_image_revision,
+                None,
+                "image preprocessing",
+            )
+            atomic_write_bytes(target, artifact)
+            invalidate_image_pipeline(
+                store,
+                image,
+                {"detection", "ocr", "translation", "inpaint", "typeset", "export"},
+            )
+            status = dict(image.status)
+            status["preprocess"] = "done"
+            status["preprocessingProvider"] = provider_name
+            image.status = status
+            image.processing_errors = [
+                error
+                for error in (image.processing_errors or [])
+                if error.get("stage") != "preprocess"
+            ]
+            image.revision += 1
+        return {
+            "provider": provider_name,
+            "profile": preprocess_options.get("profile", "off"),
+            "artifact": relative.as_posix(),
+            "url": f"/api/images/{image_id}/content?variant=preprocessed",
+            "originalSize": list(result.original_size),
+            "processedSize": list(result.processed_size),
+            "scale": [result.scale_x, result.scale_y],
+        }
 
     @staticmethod
     def _region_versions(session, image_id: str) -> dict[str, int]:
@@ -620,23 +846,65 @@ class PersistentJobQueue:
             if image is None:
                 raise ProjectError("Detection image was not found")
             project = store.project(session)
-            provider_name = str(
+            requested_provider_name = str(
                 options.get("provider")
                 or options.get("detectorProvider")
                 or project.settings.get("detectorProvider")
                 or "tesseract"
             )
-            source = image_path(store, image)
+            source, scale_x, scale_y, input_variant = self._processing_source(store, image)
+            image_width = image.width
+            image_height = image.height
             expected_image_revision = image.revision
-        if provider_name != "tesseract":
-            raise ProjectError(f"Unsupported detection provider: {provider_name}")
+        try:
+            detector = self.providers.detector(requested_provider_name)
+        except ValueError as error:
+            raise ProjectError(str(error)) from None
+        provider_name = str(getattr(detector, "name", requested_provider_name))
         direction = str(options.get("direction", self.settings.ocr_default_direction))
         language = self._ocr_language(direction, options.get("language"))
-        detections = self.providers.ocr.detect_text_regions(
+        raw_detections = detector.detect_text_regions(
             source,
             direction=direction,
             language=language,
         )
+        detections: list[OCRRegion] = []
+        for detection in raw_detections:
+            left = max(0, min(image_width, math.floor(detection.x / scale_x)))
+            top = max(0, min(image_height, math.floor(detection.y / scale_y)))
+            right = max(
+                left,
+                min(image_width, math.ceil((detection.x + detection.width) / scale_x)),
+            )
+            bottom = max(
+                top,
+                min(image_height, math.ceil((detection.y + detection.height) / scale_y)),
+            )
+            if right - left < 1 or bottom - top < 1:
+                continue
+            polygon = (
+                tuple(
+                    (
+                        max(0.0, min(float(image_width), point[0] / scale_x)),
+                        max(0.0, min(float(image_height), point[1] / scale_y)),
+                    )
+                    for point in detection.polygon
+                )
+                if detection.polygon is not None
+                else None
+            )
+            detections.append(
+                OCRRegion(
+                    x=left,
+                    y=top,
+                    width=right - left,
+                    height=bottom - top,
+                    text=detection.text,
+                    confidence=detection.confidence,
+                    direction=detection.direction,
+                    polygon=polygon,
+                )
+            )
         created_ids: list[str] = []
         with store.session() as session:
             project = store.project(session)
@@ -676,8 +944,14 @@ class PersistentJobQueue:
                     region_type="unknown",
                     reading_order=order,
                     repair={
+                        **DEFAULT_REPAIR_SETTINGS,
                         "detectorGenerated": True,
                         "detectedTextCandidate": detection.text,
+                        **(
+                            {"maskPolygon": detection.polygon}
+                            if detection.polygon is not None
+                            else {}
+                        ),
                     },
                     revision=1,
                 )
@@ -698,6 +972,7 @@ class PersistentJobQueue:
                 image,
                 {"ocr", "translation", "inpaint", "typeset", "export"},
             )
+            reset_image_review(image)
             status = dict(image.status)
             status["detection"] = "done"
             status["detectorProvider"] = provider_name
@@ -708,6 +983,7 @@ class PersistentJobQueue:
             image.revision += 1
         return {
             "provider": provider_name,
+            "inputVariant": input_variant,
             "regionIds": created_ids,
             "count": len(created_ids),
             "candidates": [detection.to_dict() for detection in detections],
@@ -725,7 +1001,7 @@ class PersistentJobQueue:
             if image is None:
                 raise ProjectError("OCR image was not found")
             project = store.project(session)
-            provider_name = str(
+            requested_provider_name = str(
                 options.get("provider")
                 or options.get("ocrProvider")
                 or project.settings.get("ocrProvider")
@@ -738,20 +1014,33 @@ class PersistentJobQueue:
                     .limit(1)
                 )
             )
+            detection_is_current = image.status.get("detection") == "done"
+            fallback_detector_name = str(
+                options.get("detectorProvider")
+                or image.status.get("detectorProvider")
+                or project.settings.get("detectorProvider")
+                or "tesseract"
+            )
             if region_id:
                 region = session.get(TextRegion, region_id)
                 if region is None or region.image_id != image_id:
                     raise ProjectError("OCR region was not found")
                 has_targets = True
-        if provider_name != "tesseract":
-            raise ProjectError(f"Unsupported OCR provider: {provider_name}")
-        if not has_targets:
-            self._process_detect(store, image_id, options)
+        try:
+            ocr_provider = self.providers.ocr_provider(requested_provider_name)
+        except ValueError as error:
+            raise ProjectError(str(error)) from None
+        provider_name = str(getattr(ocr_provider, "name", requested_provider_name))
+        if not has_targets and not detection_is_current:
+            detection_options = dict(options)
+            detection_options["provider"] = fallback_detector_name
+            self._process_detect(store, image_id, detection_options)
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
             if image is None:
                 raise ProjectError("OCR image was not found")
-            source = image_path(store, image)
+            original_source = image_path(store, image)
+            source, scale_x, scale_y, input_variant = self._processing_source(store, image)
             expected_image_revision = image.revision
             expected_region_versions = self._region_versions(session, image_id)
             target_query = select(TextRegion).where(TextRegion.image_id == image_id)
@@ -762,36 +1051,69 @@ class PersistentJobQueue:
             targets = list(session.scalars(target_query.order_by(TextRegion.reading_order)).all())
             if region_id and len(targets) != 1:
                 raise ProjectError("OCR region changed before processing")
-            target_snapshots = [
-                {
-                    "id": target.id,
-                    "direction": target.direction
-                    if target.direction != "auto"
-                    else str(options.get("direction", "auto")),
-                    "box": {
+            target_snapshots = []
+            for target in targets:
+                original_box = self._clamp_box(
+                    {
                         "x": target.x,
                         "y": target.y,
                         "width": target.width,
                         "height": target.height,
                     },
-                }
-                for target in targets
-            ]
-        results = [
-            (
-                str(target["id"]),
-                self.providers.ocr.recognize_region(
-                    source,
-                    target["box"],
-                    direction=str(target["direction"]),
-                    language=self._ocr_language(
-                        str(target["direction"]),
-                        options.get("language"),
-                    ),
+                    image.width,
+                    image.height,
+                )
+                target_snapshots.append(
+                    {
+                        "id": target.id,
+                        "direction": target.direction
+                        if target.direction != "auto"
+                        else str(options.get("direction", "auto")),
+                        "originalBox": original_box,
+                        "processedBox": self._clamp_box(
+                            {
+                                "x": original_box["x"] * scale_x,
+                                "y": original_box["y"] * scale_y,
+                                "width": original_box["width"] * scale_x,
+                                "height": original_box["height"] * scale_y,
+                            },
+                            max(1, round(image.width * scale_x)),
+                            max(1, round(image.height * scale_y)),
+                        ),
+                    }
+                )
+        results: list[tuple[str, OCRRegion, int, str]] = []
+        for target in target_snapshots:
+            target_direction = str(target["direction"])
+            language = self._ocr_language(target_direction, options.get("language"))
+            primary = ocr_provider.recognize_region(
+                source,
+                target["processedBox"],
+                direction=target_direction,
+                language=language,
+            )
+            candidates = [(primary, input_variant)]
+            primary_confidence = primary.confidence or 0.0
+            if input_variant == "preprocessed" and (
+                not primary.text.strip() or primary_confidence < 0.45
+            ):
+                fallback = ocr_provider.recognize_region(
+                    original_source,
+                    target["originalBox"],
+                    direction=target_direction,
+                    language=language,
+                )
+                candidates.append((fallback, "original"))
+            selected, selected_variant = max(
+                candidates,
+                key=lambda candidate: (
+                    bool(candidate[0].text.strip()),
+                    len("".join(candidate[0].text.split()))
+                    * (0.25 + max(0.0, min(1.0, candidate[0].confidence or 0.0))),
+                    candidate[0].confidence or 0.0,
                 ),
             )
-            for target in target_snapshots
-        ]
+            results.append((str(target["id"]), selected, len(candidates), selected_variant))
         with store.session() as session:
             image = self._assert_image_unchanged(
                 session,
@@ -801,14 +1123,20 @@ class PersistentJobQueue:
                 "OCR",
             )
             project = store.project(session)
-            for target_id, result in results:
+            for target_id, result, attempt_count, selected_variant in results:
                 current = session.get(TextRegion, target_id)
                 assert current is not None
                 before = region_payload(current)
                 current.source_text = result.text
                 current.confidence = result.confidence
                 current.direction = result.direction
+                current.confirmed = False
                 current.ocr_provider = provider_name
+                current.repair = {
+                    **dict(current.repair or {}),
+                    "ocrAttemptCount": attempt_count,
+                    "ocrInputVariant": selected_variant,
+                }
                 current.revision += 1
                 session.flush()
                 add_revision(
@@ -823,8 +1151,9 @@ class PersistentJobQueue:
             invalidate_image_pipeline(
                 store,
                 image,
-                {"translation", "typeset", "export"},
+                {"translation", "inpaint", "typeset", "export"},
             )
+            reset_image_review(image)
             status = dict(image.status)
             status["ocr"] = "done"
             status["ocrProvider"] = provider_name
@@ -833,8 +1162,20 @@ class PersistentJobQueue:
                 error for error in (image.processing_errors or []) if error.get("stage") != "ocr"
             ]
             image.revision += 1
-        recognized = [result.to_dict() for _target_id, result in results]
-        return {"provider": provider_name, "regions": recognized, "count": len(recognized)}
+        recognized = [
+            {
+                **result.to_dict(),
+                "attemptCount": attempt_count,
+                "inputVariant": selected_variant,
+            }
+            for _target_id, result, attempt_count, selected_variant in results
+        ]
+        return {
+            "provider": provider_name,
+            "inputVariant": input_variant,
+            "regions": recognized,
+            "count": len(recognized),
+        }
 
     def _process_translation(
         self,
@@ -906,10 +1247,14 @@ class PersistentJobQueue:
                 "translation",
             )
             project = store.project(session)
+            review_changed = False
             for target_id, value in translated:
                 current = session.get(TextRegion, target_id)
                 assert current is not None
                 before = region_payload(current)
+                if current.translation_text != value:
+                    review_changed = True
+                    current.confirmed = False
                 current.translation_text = value
                 current.translation_provider = (
                     "manual" if provider_name == "manual" else provider_name
@@ -930,6 +1275,8 @@ class PersistentJobQueue:
                 current_image,
                 {"typeset", "export"},
             )
+            if review_changed:
+                reset_image_review(current_image)
             status = dict(current_image.status)
             status["translation"] = "done"
             status["translatorProvider"] = provider_name
@@ -954,6 +1301,25 @@ class PersistentJobQueue:
         image.save(buffer, format="PNG")
         return buffer.getvalue()
 
+    @staticmethod
+    def _preserve_mask_outside(
+        before: Path | Image.Image,
+        generated: Image.Image,
+        mask: np.ndarray,
+    ) -> Image.Image:
+        if isinstance(before, Path):
+            with Image.open(before) as opened:
+                before_image = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
+        else:
+            before_image = before.copy()
+        mode = "RGBA" if "A" in before_image.getbands() else "RGB"
+        before_pixels = np.asarray(before_image.convert(mode), dtype=np.uint8)
+        generated_pixels = np.asarray(generated.convert(mode), dtype=np.uint8).copy()
+        if before_pixels.shape != generated_pixels.shape or mask.shape != before_pixels.shape[:2]:
+            raise ProjectError("Inpainting provider returned an image with incompatible dimensions")
+        generated_pixels[mask == 0] = before_pixels[mask == 0]
+        return Image.fromarray(generated_pixels, mode=mode)
+
     def _process_render(
         self,
         store: ProjectStore,
@@ -965,6 +1331,34 @@ class PersistentJobQueue:
             image = session.get(ImageAsset, image_id)
             if image is None:
                 raise ProjectError("Render image was not found")
+            project = store.project(session)
+            typesetting_provider_name = str(
+                (
+                    options.get("provider")
+                    if kind == "typeset"
+                    else options.get("typesetterProvider")
+                )
+                or "pillow"
+            )
+            inpaint_is_current = image.status.get("inpaint") == "done"
+            recorded_inpainting_provider = image.status.get("inpaintingProvider")
+            persisted_inpainting_provider = recorded_inpainting_provider
+            if persisted_inpainting_provider not in {
+                "opencv",
+                "opencv-inpaint",
+                "lama",
+                "lama-onnx",
+            }:
+                persisted_inpainting_provider = None
+            requested_page_provider = options.get("inpainterProvider")
+            if kind in {"render", "inpaint"}:
+                requested_page_provider = options.get("provider") or requested_page_provider
+            page_inpainting_provider_name = str(
+                requested_page_provider
+                or persisted_inpainting_provider
+                or project.settings.get("inpainterProvider")
+                or "opencv"
+            )
             regions = list(
                 session.scalars(
                     select(TextRegion)
@@ -976,8 +1370,39 @@ class PersistentJobQueue:
             relative = safe_relative_path(image.relative_path).with_suffix(".png")
             expected_image_revision = image.revision
             expected_region_versions = {region.id: region.revision for region in regions}
-            inpaint_is_current = image.status.get("inpaint") == "done"
-        region_data = [region_payload(region) for region in regions if not region.ignored]
+        if kind != "inpaint" and typesetting_provider_name != "pillow":
+            raise ProjectError(f"Unknown typesetting provider: {typesetting_provider_name}")
+        active_regions = [region_payload(region) for region in regions if not region.ignored]
+        repair_policy = str(options.get("repairPolicy", "safe"))
+        if repair_policy not in {"safe", "recognized", "all"}:
+            raise ProjectError("repairPolicy must be safe, recognized, or all")
+        try:
+            minimum_confidence = float(options.get("minimumRepairConfidence", 0.65))
+        except (TypeError, ValueError) as error:
+            raise ProjectError("minimumRepairConfidence must be between zero and one") from error
+        if not 0 <= minimum_confidence <= 1:
+            raise ProjectError("minimumRepairConfidence must be between zero and one")
+
+        def should_repair(region: dict[str, Any]) -> bool:
+            if repair_policy == "all":
+                return True
+            source_text = str(region.get("sourceText", "")).strip()
+            if repair_policy == "recognized":
+                return bool(source_text)
+            if bool(region.get("confirmed")):
+                return True
+            repair = region.get("repair") if isinstance(region.get("repair"), dict) else {}
+            if not source_text:
+                return False
+            if not repair.get("detectorGenerated"):
+                return True
+            confidence = region.get("confidence")
+            return confidence is not None and float(confidence) >= minimum_confidence
+
+        repair_data = [region for region in active_regions if should_repair(region)]
+        typesetting_data = [
+            region for region in repair_data if str(region.get("translationText", "")).strip()
+        ]
         inpaint_relative = Path("generated") / "inpainted" / relative
         typeset_relative = Path("generated") / "typeset" / relative
         mask_relative = Path("generated") / "masks" / relative
@@ -999,9 +1424,21 @@ class PersistentJobQueue:
         mask_bytes: bytes | None = None
         inpainted_bytes: bytes | None = None
         typeset_bytes: bytes | None = None
+        render_mask: np.ndarray | None = None
         typeset_source: Path | Image.Image = inpaint_path
+        region_inpainting_providers: dict[str, str] = {}
+        effective_inpainting_provider_name = str(
+            recorded_inpainting_provider or page_inpainting_provider_name
+        )
         if kind != "typeset" or not inpaint_is_current or not inpaint_path.exists():
-            mask = self.providers.inpainting.create_mask(
+            try:
+                page_inpainting_provider = self.providers.inpainter(page_inpainting_provider_name)
+            except ValueError as error:
+                raise ProjectError(str(error)) from None
+            page_inpainting_provider_name = str(
+                getattr(page_inpainting_provider, "name", page_inpainting_provider_name)
+            )
+            mask = page_inpainting_provider.create_mask(
                 source,
                 [],
                 padding=0,
@@ -1009,37 +1446,156 @@ class PersistentJobQueue:
                 feather=0,
             )
             cleaned: Path | Image.Image = source
-            for region in region_data:
+            repaired_region_count = 0
+            for region in repair_data:
                 repair = region.get("repair") if isinstance(region.get("repair"), dict) else {}
-                padding = int(options.get("padding", repair.get("maskPadding", 3)))
-                dilation = int(options.get("dilation", repair.get("dilation", 1)))
-                feather = int(options.get("feather", repair.get("feather", 0)))
-                region_mask = self.providers.inpainting.create_mask(
+                requested_region_provider = str(
+                    repair.get("inpainterProvider") or page_inpainting_provider_name
+                )
+                try:
+                    inpainting_provider = self.providers.inpainter(requested_region_provider)
+                except ValueError as error:
+                    raise ProjectError(str(error)) from None
+                inpainting_provider_name = str(
+                    getattr(inpainting_provider, "name", requested_region_provider)
+                )
+                region_inpainting_providers[str(region["id"])] = inpainting_provider_name
+                padding = int(
+                    options.get(
+                        "padding",
+                        repair.get(
+                            "maskPadding",
+                            repair.get("padding", DEFAULT_REPAIR_SETTINGS["maskPadding"]),
+                        ),
+                    )
+                )
+                dilation = int(
+                    options.get(
+                        "dilation",
+                        repair.get("dilation", DEFAULT_REPAIR_SETTINGS["dilation"]),
+                    )
+                )
+                feather = int(
+                    options.get(
+                        "feather",
+                        repair.get("feather", DEFAULT_REPAIR_SETTINGS["feather"]),
+                    )
+                )
+                default_mask_mode = str(DEFAULT_REPAIR_SETTINGS["maskMode"])
+                mask_mode = str(options.get("maskMode", repair.get("maskMode", default_mask_mode)))
+                mask_region = {
+                    "x": region["x"],
+                    "y": region["y"],
+                    "width": region["width"],
+                    "height": region["height"],
+                    "rotation": region.get("rotation", 0),
+                    "padding": padding,
+                    "maskMode": mask_mode,
+                }
+                if repair.get("maskPolygon"):
+                    mask_region["maskPolygon"] = repair["maskPolygon"]
+                if repair.get("maskEdits") is not None:
+                    mask_region["maskEdits"] = repair["maskEdits"]
+                region_mask = inpainting_provider.create_mask(
                     source,
-                    [{**region, "padding": padding}],
+                    [mask_region],
                     padding=padding,
                     dilation=dilation,
                     feather=feather,
+                    mask_mode=mask_mode,
                 )
+                if not np.any(region_mask):
+                    continue
                 mask = np.maximum(mask, region_mask)
-                cleaned = self.providers.inpainting.inpaint(
-                    cleaned,
-                    region_mask,
-                    radius=float(options.get("radius", repair.get("radius", 3))),
-                    method=str(options.get("method", repair.get("method", "telea"))),
-                    fill_color=str(options.get("fillColor", repair.get("fillColor", "#ffffff"))),
-                )
-            if not region_data:
+                if inpainting_provider_name in {"lama", "lama-onnx"}:
+                    generated = inpainting_provider.inpaint(
+                        cleaned,
+                        region_mask,
+                        context_padding=int(
+                            options.get("contextPadding", repair.get("contextPadding", 64))
+                        ),
+                        # The persisted region mask already contains the final
+                        # feather weights. Blurring again inside LaMa would make
+                        # its composite boundary diverge from that saved mask.
+                        feather=0,
+                    )
+                else:
+                    generated = inpainting_provider.inpaint(
+                        cleaned,
+                        region_mask,
+                        radius=float(
+                            options.get(
+                                "radius",
+                                repair.get("radius", DEFAULT_REPAIR_SETTINGS["radius"]),
+                            )
+                        ),
+                        method=str(
+                            options.get(
+                                "method",
+                                repair.get("method", DEFAULT_REPAIR_SETTINGS["method"]),
+                            )
+                        ),
+                        fill_color=str(
+                            options.get(
+                                "fillColor",
+                                repair.get("fillColor", DEFAULT_REPAIR_SETTINGS["fillColor"]),
+                            )
+                        ),
+                    )
+                cleaned = self._preserve_mask_outside(cleaned, generated, region_mask)
+                repaired_region_count += 1
+            routed_providers = set(region_inpainting_providers.values())
+            if len(routed_providers) == 1:
+                effective_inpainting_provider_name = next(iter(routed_providers))
+            elif len(routed_providers) > 1:
+                effective_inpainting_provider_name = "mixed"
+            else:
+                effective_inpainting_provider_name = page_inpainting_provider_name
+            if isinstance(cleaned, Path):
                 with Image.open(source) as opened:
                     cleaned = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
             mask_bytes = self._png_bytes(Image.fromarray(mask))
             inpainted_bytes = self._png_bytes(cleaned)
+            render_mask = mask
             typeset_source = cleaned
         if kind != "inpaint":
-            result = typeset_image(typeset_source, region_data)
+            if render_mask is None:
+                if not mask_path.is_file():
+                    raise ProjectError("Current inpainting mask is unavailable; rerun inpainting")
+                try:
+                    with Image.open(mask_path) as opened:
+                        render_mask = np.asarray(opened.convert("L"), dtype=np.uint8)
+                except (OSError, ValueError) as error:
+                    raise ProjectError(
+                        "Current inpainting mask could not be decoded; rerun inpainting"
+                    ) from error
+
+            def overlaps_actual_mask(region: dict[str, Any]) -> bool:
+                height, width = render_mask.shape
+                left = max(0, min(width, math.floor(float(region["x"]))))
+                top = max(0, min(height, math.floor(float(region["y"]))))
+                right = max(
+                    left,
+                    min(width, math.ceil(float(region["x"]) + float(region["width"]))),
+                )
+                bottom = max(
+                    top,
+                    min(height, math.ceil(float(region["y"]) + float(region["height"]))),
+                )
+                return (
+                    right > left
+                    and bottom > top
+                    and bool(np.any(render_mask[top:bottom, left:right]))
+                )
+
+            renderable_typesetting_data = [
+                region for region in typesetting_data if overlaps_actual_mask(region)
+            ]
+            result = typeset_image(typeset_source, renderable_typesetting_data)
             typeset_bytes = self._png_bytes(result.image)
             layouts = result.layouts
         else:
+            renderable_typesetting_data = []
             layouts = []
         with store.session() as session:
             current = self._assert_image_unchanged(
@@ -1055,6 +1611,8 @@ class PersistentJobQueue:
                 atomic_write_bytes(inpaint_path, inpainted_bytes)
             if typeset_bytes is not None:
                 atomic_write_bytes(typeset_path, typeset_bytes)
+            if inpainted_bytes is not None or typeset_bytes is not None:
+                reset_image_review(current)
             invalidate_image_pipeline(
                 store,
                 current,
@@ -1062,10 +1620,11 @@ class PersistentJobQueue:
             )
             status = dict(current.status)
             status["inpaint"] = "done"
-            status["inpaintingProvider"] = "opencv"
+            if mask_bytes is not None:
+                status["inpaintingProvider"] = effective_inpainting_provider_name
             if kind != "inpaint":
                 status["typeset"] = "done"
-                status["typesettingProvider"] = "pillow"
+                status["typesettingProvider"] = typesetting_provider_name
             current.status = status
             cleared_stages = {"render", "inpaint", "typeset"}
             current.processing_errors = [
@@ -1075,6 +1634,27 @@ class PersistentJobQueue:
             ]
             current.revision += 1
         return {
+            "provider": (
+                effective_inpainting_provider_name
+                if kind in {"render", "inpaint"}
+                else typesetting_provider_name
+            ),
+            "inpaintingProvider": effective_inpainting_provider_name,
+            "inpaintingProviders": sorted(set(region_inpainting_providers.values())),
+            "regionInpaintingProviders": region_inpainting_providers,
+            "typesettingProvider": (typesetting_provider_name if kind != "inpaint" else None),
+            "repairPolicy": repair_policy,
+            "eligibleRegionCount": len(repair_data),
+            "skippedRegionCount": len(active_regions) - len(repair_data),
+            "repairedRegionCount": repaired_region_count if mask_bytes is not None else None,
+            "typesetEligibleRegionCount": (
+                len(renderable_typesetting_data) if kind != "inpaint" else None
+            ),
+            "typesetSkippedRegionCount": (
+                len(active_regions) - len(renderable_typesetting_data)
+                if kind != "inpaint"
+                else None
+            ),
             "inpaintedArtifact": inpaint_relative.as_posix(),
             "inpaintedUrl": f"/api/images/{image_id}/content?variant=erased",
             "maskArtifact": mask_relative.as_posix(),

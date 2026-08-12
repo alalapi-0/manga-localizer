@@ -1,8 +1,24 @@
 from manga_localizer.imaging.inpainting import (
+    DEFAULT_REPAIR_SETTINGS,
     InpaintingProvider,
     OpenCVInpaintingProvider,
     create_mask,
     inpaint,
+    validate_mask_edits,
+)
+from manga_localizer.imaging.preprocessing import (
+    ImageEnhancementProvider,
+    LocalPreprocessProvider,
+    OpenCVPillowPreprocessProvider,
+    OpenCVPreprocessProvider,
+    PreprocessConfig,
+    PreprocessedImage,
+    PreprocessProvider,
+    PreprocessProviderError,
+    PreprocessUnavailable,
+    RealESRGANNCNNPreprocessProvider,
+    RealESRGANNCNNProvider,
+    preprocess_image,
 )
 from manga_localizer.imaging.typesetting import (
     TypesetResult,
@@ -12,12 +28,26 @@ from manga_localizer.imaging.typesetting import (
 )
 
 __all__ = [
+    "DEFAULT_REPAIR_SETTINGS",
+    "ImageEnhancementProvider",
     "InpaintingProvider",
+    "LocalPreprocessProvider",
     "OpenCVInpaintingProvider",
+    "OpenCVPillowPreprocessProvider",
+    "OpenCVPreprocessProvider",
+    "PreprocessConfig",
+    "PreprocessProvider",
+    "PreprocessProviderError",
+    "PreprocessUnavailable",
+    "PreprocessedImage",
+    "RealESRGANNCNNPreprocessProvider",
+    "RealESRGANNCNNProvider",
     "TypesetResult",
     "create_mask",
     "discover_system_fonts",
     "font_capabilities",
     "inpaint",
+    "preprocess_image",
     "typeset_image",
+    "validate_mask_edits",
 ]

@@ -23,6 +23,7 @@ from manga_localizer.schemas import (
     ConfigOut,
     HealthOut,
     ImageOut,
+    ImageReviewRequest,
     JobOut,
     JobRequest,
     LocalImportRequest,
@@ -48,6 +49,7 @@ from manga_localizer.services.images import (
     ingest_bytes,
     invalidate_image_pipeline,
     list_images,
+    review_image,
     thumbnail_path,
     validate_image_bytes,
 )
@@ -88,10 +90,22 @@ def _project_dict(project: Project, root: Path) -> dict[str, Any]:
 def _settings_invalidation(before: dict[str, Any], after: dict[str, Any]) -> set[str]:
     changed = {key for key in before.keys() | after.keys() if before.get(key) != after.get(key)}
     stages: set[str] = set()
+    if changed & {"preprocessorProvider", "preprocessing"}:
+        stages.update(
+            (
+                "preprocess",
+                "detection",
+                "ocr",
+                "translation",
+                "inpaint",
+                "typeset",
+                "export",
+            )
+        )
     if changed & {"detectorProvider"}:
         stages.update(("detection", "ocr", "translation", "inpaint", "typeset", "export"))
     if changed & {"ocrProvider", "sourceLanguage"}:
-        stages.update(("ocr", "translation", "typeset", "export"))
+        stages.update(("ocr", "translation", "inpaint", "typeset", "export"))
     if changed & {
         "translatorProvider",
         "targetLanguage",
@@ -116,8 +130,18 @@ def _settings_invalidation(before: dict[str, Any], after: dict[str, Any]) -> set
 def _image_dict(image: ImageAsset) -> dict[str, Any]:
     pipeline_status = {
         key: image.status.get(key, "pending")
-        for key in ("detection", "ocr", "translation", "inpaint", "typeset", "export")
+        for key in (
+            "preprocess",
+            "detection",
+            "ocr",
+            "translation",
+            "inpaint",
+            "typeset",
+            "export",
+        )
     }
+    pipeline_status["reviewState"] = image.status.get("reviewState", "pending")
+    pipeline_status["reviewedAt"] = image.status.get("reviewedAt") or ""
     regions = image.__dict__.get("regions", [])
     processing_errors = redact(list(image.processing_errors or []))
     return {
@@ -136,6 +160,7 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "processingErrors": processing_errors,
         "error": processing_errors[-1]["error"] if processing_errors else None,
         "revision": image.revision,
+        "preprocessingProvider": image.status.get("preprocessingProvider") or None,
         "detectorProvider": image.status.get("detectorProvider") or None,
         "ocrProvider": image.status.get("ocrProvider") or None,
         "translatorProvider": image.status.get("translatorProvider") or None,
@@ -468,15 +493,38 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     async def images_list(project_id: str) -> list[dict[str, Any]]:
         return [_image_dict(image) for image in list_images(registry.get(project_id))]
 
+    @router.patch("/images/{image_id}/review", response_model=ImageOut)
+    async def image_review(image_id: str, body: ImageReviewRequest) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        reviewed = review_image(
+            store,
+            image.id,
+            review_state=body.review_state,
+            expected_revision=body.expected_revision,
+        )
+        return _image_dict(reviewed)
+
     @router.get("/images/{image_id}/content")
     async def image_content(
         image_id: str,
         variant: Annotated[str, Query()] = "original",
     ) -> FileResponse:
         store, image = registry.find_image(image_id)
-        if variant in {"erased", "inpainted", "typeset"}:
-            stage = "inpainted" if variant in {"erased", "inpainted"} else "typeset"
-            status_stage = "inpaint" if stage == "inpainted" else "typeset"
+        if variant in {"preprocessed", "erased", "inpainted", "typeset"}:
+            stage = (
+                "preprocessed"
+                if variant == "preprocessed"
+                else "inpainted"
+                if variant in {"erased", "inpainted"}
+                else "typeset"
+            )
+            status_stage = (
+                "preprocess"
+                if stage == "preprocessed"
+                else "inpaint"
+                if stage == "inpainted"
+                else "typeset"
+            )
             if image.status.get(status_stage) != "done":
                 raise HTTPException(
                     status_code=404,
@@ -510,11 +558,22 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
     @router.get("/images/{image_id}/generated/{stage}")
     async def image_generated(image_id: str, stage: str) -> FileResponse:
-        stage_directory = {"inpainted": "inpainted", "typeset": "typeset", "mask": "masks"}
+        stage_directory = {
+            "preprocessed": "preprocessed",
+            "inpainted": "inpainted",
+            "typeset": "typeset",
+            "mask": "masks",
+        }
         if stage not in stage_directory:
             raise HTTPException(status_code=404, detail="Unknown generated image stage")
         store, image = registry.find_image(image_id)
-        status_stage = "inpaint" if stage in {"inpainted", "mask"} else "typeset"
+        status_stage = (
+            "preprocess"
+            if stage == "preprocessed"
+            else "inpaint"
+            if stage in {"inpainted", "mask"}
+            else "typeset"
+        )
         if image.status.get(status_stage) != "done":
             raise HTTPException(
                 status_code=404,
@@ -595,7 +654,16 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
     @router.post("/projects/{project_id}/{kind}", response_model=JobOut, status_code=202)
     async def job_create(project_id: str, kind: str, body: JobRequest) -> dict[str, Any]:
-        if kind not in {"detect", "ocr", "translate", "render", "export", "inpaint", "typeset"}:
+        if kind not in {
+            "preprocess",
+            "detect",
+            "ocr",
+            "translate",
+            "render",
+            "export",
+            "inpaint",
+            "typeset",
+        }:
             raise HTTPException(status_code=404, detail="Unknown project operation")
         store = registry.get(project_id)
         job = queue.create_job(

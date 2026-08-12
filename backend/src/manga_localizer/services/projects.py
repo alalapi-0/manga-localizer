@@ -62,6 +62,18 @@ DEFAULT_PROJECT_SETTINGS: dict[str, Any] = {
     "sourceLanguage": "ja",
     "targetLanguage": "zh-CN",
     "targetScript": "simplified",
+    "preprocessorProvider": "opencv-pillow",
+    "preprocessing": {
+        "profile": "ocr-friendly",
+        "enableUpscale": True,
+        "upscaleFactor": 2,
+        "enableDenoise": True,
+        "enableSharpen": True,
+        "enableContrastEnhance": True,
+        "enableEdgeOptimize": False,
+        "enableBinarize": False,
+        "threshold": 180,
+    },
     "detectorProvider": "tesseract",
     "ocrProvider": "tesseract",
     "translatorProvider": "manual",
@@ -71,9 +83,11 @@ DEFAULT_PROJECT_SETTINGS: dict[str, Any] = {
     "characterNames": {},
     "export": {
         "format": "both",
+        "imageVariant": "typeset",
         "conflict": "rename",
         "preserveTree": True,
         "translatedDirectory": "translated",
+        "cleanDirectory": "clean",
         "originalTextDirectory": "original-text",
         "translatedTextDirectory": "translated-text",
         "maskDirectory": "masks",
@@ -222,6 +236,7 @@ class ProjectStore:
                         "status": {
                             key: image.status.get(key, "pending")
                             for key in (
+                                "preprocess",
                                 "detection",
                                 "ocr",
                                 "translation",
@@ -229,8 +244,13 @@ class ProjectStore:
                                 "typeset",
                                 "export",
                             )
+                        }
+                        | {
+                            "reviewState": image.status.get("reviewState", "pending"),
+                            "reviewedAt": image.status.get("reviewedAt") or "",
                         },
                         "providers": {
+                            "preprocessing": image.status.get("preprocessingProvider") or None,
                             "detector": image.status.get("detectorProvider") or None,
                             "ocr": image.status.get("ocrProvider") or None,
                             "translator": image.status.get("translatorProvider") or None,

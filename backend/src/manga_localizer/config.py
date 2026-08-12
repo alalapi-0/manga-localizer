@@ -45,6 +45,9 @@ class Settings(BaseSettings):
             "TESSERACT_CMD",
         ),
     )
+    ppocr_detection_model: Path | None = None
+    realesrgan_ncnn_command: str = "realesrgan-ncnn-vulkan"
+    lama_inpainting_model: Path | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     thumbnail_size: int = 384
     worker_poll_seconds: float = 0.15
@@ -61,6 +64,18 @@ class Settings(BaseSettings):
     @property
     def ocr_language_list(self) -> list[str]:
         return [language.strip() for language in self.ocr_languages.split(",") if language.strip()]
+
+    @property
+    def ppocr_detection_model_path(self) -> Path:
+        return self.ppocr_detection_model or (
+            self.data_dir / "models" / "text_detection_cn_ppocrv3_2023may.onnx"
+        )
+
+    @property
+    def lama_inpainting_model_path(self) -> Path:
+        return self.lama_inpainting_model or (
+            self.data_dir / "models" / "inpainting_lama_2025jan.onnx"
+        )
 
     @field_validator("ocr_languages")
     @classmethod

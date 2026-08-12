@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -30,7 +30,7 @@ describe('desktop workbench interactions', () => {
     render(<App />);
 
     expect(screen.getByText('image-1.png')).toBeInTheDocument();
-    expect(screen.getByText('无文本（正常）')).toBeInTheDocument();
+    expect(screen.getByText('待确认无文字')).toBeInTheDocument();
     await user.click(screen.getByRole('checkbox', { name: '批选 image-2.png' }));
     expect(useWorkbenchStore.getState().selectedImageIds).toEqual(['image-1', 'image-2']);
 
@@ -42,9 +42,83 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-2');
   });
 
-  it('edits source, translation, type, direction, order, and review flags', async () => {
+  it('requires an explicit confirmation before a zero-region page is treated as reviewed', async () => {
+    const user = userEvent.setup();
+    const zeroText = imageFixture('image-1', {
+      regionCount: 0,
+      status: {
+        ...imageFixture('image-1').status,
+        ocr: 'done',
+        reviewState: 'pending',
+      },
+      revision: 7,
+    });
+    seedWorkbench({ images: [zeroText], regions: [] });
+    const reviewImage = vi.spyOn(api, 'reviewImage').mockResolvedValue({
+      ...zeroText,
+      status: {
+        ...zeroText.status,
+        reviewState: 'no-text-reviewed',
+        reviewedAt: '2026-08-10T10:00:00Z',
+      },
+      revision: 8,
+    });
+    render(<App />);
+
+    expect(screen.getByText('待确认无文字')).toBeInTheDocument();
+    expect(document.querySelector('.status-pill--no-text')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '确认本页无文字' }));
+
+    await waitFor(() => expect(reviewImage).toHaveBeenCalledWith(
+      'image-1',
+      'no-text-reviewed',
+      7,
+    ));
+    expect(document.querySelector('.status-pill--no-text')).toHaveTextContent('已确认无文字');
+    expect(useWorkbenchStore.getState().images[0]?.status.reviewState).toBe('no-text-reviewed');
+  });
+
+  it('only enables page review after every active region is confirmed and treats ignored-only pages as no-text', () => {
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1', { confirmed: true }),
+        regionFixture('region-2', { confirmed: false }),
+        regionFixture('region-3', { ignored: true }),
+      ],
+    });
+    render(<App />);
+
+    expect(screen.getByText('还有 1 个活动文本框尚未确认')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '还需确认 1 个文本框' })).toBeDisabled();
+
+    act(() => useWorkbenchStore.getState().updateRegion('region-2', { confirmed: true }));
+    expect(screen.getByRole('button', { name: '标记本页已检查' })).toBeEnabled();
+
+    act(() => {
+      useWorkbenchStore.getState().updateRegion('region-1', { ignored: true });
+      useWorkbenchStore.getState().updateRegion('region-2', { ignored: true });
+    });
+    expect(screen.getByText('本页没有活动文本框，可确认无文字')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '确认本页无文字' })).toBeEnabled();
+  });
+
+  it('edits source, translation, type, direction, order, and keeps review flags exclusive', async () => {
     const user = userEvent.setup();
     seedWorkbench({ selectedRegionIds: ['region-1'] });
+    let revision = 4;
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture()
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images
+    );
+    vi.spyOn(api, 'updateRegion').mockImplementation(async (regionId, patch) => {
+      revision += 1;
+      const current = useWorkbenchStore.getState().regionsByImage['image-1']?.find(
+        (region) => region.id === regionId,
+      ) ?? regionFixture(regionId);
+      return { ...current, ...patch, revision };
+    });
     render(<App />);
 
     const source = screen.getByRole('textbox', { name: '日文原文' });
@@ -58,6 +132,10 @@ describe('desktop workbench interactions', () => {
     await user.clear(screen.getByRole('spinbutton', { name: '阅读顺序' }));
     await user.type(screen.getByRole('spinbutton', { name: '阅读顺序' }), '7');
     await user.click(screen.getByRole('checkbox', { name: /确认此文本框/ }));
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().regionsByImage['image-1']?.[0],
+    ).toMatchObject({ confirmed: true, ignored: false }));
+    await user.click(screen.getByRole('checkbox', { name: /忽略此文本框/ }));
 
     expect(screen.getByText('图像处理会跳过；导出 JSON 仍保留此记录')).toBeInTheDocument();
 
@@ -67,13 +145,14 @@ describe('desktop workbench interactions', () => {
       type: 'ruby',
       direction: 'horizontal',
       order: 7,
-      confirmed: true,
+      confirmed: false,
+      ignored: true,
     });
     const typeOptions = within(screen.getByRole('combobox', { name: '文本类型' }))
       .getAllByRole('option')
       .map((option) => option.getAttribute('value'));
     expect(typeOptions).toEqual(expect.arrayContaining([
-      'dialogue', 'narration', 'sound_effect', 'title', 'ruby', 'background', 'unknown',
+      'dialogue', 'narration', 'sound_effect', 'title', 'ruby', 'background', 'unknown', 'speech',
     ]));
   });
 
@@ -117,6 +196,7 @@ describe('desktop workbench interactions', () => {
     await user.click(screen.getByRole('checkbox', { name: /日文 OCR/ }));
     await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
     await user.selectOptions(screen.getByRole('combobox', { name: '导出内容' }), 'json');
+    expect(screen.getByText('仅写入文本元数据；不会复制图像，也不会创建可重开的项目快照。')).toBeInTheDocument();
     await user.selectOptions(screen.getByRole('combobox', { name: '任务并发数' }), '4');
     await user.click(screen.getByRole('button', { name: /加入队列/ }));
 
@@ -126,12 +206,106 @@ describe('desktop workbench interactions', () => {
         imageIds: ['image-1'],
         options: expect.objectContaining({
           format: 'json',
+          imageVariant: 'typeset',
           preserveTree: true,
           conflict: 'rename',
           concurrency: 1,
         }),
       }),
     ));
+  });
+
+  it('queues both the typeset page and clean background export variants', async () => {
+    const user = userEvent.setup();
+    const reviewed = imageFixture('image-1', {
+      status: {
+        ...imageFixture('image-1').status,
+        inpaint: 'done',
+        typeset: 'done',
+        reviewState: 'reviewed',
+      },
+    });
+    seedWorkbench({ images: [reviewed] });
+    vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture({ revision: 4 }));
+    vi.spyOn(api, 'listImages').mockResolvedValue([reviewed]);
+    const exportProject = vi.spyOn(api, 'exportProject').mockResolvedValue(jobFixture());
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByRole('checkbox', { name: /文字检测/ }));
+    await user.click(screen.getByRole('checkbox', { name: /日文 OCR/ }));
+    await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
+    expect(screen.getByText('同时写入图像与 JSON；自定义目录可包含完整、可重开的 project/ 项目副本及源图副本。')).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出内容' }), 'images');
+    expect(screen.getByText('仅写入所选生成图像；不会创建可重开的项目快照。')).toBeInTheDocument();
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出内容' }), 'both');
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出图像版本' }), 'both');
+    await user.click(screen.getByRole('button', { name: /加入队列/ }));
+
+    await waitFor(() => expect(exportProject).toHaveBeenCalledWith(
+      'project-1',
+      expect.objectContaining({
+        options: expect.objectContaining({
+          format: 'both',
+          imageVariant: 'both',
+        }),
+      }),
+    ));
+  });
+
+  it('requires the generated artifact selected by the export image variant', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [imageFixture('image-1', {
+        status: {
+          ...imageFixture('image-1').status,
+          inpaint: 'done',
+          typeset: 'not_started',
+          reviewState: 'reviewed',
+        },
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByRole('checkbox', { name: /文字检测/ }));
+    await user.click(screen.getByRole('checkbox', { name: /日文 OCR/ }));
+    await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
+
+    expect(screen.getByText('所选图像版本尚未全部生成')).toBeInTheDocument();
+    expect(screen.getByText(/缺少排版图/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出图像版本' }), 'inpainted');
+    expect(screen.queryByText('所选图像版本尚未全部生成')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeEnabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出图像版本' }), 'both');
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  });
+
+  it('blocks combining processing and export until the user processes, reviews, then exports', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, reviewState: 'reviewed' },
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
+
+    expect(screen.getByText('先处理→复核→再导出')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出内容' }), 'json');
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+    await user.click(screen.getByRole('checkbox', { name: /文字检测/ }));
+    await user.click(screen.getByRole('checkbox', { name: /日文 OCR/ }));
+
+    expect(screen.queryByText('先处理→复核→再导出')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeEnabled();
   });
 
   it('shows actionable errors instead of a successful-looking state', async () => {
@@ -147,6 +321,19 @@ describe('desktop workbench interactions', () => {
 
   it('guards editing fields from global shortcuts while preserving the explicit global map', async () => {
     seedWorkbench({ selectedRegionIds: ['region-1'] });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture()
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images
+    );
+    vi.spyOn(api, 'updateRegion').mockImplementation(async (regionId, patch) => ({
+      ...(useWorkbenchStore.getState().regionsByImage['image-1']?.find(
+        (region) => region.id === regionId,
+      ) ?? regionFixture(regionId)),
+      ...patch,
+      revision: 5,
+    }));
     const { container } = render(<App />);
     const translation = screen.getByRole('textbox', { name: '中文译文' });
     translation.focus();
@@ -163,11 +350,20 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().regionsByImage['image-1']).toHaveLength(2);
 
     fireEvent.keyDown(window, { key: 'b' });
+    expect(useWorkbenchStore.getState().compareMode).toBe(false);
+    act(() => useWorkbenchStore.setState((state) => ({
+      images: state.images.map((image) => image.id === 'image-1'
+        ? { ...image, status: { ...image.status, preprocess: 'done' } }
+        : image),
+    })));
+    fireEvent.keyDown(window, { key: 'b' });
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
     fireEvent.keyDown(window, { key: 'Tab' });
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
     fireEvent.keyDown(window, { key: 'Enter' });
-    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[1]?.confirmed).toBe(true);
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().regionsByImage['image-1']?.[1]?.confirmed,
+    ).toBe(true));
 
     const multiInput = container.querySelector<HTMLInputElement>('input[type="file"][multiple]:not([webkitdirectory])');
     expect(multiInput).not.toBeNull();
@@ -244,5 +440,113 @@ describe('desktop workbench interactions', () => {
     await user.click(screen.getByRole('button', { name: '批处理与导出' }));
     const configuredDrawer = screen.getByRole('dialog', { name: '批处理与导出' });
     expect(within(configuredDrawer).getByRole('checkbox', { name: /翻译/ })).toBeEnabled();
+  });
+
+  it('applies preprocessing profile defaults while keeping every switch editable', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '项目' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: '预处理配置' }), 'off');
+
+    expect(useWorkbenchStore.getState().currentProject?.settings.preprocessing).toMatchObject({
+      profile: 'off',
+      enableUpscale: false,
+      enableDenoise: false,
+      enableSharpen: false,
+      enableContrastEnhance: false,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+    });
+
+    await user.click(screen.getByRole('checkbox', { name: '锐化' }));
+    expect(
+      useWorkbenchStore.getState().currentProject?.settings.preprocessing.enableSharpen,
+    ).toBe(true);
+  });
+
+  it('stores a per-region inpainting provider override and exposes an explicit rebuild action', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    const provider = screen.getByRole('combobox', { name: '区域修复 Provider' });
+    expect(provider).toHaveValue('');
+    expect(within(provider).getByRole('option', { name: /继承项目设置/ })).toBeInTheDocument();
+
+    await user.selectOptions(provider, 'lama-onnx');
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair).toMatchObject({
+      inpainterProvider: 'lama-onnx',
+    });
+    expect(screen.getByRole('button', { name: '重建当前页' })).toBeEnabled();
+    expect(screen.getByText('LaMa AI 背景修复')).toBeInTheDocument();
+  });
+
+  it('surfaces a successful safe-repair job that changed no image pixels', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      jobs: [jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'completed',
+        total: 1,
+        completed: 1,
+        progress: 1,
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-1',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: { repairedRegionCount: 0, skippedRegionCount: 3 },
+        }],
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+
+    expect(screen.getByText('修复 0 · 跳过 3（未改动图像）')).toBeInTheDocument();
+  });
+
+  it('keeps unavailable generated previews disabled and falls back to the original', () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({ canvasMode: 'typeset' });
+
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: /^增强$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^擦除$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^成品$/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '对比' })).toBeDisabled();
+    fireEvent.keyDown(window, { key: 'b' });
+    expect(useWorkbenchStore.getState().compareMode).toBe(false);
+    expect(screen.getByRole('application', { name: '原图画布' })).toBeVisible();
+  });
+
+  it('turns comparison off when switching to a page without generated artifacts', async () => {
+    const generated = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, typeset: 'done' },
+    });
+    seedWorkbench({ images: [generated, imageFixture('image-2')] });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '对比' }));
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
+    expect(screen.getByText('嵌字成品')).toBeInTheDocument();
+
+    act(() => useWorkbenchStore.setState({
+      activeImageId: 'image-2',
+      selectedImageIds: ['image-2'],
+    }));
+
+    await waitFor(() => expect(useWorkbenchStore.getState().compareMode).toBe(false));
+    expect(screen.getByRole('button', { name: '对比' })).toBeDisabled();
+    expect(screen.queryByText('嵌字成品')).not.toBeInTheDocument();
+    expect(screen.getByRole('application', { name: '原图画布' })).toBeVisible();
   });
 });

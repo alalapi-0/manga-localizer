@@ -1,26 +1,33 @@
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Group, Image as KonvaImage, Label, Layer, Rect, Stage, Tag, Text, Transformer } from 'react-konva';
+import { Group, Image as KonvaImage, Label, Layer, Line, Rect, Stage, Tag, Text, Transformer } from 'react-konva';
 
 import { api } from '../api/client';
 import {
   activeImage,
   activeRegions,
+  hasGeneratedPreview,
   useWorkbenchStore,
 } from '../store/workbench';
-import type { CanvasMode, ImageAsset, Region } from '../types';
+import type { CanvasMode, ImageAsset, MaskEditStroke, Region } from '../types';
+import {
+  buildMaskStroke,
+  canonicalPoint,
+  centeredNodeToRegionGeometry,
+  maskEditCapacity,
+  regionToCenteredNodeGeometry,
+} from './canvasGeometry';
+import type { Point, Viewport } from './canvasGeometry';
+import { loadCanonicalCanvasImage } from './canvasImage';
 import { EmptyState, IconButton, LoadingState } from './Primitives';
 
-interface Viewport {
-  x: number;
-  y: number;
-  scale: number;
-}
-
-interface Point {
-  x: number;
-  y: number;
+function canvasModeAvailable(image: ImageAsset | null | undefined, mode: CanvasMode): boolean {
+  if (mode === 'original') return Boolean(image);
+  if (!image) return false;
+  if (mode === 'preprocessed') return image.status.preprocess === 'done';
+  if (mode === 'erased') return image.status.inpaint === 'done';
+  return image.status.typeset === 'done';
 }
 
 function useElementSize() {
@@ -46,32 +53,43 @@ function useElementSize() {
   return { ref, size };
 }
 
-function useCanvasImage(src: string) {
+function useCanvasImage(
+  src: string | null,
+  expectedSize: { width: number; height: number },
+) {
+  const expectedWidth = expectedSize.width;
+  const expectedHeight = expectedSize.height;
   const [result, setResult] = useState<{
     src: string;
-    image: HTMLImageElement | null;
+    image: ImageBitmap | null;
     state: 'loading' | 'ready' | 'error';
   }>({ src: '', image: null, state: 'loading' });
 
   useEffect(() => {
-    const next = new window.Image();
+    if (!src) return;
+    const controller = new AbortController();
     let disposed = false;
-    next.onload = () => {
-      if (!disposed) {
-        setResult({ src, image: next, state: 'ready' });
-      }
-    };
-    next.onerror = () => {
-      if (!disposed) setResult({ src, image: null, state: 'error' });
-    };
-    next.src = src;
+    let decoded: ImageBitmap | null = null;
+    void loadCanonicalCanvasImage(src, {
+      width: expectedWidth,
+      height: expectedHeight,
+    }, controller.signal)
+      .then((image) => {
+        decoded = image;
+        if (disposed) image.close();
+        else setResult({ src, image, state: 'ready' });
+      })
+      .catch(() => {
+        if (!disposed) setResult({ src, image: null, state: 'error' });
+      });
     return () => {
       disposed = true;
-      next.onload = null;
-      next.onerror = null;
+      controller.abort();
+      decoded?.close();
     };
-  }, [src]);
+  }, [expectedHeight, expectedWidth, src]);
 
+  if (!src) return { src: '', image: null, state: 'ready' as const };
   return result.src === src ? result : { src, image: null, state: 'loading' as const };
 }
 
@@ -79,12 +97,6 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function canonicalPoint(pointer: Point, viewport: Viewport): Point {
-  return {
-    x: (pointer.x - viewport.x) / viewport.scale,
-    y: (pointer.y - viewport.y) / viewport.scale,
-  };
-}
 
 function fitViewport(
   container: { width: number; height: number },
@@ -143,6 +155,7 @@ function RegionShape({
   const confidence = region.confidence === null
     ? '—'
     : `${Math.round((region.confidence <= 1 ? region.confidence * 100 : region.confidence))}%`;
+  const centeredGeometry = regionToCenteredNodeGeometry(region);
 
   function select(event: KonvaEventObject<MouseEvent | TouchEvent>) {
     if (!editable) return;
@@ -156,8 +169,10 @@ function RegionShape({
       <Rect
         ref={shapeRef}
         name="region"
-        x={region.x}
-        y={region.y}
+        x={centeredGeometry.x}
+        y={centeredGeometry.y}
+        offsetX={centeredGeometry.offsetX}
+        offsetY={centeredGeometry.offsetY}
         width={region.width}
         height={region.height}
         rotation={region.rotation}
@@ -169,25 +184,35 @@ function RegionShape({
         onClick={select}
         onTap={select}
         onDragEnd={(event) => {
+          const geometry = centeredNodeToRegionGeometry({
+            x: event.target.x(),
+            y: event.target.y(),
+            width: region.width,
+            height: region.height,
+            scaleX: 1,
+            scaleY: 1,
+            rotation: event.target.rotation(),
+          }, image);
           updateRegion(region.id, {
-            x: Math.round(clamp(event.target.x(), 0, Math.max(0, image.width - region.width))),
-            y: Math.round(clamp(event.target.y(), 0, Math.max(0, image.height - region.height))),
+            x: geometry.x,
+            y: geometry.y,
           });
         }}
         onTransformEnd={() => {
           const node = shapeRef.current;
           if (!node) return;
-          const width = Math.max(4, Math.round(region.width * node.scaleX()));
-          const height = Math.max(4, Math.round(region.height * node.scaleY()));
+          const geometry = centeredNodeToRegionGeometry({
+            x: node.x(),
+            y: node.y(),
+            width: region.width,
+            height: region.height,
+            scaleX: node.scaleX(),
+            scaleY: node.scaleY(),
+            rotation: node.rotation(),
+          }, image);
           node.scaleX(1);
           node.scaleY(1);
-          updateRegion(region.id, {
-            x: Math.round(clamp(node.x(), 0, Math.max(0, image.width - width))),
-            y: Math.round(clamp(node.y(), 0, Math.max(0, image.height - height))),
-            width,
-            height,
-            rotation: Math.round(node.rotation() * 10) / 10,
-          });
+          updateRegion(region.id, geometry);
         }}
       />
       {(showOrder || showConfidence) ? (
@@ -243,7 +268,13 @@ function CanvasViewport({
 }) {
   const { ref: containerRef, size } = useElementSize();
   const source = api.contentUrl(imageAsset.id, mode, imageAsset.revision);
-  const { image, state: imageLoadState } = useCanvasImage(source);
+  const canonicalSize = { width: imageAsset.width, height: imageAsset.height };
+  const { image, state: imageLoadState } = useCanvasImage(source, canonicalSize);
+  const showMask = useWorkbenchStore((state) => state.showMask);
+  const maskSource = showMask && imageAsset.status.inpaint === 'done'
+    ? api.maskUrl(imageAsset.id, imageAsset.revision)
+    : null;
+  const { image: maskImage } = useCanvasImage(maskSource, canonicalSize);
   const regions = useWorkbenchStore(activeRegions);
   const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const tool = useWorkbenchStore((state) => state.canvasTool);
@@ -251,15 +282,24 @@ function CanvasViewport({
   const showRegions = useWorkbenchStore((state) => state.showRegions);
   const showOrder = useWorkbenchStore((state) => state.showOrder);
   const showConfidence = useWorkbenchStore((state) => state.showConfidence);
+  const maskBrushRadius = useWorkbenchStore((state) => state.maskBrushRadius);
   const fitRequest = useWorkbenchStore((state) => state.fitRequest);
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const clearRegionSelection = useWorkbenchStore((state) => state.clearRegionSelection);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
+  const updateRegion = useWorkbenchStore((state) => state.updateRegion);
   const [viewport, setViewport] = useState<Viewport>(() =>
     fitViewport(size, imageAsset.width, imageAsset.height),
   );
   const [draft, setDraft] = useState<{ start: Point; end: Point } | null>(null);
+  const [maskDraft, setMaskDraft] = useState<(
+    MaskEditStroke & { regionId: string; maxPoints: number }
+  ) | null>(null);
   const panStart = useRef<{ pointer: Point; viewport: Viewport } | null>(null);
+  const selectedRegion = selectedRegionIds.length === 1
+    ? regions.find((region) => region.id === selectedRegionIds[0])
+    : undefined;
+  const maskEditing = tool === 'mask-brush' || tool === 'mask-eraser';
 
   useEffect(() => {
     // Canvas viewport follows measured container geometry and an explicit fit command.
@@ -292,6 +332,30 @@ function CanvasViewport({
       return;
     }
     if (!editable) return;
+    if (maskEditing) {
+      if (!selectedRegion) return;
+      const strokes = selectedRegion.repair.maskEdits?.strokes ?? [];
+      const capacity = maskEditCapacity(strokes);
+      if (!capacity.canAddStroke) {
+        useWorkbenchStore.setState({
+          globalError: '当前文本框的蒙版笔迹已达上限（256 笔 / 16384 个采样点），请先撤销或清除部分笔迹。',
+        });
+        return;
+      }
+      event.cancelBubble = true;
+      setMaskDraft({
+        regionId: selectedRegion.id,
+        maxPoints: capacity.remainingPoints,
+        ...buildMaskStroke(
+          tool === 'mask-brush' ? 'add' : 'erase',
+          maskBrushRadius,
+          [pointer],
+          viewport,
+          imageAsset,
+        ),
+      });
+      return;
+    }
     if (tool === 'region') {
       const point = canonicalPoint(pointer, viewport);
       if (point.x < 0 || point.y < 0 || point.x > imageAsset.width || point.y > imageAsset.height) return;
@@ -314,6 +378,31 @@ function CanvasViewport({
       });
       return;
     }
+    if (maskDraft) {
+      if (maskDraft.points.length >= maskDraft.maxPoints) {
+        useWorkbenchStore.setState({
+          globalError: '当前蒙版笔迹已达采样点上限，多余轨迹未记录。',
+        });
+        return;
+      }
+      const nextPoint = buildMaskStroke(
+        maskDraft.mode,
+        maskDraft.radius,
+        [pointer],
+        viewport,
+        imageAsset,
+      ).points[0];
+      if (!nextPoint) return;
+      setMaskDraft((current) => {
+        if (!current) return null;
+        const previous = current.points.at(-1);
+        if (previous && Math.hypot(nextPoint[0] - previous[0], nextPoint[1] - previous[1]) < 0.5) {
+          return current;
+        }
+        return { ...current, points: [...current.points, nextPoint] };
+      });
+      return;
+    }
     if (draft) {
       const point = canonicalPoint(pointer, viewport);
       setDraft({
@@ -328,6 +417,32 @@ function CanvasViewport({
 
   function handlePointerUp() {
     panStart.current = null;
+    if (maskDraft) {
+      const completed = maskDraft;
+      setMaskDraft(null);
+      const latest = useWorkbenchStore.getState();
+      const region = latest.activeImageId
+        ? (latest.regionsByImage[latest.activeImageId] ?? []).find(
+            (entry) => entry.id === completed.regionId,
+          )
+        : undefined;
+      if (region && completed.points.length) {
+        updateRegion(region.id, {
+          repair: {
+            ...region.repair,
+            maskEdits: {
+              version: 1,
+              strokes: [...(region.repair.maskEdits?.strokes ?? []), {
+                mode: completed.mode,
+                radius: completed.radius,
+                points: completed.points,
+              }],
+            },
+          },
+        });
+      }
+      return;
+    }
     if (!draft) return;
     const x = Math.min(draft.start.x, draft.end.x);
     const y = Math.min(draft.start.y, draft.end.y);
@@ -369,7 +484,7 @@ function CanvasViewport({
 
   return (
     <div
-      aria-label={`${mode === 'original' ? '原图' : mode === 'erased' ? '擦除' : '成品'}画布`}
+      aria-label={`${mode === 'original' ? '原图' : mode === 'preprocessed' ? '增强' : mode === 'erased' ? '擦除' : '成品'}画布`}
       className={`canvas-viewport canvas-viewport--${spacePressed ? 'hand' : tool}`}
       data-testid="canvas-surface"
       ref={containerRef}
@@ -418,6 +533,16 @@ function CanvasViewport({
                 width={imageAsset.width}
               />
             ) : null}
+            {showMask && maskImage && imageAsset.status.inpaint === 'done' ? (
+              <KonvaImage
+                globalCompositeOperation="difference"
+                height={imageAsset.height}
+                image={maskImage}
+                listening={false}
+                opacity={0.72}
+                width={imageAsset.width}
+              />
+            ) : null}
             {showRegions ? regions.map((region) => (
               <RegionShape
                 editable={editable && tool === 'select' && !spacePressed}
@@ -428,6 +553,21 @@ function CanvasViewport({
                 showConfidence={showConfidence}
                 showOrder={showOrder}
                 viewportScale={viewport.scale}
+              />
+            )) : null}
+            {maskEditing && selectedRegion ? [
+              ...(selectedRegion.repair.maskEdits?.strokes ?? []),
+              ...(maskDraft?.regionId === selectedRegion.id ? [maskDraft] : []),
+            ].map((stroke, index) => (
+              <Line
+                key={`${stroke.mode}-${index}`}
+                points={stroke.points.flat()}
+                stroke={stroke.mode === 'add' ? '#4ad7c8' : '#ff6b6b'}
+                strokeWidth={Math.max(1, stroke.radius * 2)}
+                lineCap="round"
+                lineJoin="round"
+                listening={false}
+                opacity={0.72}
               />
             )) : null}
             {draftRect ? (
@@ -467,14 +607,20 @@ function CanvasToolbar({
   const showRegions = useWorkbenchStore((state) => state.showRegions);
   const showOrder = useWorkbenchStore((state) => state.showOrder);
   const showConfidence = useWorkbenchStore((state) => state.showConfidence);
+  const maskBrushRadius = useWorkbenchStore((state) => state.maskBrushRadius);
+  const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const setCanvasMode = useWorkbenchStore((state) => state.setCanvasMode);
   const setCanvasTool = useWorkbenchStore((state) => state.setCanvasTool);
   const toggleCompareMode = useWorkbenchStore((state) => state.toggleCompareMode);
   const setShowRegions = useWorkbenchStore((state) => state.setShowRegions);
   const setShowOrder = useWorkbenchStore((state) => state.setShowOrder);
   const setShowConfidence = useWorkbenchStore((state) => state.setShowConfidence);
+  const setMaskBrushRadius = useWorkbenchStore((state) => state.setMaskBrushRadius);
   const requestFit = useWorkbenchStore((state) => state.requestFit);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
+  const compareAvailable = hasGeneratedPreview(image);
+  const maskToolAvailable = Boolean(image && selectedRegionIds.length === 1);
+  const maskToolActive = tool === 'mask-brush' || tool === 'mask-eraser';
 
   function quickCreate() {
     if (!image) return;
@@ -494,10 +640,11 @@ function CanvasToolbar({
       <div className="segmented" aria-label="预览模式">
         {([
           ['original', '原图'],
+          ['preprocessed', '增强'],
           ['erased', '擦除'],
           ['typeset', '成品'],
         ] as const).map(([value, label]) => (
-          <button aria-pressed={mode === value} key={value} onClick={() => setCanvasMode(value)} type="button">{label}</button>
+          <button aria-pressed={mode === value} disabled={!canvasModeAvailable(image, value)} key={value} onClick={() => setCanvasMode(value)} title={!canvasModeAvailable(image, value) && value !== 'original' ? '尚未生成，请先运行对应步骤' : undefined} type="button">{label}</button>
         ))}
       </div>
       <span className="toolbar-divider" />
@@ -506,7 +653,22 @@ function CanvasToolbar({
         <IconButton aria-label="绘制文本框" className={tool === 'region' ? 'is-active' : ''} onClick={() => setCanvasTool('region')} title="绘制文本框 N">▢</IconButton>
         <IconButton aria-label="平移工具" className={tool === 'hand' ? 'is-active' : ''} onClick={() => setCanvasTool('hand')} title="平移 H">✋</IconButton>
         <IconButton aria-label="在中央快速新建文本框" disabled={!image} onClick={quickCreate} title="快速新建文本框">＋框</IconButton>
+        <IconButton aria-label="蒙版画笔" className={tool === 'mask-brush' ? 'is-active' : ''} disabled={!maskToolAvailable} onClick={() => setCanvasTool('mask-brush')} title="向选中区域蒙版添加笔迹 M">画</IconButton>
+        <IconButton aria-label="蒙版橡皮擦" className={tool === 'mask-eraser' ? 'is-active' : ''} disabled={!maskToolAvailable} onClick={() => setCanvasTool('mask-eraser')} title="从选中区域蒙版擦除笔迹 E">擦</IconButton>
       </div>
+      {maskToolActive ? (
+        <label className="brush-radius">
+          <span>半径 {maskBrushRadius}px</span>
+          <input
+            aria-label="蒙版画笔半径"
+            max={100}
+            min={1}
+            onChange={(event) => setMaskBrushRadius(Number(event.target.value))}
+            type="range"
+            value={maskBrushRadius}
+          />
+        </label>
+      ) : null}
       <span className="toolbar-divider" />
       <div className="tool-buttons" aria-label="缩放">
         <IconButton aria-label="缩小" onClick={() => onZoom(-1)}>−</IconButton>
@@ -517,7 +679,16 @@ function CanvasToolbar({
       <label className="toolbar-check"><input checked={showRegions} onChange={(event) => setShowRegions(event.target.checked)} type="checkbox" />框</label>
       <label className="toolbar-check"><input checked={showOrder} onChange={(event) => setShowOrder(event.target.checked)} type="checkbox" />编号</label>
       <label className="toolbar-check"><input checked={showConfidence} onChange={(event) => setShowConfidence(event.target.checked)} type="checkbox" />置信度</label>
-      <button className={`button button--compact ${compareMode ? 'is-active' : ''}`} aria-pressed={compareMode} onClick={toggleCompareMode} type="button">对比</button>
+      <button
+        aria-pressed={compareMode && compareAvailable}
+        className={`button button--compact ${compareMode && compareAvailable ? 'is-active' : ''}`}
+        disabled={!compareAvailable}
+        onClick={toggleCompareMode}
+        title={compareAvailable ? undefined : '尚无增强、擦除或成品可供对比'}
+        type="button"
+      >
+        对比
+      </button>
     </div>
   );
 }
@@ -525,34 +696,53 @@ function CanvasToolbar({
 export function CanvasWorkspace() {
   const image = useWorkbenchStore(activeImage);
   const compareMode = useWorkbenchStore((state) => state.compareMode);
-  const mode = useWorkbenchStore((state) => state.canvasMode);
+  const requestedMode = useWorkbenchStore((state) => state.canvasMode);
+  const setCanvasMode = useWorkbenchStore((state) => state.setCanvasMode);
+  const toggleCompareMode = useWorkbenchStore((state) => state.toggleCompareMode);
   const regionsLoading = useWorkbenchStore((state) =>
     state.activeImageId ? state.regionsLoading[state.activeImageId] : false,
   );
   const [zoomSignal, setZoomSignal] = useState({ direction: 0 as -1 | 0 | 1, nonce: 0 });
 
-  const resultMode = useMemo<CanvasMode>(() => (mode === 'original' ? 'typeset' : mode), [mode]);
+  const mode: CanvasMode = canvasModeAvailable(image, requestedMode) ? requestedMode : 'original';
+  const resultMode = useMemo<CanvasMode>(() => {
+    if (mode !== 'original') return mode;
+    if (canvasModeAvailable(image, 'typeset')) return 'typeset';
+    if (canvasModeAvailable(image, 'erased')) return 'erased';
+    if (canvasModeAvailable(image, 'preprocessed')) return 'preprocessed';
+    return 'original';
+  }, [image, mode]);
+  const compareAvailable = hasGeneratedPreview(image);
+  const showCompare = compareMode && compareAvailable;
+
+  useEffect(() => {
+    if (requestedMode !== mode) setCanvasMode(mode);
+  }, [mode, requestedMode, setCanvasMode]);
+
+  useEffect(() => {
+    if (compareMode && !compareAvailable) toggleCompareMode();
+  }, [compareAvailable, compareMode, toggleCompareMode]);
 
   return (
     <main className="canvas-panel panel">
       <CanvasToolbar
         onZoom={(direction) => setZoomSignal((signal) => ({ direction, nonce: signal.nonce + 1 }))}
       />
-      <div className={`canvas-area ${compareMode ? 'canvas-area--compare' : ''}`}>
+      <div className={`canvas-area ${showCompare ? 'canvas-area--compare' : ''}`}>
         {!image ? (
           <EmptyState
             icon="▧"
             title="选择一张图像开始"
             description="画布坐标始终使用原图像素，缩放和平移不会改变区域数据。"
           />
-        ) : compareMode ? (
+        ) : showCompare ? (
           <>
             <section className="compare-pane">
               <span className="compare-pane__label">原图</span>
               <CanvasViewport editable={false} imageAsset={image} mode="original" zoomSignal={zoomSignal} />
             </section>
             <section className="compare-pane">
-              <span className="compare-pane__label">{resultMode === 'erased' ? '擦除结果' : '嵌字成品'}</span>
+              <span className="compare-pane__label">{resultMode === 'preprocessed' ? '增强结果' : resultMode === 'erased' ? '擦除结果' : resultMode === 'typeset' ? '嵌字成品' : '原图'}</span>
               <CanvasViewport editable imageAsset={image} mode={resultMode} zoomSignal={zoomSignal} />
             </section>
           </>

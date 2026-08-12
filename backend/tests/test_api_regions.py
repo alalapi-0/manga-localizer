@@ -81,6 +81,101 @@ def test_region_must_remain_inside_image(client: TestClient, tmp_path: Path) -> 
     assert invalid_type.status_code == 422
 
 
+def test_geometry_edit_discards_stale_detector_mask_polygon(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 12,
+            "width": 40,
+            "height": 50,
+            "sourceText": "文字",
+            "confirmed": True,
+            "repair": {
+                "detectorGenerated": True,
+                "maskPolygon": [[10, 12], [50, 12], [50, 62], [10, 62]],
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+    region = created.json()
+    assert region["confirmed"] is True
+    assert region["repair"]["detectorGenerated"] is True
+    assert "maskPolygon" in region["repair"]
+    assert region["repair"]["maskMode"] == "text"
+    assert region["repair"]["maskPadding"] == 4
+    assert region["repair"]["dilation"] == 2
+    assert region["repair"]["feather"] == 2
+
+    moved = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"x": 20, "width": 55, "expectedRevision": region["revision"]},
+    )
+
+    assert moved.status_code == 200, moved.text
+    updated = moved.json()
+    assert updated["x"] == 20
+    assert updated["width"] == 55
+    assert updated["confirmed"] is False
+    assert updated["repair"]["detectorGenerated"] is True
+    assert "maskPolygon" not in updated["repair"]
+
+
+def test_geometry_edit_discards_stale_polygon_from_a_full_frontend_snapshot(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 12,
+            "width": 40,
+            "height": 50,
+            "sourceText": "文字",
+            "confirmed": True,
+            "repair": {
+                "detectorGenerated": True,
+                "maskPolygon": [[10, 12], [50, 12], [50, 62], [10, 62]],
+            },
+        },
+    )
+    assert created.status_code == 201, created.text
+    region = created.json()
+    assert region["confirmed"] is True
+
+    moved = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "x": 20,
+            "y": region["y"],
+            "width": region["width"],
+            "height": region["height"],
+            "rotation": region["rotation"],
+            "sourceText": region["sourceText"],
+            "translationText": region["translationText"],
+            "type": region["type"],
+            "direction": region["direction"],
+            "order": region["order"],
+            "confidence": region["confidence"],
+            "ignored": region["ignored"],
+            "confirmed": region["confirmed"],
+            "style": region["style"],
+            "repair": region["repair"],
+            "expectedRevision": region["revision"],
+        },
+    )
+
+    assert moved.status_code == 200, moved.text
+    assert moved.json()["confirmed"] is False
+    assert "maskPolygon" not in moved.json()["repair"]
+
+
 def test_default_manga_reading_order_is_right_column_top_to_bottom(
     client: TestClient, tmp_path: Path
 ) -> None:
@@ -104,3 +199,322 @@ def test_default_manga_reading_order_is_right_column_top_to_bottom(
         left_bottom["id"],
     ]
     assert [region["order"] for region in ordered] == [0, 1, 2, 3]
+
+
+def test_page_review_is_explicit_revisioned_and_reset_by_region_changes(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    initial = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert initial["regionCount"] == 0
+    assert initial["status"]["reviewState"] == "pending"
+    assert initial["status"]["reviewedAt"] == ""
+
+    empty_as_reviewed = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "reviewed", "expectedRevision": initial["revision"]},
+    )
+    assert empty_as_reviewed.status_code == 400
+    assert empty_as_reviewed.json()["detail"] == (
+        "Cannot mark image as reviewed without at least one non-ignored region"
+    )
+
+    no_text = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "no-text-reviewed", "expectedRevision": initial["revision"]},
+    )
+    assert no_text.status_code == 200, no_text.text
+    reviewed_image = no_text.json()
+    assert reviewed_image["status"]["reviewState"] == "no-text-reviewed"
+    assert reviewed_image["status"]["reviewedAt"]
+
+    stale = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "reviewed", "expectedRevision": initial["revision"]},
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["resource"] == f"image:{image['id']}"
+
+    region = _create_region(client, image["id"], 20, 30)
+    ignored_region = _create_region(client, image["id"], 100, 30)
+    ignored_region = client.patch(
+        f"/api/regions/{ignored_region['id']}",
+        json={"ignored": True, "expectedRevision": ignored_region["revision"]},
+    ).json()
+    assert ignored_region["ignored"] is True
+    after_create = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_create["status"]["reviewState"] == "pending"
+    assert after_create["status"]["reviewedAt"] == ""
+
+    text_bypass = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={
+            "reviewState": "no-text-reviewed",
+            "expectedRevision": after_create["revision"],
+        },
+    )
+    assert text_bypass.status_code == 400
+    assert text_bypass.json()["detail"] == (
+        "Cannot mark image as no-text-reviewed while non-ignored regions remain"
+    )
+
+    unconfirmed_bypass = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "reviewed", "expectedRevision": after_create["revision"]},
+    )
+    assert unconfirmed_bypass.status_code == 400
+    assert unconfirmed_bypass.json()["detail"] == (
+        "Cannot mark image as reviewed until every non-ignored region is confirmed (1 unconfirmed)"
+    )
+
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["confirmed"] is True
+    after_confirm = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_confirm["revision"] > after_create["revision"]
+    assert after_confirm["status"]["reviewState"] == "pending"
+
+    reviewed = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "reviewed", "expectedRevision": after_confirm["revision"]},
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["status"]["reviewState"] == "reviewed"
+    assert reviewed.json()["confirmedCount"] == 1
+    assert reviewed.json()["ignoredCount"] == 1
+
+    changed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "sourceText": "改写",
+            "confirmed": True,
+            "expectedRevision": confirmed.json()["revision"],
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    assert changed.json()["confirmed"] is False
+
+    after_change = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    stale_confirmation = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={"reviewState": "reviewed", "expectedRevision": after_change["revision"]},
+    )
+    assert stale_confirmation.status_code == 400
+    assert "every non-ignored region is confirmed" in stale_confirmation.json()["detail"]
+
+    reconfirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "translationText": "同请求确认",
+            "confirmed": True,
+            "expectedRevision": changed.json()["revision"],
+        },
+    )
+    assert reconfirmed.status_code == 200, reconfirmed.text
+    assert reconfirmed.json()["confirmed"] is True
+
+    ignored = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"ignored": True, "expectedRevision": reconfirmed.json()["revision"]},
+    )
+    assert ignored.status_code == 200, ignored.text
+    assert ignored.json()["ignored"] is True
+    assert ignored.json()["confirmed"] is False
+
+    all_ignored_as_reviewed = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={
+            "reviewState": "reviewed",
+            "expectedRevision": client.get(f"/api/projects/{project['id']}/images").json()[0][
+                "revision"
+            ],
+        },
+    )
+    assert all_ignored_as_reviewed.status_code == 400
+    assert all_ignored_as_reviewed.json()["detail"] == (
+        "Cannot mark image as reviewed without at least one non-ignored region"
+    )
+
+    all_ignored_as_no_text = client.patch(
+        f"/api/images/{image['id']}/review",
+        json={
+            "reviewState": "no-text-reviewed",
+            "expectedRevision": client.get(f"/api/projects/{project['id']}/images").json()[0][
+                "revision"
+            ],
+        },
+    )
+    assert all_ignored_as_no_text.status_code == 200, all_ignored_as_no_text.text
+    assert all_ignored_as_no_text.json()["status"]["reviewState"] == "no-text-reviewed"
+
+    deleted = client.delete(
+        f"/api/regions/{region['id']}",
+        params={"expectedRevision": ignored.json()["revision"]},
+    )
+    assert deleted.status_code == 204
+    after_delete = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_delete["status"]["reviewState"] == "pending"
+    assert after_delete["status"]["reviewedAt"] == ""
+
+
+def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    conflicting = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "ignored": True,
+            "confirmed": True,
+        },
+    )
+    assert conflicting.status_code == 422
+
+    invalid_edits = (
+        {"version": 2, "strokes": []},
+        {"version": 1, "strokes": [{"mode": "paint", "radius": 2, "points": [[1, 1]]}]},
+        {"version": 1, "strokes": [{"mode": "add", "radius": 0, "points": [[1, 1]]}]},
+        {"version": 1, "strokes": [{"mode": "add", "radius": 2, "points": []}]},
+    )
+    for mask_edits in invalid_edits:
+        response = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 10,
+                "y": 10,
+                "width": 30,
+                "height": 30,
+                "repair": {"maskEdits": mask_edits},
+            },
+        )
+        assert response.status_code == 422, response.text
+
+    invalid_repairs = (
+        {"maskMode": "polygon"},
+        {"maskPadding": -1},
+        {"maskPadding": 513},
+        {"dilation": 129},
+        {"feather": 129},
+        {"radius": 0},
+        {"radius": 257},
+        {"method": "magic"},
+        {"fillColor": "not-a-color"},
+        {
+            "maskEdits": {
+                "version": 1,
+                "strokes": [{"mode": "add", "radius": 1, "points": [[1, 1]]}] * 257,
+            }
+        },
+        {
+            "maskEdits": {
+                "version": 1,
+                "strokes": [
+                    {
+                        "mode": "add",
+                        "radius": 1,
+                        "points": [[1, 1]] * 4097,
+                    }
+                ],
+            }
+        },
+        {
+            "maskEdits": {
+                "version": 1,
+                "strokes": [{"mode": "add", "radius": 513, "points": [[1, 1]]}],
+            }
+        },
+        {"maskPolygon": [[1, 1], [2, 2]]},
+        {"x": 999},
+        {"polygon": [[1, 1], [2, 2], [3, 3]]},
+    )
+    for repair in invalid_repairs:
+        response = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={"x": 10, "y": 10, "width": 30, "height": 30, "repair": repair},
+        )
+        assert response.status_code == 422, (repair, response.text)
+
+    out_of_bounds = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "repair": {
+                "maskEdits": {
+                    "version": 1,
+                    "strokes": [{"mode": "add", "radius": 2, "points": [[image["width"] + 1, 2]]}],
+                }
+            },
+        },
+    )
+    assert out_of_bounds.status_code == 400
+
+    polygon_out_of_bounds = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "repair": {
+                "maskPolygon": [[1, 1], [2, 2], [image["width"] + 1, 3]],
+            },
+        },
+    )
+    assert polygon_out_of_bounds.status_code == 400
+
+    valid = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "confirmed": True,
+            "repair": {
+                "inpainterProvider": "lama",
+                "method": "navier_stokes",
+                "maskEdits": {
+                    "version": 1,
+                    "strokes": [{"mode": "add", "radius": 2, "points": [[1, 2], [3.5, 4.5]]}],
+                },
+            },
+        },
+    )
+    assert valid.status_code == 201, valid.text
+    valid_region = valid.json()
+    assert valid_region["confirmed"] is True
+    assert valid_region["repair"]["inpainterProvider"] == "lama-onnx"
+    assert valid_region["repair"]["method"] == "navier-stokes"
+    assert valid_region["repair"]["maskEdits"] == {
+        "version": 1,
+        "strokes": [{"mode": "add", "radius": 2.0, "points": [[1.0, 2.0], [3.5, 4.5]]}],
+    }
+
+    autosaved_repair = client.patch(
+        f"/api/regions/{valid_region['id']}",
+        json={
+            "repair": {
+                **valid_region["repair"],
+                "maskEdits": {
+                    "version": 1,
+                    "strokes": [{"mode": "erase", "radius": 3, "points": [[15, 15]]}],
+                },
+            },
+            "confirmed": True,
+            "expectedRevision": valid_region["revision"],
+        },
+    )
+    assert autosaved_repair.status_code == 200, autosaved_repair.text
+    assert autosaved_repair.json()["confirmed"] is False

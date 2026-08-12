@@ -1,7 +1,8 @@
 export type Theme = 'dark' | 'light';
-export type CanvasMode = 'original' | 'erased' | 'typeset';
-export type CanvasTool = 'select' | 'region' | 'hand';
+export type CanvasMode = 'original' | 'preprocessed' | 'erased' | 'typeset';
+export type CanvasTool = 'select' | 'region' | 'hand' | 'mask-brush' | 'mask-eraser';
 export type RightPanelTab = 'text' | 'typesetting' | 'repair' | 'project';
+export type ReviewState = 'pending' | 'reviewed' | 'no-text-reviewed';
 
 export type StageState =
   | 'not_started'
@@ -21,6 +22,7 @@ export type RegionType =
   | 'unknown'
   | 'thought'
   | 'sign'
+  | 'speech'
   | 'other';
 
 export type TextDirection = 'vertical' | 'horizontal' | 'auto';
@@ -28,7 +30,7 @@ export type TextDirection = 'vertical' | 'horizontal' | 'auto';
 export interface ProviderCapability {
   id: string;
   label: string;
-  kind: 'detector' | 'ocr' | 'translator' | 'inpainter' | 'typesetter';
+  kind: 'preprocessor' | 'detector' | 'ocr' | 'translator' | 'inpainter' | 'typesetter';
   available: boolean;
   configurable?: boolean;
   local: boolean;
@@ -45,6 +47,8 @@ export interface AppCapabilities {
 export interface ProjectSettings {
   sourceLanguage: string;
   targetLanguage: string;
+  preprocessorProvider: string;
+  preprocessing: PreprocessingSettings;
   detectorProvider: string;
   ocrProvider: string;
   translatorProvider: string;
@@ -56,6 +60,18 @@ export interface ProjectSettings {
   remoteModel: string;
   apiKeyConfigured: boolean;
   preserveTree: boolean;
+}
+
+export interface PreprocessingSettings {
+  profile: 'off' | 'ocr-friendly' | 'balanced' | 'visual-quality';
+  enableUpscale: boolean;
+  upscaleFactor: 2 | 3 | 4;
+  enableDenoise: boolean;
+  enableSharpen: boolean;
+  enableContrastEnhance: boolean;
+  enableEdgeOptimize: boolean;
+  enableBinarize: boolean;
+  threshold: number;
 }
 
 export interface ProjectSummary {
@@ -75,12 +91,15 @@ export interface Project extends ProjectSummary {
 
 export interface PipelineStatus {
   import: StageState;
+  preprocess: StageState;
   detection: StageState;
   ocr: StageState;
   translation: StageState;
   inpaint: StageState;
   typeset: StageState;
   export: StageState;
+  reviewState: ReviewState;
+  reviewedAt?: string | null;
 }
 
 export interface ImageAsset {
@@ -94,6 +113,7 @@ export interface ImageAsset {
   confirmedCount: number;
   ignoredCount: number;
   status: PipelineStatus;
+  preprocessingProvider?: string;
   detectorProvider?: string;
   ocrProvider?: string;
   translatorProvider?: string;
@@ -118,10 +138,30 @@ export interface RegionStyle {
 
 export interface RepairSettings {
   method: 'telea' | 'navier_stokes' | 'solid';
+  maskMode: 'region' | 'text';
   maskPadding: number;
   dilation: number;
+  feather: number;
   radius: number;
   fillColor: string;
+  detectorGenerated?: boolean;
+  detectedTextCandidate?: string;
+  maskPolygon?: Array<[number, number]>;
+  ocrAttemptCount?: number;
+  ocrInputVariant?: 'original' | 'preprocessed';
+  inpainterProvider?: string;
+  maskEdits?: MaskEdits;
+}
+
+export interface MaskEditStroke {
+  mode: 'add' | 'erase';
+  radius: number;
+  points: Array<[number, number]>;
+}
+
+export interface MaskEdits {
+  version: 1;
+  strokes: MaskEditStroke[];
 }
 
 export interface Region {
@@ -147,7 +187,7 @@ export interface Region {
   updatedAt?: string;
 }
 
-export type JobKind = 'detect' | 'ocr' | 'translate' | 'inpaint' | 'typeset' | 'export';
+export type JobKind = 'preprocess' | 'detect' | 'ocr' | 'translate' | 'inpaint' | 'typeset' | 'export';
 export type JobStatus =
   | 'queued'
   | 'running'
@@ -164,6 +204,7 @@ export interface JobItem {
   status: JobStatus;
   progress: number;
   error?: string;
+  output?: Record<string, unknown>;
 }
 
 export interface Job {
@@ -182,6 +223,7 @@ export interface Job {
 
 export interface ExportOptions {
   format: 'images' | 'json' | 'both';
+  imageVariant: 'typeset' | 'inpainted' | 'both';
   outputPath?: string;
   conflict: 'rename' | 'overwrite' | 'skip';
   preserveTree: boolean;
@@ -203,6 +245,18 @@ export interface RevisionConflict {
 export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   sourceLanguage: 'ja',
   targetLanguage: 'zh-CN',
+  preprocessorProvider: 'opencv-pillow',
+  preprocessing: {
+    profile: 'ocr-friendly',
+    enableUpscale: true,
+    upscaleFactor: 2,
+    enableDenoise: true,
+    enableSharpen: true,
+    enableContrastEnhance: true,
+    enableEdgeOptimize: false,
+    enableBinarize: false,
+    threshold: 180,
+  },
   detectorProvider: 'tesseract',
   ocrProvider: 'tesseract',
   translatorProvider: 'manual',
@@ -231,18 +285,23 @@ export const DEFAULT_REGION_STYLE: RegionStyle = {
 
 export const DEFAULT_REPAIR_SETTINGS: RepairSettings = {
   method: 'telea',
+  maskMode: 'text',
   maskPadding: 4,
   dilation: 2,
+  feather: 2,
   radius: 3,
   fillColor: '#ffffff',
 };
 
 export const EMPTY_PIPELINE_STATUS: PipelineStatus = {
   import: 'done',
+  preprocess: 'not_started',
   detection: 'not_started',
   ocr: 'not_started',
   translation: 'not_started',
   inpaint: 'not_started',
   typeset: 'not_started',
   export: 'not_started',
+  reviewState: 'pending',
+  reviewedAt: null,
 };

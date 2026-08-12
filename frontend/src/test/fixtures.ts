@@ -71,11 +71,13 @@ export function regionFixture(id = 'region-1', overrides: Partial<Region> = {}):
 export function capabilitiesFixture(): AppCapabilities {
   return {
     providers: [
+      { id: 'opencv-pillow', label: 'OpenCV / Pillow 基础增强', kind: 'preprocessor', available: true, local: true, isMock: false },
       { id: 'tesseract', label: 'Tesseract 文本检测', kind: 'detector', available: true, local: true, isMock: false },
       { id: 'tesseract', label: 'Tesseract', kind: 'ocr', available: true, local: true, isMock: false },
       { id: 'manual', label: '手动翻译', kind: 'translator', available: true, local: true, isMock: false },
       { id: 'mock', label: '确定性演示翻译', kind: 'translator', available: true, local: true, isMock: true },
       { id: 'opencv', label: 'OpenCV', kind: 'inpainter', available: true, local: true, isMock: false },
+      { id: 'lama-onnx', label: 'LaMa ONNX', kind: 'inpainter', available: true, local: true, isMock: false },
       { id: 'pillow', label: 'Pillow 本地排版', kind: 'typesetter', available: true, local: true, isMock: false },
     ],
   };

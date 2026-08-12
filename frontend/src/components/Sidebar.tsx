@@ -6,16 +6,29 @@ import type { ImageAsset, ProviderCapability, StageState } from '../types';
 import { EmptyState, IconButton, ProviderBadge, StatusPill } from './Primitives';
 import { ProjectDialog } from './ProjectDialog';
 
-function imageReviewState(image: ImageAsset): StageState | 'no_text' | 'needs_review' {
-  const stages = Object.values(image.status);
+function imageReviewState(
+  image: ImageAsset,
+): StageState | 'no_text_reviewed' | 'no_text_pending' | 'needs_review' {
+  const stages = [
+    image.status.import,
+    image.status.preprocess,
+    image.status.detection,
+    image.status.ocr,
+    image.status.translation,
+    image.status.inpaint,
+    image.status.typeset,
+    image.status.export,
+  ];
   if (image.error || stages.includes('failed')) return 'failed';
   if (stages.includes('running')) return 'running';
   if (stages.includes('queued')) return 'queued';
   if (image.status.ocr === 'unavailable' || image.status.detection === 'unavailable') return 'unavailable';
-  if (image.status.ocr === 'done' && image.regionCount === 0) return 'no_text';
-  if (image.regionCount > image.confirmedCount + image.ignoredCount) return 'needs_review';
-  if (image.regionCount > 0 && image.regionCount === image.confirmedCount + image.ignoredCount) return 'done';
-  return 'not_started';
+  if (image.status.reviewState === 'no-text-reviewed') return 'no_text_reviewed';
+  if (image.status.reviewState === 'reviewed') return 'done';
+  if (image.regionCount === image.ignoredCount && image.status.ocr === 'done') {
+    return 'no_text_pending';
+  }
+  return 'needs_review';
 }
 
 function matchesFilter(image: ImageAsset, filter: string): boolean {
@@ -23,8 +36,12 @@ function matchesFilter(image: ImageAsset, filter: string): boolean {
   if (filter === 'all') return true;
   if (filter === 'failed') return state === 'failed' || state === 'unavailable';
   if (filter === 'complete') return state === 'done';
-  if (filter === 'no_text') return state === 'no_text';
-  return state === 'needs_review' || state === 'not_started' || state === 'running' || state === 'queued';
+  if (filter === 'no_text') return state === 'no_text_reviewed';
+  return state === 'needs_review'
+    || state === 'no_text_pending'
+    || state === 'not_started'
+    || state === 'running'
+    || state === 'queued';
 }
 
 function folderName(path: string): string {
@@ -78,12 +95,14 @@ function ImageRow({ image }: { image: ImageAsset }) {
         <span className="image-row__content">
           <span className="image-row__name" title={image.relativePath}>{image.name}</span>
           <span className="image-row__meta">{image.width} × {image.height}px</span>
-          {reviewState === 'no_text' ? (
-            <span className="status-pill status-pill--no-text"><span />无文本（正常）</span>
+          {reviewState === 'no_text_reviewed' ? (
+            <span className="status-pill status-pill--no-text"><span />已确认无文字</span>
+          ) : reviewState === 'no_text_pending' ? (
+            <span className="status-pill status-pill--needs-review"><span />待确认无文字</span>
           ) : reviewState === 'needs_review' ? (
-            <span className="status-pill status-pill--needs-review"><span />待复核</span>
+            <span className="status-pill status-pill--needs-review"><span />待检查</span>
           ) : (
-            <StatusPill state={reviewState} label={reviewState === 'done' ? '已复核' : undefined} />
+            <StatusPill state={reviewState} label={reviewState === 'done' ? '已检查' : undefined} />
           )}
           <span className="image-row__stages" aria-label="页面处理阶段">
             <span className={`stage-mini stage-mini--${image.status.detection}`}>检测</span>
@@ -221,8 +240,8 @@ export function Sidebar() {
           <option value="all">全部状态</option>
           <option value="needs_review">待处理 / 待复核</option>
           <option value="failed">失败 / 不可用</option>
-          <option value="complete">已复核</option>
-          <option value="no_text">无文本</option>
+          <option value="complete">已检查</option>
+          <option value="no_text">已确认无文字</option>
         </select>
       </section>
 

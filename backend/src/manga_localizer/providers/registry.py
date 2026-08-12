@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from manga_localizer.config import Settings
-from manga_localizer.imaging import OpenCVInpaintingProvider
+from manga_localizer.imaging import (
+    OpenCVInpaintingProvider,
+    OpenCVPillowPreprocessProvider,
+    PreprocessProvider,
+    RealESRGANNCNNPreprocessProvider,
+)
+from manga_localizer.providers.detection import PPOCRTextDetectionProvider, TextDetectionProvider
+from manga_localizer.providers.inpainting_lama import LaMaONNXInpaintingProvider
 from manga_localizer.providers.ocr import TesseractOCRProvider
 from manga_localizer.providers.translation import (
     DictionaryTranslationProvider,
@@ -19,13 +26,46 @@ class ProviderRegistry:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.ocr = TesseractOCRProvider(settings.tesseract_command)
+        self.ppocr = PPOCRTextDetectionProvider(settings.ppocr_detection_model_path)
+        self.preprocessing = OpenCVPillowPreprocessProvider(profile="off")
+        self.realesrgan = RealESRGANNCNNPreprocessProvider(
+            command=settings.realesrgan_ncnn_command,
+            profile="off",
+        )
         self.inpainting = OpenCVInpaintingProvider()
+        self.lama = LaMaONNXInpaintingProvider(settings.lama_inpainting_model_path)
         self.manual = ManualTranslationProvider()
         self.mock = MockTranslationProvider()
         self.dictionary = DictionaryTranslationProvider()
         self._session_openai_key: str | None = settings.openai_api_key
         self._session_openai_base_url = settings.openai_base_url
         self._session_openai_model = settings.openai_model
+
+    def detector(self, name: str) -> TextDetectionProvider:
+        if name == "tesseract":
+            return self.ocr
+        if name in {"ppocr", "ppocr-v3", "paddleocr-detection"}:
+            return self.ppocr
+        raise ValueError(f"Unknown text detection provider: {name}")
+
+    def ocr_provider(self, name: str):
+        if name == "tesseract":
+            return self.ocr
+        raise ValueError(f"Unknown OCR provider: {name}")
+
+    def preprocessor(self, name: str) -> PreprocessProvider:
+        if name in {"opencv", "opencv-pillow", "local"}:
+            return self.preprocessing
+        if name in {"realesrgan", "realesrgan-ncnn", "realesrgan-ncnn-vulkan"}:
+            return self.realesrgan
+        raise ValueError(f"Unknown image preprocessing provider: {name}")
+
+    def inpainter(self, name: str):
+        if name in {"opencv", "opencv-inpaint"}:
+            return self.inpainting
+        if name in {"lama", "lama-onnx"}:
+            return self.lama
+        raise ValueError(f"Unknown inpainting provider: {name}")
 
     def configure_openai_session(
         self,
@@ -66,8 +106,19 @@ class ProviderRegistry:
         ocr["configuredLanguages"] = self.settings.ocr_language_list
         ocr["defaultDirection"] = self.settings.ocr_default_direction
         return {
+            "preprocessing": {
+                "opencv-pillow": self.preprocessing.get_capabilities(),
+                "realesrgan-ncnn": self.realesrgan.get_capabilities(),
+            },
+            "detection": {
+                "tesseract": ocr,
+                "ppocr-v3": self.ppocr.get_capabilities(),
+            },
             "ocr": {"tesseract": ocr},
-            "inpainting": {"opencv": self.inpainting.get_capabilities()},
+            "inpainting": {
+                "opencv": self.inpainting.get_capabilities(),
+                "lama-onnx": self.lama.get_capabilities(),
+            },
             "translation": {
                 "manual": self.manual.capabilities(),
                 "mock": self.mock.capabilities(),

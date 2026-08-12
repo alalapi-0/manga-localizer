@@ -5,7 +5,8 @@ from typing import Any
 from sqlalchemy import func, select
 
 from manga_localizer.database import ImageAsset, TextRegion
-from manga_localizer.services.images import invalidate_image_pipeline
+from manga_localizer.imaging import DEFAULT_REPAIR_SETTINGS
+from manga_localizer.services.images import invalidate_image_pipeline, reset_image_review
 from manga_localizer.services.projects import (
     ProjectError,
     ProjectStore,
@@ -19,18 +20,40 @@ class RegionNotFound(ProjectError):
     pass
 
 
+def _validate_repair_bounds(image: ImageAsset, repair: dict[str, Any]) -> None:
+    polygon = repair.get("maskPolygon")
+    if isinstance(polygon, list):
+        for point in polygon:
+            if float(point[0]) > image.width or float(point[1]) > image.height:
+                raise ProjectError("Mask polygon points must remain within image bounds")
+    edits = repair.get("maskEdits")
+    if not isinstance(edits, dict):
+        return
+    for stroke in edits.get("strokes", []):
+        for point in stroke.get("points", []):
+            if float(point[0]) > image.width or float(point[1]) > image.height:
+                raise ProjectError("Mask edit points must remain within image bounds")
+
+
 def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[str]:
     keys = set(values)
     stages = {"export"}
     if keys & {"source_text"}:
-        stages.update(("translation", "typeset"))
+        stages.update(("translation", "inpaint", "typeset"))
+    if keys & {"confidence", "confirmed"}:
+        # Safe repair eligibility depends on automatic OCR confidence and on
+        # explicit confirmation. Never reuse a mask produced under old trust data.
+        stages.update(("inpaint", "typeset"))
     if keys & {
         "translation_text",
         "style",
         "direction",
-        "order",
     }:
         stages.add("typeset")
+    if "order" in keys:
+        # Per-region inpainting is intentionally sequential in reading order,
+        # so a reorder changes both translation context and rendered pixels.
+        stages.update(("translation", "inpaint", "typeset"))
     if keys & {"x", "y", "width", "height", "rotation", "repair", "ignored"}:
         stages.update(("inpaint", "typeset"))
     if "ignored" in keys:
@@ -81,6 +104,12 @@ def create_region(store: ProjectStore, image_id: str, values: dict[str, Any]) ->
             requested_order = session.scalar(
                 select(func.count()).select_from(TextRegion).where(TextRegion.image_id == image_id)
             )
+        repair = dict(values.get("repair", {}))
+        if values.get("ignored", False) and values.get("confirmed", False):
+            raise ProjectError("A region cannot be both ignored and confirmed")
+        if "maskPadding" not in repair and "padding" in repair:
+            repair["maskPadding"] = repair["padding"]
+        _validate_repair_bounds(image, repair)
         region = TextRegion(
             image_id=image_id,
             x=values["x"],
@@ -97,7 +126,7 @@ def create_region(store: ProjectStore, image_id: str, values: dict[str, Any]) ->
             ignored=values.get("ignored", False),
             confirmed=values.get("confirmed", False),
             style=values.get("style", {}),
-            repair=values.get("repair", {}),
+            repair={**DEFAULT_REPAIR_SETTINGS, **repair},
             ocr_provider="manual" if values.get("source_text") else None,
             translation_provider="manual" if values.get("translation_text") else None,
             revision=1,
@@ -109,6 +138,7 @@ def create_region(store: ProjectStore, image_id: str, values: dict[str, Any]) ->
         if not region.ignored and not region.translation_text:
             stages.add("translation")
         invalidate_image_pipeline(store, image, stages)
+        reset_image_review(image)
         image.revision += 1
         session.flush()
         add_revision(
@@ -148,6 +178,13 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
         _validate_bounds(image, proposed)
         project = store.project(session)
         before = region_payload(region)
+        explicit_reconfirmation = values.get("confirmed") is True and not region.confirmed
+        if values.get("ignored") is True:
+            if explicit_reconfirmation:
+                raise ProjectError("A region cannot be both ignored and confirmed")
+            values["confirmed"] = False
+        elif explicit_reconfirmation and values.get("ignored", region.ignored):
+            raise ProjectError("An ignored region cannot be confirmed")
         mapping = {
             "type": "region_type",
             "order": "reading_order",
@@ -157,8 +194,45 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
             for key, value in values.items()
             if value is not None and getattr(region, mapping.get(key, key)) != value
         }
+        confirmation_stale_keys = {
+            "x",
+            "y",
+            "width",
+            "height",
+            "rotation",
+            "source_text",
+            "translation_text",
+            "type",
+            "direction",
+            "order",
+            "confidence",
+            "style",
+            "repair",
+            "ignored",
+        }
+        if (
+            changed_values.keys() & confirmation_stale_keys
+            and region.confirmed
+            and not explicit_reconfirmation
+        ):
+            changed_values["confirmed"] = False
+        geometry_keys = {"x", "y", "width", "height", "rotation"}
+        if geometry_keys & changed_values.keys():
+            repair = dict(changed_values.get("repair", region.repair or {}))
+            # Detector polygons use the previous canonical coordinates. Once the
+            # user edits the region geometry, the visible box becomes the manual
+            # mask boundary instead of a stale hidden polygon. Preserve only a
+            # genuinely new polygon supplied alongside the geometry update.
+            previous_polygon = (region.repair or {}).get("maskPolygon")
+            if (
+                repair.get("maskPolygon") == previous_polygon
+                and repair.pop("maskPolygon", None) is not None
+            ):
+                changed_values["repair"] = repair
         if not changed_values:
             return region
+        if "repair" in changed_values:
+            _validate_repair_bounds(image, changed_values["repair"])
         for key, value in changed_values.items():
             setattr(region, mapping.get(key, key), value)
         if "source_text" in changed_values:
@@ -166,6 +240,7 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
         if "translation_text" in changed_values:
             region.translation_provider = "manual"
         invalidate_image_pipeline(store, image, _changed_region_stages(changed_values, region))
+        reset_image_review(image)
         region.revision += 1
         image.revision += 1
         session.flush()
@@ -201,6 +276,7 @@ def delete_region(
         image = session.get(ImageAsset, region.image_id)
         assert image is not None
         invalidate_image_pipeline(store, image, {"inpaint", "typeset", "export"})
+        reset_image_review(image)
         image.revision += 1
         before = region_payload(region)
         session.delete(region)
@@ -266,8 +342,9 @@ def apply_reading_order(
             invalidate_image_pipeline(
                 store,
                 image,
-                {"translation", "typeset", "export"},
+                {"translation", "inpaint", "typeset", "export"},
             )
+            reset_image_review(image)
             image.revision += 1
     store.write_snapshot()
     return ordered

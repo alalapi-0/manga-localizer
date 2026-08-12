@@ -13,7 +13,8 @@ exports. A future desktop wrapper may launch both without changing their API.
 - **Project store:** one SQLite database beneath `output/project/`, plus a sanitized, inspectable JSON
   snapshot. Reopening requires both the manifest and its adjacent database; JSON-only import is not
   implemented. Generated artifacts live under fixed output categories and retain source-relative paths.
-- **Provider registry:** runtime selection of OCR, translation, and inpainting implementations.
+- **Provider registry:** exact runtime selection of preprocessing, text detection, OCR, translation,
+  and inpainting implementations. Optional model/runtime failures remain isolated health states.
 - **Typesetting engine:** deterministic Pillow renderer with font discovery and overflow reporting.
 - **Job runner:** persisted job records and one process-local runner. It executes one job at a time,
   with a user-selected one-to-eight-item concurrency bound inside detection/OCR/translation/render
@@ -24,17 +25,38 @@ exports. A future desktop wrapper may launch both without changing their API.
 
 1. Import records each trusted local file/directory selection as a cumulative security boundary before
    decoding candidates, then validates every relative path, image type, dimension, and destination.
-2. OCR stores regions and provenance; reading order is independently editable.
-3. Translation receives the current text plus bounded preceding/following regions by reading order on
+2. Optional preprocessing writes a separate PNG plus scale provenance. Detection and OCR consume it,
+   but every persisted region is mapped back to immutable source coordinates. Low/empty processed-crop
+   OCR is retried on the original crop.
+3. Detection stores polygon/box provenance. A completed empty result is authoritative; OCR does not
+   silently substitute a second detector. OCR stores attempts and provider provenance; reading order is
+   independently editable.
+4. Translation receives the current text plus bounded preceding/following regions by reading order on
    the same page and records provider provenance.
-4. Inpainting writes masks and previews outside source storage.
-5. Typesetting reads the immutable source or repaired preview and writes a new rendered preview.
-6. Export performs a final boundary/overwrite check, then exclusively creates new artifacts or uses
+5. Inpainting applies a safe eligibility policy, writes the real mask and repaired preview outside
+   source storage, and records the selected provider and skipped/repaired counts. Text-aware masks,
+   current region geometry, padding, dilation, and inward feathering are all explicit.
+6. Typesetting reads the current repaired preview (or produces one when required) and writes a new
+   rendered preview. Its Pillow provider is separate from the inpainter selection.
+7. Export performs a final boundary/overwrite check, then exclusively creates new artifacts or uses
    atomic replacement for an explicitly selected overwrite where supported.
 
 Region or upstream-provider changes invalidate every affected downstream status and generated file.
 Preview endpoints and image export also require a current completed stage, so an old bitmap cannot be
 silently paired with newly edited JSON.
+
+The canonical pipeline is:
+
+```text
+immutable source
+  -> optional preprocess artifact
+  -> text detection (canonical coordinates)
+  -> OCR with original-crop fallback
+  -> editable/reviewed regions
+  -> safe mask + OpenCV or LaMa restoration
+  -> Pillow typesetting
+  -> conflict-safe export
+```
 
 ## Reliability boundaries
 

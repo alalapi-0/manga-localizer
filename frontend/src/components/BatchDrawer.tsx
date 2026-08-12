@@ -5,6 +5,7 @@ import type { ExportOptions, Job, JobKind, ProviderCapability } from '../types';
 import { Field, IconButton } from './Primitives';
 
 const kindLabels: Record<JobKind, string> = {
+  preprocess: '图片增强',
   detect: '文字检测',
   ocr: '日文 OCR',
   translate: '翻译',
@@ -32,6 +33,7 @@ function capabilityForKind(
   kind: JobKind,
   providers: ProviderCapability[],
   settings: {
+    preprocessorProvider: string;
     detectorProvider: string;
     ocrProvider: string;
     translatorProvider: string;
@@ -39,6 +41,14 @@ function capabilityForKind(
   },
 ): { available: boolean; message: string; mock: boolean } {
   if (kind === 'export') return { available: true, message: '本地安全导出', mock: false };
+  if (kind === 'preprocess') {
+    const preprocessor = providers.find((provider) => provider.kind === 'preprocessor' && provider.id === settings.preprocessorProvider);
+    return {
+      available: Boolean(preprocessor?.available),
+      message: preprocessor?.available ? preprocessor.label : preprocessor?.reason || '图片增强能力未报告',
+      mock: false,
+    };
+  }
   if (kind === 'detect') {
     const detector = providers.find((provider) => provider.kind === 'detector' && provider.id === settings.detectorProvider);
     return {
@@ -71,7 +81,20 @@ function capabilityForKind(
 
 function JobCard({ job }: { job: Job }) {
   const runJobAction = useWorkbenchStore((state) => state.runJobAction);
+  const images = useWorkbenchStore((state) => state.images);
   const value = Math.max(0, Math.min(100, percent(job)));
+  const repaired = job.kind === 'inpaint'
+    ? job.items.reduce((total, item) => total + Number(item.output?.repairedRegionCount ?? 0), 0)
+    : null;
+  const skipped = job.kind === 'inpaint'
+    ? job.items.reduce((total, item) => total + Number(item.output?.skippedRegionCount ?? 0), 0)
+    : null;
+  const hasRepairMetrics = job.kind === 'inpaint'
+    && job.items.some((item) => item.output?.repairedRegionCount !== undefined);
+  const displayedItems = [
+    ...job.items.slice(0, 20),
+    ...job.items.slice(20).filter((item) => item.status === 'failed'),
+  ];
   return (
     <article className={`job-card job-card--${job.status}`}>
       <header>
@@ -81,14 +104,19 @@ function JobCard({ job }: { job: Job }) {
       <progress aria-label={`${kindLabels[job.kind]}进度`} max={100} value={value} />
       <div className="job-card__meta">
         <span>{job.completed} / {job.total || '—'} 项</span>
+        {hasRepairMetrics ? (
+          <span className={repaired === 0 ? 'job-error' : undefined}>
+            修复 {repaired} · 跳过 {skipped}{repaired === 0 ? '（未改动图像）' : ''}
+          </span>
+        ) : null}
         {job.error ? <span className="job-error">{job.error}</span> : null}
       </div>
       {job.items.length ? (
         <details>
-          <summary>查看 {job.items.length} 个队列项</summary>
+          <summary>查看 {job.items.length} 个队列项{displayedItems.length < job.items.length ? `（显示 ${displayedItems.length}）` : ''}</summary>
           <div className="job-items">
-            {job.items.slice(0, 20).map((item) => (
-              <div key={item.id}><span>{item.label}</span><em>{statusLabels[item.status]}</em>{item.error ? <small>{item.error}</small> : null}</div>
+            {displayedItems.map((item) => (
+              <div key={item.id}><span>{images.find((image) => image.id === item.imageId)?.relativePath ?? item.label}</span><em>{statusLabels[item.status]}</em>{item.error ? <small>{item.error}</small> : null}</div>
             ))}
           </div>
         </details>
@@ -123,6 +151,7 @@ export function BatchDrawer() {
   const startBatch = useWorkbenchStore((state) => state.startBatch);
   const [target, setTarget] = useState<'selected' | 'current' | 'all'>('selected');
   const [steps, setSteps] = useState<Record<JobKind, boolean>>({
+    preprocess: false,
     detect: true,
     ocr: true,
     translate: false,
@@ -132,6 +161,7 @@ export function BatchDrawer() {
   });
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     format: 'both',
+    imageVariant: 'typeset',
     conflict: 'rename',
     preserveTree: true,
   });
@@ -144,14 +174,44 @@ export function BatchDrawer() {
     return selectedImageIds;
   }, [currentImage, images, selectedImageIds, target]);
 
+  const unreviewedImageCount = imageIds.filter((imageId) => {
+    const state = images.find((image) => image.id === imageId)?.status.reviewState;
+    return state !== 'reviewed' && state !== 'no-text-reviewed';
+  }).length;
+  const imageExportBlocked = steps.export
+    && exportOptions.format !== 'json'
+    && unreviewedImageCount > 0;
+  const missingTypesetCount = imageIds.filter((imageId) =>
+    images.find((image) => image.id === imageId)?.status.typeset !== 'done'
+  ).length;
+  const missingInpaintCount = imageIds.filter((imageId) =>
+    images.find((image) => image.id === imageId)?.status.inpaint !== 'done'
+  ).length;
+  const requiresTypeset = exportOptions.imageVariant === 'typeset'
+    || exportOptions.imageVariant === 'both';
+  // Typeset output is composited from the clean background, so every image variant needs it.
+  const requiresInpaint = exportOptions.format !== 'json';
+  const generatedImageExportBlocked = steps.export
+    && exportOptions.format !== 'json'
+    && ((requiresTypeset && missingTypesetCount > 0)
+      || (requiresInpaint && missingInpaintCount > 0));
+  const pipelineExportBlocked = steps.export
+    && (Object.keys(steps) as JobKind[]).some((kind) => kind !== 'export' && steps[kind]);
+  const outputPathHint = exportOptions.format === 'json'
+    ? '仅写入文本元数据；不会复制图像，也不会创建可重开的项目快照。'
+    : exportOptions.format === 'images'
+      ? '仅写入所选生成图像；不会创建可重开的项目快照。'
+      : '同时写入图像与 JSON；自定义目录可包含完整、可重开的 project/ 项目副本及源图副本。';
+
   if (!open) return null;
   const selectedKinds = (Object.keys(steps) as JobKind[]).filter((kind) => steps[kind]);
 
   async function run() {
+    if (imageExportBlocked || generatedImageExportBlocked || pipelineExportBlocked) return;
     setStarting(true);
     const success = await startBatch(selectedKinds, imageIds, exportOptions, concurrency);
     setStarting(false);
-    if (success) setSteps((current) => ({ ...current, detect: false, ocr: false, translate: false, inpaint: false, typeset: false, export: false }));
+    if (success) setSteps((current) => ({ ...current, preprocess: false, detect: false, ocr: false, translate: false, inpaint: false, typeset: false, export: false }));
   }
 
   return (
@@ -193,6 +253,14 @@ export function BatchDrawer() {
                 );
               })}
             </div>
+            {!steps.preprocess
+              && (steps.detect || steps.ocr)
+              && project?.settings.preprocessing.profile !== 'off' ? (
+                <div className="notice notice--warning"><b>本批次不会执行图片增强</b><span>项目已配置 {project?.settings.preprocessing.profile}，勾选“图片增强”后检测与 OCR 才会使用新产物。</span></div>
+              ) : null}
+            {pipelineExportBlocked ? (
+              <div className="notice notice--warning" role="status"><b>先处理→复核→再导出</b><span>处理阶段会使旧产物或复核结论失效，不能与导出一次性排队。请先完成处理，逐页复核后再单独导出。</span></div>
+            ) : null}
           </section>
           <section className="drawer-section">
             <h3>3. 资源限制</h3>
@@ -218,25 +286,58 @@ export function BatchDrawer() {
                     <option value="both">成品图 + JSON</option><option value="images">仅成品图</option><option value="json">仅文本 JSON</option>
                   </select>
                 </Field>
+                <Field label="图像版本">
+                  <select
+                    aria-label="导出图像版本"
+                    disabled={exportOptions.format === 'json'}
+                    onChange={(event) => setExportOptions((current) => ({
+                      ...current,
+                      imageVariant: event.target.value as ExportOptions['imageVariant'],
+                    }))}
+                    value={exportOptions.imageVariant}
+                  >
+                    <option value="typeset">排版图（translated/）</option>
+                    <option value="inpainted">无字底图（clean/）</option>
+                    <option value="both">排版图 + 无字底图</option>
+                  </select>
+                </Field>
                 <Field label="重名处理">
                   <select aria-label="导出重名处理" onChange={(event) => setExportOptions((current) => ({ ...current, conflict: event.target.value as ExportOptions['conflict'] }))} value={exportOptions.conflict}>
                     <option value="rename">自动重命名</option><option value="skip">跳过</option><option value="overwrite">覆盖生成文件</option>
                   </select>
                 </Field>
               </div>
-              <Field label="输出目录（可选）" hint="自定义目录会生成可重开的项目快照，包含源图副本；只分享成品时请仅取 translated/。"><input onChange={(event) => setExportOptions((current) => ({ ...current, outputPath: event.target.value }))} placeholder="使用项目默认 output/" value={exportOptions.outputPath ?? ''} /></Field>
+              <Field label="输出目录（可选）" hint={outputPathHint}><input onChange={(event) => setExportOptions((current) => ({ ...current, outputPath: event.target.value }))} placeholder="使用项目根目录" value={exportOptions.outputPath ?? ''} /></Field>
               <label className="check-row"><input checked={exportOptions.preserveTree} onChange={(event) => setExportOptions((current) => ({ ...current, preserveTree: event.target.checked }))} type="checkbox" />保留原始相对目录树</label>
+              {imageExportBlocked ? (
+                <div className="notice notice--warning" role="status"><b>还有 {unreviewedImageCount} 页未显式检查</b><span>包含图像的导出要求先逐页“标记已检查”或“确认无文字”；改为仅文本 JSON 可跳过此门禁。</span></div>
+              ) : null}
+              {generatedImageExportBlocked ? (
+                <div className="notice notice--warning" role="status">
+                  <b>所选图像版本尚未全部生成</b>
+                  <span>
+                    {requiresTypeset && missingTypesetCount > 0 ? `${missingTypesetCount} 页缺少排版图。` : ''}
+                    {requiresInpaint && missingInpaintCount > 0 ? `${missingInpaintCount} 页缺少无字底图。` : ''}
+                    请先单独处理，完成后逐页复核，再导出。
+                  </span>
+                </div>
+              ) : null}
+              {exportOptions.format === 'json' ? (
+                <div className="notice notice--local"><b>仅文本 JSON 不受页面复核门禁</b><span>此导出不会写入排版图或无字底图。</span></div>
+              ) : null}
               {exportOptions.conflict === 'overwrite' ? <div className="notice notice--warning"><b>覆盖仅限生成目录</b><span>本地服务仍不会修改导入的源图。</span></div> : null}
             </section>
           ) : null}
-          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length} onClick={() => void run()} type="button">
-            {starting ? '正在创建队列…' : `加入队列 · ${imageIds.length} 张 · ${selectedKinds.length} 步`}
-          </button>
           <section className="drawer-section queue-section">
             <div className="section-title-row"><h3>任务队列</h3><span>{jobs.filter((job) => ['queued', 'running', 'paused'].includes(job.status)).length} 个活动任务</span></div>
             {!jobs.length ? <p className="panel-hint">尚无任务。队列持久化在项目数据库中，重启后可恢复。</p> : jobs.map((job) => <JobCard job={job} key={job.id} />)}
           </section>
         </div>
+        <footer className="batch-drawer__footer">
+          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length || imageExportBlocked || generatedImageExportBlocked || pipelineExportBlocked} onClick={() => void run()} type="button">
+            {starting ? '正在创建队列…' : `加入队列 · ${imageIds.length} 张 · ${selectedKinds.length} 步`}
+          </button>
+        </footer>
       </aside>
     </div>
   );

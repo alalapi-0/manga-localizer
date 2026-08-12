@@ -4,10 +4,9 @@ Manga Localizer is a local-first desktop Web workbench for turning Japanese mang
 scans into reviewed Chinese image exports. It keeps text detection, OCR, reading order, translation,
 inpainting, typesetting, review, and export as separate replaceable stages.
 
-> **Release status:** current 0.2.0 MVP. The baseline pipeline is intentionally
-> practical rather than magical: Tesseract provides offline Japanese OCR, OpenCV provides basic
-> inpainting, and Pillow provides deterministic Chinese typesetting. See [Roadmap](ROADMAP.md) for
-> higher-quality models and native packaging.
+> **Release status:** 0.2.0 plus the current Unreleased real-data iteration. The guaranteed baseline
+> remains Tesseract + OpenCV/Pillow; optional local PP-OCRv3 and LaMa ONNX providers improve detection
+> and restoration when their explicitly installed models are available.
 
 ![Manga Localizer workbench](docs/assets/workbench.jpg)
 
@@ -17,10 +16,16 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 - Single, multiple, and nested-folder image import with Unicode paths, cumulative original-path
   protection, and immutable source copies
 - Dense three-pane workbench with a zoomable canvas and editable numbered text regions
-- Offline Tesseract Japanese detection/OCR, including horizontal and vertical language data
+- A persisted image-preprocessing stage with OCR-friendly, balanced, visual-quality, and off profiles;
+  2×–4× upscale, denoise, sharpen, contrast, edge, and binarization switches; before/after preview;
+  and original-coordinate mapping
+- Offline Tesseract Japanese OCR plus optional PP-OCRv3 polygon detection, including horizontal and
+  vertical workflows, low-confidence original-image retry, and actual provider provenance
 - Manual, deterministic mock, local dictionary, and configurable OpenAI-compatible translation
 - Bounded same-page reading-order context, glossary controls, and remote privacy warnings
-- OpenCV mask creation/inpainting and Pillow horizontal or vertical Chinese typesetting
+- Text-aware or region masks with padding, dilation, feathering, a visible mask overlay, editable
+  region boundaries, safe repair gating, OpenCV fallback, optional local LaMa ONNX restoration, and
+  Pillow horizontal or vertical Chinese typesetting
 - Persistent non-blocking batch jobs with a 1–8 item limit, progress, cooperative controls, failure
   details, and retry; export is serialized for conflict-safe naming
 - Safe single/batch export preserving relative folders and emitting original/translated text JSON
@@ -28,12 +33,19 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 
 ## Honest limitations
 
-The MVP does **not** provide deep-learning inpainting, a manual mask brush/eraser, arbitrary polygon
-regions, JSON-only project import, MangaOCR/PaddleOCR adapters, artistic sound-effect redraw,
-automatic font matching, reliable automatic speech-bubble segmentation, book-scale character
-reasoning, PDF/EPUB ingestion, native installers, cloud sync, or collaboration. Tesseract accuracy
-and OpenCV repair quality vary substantially by scan quality; every rectangular text region remains
-editable so the user can correct the baseline. No model weights or fonts are bundled.
+Optional models and ONNX Runtime are not part of the default install, and the application never
+downloads them at startup. There is still no pixel-level mask brush/eraser: manual mask correction is
+performed by moving/resizing/rotating a region or switching between its detector polygon, text-aware
+mask, and full region mask. PP-OCR/Tesseract can still confuse detailed line art with text, and LaMa
+can leave a visible reconstruction band where lettering covers complex line work. A confirmed or
+recognized-region policy prevents those uncertain boxes from being repaired automatically, but human
+review remains required.
+
+The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, artistic
+sound-effect redraw, automatic font matching, reliable speech-bubble classification, PDF/EPUB import,
+native installers, cloud sync, or collaboration. No model weights or fonts are bundled. See the
+[real-data iteration report](docs/real-data-iteration-status.md) for measured trade-offs rather than
+accuracy claims without ground truth.
 
 ## Architecture
 
@@ -42,7 +54,8 @@ flowchart TB
   UI[React + TypeScript + Konva workbench] -->|local HTTP / JSON| API[FastAPI application]
   API --> DB[(per-project SQLite)]
   API --> Queue[persistent local job queue]
-  Queue --> D[Text detection]
+  Queue --> P[Optional image preprocessing]
+  P --> D[Text detection]
   D --> O[Japanese OCR provider]
   O --> R[Reading order]
   R --> T[Translation provider]
@@ -63,6 +76,13 @@ never calls a model directly. Project settings are portable; credentials are not
 - A current Chromium-based browser is recommended
 
 Apple Silicon and CPU-only systems are supported by the baseline. A GPU is not required.
+
+Optional local providers add these requirements:
+
+- PP-OCRv3 detection: the OpenCV Zoo ONNX model; no additional Python runtime.
+- LaMa restoration: `onnxruntime` from the backend `ai` extra plus the OpenCV Zoo LaMa model.
+- Real-ESRGAN enhancement: a separately installed `realesrgan-ncnn-vulkan` executable and its model
+  files. The adapter reports unavailable when the executable is absent and never blocks startup.
 
 ### Current verification coverage
 
@@ -88,6 +108,24 @@ Open <http://127.0.0.1:5173>. The local API listens on `127.0.0.1:8000`; it is n
 network by default. Configuration is optional: copy `.env.example` to `.env` before starting if you
 want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` loads
 that root `.env` file and passes the values to both development processes. The file is Git-ignored.
+
+To opt into both checked local ONNX models, run this explicitly before startup:
+
+```bash
+npm run setup:ai
+```
+
+This installs the backend AI extra and downloads PP-OCRv3 plus LaMa into
+`~/.manga-localizer/models/`, verifying fixed SHA-256 checksums. If your `.env` changes
+`MANGA_LOCALIZER_DATA_DIR`, point the model setup at the same directory instead:
+
+```bash
+npm run setup:models -- --data-dir .manga-localizer ppocr lama
+uv sync --project backend --extra ai --group dev
+```
+
+Model installation is always a user-invoked action. The default application and test suite remain
+offline and usable with Tesseract/OpenCV/Pillow only.
 
 ### macOS
 
@@ -134,10 +172,13 @@ Package names differ between distributions; verify `tesseract --list-langs` cont
    the local data directory. Native directory pickers are deferred to desktop packaging.
 3. Import images or a folder. Folder import removes the selected root folder itself and preserves all
    paths beneath it, so selecting `input/` retains `chapter-01/001.png`.
-4. Run OCR on selected pages, then review numbered regions in the canvas and Text panel.
-5. Enter Chinese manually or choose a configured translation provider.
-6. Preview inpainting and typesetting. Adjust boxes and typography where the baseline needs help.
-7. Confirm or ignore each text region and export. Original files are never replaced.
+4. Optionally run preprocessing, compare the enhanced image with the original, then detect and OCR.
+5. Review numbered regions in the canvas and Text panel; empty or uncertain detections are not safe
+   repair candidates until corrected or confirmed.
+6. Enter Chinese manually or choose a configured translation provider.
+7. Inspect the real mask overlay, choose text/full-region masking and an available inpainter, then
+   preview repair and typesetting. Moving or resizing a region also corrects its mask boundary.
+8. Confirm or ignore each text region and export. Original files are never replaced.
 
 Default project output resembles:
 
@@ -145,6 +186,7 @@ Default project output resembles:
 output/
 ├── source/chapter-01/001.png
 ├── generated/
+│   ├── preprocessed/chapter-01/001.png
 │   ├── inpainted/chapter-01/001.png
 │   ├── typeset/chapter-01/001.png
 │   └── masks/chapter-01/001.png
@@ -165,13 +207,38 @@ the bundle.
 
 ## OCR providers
 
-Tesseract is the default because it starts without Python model downloads and has maintained
-cross-platform packages. It performs both region detection and recognition in this MVP. Install
-Japanese horizontal and vertical data and check provider health in Project Settings.
+Tesseract remains the default detector and recognizer because it starts without Python model downloads
+and has maintained cross-platform packages. Install Japanese horizontal and vertical data and check
+provider health in Project Settings.
 
-MangaOCR and PaddleOCR are planned roadmap adapters, not implementations included in this release.
-Their larger dependencies and model downloads are deliberately excluded from the default install so
-they cannot stop the editor from starting. See [Provider system](docs/provider-system.md).
+`ppocr-v3` is an optional, local detection-only provider using OpenCV DNN and the official OpenCV Zoo
+PP-OCRv3 ONNX model. It returns polygon geometry; Tesseract then recognizes each detected region. A
+completed zero-detection page remains a valid empty result and is not silently re-detected by another
+provider. MangaOCR and PaddleOCR recognition adapters remain roadmap work. See
+[Provider system](docs/provider-system.md).
+
+## Image preprocessing
+
+`opencv-pillow` is always available and persists a separate enhanced PNG; source files are immutable.
+The OCR-friendly profile upscales, denoises, sharpens, and raises contrast. Edge enhancement is
+deliberately opt-in: on the private real-data set it amplified line-art false positives. Every switch
+can be overridden per project, and detection/OCR coordinates are mapped back to the original image.
+
+`realesrgan-ncnn` is an optional adapter around a local Real-ESRGAN NCNN executable. It uses temporary
+files, preserves alpha, can chain the local post-processing switches, and reports a clear unavailable
+health state when the executable is not installed. It does not download an executable or weights.
+
+## Background restoration
+
+`opencv` provides Telea, Navier-Stokes, and solid fill as the guaranteed fallback. `lama-onnx` is the
+optional AI provider and runs the OpenCV Zoo 512×512 model locally through ONNX Runtime. It performs
+context-cropped inference and composites only inside the mask, preserving every zero-mask pixel.
+
+The default `safe` repair policy repairs confirmed regions, manual recognized regions, and
+detector-generated recognized regions above the confidence threshold. Empty or low-confidence automatic
+detections are skipped. Use `recognized` or `all` only for deliberate review/testing. AI restoration is
+materially better than whole-page rectangular OpenCV repair on tested complex pages, but it cannot
+reconstruct line work hidden entirely by the original glyphs and may still need an external editor.
 
 ## Translation providers
 
@@ -233,6 +300,22 @@ npm run audit:release       # secrets, personal paths, weights, fonts, DBs, larg
 Run `npm run setup:test` once before the first Playwright run. Backend-only and frontend-only
 commands are documented in [Development](docs/development.md).
 
+The current Unreleased candidate was verified on 2026-08-08:
+
+- `npm run check`: 2 launcher tests, Ruff lint/format, 117 backend pytest cases, ESLint, TypeScript,
+  47 frontend Vitest cases, and the production Vite build
+- Playwright: 2 Chromium journeys, including preprocessing, real local detection/OCR, actual mask
+  preview, repair, typesetting, export, and project reopen
+- Private real-data regression: all 130 supplied images completed the comparison runs; the exact final
+  three-image PP-OCRv3/LaMa pipeline completed 21/21 stage items with unchanged sources/dimensions and
+  zero changed pixels outside generated masks
+- Release/privacy audit: real inputs, outputs, OCR content, model weights, project databases, and
+  machine-specific paths remain excluded from the tracked tree
+
+Coverage counts and OCR confidence are not accuracy claims because the supplied set has no annotated
+box/transcription ground truth. See [Real-data iteration status](docs/real-data-iteration-status.md) for
+the measured tradeoffs, visual findings, and remaining roadmap.
+
 The 0.2.0 source tree was verified on 2026-08-06:
 
 - `npm run check`: 2 launcher tests, Ruff lint/format plus 78 backend pytest cases, and ESLint,
@@ -262,9 +345,10 @@ No. Detection, OCR, reading order, and translation are explicit separate stages.
 
 ### Why is the repaired background imperfect?
 
-The default OpenCV algorithm interpolates nearby pixels; it does not understand line art. Adjust the
-text box and its mask padding/dilation, preserve the source region, or use an external editor for
-difficult textures. The MVP has no manual mask brush.
+OpenCV only interpolates nearby pixels, while LaMa predicts plausible local content; neither can know
+the line art that was fully hidden by a glyph. Inspect the mask overlay, adjust the region and
+padding/dilation/feathering, switch between text and full-region masks, and keep difficult textures for
+manual review. The current workbench has editable mask boundaries but no pixel brush.
 
 ### Can I use a commercial font?
 

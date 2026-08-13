@@ -19,15 +19,16 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Real-data Round 9 is the active checkpoint. Round 8 prepared review material for all 130 pages but has
-explicit completed output review for only 18; it is not a full-book visual result. Ignored Round 9
-aggregate evidence confirms that confidence is not a sufficient text-validity gate and that structurally
-safe complex repairs can remain visually unacceptable. The current worktree adds durable visual-stage
-review and checksum-gated export and is not yet committed or pushed. The non-default branch
-`agent/manga-round7-governance-20260812` is already on GitHub at `5624182ef496151881368aaa253211c42676b6ae`;
-draft PR #3 exists and its prior candidate CI succeeded. Current-candidate regression, exact-state
-Judge/Governor review, commit, push, remote-SHA verification, and new CI remain pending. No merge,
-tag, release, or deployment has occurred.
+Real-data Round 9's durable visual-stage signoff checkpoint is delivered to the non-default branch
+`agent/manga-round7-governance-20260812` at `ae7146faf74d20babc63310236ffa9295f907cdd`
+through draft PR #3. Fresh Judge/Governor review approved the implementation and each subsequent
+CI-only repair. GitHub CI run `31708706339` passed the complete backend, frontend, and Playwright
+gates for that exact remote commit. Round 8 prepared review material for all 130 pages but has explicit
+completed output review for only 18; it remains a partial result, not a full-book visual acceptance.
+Ignored Round 9 aggregate evidence confirms that confidence is not a sufficient text-validity gate and
+that structurally safe complex repairs can remain visually unacceptable. The full product goal remains
+active; the next quality checkpoint is the automatic post-OCR trust/disposition gate. No merge, tag,
+release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -100,8 +101,8 @@ tag, release, or deployment has occurred.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial at 18/130 explicitly completed pages.
-- [ ] Round 9: ignored aggregate evidence captured and visual-stage review implementation prepared;
-  exact candidate verification, governed review, GitHub delivery, and CI are pending.
+- [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
+  export, governed review, non-default-branch delivery, and complete CI verification.
 
 ## Verification evidence
 
@@ -120,16 +121,21 @@ tag, release, or deployment has occurred.
   files and all reachable historical blobs with zero findings. `uv lock --check`, compileall, and
   `git diff --check` passed; ignored/private/model/DB paths have zero tracked files and the public
   candidate contains no private sample name or personal absolute path.
-- Current Round 9 local checks: 2 launcher tests; frontend ESLint/TypeScript, 75 Vitest cases, and the
-  production build passed. Direct release audit scanned 108 candidate files and 202 historical blobs
-  with zero findings; `uv lock --check`, compileall, E2E spec lint, and `git diff --check` passed.
-  Current backend Ruff/pytest and live Playwright remain pending because the offline local environment
-  lacks the required OpenCV wheel; CI must run the complete gates after delivery.
+- Round 9 remote verification: GitHub CI run `31708706339` passed at
+  `ae7146faf74d20babc63310236ffa9295f907cdd`. Backend Ruff lint and format passed; all 149 pytest
+  cases passed; the release audit scanned 108 candidate files and 214 historical blobs with zero
+  findings. Frontend ESLint, TypeScript, 75 Vitest cases, and the production build passed. Both
+  Playwright Chromium journeys passed in 42.5 seconds.
+- Round 9 local verification also passed 2 launcher tests, frontend lint/typecheck/75 tests/build,
+  E2E spec lint and two-test discovery, `uv lock --check`, compileall, `git diff --check`, and the direct
+  release audit. Backend dependencies were unavailable in the offline local environment, so the exact
+  remote candidate's successful CI is the authoritative backend and live-browser evidence.
 
 ## Known limitations and blockers
 
 No source-integrity or privacy blocker is currently known, but the full product objective is not yet
-complete and the Round 9 candidate is not yet delivered.
+complete. Round 9 is delivered and verified; it is a safety/review checkpoint rather than a claim of
+unattended full-book output quality.
 
 - The private dataset has no annotated boxes/transcriptions, so coverage and confidence are proxies,
   not detection recall or OCR accuracy.
@@ -138,5 +144,5 @@ complete and the Round 9 candidate is not yet delivered.
   reconstruction artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, an automatic post-OCR trust gate, arbitrary polygon/whole-page mask
   editing, line-art-aware restoration, and a real Real-ESRGAN run remain roadmap work.
-- The current visual-stage review candidate is uncommitted and requires local checks, exact governed
-  review, non-default-branch push, remote verification, and CI before the next major feature checkpoint.
+- Automatic regions still need a post-OCR trust/disposition gate that retains every proposal for human
+  review while preventing unconfirmed automatic OCR from reaching translation or safe repair.

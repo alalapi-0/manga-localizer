@@ -1450,7 +1450,7 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert "review is pending" in gated_job["items"][0]["error"]
 
         page_reviewed = _review_image(client, project["id"], image["id"])
-        rejected_clean = _set_stage_review(client, page_reviewed, "inpaint", "rejected")
+        _set_stage_review(client, page_reviewed, "inpaint", "rejected")
         rejected_root = tmp_path / "rejected-clean-export"
         rejected_export = client.post(
             f"/api/projects/{project['id']}/export",

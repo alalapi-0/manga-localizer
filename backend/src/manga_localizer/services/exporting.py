@@ -157,24 +157,19 @@ def _portable_assets(
         )
         image_relative = safe_relative_path(image.relative_path).with_suffix(".png")
         reviews = stage_reviews(image)
-
-        def accepted_and_current(stage: str) -> bool:
+        current: set[str] = set()
+        for stage in ("preprocess", "inpaint", "typeset"):
             review = reviews.get(stage)
             if image.status.get(stage) != "done" or review is None:
-                return False
+                continue
             if review.get("state") != "accepted":
-                return False
+                continue
             try:
                 actual = stage_artifact_checksums(store, image, stage)
             except ProjectError:
-                return False
-            return all(review.get(key) == checksum for key, checksum in actual.items())
-
-        current = {
-            stage
-            for stage in ("preprocess", "inpaint", "typeset")
-            if accepted_and_current(stage)
-        }
+                continue
+            if all(review.get(key) == checksum for key, checksum in actual.items()):
+                current.add(stage)
         if "inpaint" not in current:
             current.discard("typeset")
         available_stages[image.id] = current

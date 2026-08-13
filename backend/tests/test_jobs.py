@@ -448,29 +448,31 @@ def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
 
 
 def test_legacy_confirmation_is_materialized_before_translation_resets_page_review(
-    client: TestClient,
     tmp_path: Path,
-    app,
 ) -> None:
-    project = create_project(client, tmp_path / "project")
-    image = upload_image(client, project["id"])
-    region = _add_region(client, image["id"], confirmed=True)
-    store = app.state.registry.get(project["id"])
-    with store.session() as session:
-        legacy = session.get(TextRegion, region["id"])
-        assert legacy is not None
-        legacy.recognition = {}
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            legacy = session.get(TextRegion, region["id"])
+            assert legacy is not None
+            legacy.recognition = {}
 
-    translated = client.post(
-        f"/api/projects/{project['id']}/translate",
-        json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
-    )
-    completed = _wait_job(client, translated.json()["id"])
-    assert completed["status"] == "completed", completed
-    current = client.get(f"/api/images/{image['id']}/regions").json()[0]
-    assert current["confirmed"] is False
-    assert current["trustDisposition"] == "trusted"
-    assert current["trustReason"] == "legacy-confirmed"
+        translated = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+        )
+        assert translated.status_code == 202, translated.text
+        completed = _wait_job(client, translated.json()["id"])
+        assert completed["status"] == "completed", completed
+        current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current["confirmed"] is False
+        assert current["trustDisposition"] == "trusted"
+        assert current["trustReason"] == "legacy-confirmed"
 
 
 def test_region_repair_settings_drive_the_inpainting_job(tmp_path: Path) -> None:
@@ -917,7 +919,7 @@ def test_full_region_snapshot_invalidates_only_fields_that_actually_changed(
     assert response.status_code == 200, response.text
     state = client.get(f"/api/projects/{project['id']}/images").json()[0]
     assert state["status"]["ocr"] == "done"
-    assert state["status"]["translation"] == "done"
+    assert state["status"]["translation"] == "pending"
     assert state["status"]["inpaint"] == "pending"
     assert state["status"]["typeset"] == "pending"
     assert state["status"]["export"] == "pending"

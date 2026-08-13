@@ -149,10 +149,10 @@ def create_region(store: ProjectStore, image_id: str, values: dict[str, Any]) ->
             revision=1,
         )
         session.add(region)
-        stages = {"translation", "inpaint", "typeset", "export"}
+        stages = {"inpaint", "typeset", "export"}
         if not region.ignored and not region.source_text:
             stages.add("ocr")
-        if not region.ignored and not region.translation_text:
+        if not region.ignored:
             stages.add("translation")
         invalidate_image_pipeline(store, image, stages)
         reset_image_review(image)

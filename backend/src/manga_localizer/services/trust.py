@@ -344,7 +344,9 @@ def with_ocr_evidence(
     else:
         combined_selected_index = len(previous_attempts) + selected_index
     combined_attempts = previous_attempts + normalized_attempts
-    selected = combined_attempts[combined_selected_index] if combined_selected_index is not None else None
+    selected = None
+    if combined_selected_index is not None:
+        selected = combined_attempts[combined_selected_index]
     value["ocr"] = {
         "confidence": _finite_confidence(confidence),
         "provider": provider,

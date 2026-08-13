@@ -202,8 +202,7 @@ def _validate_image_review_state(image: ImageAsset, review_state: str) -> None:
     if not non_ignored_regions:
         raise ProjectError("Cannot mark image as reviewed without at least one non-ignored region")
     unready_count = sum(
-        not (region.confirmed and is_region_trusted(region))
-        for region in non_ignored_regions
+        not (region.confirmed and is_region_trusted(region)) for region in non_ignored_regions
     )
     if unready_count:
         raise ProjectError(

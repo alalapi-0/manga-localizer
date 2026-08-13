@@ -547,9 +547,7 @@ class ProjectRegistry:
                 stale_trust_image_ids.add(region.image_id)
             if migrate_trust_schema:
                 current.schema_version = 2
-                stale_trust_image_ids.update(
-                    session.scalars(select(ImageAsset.id)).all()
-                )
+                stale_trust_image_ids.update(session.scalars(select(ImageAsset.id)).all())
             if stale_trust_image_ids:
                 # Imported lazily to avoid the images -> projects module dependency
                 # during application startup.

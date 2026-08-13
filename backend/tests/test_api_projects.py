@@ -806,9 +806,7 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
             json={"manifestPath": str(root / "project/project.json")},
         )
         assert reopened_again.status_code == 200, reopened_again.text
-        idempotent_image = second_fresh.get(
-            f"/api/projects/{project['id']}/images"
-        ).json()[0]
+        idempotent_image = second_fresh.get(f"/api/projects/{project['id']}/images").json()[0]
         assert idempotent_image["revision"] == first_migrated_revision
 
     with sqlite3.connect(database_path) as database:
@@ -1588,8 +1586,7 @@ def test_recognition_provider_settings_revoke_only_matching_nonignored_trust(
     assert changed.status_code == 200, changed.text
 
     regions = {
-        region["id"]: region
-        for region in client.get(f"/api/images/{image['id']}/regions").json()
+        region["id"]: region for region in client.get(f"/api/images/{image['id']}/regions").json()
     }
     assert regions[affected["id"]]["confirmed"] is False
     assert regions[affected["id"]]["trustDisposition"] == "review"
@@ -1656,8 +1653,7 @@ def test_preprocessing_setting_revokes_only_trust_using_preprocessed_evidence(
     )
     assert changed.status_code == 200, changed.text
     current = {
-        region["id"]: region
-        for region in client.get(f"/api/images/{image['id']}/regions").json()
+        region["id"]: region for region in client.get(f"/api/images/{image['id']}/regions").json()
     }
     assert current[regions[0]["id"]]["confirmed"] is False
     assert current[regions[0]["id"]]["trustDisposition"] == "review"

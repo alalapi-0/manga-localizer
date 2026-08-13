@@ -19,15 +19,11 @@ def _reasons(findings: list[tuple[str, str]]) -> set[str]:
 def test_main_scans_secrets_past_two_mib(tmp_path: Path, monkeypatch, capsys) -> None:
     token = "gh" + "p_" + "A" * 24
     candidate = tmp_path / "large.txt"
-    candidate.write_text(
-        "x" * (2 * 1024 * 1024 + 1) + "\n" + token, encoding="utf-8"
-    )
+    candidate.write_text("x" * (2 * 1024 * 1024 + 1) + "\n" + token, encoding="utf-8")
 
     monkeypatch.setattr(audit_release, "ROOT", tmp_path)
     monkeypatch.setattr(audit_release, "candidate_files", lambda: [candidate])
-    monkeypatch.setattr(
-        audit_release, "tracked_files", lambda: {PurePosixPath("large.txt")}
-    )
+    monkeypatch.setattr(audit_release, "tracked_files", lambda: {PurePosixPath("large.txt")})
     monkeypatch.setattr(audit_release, "historical_blobs", lambda: [])
 
     assert audit_release.main() == 1
@@ -64,9 +60,7 @@ def test_candidate_symlink_is_rejected_without_following_target(
 
     monkeypatch.setattr(audit_release, "ROOT", tmp_path)
     monkeypatch.setattr(audit_release, "candidate_files", lambda: [candidate])
-    monkeypatch.setattr(
-        audit_release, "tracked_files", lambda: {PurePosixPath("link.txt")}
-    )
+    monkeypatch.setattr(audit_release, "tracked_files", lambda: {PurePosixPath("link.txt")})
     monkeypatch.setattr(audit_release, "historical_blobs", lambda: [])
 
     assert audit_release.main() == 1

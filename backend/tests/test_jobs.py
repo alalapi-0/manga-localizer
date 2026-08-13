@@ -697,14 +697,17 @@ def test_safe_typesetting_rebuilds_inpaint_created_with_all_policy(tmp_path: Pat
         safe_job = _wait_job(client, safe.json()["id"])
         assert safe_job["status"] == "completed", safe_job
         output = safe_job["items"][0]["output"]
-        assert not {
-            "inpaintedArtifact",
-            "inpaintedUrl",
-            "maskArtifact",
-            "maskUrl",
-            "typesetArtifact",
-            "typesetUrl",
-        } & output.keys()
+        assert (
+            not {
+                "inpaintedArtifact",
+                "inpaintedUrl",
+                "maskArtifact",
+                "maskUrl",
+                "typesetArtifact",
+                "typesetUrl",
+            }
+            & output.keys()
+        )
         assert output["repairPolicy"] == "safe"
         assert output["eligibleRegionCount"] == 0
         assert output["repairedRegionCount"] == 0
@@ -775,9 +778,7 @@ def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: 
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"], data=png_bytes(color="white"))
-        region = _add_region(
-            client, image["id"], translation="不应覆盖空蒙版", confirmed=True
-        )
+        region = _add_region(client, image["id"], translation="不应覆盖空蒙版", confirmed=True)
         updated = client.patch(
             f"/api/regions/{region['id']}",
             json={
@@ -850,9 +851,7 @@ def test_region_and_translation_edits_invalidate_stale_render_and_export(tmp_pat
         )
         failed = _wait_job(client, stale_export.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
 
         typeset = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1238,9 +1237,10 @@ def test_targeted_ocr_preserves_human_ignore_and_attempt_evidence_on_reopen(
         assert current["recognition"]["ocr"]["attemptCount"] == 2
         assert current["recognition"]["ocr"]["selectedIndex"] == 1
         assert current["repair"]["ocrAttemptCount"] == 2
-        assert [
-            item["confidence"] for item in current["recognition"]["ocr"]["attempts"]
-        ] == [0.91, 0.91]
+        assert [item["confidence"] for item in current["recognition"]["ocr"]["attempts"]] == [
+            0.91,
+            0.91,
+        ]
 
     with TestClient(create_app(settings, start_worker=False)) as reopened:
         persisted = reopened.get(f"/api/images/{image['id']}/regions")
@@ -1251,9 +1251,10 @@ def test_targeted_ocr_preserves_human_ignore_and_attempt_evidence_on_reopen(
         assert current["trustReason"] == "human-ignored"
         assert current["recognition"]["ocr"]["attemptCount"] == 2
         assert current["recognition"]["ocr"]["selectedIndex"] == 1
-        assert [
-            item["confidence"] for item in current["recognition"]["ocr"]["attempts"]
-        ] == [0.91, 0.91]
+        assert [item["confidence"] for item in current["recognition"]["ocr"]["attempts"]] == [
+            0.91,
+            0.91,
+        ]
 
 
 def test_cancel_leaves_active_item_running_then_records_its_real_completion(tmp_path: Path) -> None:
@@ -1345,9 +1346,7 @@ def test_background_ocr_and_translation_never_overwrite_newer_manual_edits(
         ocr_release.set()
         failed_ocr = _wait_job(client, ocr.json()["id"])
         assert failed_ocr["status"] == "failed"
-        assert failed_ocr["items"][0]["error"] == (
-            "OCR failed; inspect the private project log"
-        )
+        assert failed_ocr["items"][0]["error"] == ("OCR failed; inspect the private project log")
         current = client.get(f"/api/images/{image['id']}/regions").json()[0]
         assert current["sourceText"] == "用户新原文"
 
@@ -1812,9 +1811,7 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         )
         gated_job = _wait_job(client, gated.json()["id"])
         assert gated_job["status"] == "failed"
-        assert gated_job["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert gated_job["items"][0]["error"] == ("Export failed; inspect the private project log")
 
         page_reviewed = _review_image(client, project["id"], image["id"])
         _set_stage_review(client, page_reviewed, "inpaint", "rejected")
@@ -2092,9 +2089,7 @@ def test_verified_export_copy_never_publishes_changed_bytes(
         )
         failed = _wait_job(client, exported.json()["id"])
         assert failed["status"] == "failed"
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
         assert existing.read_bytes() == reviewed_bytes
         assert not list(existing.parent.glob(".page.png.*.tmp"))
 
@@ -2293,9 +2288,7 @@ def test_export_rejects_another_project_bundle_without_writing(tmp_path: Path) -
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
         assert (second_root / "project/project.json").read_bytes() == manifest_before
         with sqlite3.connect(second_root / "project/project.sqlite3") as database:
             assert database.execute("SELECT id FROM projects").fetchone()[0] == second["id"]
@@ -2330,9 +2323,7 @@ def test_export_rejects_symlinked_project_bundle_target(tmp_path: Path) -> None:
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
         assert list(outside.iterdir()) == []
 
 
@@ -2442,9 +2433,7 @@ def test_export_never_overwrites_a_trusted_local_original(tmp_path: Path) -> Non
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
         assert collision.read_bytes() == collision_bytes
         assert not (originals / "masks/a.png").exists()
 
@@ -2639,9 +2628,7 @@ def test_export_bundle_never_overwrites_an_original_with_an_arbitrary_extension(
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert failed["items"][0]["error"] == (
-            "Export failed; inspect the private project log"
-        )
+        assert failed["items"][0]["error"] == ("Export failed; inspect the private project log")
         assert disguised_original.read_bytes() == disguised_bytes
         assert not (originals / "original-text/page.json").exists()
 

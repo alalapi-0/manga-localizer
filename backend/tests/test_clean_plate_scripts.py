@@ -148,9 +148,7 @@ def test_bootstrap_candidates_persist_review_only_detection_evidence(
             ],
             set(),
         )
-        regions = client.get(
-            f"/api/images/{image_by_path['page.png']['id']}/regions"
-        ).json()
+        regions = client.get(f"/api/images/{image_by_path['page.png']['id']}/regions").json()
 
     assert len(regions) == 1
     assert regions[0]["detectorConfidence"] == 0.73

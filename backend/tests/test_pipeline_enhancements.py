@@ -138,16 +138,19 @@ def test_preprocess_artifact_drives_scaled_detection_and_ocr_fallback(
         preprocessed = _wait_job(client, submitted.json()["id"])
         assert preprocessed["status"] == "completed", preprocessed
         output = preprocessed["items"][0]["output"]
-        assert not {
-            "artifact",
-            "url",
-            "inpaintedArtifact",
-            "inpaintedUrl",
-            "maskArtifact",
-            "maskUrl",
-            "typesetArtifact",
-            "typesetUrl",
-        } & output.keys()
+        assert (
+            not {
+                "artifact",
+                "url",
+                "inpaintedArtifact",
+                "inpaintedUrl",
+                "maskArtifact",
+                "maskUrl",
+                "typesetArtifact",
+                "typesetUrl",
+            }
+            & output.keys()
+        )
         assert output["originalSize"] == [240, 320]
         assert output["processedSize"] == [480, 640]
         assert (
@@ -320,9 +323,7 @@ def test_public_generated_content_classes_remain_reviewable_across_empty_rerun_a
         assert completed["status"] == "completed", completed
         serialized_job = json.dumps(completed, ensure_ascii=False)
         assert '"regionId"' not in serialized_job
-        assert not any(
-            "regionId" in item for item in completed["items"]
-        )
+        assert not any("regionId" in item for item in completed["items"])
         assert all(
             fixture_text not in serialized_job
             for fixture_text in ("BUBBLE-H", "NONBUBBLE-V", "SFX")

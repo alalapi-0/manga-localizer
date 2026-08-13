@@ -119,9 +119,7 @@ def _normalize(recognition: Any) -> dict[str, Any] | None:
             "direction": ocr.get("direction")
             if ocr.get("direction") in {"horizontal", "vertical", "auto"}
             else None,
-            "language": ocr.get("language")
-            if isinstance(ocr.get("language"), str)
-            else None,
+            "language": ocr.get("language") if isinstance(ocr.get("language"), str) else None,
             "attempts": attempts,
             "selectedIndex": selected_index,
         }
@@ -183,9 +181,7 @@ def recognition_uses_input_variant(recognition: Any, input_variant: str) -> bool
         return False
     if ocr.get("inputVariant") == input_variant:
         return True
-    return any(
-        attempt.get("inputVariant") == input_variant for attempt in ocr.get("attempts", [])
-    )
+    return any(attempt.get("inputVariant") == input_variant for attempt in ocr.get("attempts", []))
 
 
 def recognition_payload(region: TextRegion) -> dict[str, Any]:
@@ -348,11 +344,7 @@ def with_ocr_evidence(
     else:
         combined_selected_index = len(previous_attempts) + selected_index
     combined_attempts = previous_attempts + normalized_attempts
-    selected = (
-        combined_attempts[combined_selected_index]
-        if combined_selected_index is not None
-        else None
-    )
+    selected = combined_attempts[combined_selected_index] if combined_selected_index is not None else None
     value["ocr"] = {
         "confidence": _finite_confidence(confidence),
         "provider": provider,

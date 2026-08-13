@@ -889,10 +889,9 @@ class PersistentJobQueue:
                 "image preprocessing",
             )
             project = store.project(session)
-            provenance_changed = (
-                artifact_changed
-                or image.status.get("preprocessingProvider") != provider_name
-            )
+            provenance_changed = artifact_changed or image.status.get(
+                "preprocessingProvider"
+            ) != provider_name
             if provenance_changed:
                 for region in session.scalars(
                     select(TextRegion).where(TextRegion.image_id == image_id)
@@ -1080,9 +1079,7 @@ class PersistentJobQueue:
             existing = list(
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
-            next_reading_order = (
-                max((region.reading_order for region in existing), default=-1) + 1
-            )
+            next_reading_order = max((region.reading_order for region in existing), default=-1) + 1
             for offset, detection in enumerate(detections):
                 region = TextRegion(
                     image_id=image_id,
@@ -1433,9 +1430,7 @@ class PersistentJobQueue:
             if requested is None:
                 raise ProjectError("Translation region was not found")
             if not is_region_trusted(requested):
-                raise ProjectError(
-                    "Translation region requires explicit human trust confirmation"
-                )
+                raise ProjectError("Translation region requires explicit human trust confirmation")
             targets = [requested]
         provider_name = str(
             options.get("provider") or project_settings.get("translatorProvider") or "manual"

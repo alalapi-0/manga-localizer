@@ -206,8 +206,7 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "confirmedCount": sum(region.confirmed for region in regions),
         "trustedCount": sum(is_region_trusted(region) for region in regions),
         "trustReviewCount": sum(
-            not region.ignored and region_disposition(region) == "review"
-            for region in regions
+            not region.ignored and region_disposition(region) == "review" for region in regions
         ),
         "ignoredCount": sum(region.ignored for region in regions),
         "processingErrors": processing_errors,
@@ -577,18 +576,13 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                                     and recognition_has_ocr_evidence(evidence)
                                 )
                                 preprocessing_changed = bool(
-                                    changed_settings
-                                    & {"preprocessorProvider", "preprocessing"}
+                                    changed_settings & {"preprocessorProvider", "preprocessing"}
                                     and recognition_uses_input_variant(
                                         evidence,
                                         "preprocessed",
                                     )
                                 )
-                                if not (
-                                    detection_changed
-                                    or ocr_changed
-                                    or preprocessing_changed
-                                ):
+                                if not (detection_changed or ocr_changed or preprocessing_changed):
                                     continue
                                 if not (is_region_trusted(region) or region.confirmed):
                                     continue

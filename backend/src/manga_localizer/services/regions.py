@@ -196,8 +196,8 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
         project = store.project(session)
         before = region_payload(region)
         previous_recognition = recognition_payload(region)
-        explicit_trust_confirmation = (
-            values.get("confirmed") is True and not is_region_trusted(region)
+        explicit_trust_confirmation = values.get("confirmed") is True and not is_region_trusted(
+            region
         )
         if values.get("ignored") is True:
             if values.get("confirmed") is True:

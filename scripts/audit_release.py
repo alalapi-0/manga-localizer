@@ -196,9 +196,7 @@ def historical_blobs() -> list[
                 )
                 entries.add((object_id, relative, mode))
 
-    blobs: list[
-        tuple[str, PurePosixPath, int, str | None, str | None, bool]
-    ] = []
+    blobs: list[tuple[str, PurePosixPath, int, str | None, str | None, bool]] = []
     for object_id, relative, mode in sorted(
         entries, key=lambda item: (str(item[1]), item[0], item[2])
     ):
@@ -301,7 +299,9 @@ def main() -> int:
         try:
             metadata = path.lstat()
         except FileNotFoundError:
-            findings.append((str(relative), "candidate file is missing from working tree"))
+            findings.append(
+                (str(relative), "candidate file is missing from working tree")
+            )
             continue
         is_symlink = stat.S_ISLNK(metadata.st_mode)
         if not is_symlink and not stat.S_ISREG(metadata.st_mode):

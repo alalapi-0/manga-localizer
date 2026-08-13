@@ -889,9 +889,9 @@ class PersistentJobQueue:
                 "image preprocessing",
             )
             project = store.project(session)
-            provenance_changed = artifact_changed or image.status.get(
-                "preprocessingProvider"
-            ) != provider_name
+            provenance_changed = (
+                artifact_changed or image.status.get("preprocessingProvider") != provider_name
+            )
             if provenance_changed:
                 for region in session.scalars(
                     select(TextRegion).where(TextRegion.image_id == image_id)

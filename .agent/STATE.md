@@ -19,23 +19,19 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Real-data Round 9's durable visual-stage signoff checkpoint is delivered to the non-default branch
-`agent/manga-round7-governance-20260812` at `ae7146faf74d20babc63310236ffa9295f907cdd`
-through draft PR #3. Fresh Judge/Governor review approved the implementation and each subsequent
-CI-only repair. GitHub CI run `31708706339` passed the complete backend, frontend, and Playwright
-gates for that exact remote commit. Round 8 prepared review material for all 130 pages but has explicit
-completed output review for only 18; it remains a partial result, not a full-book visual acceptance.
-Ignored Round 9 aggregate evidence confirms that confidence is not a sufficient text-validity gate and
-that structurally safe complex repairs can remain visually unacceptable. A post-Round-9 OCR
-trust/disposition working candidate is now present locally and uncommitted: it persists versioned
-detection/OCR evidence (including provider, attempted input, effective language, confidence, and selected
-attempt), leaves automatic proposals in review regardless of confidence, requires explicit human trust
-before translation or default safe rendering, and invalidates trust when recognition inputs or policy
-change. Legacy/policy migration also discards old repair/typeset cache created under the earlier
-confidence policy. Public regression, private real-data evaluation, independent review, commit, and delivery are
-pending; local frontend/static/privacy checks have passed, but prior Round 9 evidence does not verify this
-candidate and its full backend/browser gates still require CI. The full product goal remains active. No
-merge, tag, release, or deployment has occurred.
+Real-data Round 9's durable visual-stage signoff checkpoint and the subsequent Round 10 OCR trust gate
+are delivered to the non-default branch `agent/manga-round7-governance-20260812` through draft PR #3.
+The Round 10 feature checkpoint is at `29305788cfbb8f4d1f36354ba89c40e18d15400e`; fresh
+Judge/Governor review approved the implementation and each CI repair, and GitHub CI run `31729184780`
+passed the complete backend, frontend, privacy, and Playwright gates for that exact remote commit. It
+persists versioned detection/OCR evidence, leaves automatic proposals in review regardless of
+confidence, requires explicit human trust before translation or default safe rendering, and invalidates
+trust when recognition inputs or policy change. Legacy/policy migration also discards repair/typeset
+caches created under the earlier confidence policy. Round 8 prepared review material for all 130 pages
+but has explicit completed output review for only 18; it remains a partial result, not a full-book visual
+acceptance. No new private real-data quality result was produced by Round 10, so privacy-safe evaluation
+and calibration of the delivered gate remain the next checkpoint. The full product goal remains active.
+No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -118,8 +114,10 @@ merge, tag, release, or deployment has occurred.
 - [ ] Round 8: full-book clean-plate visual review is partial at 18/130 explicitly completed pages.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
-- [ ] Round 10: post-OCR evidence/trust gate is implemented locally; public regression, private-safe
-  real-data evaluation, governed review, commit, push, and CI verification remain pending.
+- [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
+  delivery, and complete backend/frontend/privacy/browser CI verification.
+- [ ] Next real-data checkpoint: evaluate and calibrate the delivered trust gate against privacy-safe
+  aggregate evidence without publishing private images, text, paths, or identifiers.
 
 ## Verification evidence
 
@@ -147,12 +145,15 @@ merge, tag, release, or deployment has occurred.
   E2E spec lint and two-test discovery, `uv lock --check`, compileall, `git diff --check`, and the direct
   release audit. Backend dependencies were unavailable in the offline local environment, so the exact
   remote candidate's successful CI is the authoritative backend and live-browser evidence.
-- Current Round 10 local candidate verification: 2 launcher tests; frontend ESLint, TypeScript, 92
-  Vitest cases, and production build; two-test Playwright discovery/compilation; 10 isolated release-audit
-  tests; `uv lock --check --offline`; compileall; `git diff --check`; and a direct release audit over 110
-  candidate files plus 202 historical entries all passed. The task-created incomplete backend virtual
-  environment was moved out of the repository. Full backend pytest/Ruff and live Playwright remain
-  unavailable locally and must pass on the exact remote candidate before this round is accepted.
+- Round 10 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 92 Vitest cases,
+  and production build; two-test Playwright discovery/compilation; 10 isolated release-audit tests;
+  `uv lock --check --offline`; compileall; `git diff --check`; and a direct release audit over 110
+  candidate files plus 202 historical entries. The task-created incomplete backend virtual environment
+  was moved out of the repository.
+- Round 10 authoritative remote verification: GitHub CI run `31729184780` passed at
+  `29305788cfbb8f4d1f36354ba89c40e18d15400e`. Backend Ruff lint/format, all 184 pytest cases, and the
+  release audit over 110 candidate files plus 272 historical blobs passed. Frontend ESLint, TypeScript,
+  all 92 Vitest cases, and production build passed. Both Playwright Chromium journeys passed.
 
 ## Known limitations and blockers
 
@@ -167,6 +168,6 @@ unattended full-book output quality.
   reconstruction artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, line-art-aware restoration,
   and a real Real-ESRGAN run remain roadmap work.
-- The post-OCR trust/disposition candidate still needs full backend/live-browser CI, privacy-safe
-  real-data aggregate evaluation, governed delivery, and exact-commit verification before it is durable
-  evidence.
+- The post-OCR trust gate is delivered and fully CI-verified, but its precision/recall and calibration
+  still require privacy-safe annotated or aggregate real-data evaluation; the current evidence proves
+  safety and workflow behavior, not unattended recognition quality.

@@ -332,8 +332,11 @@ Coverage counts and OCR confidence are not accuracy claims because the supplied 
 box/transcription ground truth. See [Real-data iteration status](docs/real-data-iteration-status.md) for
 the measured tradeoffs, visual findings, and remaining roadmap.
 
-The post-Round-9 OCR trust/disposition work described above is a current working candidate. Its public
-regression and delivery gates are not yet registered, and prior Round 7/9 evidence does not verify it.
+The post-Round-9 OCR trust/disposition checkpoint is delivered on the non-default draft PR branch at
+`29305788cfbb8f4d1f36354ba89c40e18d15400e`. GitHub CI run `31729184780` passed Ruff lint/format,
+184 backend tests, the release/privacy audit, frontend lint/typecheck/build with 92 tests, and both
+Playwright journeys. This verifies the safety and workflow contract; private real-data calibration is
+still required before making recognition-accuracy or unattended-publication claims.
 
 The 0.2.0 source tree was verified on 2026-08-06:
 

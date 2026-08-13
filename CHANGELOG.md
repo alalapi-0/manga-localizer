@@ -75,6 +75,9 @@ Semantic Versioning.
 - The prior Round 7 candidate passed 130 backend tests, 64 frontend tests, two Playwright Chromium journeys,
   production builds, release/privacy checks, and a repeated three-image real PP-OCRv3/LaMa pipeline with
   zero stage failures or mask-outside pixel changes.
+- The Round 10 trust-gate checkpoint passed Ruff lint/format, 184 backend tests, the release/privacy
+  audit, frontend lint/typecheck/build with 92 tests, and both Playwright Chromium journeys on the exact
+  non-default-branch commit. No new private real-data quality result is claimed by this verification.
 
 ### Known limitations
 

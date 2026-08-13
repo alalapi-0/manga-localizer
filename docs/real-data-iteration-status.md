@@ -17,8 +17,10 @@ Last updated: 2026-08-13
 - Round 6 — real-data regression and failure-driven repair: complete.
 - Round 7 — documentation, public-tree cleanup, and final gates: complete.
 - Round 8 — full-book clean-plate visual review: partial; 18 of 130 pages have explicit output review.
-- Round 9 — ignored aggregate failure evidence and durable visual-stage review checkpoint: candidate
-  implementation complete; current regression/CI verification pending.
+- Round 9 — ignored aggregate failure evidence and durable visual-stage review checkpoint: delivered
+  and verified by complete CI on the non-default task branch.
+- Post-Round-9 OCR trust/disposition checkpoint: working implementation present locally; public
+  regression, private real-data evaluation, governed review, and delivery pending.
 
 ## Private data boundary
 
@@ -169,6 +171,9 @@ before unattended publication would be appropriate.
   executable/model was absent.
 - Optional PP-OCRv3 polygon detector and explicit detection/OCR provider separation.
 - Preprocessed-crop OCR retry against original, quality selection, and attempt/input provenance.
+- Working candidate: versioned separate detector/OCR evidence, retained automatic proposals, stable
+  trust reasons, and trusted-only translation/default safe rendering. This bullet is not delivered
+  evidence until the current candidate finishes its gates.
 - Text-aware or full-region masks, padding, dilation, real soft feathering, and actual mask overlay.
 - Persisted bounded brush/eraser strokes for manual correction of a selected region's mask.
 - Exact inpainting provider selection; unknown IDs fail instead of silently using OpenCV.
@@ -190,7 +195,8 @@ before unattended publication would be appropriate.
    assumption. Run the already integrated Real-ESRGAN adapter only after a licensed local executable and
    model are installed, then compare against the exact same annotations.
 3. **Detection/OCR:** add MangaOCR or PaddleOCR recognition behind the existing protocol, region-level
-   rerun/history controls, and calibrated confidence. Keep empty detection authoritative.
+   rerun/history controls, and calibrated confidence. Complete and validate the current human trust gate;
+   keep empty detection authoritative.
 4. **Mask editing:** add arbitrary polygon regions and a whole-page raster workflow. Current brush and
    eraser strokes are bounded to one selected rectangular region.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
@@ -223,5 +229,7 @@ before unattended publication would be appropriate.
   only 18 pages. This is a partial clean-plate checkpoint, not a full-book quality result.
 - **Round 9:** recorded ignored aggregate evidence that no-text pages still receive many automatic text
   candidates and that structurally safe complex repairs can remain visually unacceptable. Added durable
-  visual-stage accept/reject state, checksum binding, invalidation, UI controls, and export gating; exact
-  current-candidate verification is still pending.
+  visual-stage accept/reject state, checksum binding, invalidation, UI controls, and export gating; the
+  non-default branch passed full backend, frontend, privacy, and Playwright CI.
+- **Post-Round-9 candidate:** added versioned detection/OCR evidence and a fail-closed human trust gate
+  locally. No new private result, independent approval, commit, push, or CI is yet registered for it.

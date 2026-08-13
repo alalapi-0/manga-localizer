@@ -34,9 +34,9 @@ reconstruct detailed line art semantically, so difficult repairs may need an ext
 
 ## Export says a visual-stage review is missing or stale
 
-Finish the page-level text review, switch the canvas to **擦除** and accept the inpaint result, then
-display and inspect **复核蒙版**, accept the inpaint result, then accept **成品** when exporting a
-typeset image. The decision is bound to the exact bytes loaded by the canvas. A changed artifact or mask
+Finish the page-level text review, switch the canvas to **擦除**, display and inspect **复核蒙版**, then
+accept the inpaint result. Accept **成品** as well when exporting a typeset image. The decision is bound
+to the exact bytes loaded by the canvas. A changed artifact or mask
 no longer matches the saved review and must be reloaded, rerun, or accepted again. Upstream changes clear
 dependent review state. JSON-only export intentionally does not require visual-stage acceptance.
 

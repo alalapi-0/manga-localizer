@@ -19,7 +19,7 @@ from sqlalchemy.orm import selectinload
 
 import manga_localizer.queue as queue_module
 from manga_localizer.config import Settings
-from manga_localizer.database import ImageAsset, Job, JobStatus
+from manga_localizer.database import ImageAsset, Job, JobStatus, TextRegion
 from manga_localizer.imaging import create_mask
 from manga_localizer.main import create_app
 from manga_localizer.providers.ocr import OCRRegion
@@ -159,11 +159,15 @@ def test_queue_control_actions_and_job_options_drop_credentials(
     )
     assert response.status_code == 202
     job = response.json()
-    assert "apiKey" not in job["options"]
-    assert "api-key" not in job["options"]
-    assert "Authorization" not in job["options"]
-    assert "token" not in job["options"]["nested"]
-    assert "serviceCredential" not in job["options"]["nested"]
+    assert "options" not in job
+    assert "never-persist" not in json.dumps(job)
+    store = client.app.state.registry.get(project["id"])
+    internal = client.app.state.queue.get_job(store, job["id"])
+    serialized_options = json.dumps(internal.options)
+    assert internal.options["provider"] == "mock"
+    assert "never-persist" not in serialized_options
+    assert "Authorization" not in serialized_options
+    assert "token" not in serialized_options
 
     paused = client.post(f"/api/jobs/{job['id']}/pause")
     assert paused.status_code == 200
@@ -326,7 +330,9 @@ def test_export_failure_guard_refreshes_after_acquiring_the_export_lock(
         current_image = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert current_image["status"]["export"] == "failed"
         assert current_image["revision"] == edited_revision[0] + 1
-        assert current_image["processingErrors"][-1]["error"] == "current export failure"
+        assert current_image["processingErrors"][-1]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
 
 def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path) -> None:
@@ -335,7 +341,7 @@ def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path)
     with TestClient(app) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"], translation="不要覆盖")
+        region = _add_region(client, image["id"], translation="不要覆盖", confirmed=True)
 
         manual = client.post(
             f"/api/projects/{project['id']}/translate",
@@ -357,12 +363,122 @@ def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path)
         assert image_state["status"]["translation"] == "done"
 
 
+def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 30,
+                "y": 40,
+                "width": 100,
+                "height": 120,
+                "sourceText": "高置信也必须人工确认",
+                "translationText": "待翻译",
+                "confidence": 0.99,
+                "repair": {"detectorGenerated": True, "maskMode": "region"},
+            },
+        ).json()
+        assert region["trustDisposition"] == "review"
+
+        rejected = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+        )
+        failed = _wait_job(client, rejected.json()["id"])
+        assert failed["status"] == "failed"
+        assert failed["items"][0]["error"] == (
+            "Translation failed; inspect the private project log"
+        )
+
+        safe = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"repairPolicy": "safe"}},
+        )
+        safe_job = _wait_job(client, safe.json()["id"])
+        assert safe_job["status"] == "completed", safe_job
+        assert safe_job["items"][0]["output"]["eligibleRegionCount"] == 0
+
+        low = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"confidence": 0.1, "expectedRevision": region["revision"]},
+        ).json()
+        confirmed = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"confirmed": True, "expectedRevision": low["revision"]},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["trustDisposition"] == "trusted"
+
+        translated = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={
+                "regionIds": [region["id"]],
+                "options": {"provider": "mock"},
+            },
+        )
+        completed = _wait_job(client, translated.json()["id"])
+        assert completed["status"] == "completed", completed
+        translation_output = completed["items"][0]["output"]
+        assert translation_output["count"] == 1
+        assert "translation" not in translation_output
+        serialized_output = json.dumps(translation_output, ensure_ascii=False)
+        assert region["id"] not in serialized_output
+        assert "高置信也必须人工确认" not in serialized_output
+        assert "你好" not in serialized_output
+        after_translation = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert after_translation["confirmed"] is False
+        assert after_translation["trustDisposition"] == "trusted"
+
+        ignored = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"ignored": True, "expectedRevision": after_translation["revision"]},
+        )
+        assert ignored.status_code == 200, ignored.text
+        assert ignored.json()["trustDisposition"] == "ignored"
+        ignored_translation = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+        )
+        assert _wait_job(client, ignored_translation.json()["id"])["status"] == "failed"
+
+
+def test_legacy_confirmation_is_materialized_before_translation_resets_page_review(
+    client: TestClient,
+    tmp_path: Path,
+    app,
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    region = _add_region(client, image["id"], confirmed=True)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        legacy = session.get(TextRegion, region["id"])
+        assert legacy is not None
+        legacy.recognition = {}
+
+    translated = client.post(
+        f"/api/projects/{project['id']}/translate",
+        json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+    )
+    completed = _wait_job(client, translated.json()["id"])
+    assert completed["status"] == "completed", completed
+    current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+    assert current["confirmed"] is False
+    assert current["trustDisposition"] == "trusted"
+    assert current["trustReason"] == "legacy-confirmed"
+
+
 def test_region_repair_settings_drive_the_inpainting_job(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"])
+        region = _add_region(client, image["id"], confirmed=True)
         updated = client.patch(
             f"/api/regions/{region['id']}",
             json={
@@ -438,6 +554,7 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
                     "width": 30,
                     "height": 30,
                     "sourceText": "文字",
+                    "confirmed": True,
                     "repair": {
                         "maskMode": "region",
                         "maskPadding": 0,
@@ -470,10 +587,7 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         output = completed["items"][0]["output"]
         assert output["inpaintingProvider"] == "mixed"
         assert output["inpaintingProviders"] == ["lama-onnx", "opencv"]
-        assert output["regionInpaintingProviders"] == {
-            regions[0]["id"]: "opencv",
-            regions[1]["id"]: "lama-onnx",
-        }
+        assert "regionInpaintingProviders" not in output
         assert opencv.calls == 1
         assert lama.calls == 1
         assert lama.inpaint_options == [{"context_padding": 64, "feather": 0}]
@@ -553,7 +667,107 @@ def test_safe_typesetting_does_not_overlay_an_unrepaired_detection(tmp_path: Pat
         assert output["eligibleRegionCount"] == 0
         assert output["typesetEligibleRegionCount"] == 0
         assert output["typesetSkippedRegionCount"] == 1
-        assert output["layouts"] == []
+        assert "layouts" not in output
+
+
+def test_safe_typesetting_rebuilds_inpaint_created_with_all_policy(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        _add_region(client, image["id"], translation="不可信区域", confirmed=False)
+
+        unsafe = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"repairPolicy": "all"}},
+        )
+        unsafe_job = _wait_job(client, unsafe.json()["id"])
+        assert unsafe_job["status"] == "completed", unsafe_job
+        assert unsafe_job["items"][0]["output"]["eligibleRegionCount"] == 1
+        unsafe_mask = client.get(f"/api/images/{image['id']}/generated/mask")
+        assert unsafe_mask.status_code == 200, unsafe_mask.text
+        with Image.open(io.BytesIO(unsafe_mask.content)) as opened:
+            assert np.any(np.asarray(opened.convert("L"), dtype=np.uint8))
+
+        safe = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"repairPolicy": "safe"}},
+        )
+        safe_job = _wait_job(client, safe.json()["id"])
+        assert safe_job["status"] == "completed", safe_job
+        output = safe_job["items"][0]["output"]
+        assert not {
+            "inpaintedArtifact",
+            "inpaintedUrl",
+            "maskArtifact",
+            "maskUrl",
+            "typesetArtifact",
+            "typesetUrl",
+        } & output.keys()
+        assert output["repairPolicy"] == "safe"
+        assert output["eligibleRegionCount"] == 0
+        assert output["repairedRegionCount"] == 0
+        assert output["typesetEligibleRegionCount"] == 0
+        safe_mask = client.get(f"/api/images/{image['id']}/generated/mask")
+        assert safe_mask.status_code == 200, safe_mask.text
+        with Image.open(io.BytesIO(safe_mask.content)) as opened:
+            assert not np.any(np.asarray(opened.convert("L"), dtype=np.uint8))
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            asset = session.get(ImageAsset, image["id"])
+            assert asset is not None
+            assert asset.status["inpaintingRepairPolicy"] == "safe"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("type", "sound_effect"), ("direction", "horizontal")),
+)
+def test_trust_input_edit_discards_repair_cache_before_safe_typesetting(
+    tmp_path: Path,
+    field: str,
+    value: str,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / f"project-{field}")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], translation="已信任译文", confirmed=True)
+        rendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
+        before = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert before["status"]["inpaint"] == "done"
+        assert before["status"]["typeset"] == "done"
+        assert client.get(f"/api/images/{image['id']}/content?variant=erased").status_code == 200
+
+        changed = client.patch(
+            f"/api/regions/{region['id']}",
+            json={field: value, "expectedRevision": region["revision"]},
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["trustDisposition"] == "review"
+        assert changed.json()["trustReason"] == "trust-input-changed"
+        state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert state["status"]["translation"] == "pending"
+        assert state["status"]["inpaint"] == "pending"
+        assert state["status"]["typeset"] == "pending"
+        assert state["status"]["export"] == "pending"
+        assert client.get(f"/api/images/{image['id']}/content?variant=erased").status_code == 404
+        assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 404
+
+        typeset = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"repairPolicy": "safe"}},
+        )
+        completed = _wait_job(client, typeset.json()["id"])
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["eligibleRegionCount"] == 0
+        assert output["typesetEligibleRegionCount"] == 0
 
 
 def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: Path) -> None:
@@ -561,7 +775,9 @@ def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: 
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"], data=png_bytes(color="white"))
-        region = _add_region(client, image["id"], translation="不应覆盖空蒙版")
+        region = _add_region(
+            client, image["id"], translation="不应覆盖空蒙版", confirmed=True
+        )
         updated = client.patch(
             f"/api/regions/{region['id']}",
             json={
@@ -582,7 +798,7 @@ def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: 
         assert output["eligibleRegionCount"] == 1
         assert output["repairedRegionCount"] == 0
         assert output["typesetEligibleRegionCount"] == 0
-        assert output["layouts"] == []
+        assert "layouts" not in output
 
 
 def test_region_and_translation_edits_invalidate_stale_render_and_export(tmp_path: Path) -> None:
@@ -634,7 +850,9 @@ def test_region_and_translation_edits_invalidate_stale_render_and_export(tmp_pat
         )
         failed = _wait_job(client, stale_export.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert "stale" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
         typeset = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -715,7 +933,7 @@ def test_rotation_and_reactivating_empty_region_invalidate_required_stages(
     with TestClient(app) as client:
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"])
+        region = _add_region(client, image["id"], confirmed=True)
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -773,7 +991,7 @@ def test_translation_settings_invalidate_rendered_and_exported_output(tmp_path: 
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"])
+        region = _add_region(client, image["id"], confirmed=True)
         translated = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
@@ -809,6 +1027,9 @@ def test_translation_settings_invalidate_rendered_and_exported_output(tmp_path: 
             },
         )
         assert changed.status_code == 200, changed.text
+        preserved_region = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert preserved_region["trustDisposition"] == "trusted"
+        assert preserved_region["trustReason"] == "human-confirmed"
         state = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert state["status"]["translation"] == "pending"
         assert state["status"]["inpaint"] == "done"
@@ -886,6 +1107,20 @@ class _FakeOCR:
         return [OCRRegion(10, 10, 80, 100, "検出", 0.88, "vertical")]
 
 
+class _DirectionAwareOCR:
+    def recognize_region(self, _image, region, **options) -> OCRRegion:
+        direction = str(options["direction"])
+        return OCRRegion(
+            x=round(region["x"]),
+            y=round(region["y"]),
+            width=round(region["width"]),
+            height=round(region["height"]),
+            text=f"ocr-{direction}",
+            confidence=0.8,
+            direction=direction,
+        )
+
+
 def test_ocr_job_endpoint_updates_region_without_http_blocking(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     app = create_app(settings, start_worker=True)
@@ -915,6 +1150,110 @@ def test_ocr_job_endpoint_updates_region_without_http_blocking(tmp_path: Path) -
         assert image_state["status"]["ocr"] == "done"
         assert image_state["status"]["reviewState"] == "pending"
         assert image_state["status"]["reviewedAt"] == ""
+
+
+def test_ocr_persists_each_target_direction_language(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    app.state.providers.ocr = _DirectionAwareOCR()
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "mixed-direction-ocr")
+        image = upload_image(client, project["id"])
+        for x, direction in ((10, "horizontal"), (120, "vertical")):
+            created = client.post(
+                f"/api/images/{image['id']}/regions",
+                json={
+                    "x": x,
+                    "y": 20,
+                    "width": 80,
+                    "height": 100,
+                    "direction": direction,
+                },
+            )
+            assert created.status_code == 201, created.text
+
+        submitted = client.post(
+            f"/api/projects/{project['id']}/ocr",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        completed = _wait_job(client, submitted.json()["id"])
+        assert completed["status"] == "completed", completed
+        regions = client.get(f"/api/images/{image['id']}/regions").json()
+        by_direction = {region["direction"]: region for region in regions}
+        assert by_direction["horizontal"]["recognition"]["ocr"]["language"] == "jpn"
+        assert by_direction["vertical"]["recognition"]["ocr"]["language"] == "jpn_vert"
+        for direction, language in (("horizontal", "jpn"), ("vertical", "jpn_vert")):
+            recognition = by_direction[direction]["recognition"]["ocr"]
+            assert recognition["attempts"][recognition["selectedIndex"]]["language"] == language
+
+
+def test_targeted_ocr_preserves_human_ignore_and_attempt_evidence_on_reopen(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    app.state.providers.ocr = _FakeOCR()
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "ignored-targeted-ocr")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], source="忽略前")
+        ignored = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"ignored": True, "expectedRevision": region["revision"]},
+        )
+        assert ignored.status_code == 200, ignored.text
+        assert ignored.json()["trustDisposition"] == "ignored"
+        assert ignored.json()["trustReason"] == "human-ignored"
+
+        submitted = client.post(
+            f"/api/projects/{project['id']}/ocr",
+            json={"regionIds": [region["id"]], "options": {}},
+        )
+        assert submitted.status_code == 202, submitted.text
+        completed = _wait_job(client, submitted.json()["id"])
+        assert completed["status"] == "completed", completed
+        current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current["ignored"] is True
+        assert current["confirmed"] is False
+        assert current["trustDisposition"] == "ignored"
+        assert current["trustReason"] == "human-ignored"
+        assert current["ocrConfidence"] == 0.91
+        assert current["recognition"]["ocr"]["attemptCount"] == 1
+        assert current["recognition"]["ocr"]["selectedIndex"] == 0
+        attempt = current["recognition"]["ocr"]["attempts"][0]
+        assert attempt["provider"] == "tesseract"
+        assert attempt["inputVariant"] == "original"
+        assert attempt["confidence"] == 0.91
+        assert attempt["direction"] == "vertical"
+
+        repeated = client.post(
+            f"/api/projects/{project['id']}/ocr",
+            json={"regionIds": [region["id"]], "options": {}},
+        )
+        assert repeated.status_code == 202, repeated.text
+        repeated_job = _wait_job(client, repeated.json()["id"])
+        assert repeated_job["status"] == "completed", repeated_job
+        current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current["trustDisposition"] == "ignored"
+        assert current["recognition"]["ocr"]["attemptCount"] == 2
+        assert current["recognition"]["ocr"]["selectedIndex"] == 1
+        assert current["repair"]["ocrAttemptCount"] == 2
+        assert [
+            item["confidence"] for item in current["recognition"]["ocr"]["attempts"]
+        ] == [0.91, 0.91]
+
+    with TestClient(create_app(settings, start_worker=False)) as reopened:
+        persisted = reopened.get(f"/api/images/{image['id']}/regions")
+        assert persisted.status_code == 200, persisted.text
+        current = persisted.json()[0]
+        assert current["ignored"] is True
+        assert current["trustDisposition"] == "ignored"
+        assert current["trustReason"] == "human-ignored"
+        assert current["recognition"]["ocr"]["attemptCount"] == 2
+        assert current["recognition"]["ocr"]["selectedIndex"] == 1
+        assert [
+            item["confidence"] for item in current["recognition"]["ocr"]["attempts"]
+        ] == [0.91, 0.91]
 
 
 def test_cancel_leaves_active_item_running_then_records_its_real_completion(tmp_path: Path) -> None:
@@ -1006,9 +1345,18 @@ def test_background_ocr_and_translation_never_overwrite_newer_manual_edits(
         ocr_release.set()
         failed_ocr = _wait_job(client, ocr.json()["id"])
         assert failed_ocr["status"] == "failed"
-        assert "changed during OCR" in failed_ocr["items"][0]["error"]
+        assert failed_ocr["items"][0]["error"] == (
+            "OCR failed; inspect the private project log"
+        )
         current = client.get(f"/api/images/{image['id']}/regions").json()[0]
         assert current["sourceText"] == "用户新原文"
+
+        confirmed = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"confirmed": True, "expectedRevision": current["revision"]},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        current = confirmed.json()
 
         translation_entered = threading.Event()
         translation_release = threading.Event()
@@ -1035,7 +1383,9 @@ def test_background_ocr_and_translation_never_overwrite_newer_manual_edits(
         translation_release.set()
         failed_translation = _wait_job(client, translated.json()["id"])
         assert failed_translation["status"] == "failed"
-        assert "changed during translation" in failed_translation["items"][0]["error"]
+        assert failed_translation["items"][0]["error"] == (
+            "Translation failed; inspect the private project log"
+        )
         final = client.get(f"/api/images/{image['id']}/regions").json()[0]
         assert final["translationText"] == "用户新译文"
 
@@ -1060,7 +1410,7 @@ def test_background_render_discards_results_when_region_changes(
     with TestClient(app) as client:
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"])
+        region = _add_region(client, image["id"], confirmed=True)
         render = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1075,7 +1425,9 @@ def test_background_render_discards_results_when_region_changes(
         release.set()
         failed = _wait_job(client, render.json()["id"])
         assert failed["status"] == "failed"
-        assert "changed during rendering" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Image rendering failed; inspect the private project log"
+        )
         final_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert final_state["revision"] == state_after_edit["revision"]
         assert final_state["status"] == state_after_edit["status"]
@@ -1103,7 +1455,7 @@ def test_provider_failure_after_edit_does_not_pollute_new_image_state(
     with TestClient(app) as client:
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
-        region = _add_region(client, image["id"])
+        region = _add_region(client, image["id"], confirmed=True)
         render = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1119,8 +1471,13 @@ def test_provider_failure_after_edit_does_not_pollute_new_image_state(
 
         failed = _wait_job(client, render.json()["id"])
         assert failed["status"] == "failed"
-        assert "stale failure was discarded" in failed["items"][0]["error"]
-        assert "obsolete provider failure" not in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Image rendering failed; inspect the private project log"
+        )
+        store = app.state.registry.get(project["id"])
+        internal = app.state.queue.get_job(store, render.json()["id"])
+        assert "stale failure was discarded" in internal.items[0].error
+        assert "obsolete provider failure" not in internal.items[0].error
         final_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert final_state["revision"] == state_after_edit["revision"]
         assert final_state["status"] == state_after_edit["status"]
@@ -1352,6 +1709,10 @@ def test_render_content_variants_and_safe_tree_export(tmp_path: Path) -> None:
         output_serialized = str(exported["items"][0]["output"])
         assert str(output_root) not in output_serialized
         assert str(project_root) not in output_serialized
+        assert set(exported["items"][0]["output"]) == {
+            "writtenArtifactCount",
+            "skippedArtifactCount",
+        }
 
         fresh_settings = Settings(
             data_dir=tmp_path / "fresh-catalog",
@@ -1451,7 +1812,9 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         )
         gated_job = _wait_job(client, gated.json()["id"])
         assert gated_job["status"] == "failed"
-        assert "review is pending" in gated_job["items"][0]["error"]
+        assert gated_job["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
         page_reviewed = _review_image(client, project["id"], image["id"])
         _set_stage_review(client, page_reviewed, "inpaint", "rejected")
@@ -1469,7 +1832,9 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         )
         rejected_job = _wait_job(client, rejected_export.json()["id"])
         assert rejected_job["status"] == "failed"
-        assert "Stage review must be accepted for inpaint" in rejected_job["items"][0]["error"]
+        assert rejected_job["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert not rejected_root.exists()
         current_after_rejection = client.get(f"/api/projects/{project['id']}/images").json()[0]
         page_reviewed = _set_stage_review(
@@ -1516,7 +1881,9 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         )
         tampered_job = _wait_job(client, tampered.json()["id"])
         assert tampered_job["status"] == "failed"
-        assert "no longer matches the generated artifact" in tampered_job["items"][0]["error"]
+        assert tampered_job["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         generated.write_bytes(reviewed_generated)
 
         typeset = client.post(
@@ -1534,8 +1901,10 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         )
         default_failed = _wait_job(client, default_export.json()["id"])
         assert default_failed["status"] == "failed"
-        assert default_export.json()["options"]["imageVariant"] == "typeset"
-        assert "review is pending" in default_failed["items"][0]["error"]
+        assert "options" not in default_export.json()
+        assert default_failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
         json_root = tmp_path / "json-only"
         json_only = client.post(
@@ -1553,9 +1922,18 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert not (json_root / "source").exists()
         assert not (json_root / "generated").exists()
         assert not list(json_root.rglob("*.png"))
+        original_regions = json.loads(
+            (json_root / "original-text/chapter/page.json").read_text("utf-8")
+        )["regions"]
+        assert original_regions[0]["detectorConfidence"] is None
+        assert original_regions[0]["ocrConfidence"] is None
+        assert original_regions[0]["trustDisposition"] == "trusted"
+        assert original_regions[0]["trustReason"] == "human-confirmed"
+        assert original_regions[0]["trustPolicyVersion"] == 1
         json_job = client.get(f"/api/jobs/{json_only.json()['id']}").json()
-        assert json_job["options"]["summaryArtifact"] == "export.json"
+        assert "options" not in json_job
         assert "project" not in json_job["items"][0]["output"]
+        assert "artifact" not in json.dumps(json_job["items"][0]["output"])
         summary_text = (json_root / "export.json").read_text("utf-8")
         assert str(project_root) not in summary_text
         assert str(json_root) not in summary_text
@@ -1714,7 +2092,9 @@ def test_verified_export_copy_never_publishes_changed_bytes(
         )
         failed = _wait_job(client, exported.json()["id"])
         assert failed["status"] == "failed"
-        assert "changed after review" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert existing.read_bytes() == reviewed_bytes
         assert not list(existing.parent.glob(".page.png.*.tmp"))
 
@@ -1781,7 +2161,9 @@ def test_reading_order_changes_invalidate_clean_output_and_review(tmp_path: Path
         )
         stale_patch_job = _wait_job(client, stale_patch_export.json()["id"])
         assert stale_patch_job["status"] == "failed"
-        assert "stale" in stale_patch_job["items"][0]["error"]
+        assert stale_patch_job["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
         reconfirmed = client.patch(
             f"/api/regions/{first['id']}",
@@ -1824,7 +2206,9 @@ def test_reading_order_changes_invalidate_clean_output_and_review(tmp_path: Path
         )
         stale_bulk_job = _wait_job(client, stale_bulk_export.json()["id"])
         assert stale_bulk_job["status"] == "failed"
-        assert "stale" in stale_bulk_job["items"][0]["error"]
+        assert stale_bulk_job["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
 
 
 def test_mixed_source_extensions_receive_distinct_render_and_export_stems(tmp_path: Path) -> None:
@@ -1880,6 +2264,8 @@ def test_mixed_source_extensions_receive_distinct_render_and_export_stems(tmp_pa
         )
         assert first_json["image"]["id"] == first["id"]
         assert second_json["image"]["id"] == second["id"]
+        assert first_json["regions"][0]["trustDisposition"] == "trusted"
+        assert first_json["regions"][0]["trustPolicyVersion"] == 1
         assert (output_root / "translated/chapter/page.png").is_file()
         assert (output_root / "translated/chapter/page-2.png").is_file()
 
@@ -1907,7 +2293,9 @@ def test_export_rejects_another_project_bundle_without_writing(tmp_path: Path) -
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert "different portable project" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert (second_root / "project/project.json").read_bytes() == manifest_before
         with sqlite3.connect(second_root / "project/project.sqlite3") as database:
             assert database.execute("SELECT id FROM projects").fetchone()[0] == second["id"]
@@ -1942,7 +2330,9 @@ def test_export_rejects_symlinked_project_bundle_target(tmp_path: Path) -> None:
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert "symlink" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert list(outside.iterdir()) == []
 
 
@@ -1969,7 +2359,9 @@ def test_generated_and_export_symlinks_cannot_overwrite_immutable_source(tmp_pat
         )
         failed_render = _wait_job(client, render.json()["id"])
         assert failed_render["status"] == "failed"
-        assert "symlink" in failed_render["items"][0]["error"]
+        assert failed_render["items"][0]["error"] == (
+            "Image rendering failed; inspect the private project log"
+        )
         assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
 
         generated_target.unlink()
@@ -1991,7 +2383,9 @@ def test_generated_and_export_symlinks_cannot_overwrite_immutable_source(tmp_pat
         )
         failed_export = _wait_job(client, exported.json()["id"])
         assert failed_export["status"] == "failed"
-        assert "symlink" in failed_export["items"][0]["error"]
+        assert failed_export["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
 
 
@@ -2048,7 +2442,9 @@ def test_export_never_overwrites_a_trusted_local_original(tmp_path: Path) -> Non
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert "original imported file" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert collision.read_bytes() == collision_bytes
         assert not (originals / "masks/a.png").exists()
 
@@ -2243,7 +2639,9 @@ def test_export_bundle_never_overwrites_an_original_with_an_arbitrary_extension(
         )
         failed = _wait_job(client, queued.json()["id"])
         assert failed["status"] == JobStatus.FAILED.value
-        assert "original imported file" in failed["items"][0]["error"]
+        assert failed["items"][0]["error"] == (
+            "Export failed; inspect the private project log"
+        )
         assert disguised_original.read_bytes() == disguised_bytes
         assert not (originals / "original-text/page.json").exists()
 
@@ -2266,7 +2664,10 @@ def test_export_reports_every_missing_typeset_page_as_failure(tmp_path: Path) ->
         assert failed["completed"] == 0
         assert len(failed["items"]) == 2
         assert all(item["status"] == "failed" for item in failed["items"])
-        assert all("not exported" in item["error"] for item in failed["items"])
+        assert all(
+            item["error"] == "Export failed; inspect the private project log"
+            for item in failed["items"]
+        )
         images = client.get(f"/api/projects/{project['id']}/images").json()
         assert all(image["processingErrors"] for image in images)
         assert all(image["revision"] >= 2 for image in images)
@@ -2418,6 +2819,98 @@ def test_cancelled_running_item_recovers_as_cancelled_and_can_be_retried(
     assert retried.json()["items"][0]["status"] == JobStatus.QUEUED.value
 
 
+def test_export_job_api_never_exposes_options_targets_or_internal_output(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        private_output = tmp_path / "private-export-target"
+        created = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "format": "json",
+                    "outputPath": str(private_output),
+                    "nested": {
+                        "text": "never-public-text",
+                        "regionIds": ["never-public-region"],
+                    },
+                },
+            },
+        )
+        assert created.status_code == 202, created.text
+        job_id = created.json()["id"]
+
+        responses = [
+            created,
+            client.get(f"/api/jobs/{job_id}"),
+            client.get(f"/api/jobs?projectId={project['id']}"),
+            client.post(f"/api/jobs/{job_id}/pause"),
+            client.post(f"/api/jobs/{job_id}/resume"),
+            client.post(f"/api/jobs/{job_id}/cancel"),
+            client.post(f"/api/jobs/{job_id}/retry"),
+        ]
+        for response in responses:
+            assert response.status_code in {200, 202}, response.text
+            serialized = response.text
+            assert "options" not in serialized
+            assert str(private_output) not in serialized
+            assert "never-public-text" not in serialized
+            assert "never-public-region" not in serialized
+            assert "regionIds" not in serialized
+
+
+def test_public_job_and_image_errors_never_echo_provider_content_or_paths(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    sentinel = "private OCR text /outside/private/page.png region-secret-id x=123,y=456"
+
+    def fail_preprocess(*_args, **_kwargs):
+        raise RuntimeError(sentinel)
+
+    monkeypatch.setattr(app.state.providers.preprocessing, "preprocess", fail_preprocess)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        submitted = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert submitted.status_code == 202, submitted.text
+        failed = _wait_job(client, submitted.json()["id"])
+        assert failed["status"] == "failed"
+
+        public_responses = (
+            client.get(f"/api/jobs/{failed['id']}"),
+            client.get(f"/api/jobs?projectId={project['id']}"),
+            client.get(f"/api/projects/{project['id']}/images"),
+        )
+        for response in public_responses:
+            assert response.status_code == 200, response.text
+            assert sentinel not in response.text
+            assert "/outside/private/page.png" not in response.text
+            assert "region-secret-id" not in response.text
+            assert "x=123" not in response.text
+
+        assert failed["items"][0]["error"] == (
+            "Image preprocessing failed; inspect the private project log"
+        )
+        image_state = public_responses[-1].json()[0]
+        assert image_state["processingErrors"][-1]["error"] == (
+            "Image preprocessing failed; inspect the private project log"
+        )
+        store = app.state.registry.get(project["id"])
+        internal = app.state.queue.get_job(store, failed["id"])
+        assert sentinel in internal.items[0].error
+
+
 def test_export_bundle_finalization_recovers_temp_only_and_database_only_crashes(
     tmp_path: Path,
 ) -> None:
@@ -2551,7 +3044,12 @@ def test_relative_export_output_is_canonicalized_before_worker_recovery(
             },
         ).json()
         expected_root = (project_root / "relative-output").resolve()
-        assert exported["options"]["outputPath"] == str(expected_root)
+        assert "options" not in exported
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(Job, exported["id"])
+            assert stored is not None
+            assert stored.options["outputPath"] == str(expected_root)
         changed_cwd = tmp_path / "different-working-directory"
         changed_cwd.mkdir()
         monkeypatch.chdir(changed_cwd)

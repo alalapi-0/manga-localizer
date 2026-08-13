@@ -19,6 +19,10 @@ Semantic Versioning.
   editable region boundaries plus persisted bounded brush/eraser strokes for manual mask correction.
 - Durable accept/reject review for preprocessing, inpainting, and typesetting artifacts, with
   revision history and application-restart recovery.
+- Versioned per-region detection/OCR evidence with provider/input/language provenance, separate
+  confidence values, OCR attempts retained across reruns, a stable trust disposition/reason, and
+  fail-closed legacy project migration that invalidates repair/typeset caches created under the former
+  confidence policy.
 - Private path-parameterized real-data evaluator with a non-sensitive run-configuration snapshot,
   aggregate/per-image OCR coverage, stage failures, source checksum, dimensions, mask coverage, and
   mask-outside change metrics; OCR text and model paths are omitted.
@@ -44,9 +48,18 @@ Semantic Versioning.
 - Generated preview and comparison controls, including keyboard shortcuts and cross-page state, stay
   disabled or return to the original until a real enhanced, repaired, or typeset artifact exists.
 - OCR-friendly edge enhancement is opt-in after real line-art testing showed severe false positives.
-- Generated-image export requires accepted, checksum-current inpaint and typeset results; inpaint
-  acceptance also binds the mask, upstream changes clear dependent reviews, and unreviewed generated
-  artifacts are excluded from portable bundles. JSON-only export remains available without image review.
+- Generated-image export requires accepted, checksum-current inpaint and, when applicable, typeset
+  results; inpaint acceptance also binds the mask, upstream changes clear dependent reviews, and
+  unreviewed generated artifacts are excluded from portable bundles. JSON-only export remains available
+  without image review.
+- Automatic detection/OCR proposals remain reviewable regardless of confidence. Only explicit human
+  trust can authorize translation/context or the default safe repair/typesetting path; relevant source,
+  geometry, type, direction, confidence, or provenance changes revoke that authorization.
+- Detection reruns retain prior proposals, public job stage outputs report operational/aggregate fields
+  without OCR text, region IDs, internal options, or filesystem paths, and native Tab navigation is no
+  longer captured for region cycling.
+- Preprocessing changes revoke trust that depended on the preprocessed variant, and safe typesetting
+  never reuses a plate generated under the `recognized` or `all` repair policy.
 
 ### Verification
 

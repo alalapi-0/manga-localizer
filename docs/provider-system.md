@@ -61,6 +61,14 @@ The Tesseract adapter invokes the installed CLI directly, supports `jpn` and `jp
 horizontal/vertical modes when direction is automatic. MangaOCR and PaddleOCR recognition adapters are
 not included yet; their larger dependencies cannot stop the baseline editor from starting.
 
+Recognition records every attempted input, its provider/direction/confidence, the selected result, and
+the effective OCR language as evidence. Attempts accumulate across OCR reruns; `selectedIndex` points
+into that cumulative history. `inputVariant` is either `original` or `preprocessed`. It identifies the
+kind of input rather than a reproducible artifact generation, so replacing preprocessing output or its
+provider/settings revokes trust for evidence that used `preprocessed`. Provider completion and
+confidence never grant trust: all automatic proposals remain pending until a human confirms or ignores
+them, and relevant OCR inputs changing revoke prior trust.
+
 ## Translation provider
 
 ```python
@@ -73,6 +81,10 @@ get_capabilities()
 Manual preserves the current reviewed translation without automatic mutation. Mock is deterministic.
 Dictionary is a local non-LLM exact/glossary translator. OpenAI-compatible sends the current text plus
 bounded preceding/following regions by reading order on the same page to a user-configured endpoint.
+Both targets and context must carry explicit current human trust; pending and ignored regions are
+excluded. A generated translation preserves the OCR trust decision but clears the separate
+current-content confirmation when it changes the translated text, so the result must be reviewed and
+reconfirmed before page review.
 Provider errors are normalized without echoing request headers, remote response bodies, or credentials.
 
 The compatibility adapter uses the widely implemented Chat Completions contract: bearer authentication,
@@ -101,10 +113,12 @@ polygon so the visible edited box becomes the manual boundary. The UI overlays t
 mask and stores bounded add/erase brush strokes for one selected region; the composed mask is the input
 to the inpainting provider.
 
-The `safe` repair policy is the default. It accepts confirmed regions, manual regions with source text,
-and detector-created source text above the configured confidence threshold. `recognized` accepts every
-non-empty source region; `all` is an explicit high-risk override. Skipped/repaired counts and the actual
-provider are recorded in each job result.
+The `safe` repair policy is the default. It accepts only regions with a current-policy `trusted`
+disposition; confidence is evidence, not authorization. `recognized` accepts every non-empty source
+region and `all` is an explicit high-risk override. Skipped/repaired counts and aggregate provider/trust
+evidence are recorded without OCR text or region IDs. Typesetting may reuse an existing inpainted plate
+only when it was generated under the same repair policy; a legacy, missing, `recognized`, or `all`
+policy is never reused as a `safe` plate.
 
 Provider completion is not visual approval. Preprocessed, inpainted, and typeset artifacts have
 separate persisted accept/reject records. Generated-image export requires accepted checksums for the

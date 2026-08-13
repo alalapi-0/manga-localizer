@@ -64,6 +64,7 @@ from manga_localizer.services.projects import (
     RevisionConflict,
     add_revision,
     public_root,
+    region_payload,
     settings_with_defaults,
 )
 from manga_localizer.services.regions import (
@@ -73,6 +74,15 @@ from manga_localizer.services.regions import (
     delete_region,
     list_regions,
     update_region,
+)
+from manga_localizer.services.trust import (
+    invalidate_trust,
+    is_region_trusted,
+    recognition_has_detection_evidence,
+    recognition_has_ocr_evidence,
+    recognition_payload,
+    recognition_uses_input_variant,
+    region_disposition,
 )
 
 
@@ -131,6 +141,39 @@ def _settings_invalidation(before: dict[str, Any], after: dict[str, Any]) -> set
     return stages
 
 
+_PUBLIC_STAGE_ERROR_MESSAGES = {
+    "preprocess": "Image preprocessing failed; inspect the private project log",
+    "detect": "Text detection failed; inspect the private project log",
+    "ocr": "OCR failed; inspect the private project log",
+    "translate": "Translation failed; inspect the private project log",
+    "render": "Image rendering failed; inspect the private project log",
+    "inpaint": "Image rendering failed; inspect the private project log",
+    "typeset": "Image rendering failed; inspect the private project log",
+    "export": "Export failed; inspect the private project log",
+}
+
+
+def _public_stage_error(stage: object) -> str:
+    return _PUBLIC_STAGE_ERROR_MESSAGES.get(
+        str(stage),
+        "Processing failed; inspect the private project log",
+    )
+
+
+def _public_processing_errors(errors: object) -> list[dict[str, str]]:
+    if not isinstance(errors, list):
+        return []
+    projected: list[dict[str, str]] = []
+    for recorded in errors:
+        if not isinstance(recorded, dict):
+            continue
+        stage = str(recorded.get("stage", "processing"))
+        if stage not in _PUBLIC_STAGE_ERROR_MESSAGES:
+            stage = "processing"
+        projected.append({"stage": stage, "error": _public_stage_error(stage)})
+    return projected
+
+
 def _image_dict(image: ImageAsset) -> dict[str, Any]:
     pipeline_status = {
         key: image.status.get(key, "pending")
@@ -147,7 +190,7 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
     pipeline_status["reviewState"] = image.status.get("reviewState", "pending")
     pipeline_status["reviewedAt"] = image.status.get("reviewedAt") or ""
     regions = image.__dict__.get("regions", [])
-    processing_errors = redact(list(image.processing_errors or []))
+    processing_errors = _public_processing_errors(image.processing_errors)
     return {
         "id": image.id,
         "projectId": image.project_id,
@@ -161,6 +204,11 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "stageReviews": stage_reviews(image),
         "regionCount": len(regions),
         "confirmedCount": sum(region.confirmed for region in regions),
+        "trustedCount": sum(is_region_trusted(region) for region in regions),
+        "trustReviewCount": sum(
+            not region.ignored and region_disposition(region) == "review"
+            for region in regions
+        ),
         "ignoredCount": sum(region.ignored for region in regions),
         "processingErrors": processing_errors,
         "error": processing_errors[-1]["error"] if processing_errors else None,
@@ -179,33 +227,85 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
 
 
 def _region_dict(region: TextRegion) -> dict[str, Any]:
-    return {
-        "id": region.id,
-        "imageId": region.image_id,
-        "x": region.x,
-        "y": region.y,
-        "width": region.width,
-        "height": region.height,
-        "rotation": region.rotation,
-        "sourceText": region.source_text,
-        "translationText": region.translation_text,
-        "type": region.region_type,
-        "direction": region.direction,
-        "order": region.reading_order,
-        "confidence": region.confidence,
-        "ignored": region.ignored,
-        "confirmed": region.confirmed,
-        "style": region.style,
-        "repair": region.repair,
-        "ocrProvider": region.ocr_provider,
-        "translationProvider": region.translation_provider,
-        "revision": region.revision,
+    return region_payload(region) | {
         "createdAt": region.created_at,
         "updatedAt": region.updated_at,
     }
 
 
+_PUBLIC_JOB_OUTPUT_FIELDS = {
+    "preprocess": {"provider", "profile", "originalSize", "processedSize", "scale"},
+    "detect": {
+        "provider",
+        "inputVariant",
+        "policyVersion",
+        "count",
+        "confidenceBuckets",
+        "dispositionCounts",
+        "reasonCounts",
+    },
+    "ocr": {
+        "provider",
+        "inputVariant",
+        "policyVersion",
+        "count",
+        "attemptCount",
+        "selectedInputVariantCounts",
+        "confidenceBuckets",
+        "dispositionCounts",
+        "reasonCounts",
+    },
+    "translate": {
+        "provider",
+        "policyVersion",
+        "count",
+        "skippedUntrustedCount",
+        "dispositionCounts",
+        "reasonCounts",
+    },
+    "render": {
+        "provider",
+        "inpaintingProvider",
+        "inpaintingProviders",
+        "typesettingProvider",
+        "repairPolicy",
+        "eligibleRegionCount",
+        "skippedRegionCount",
+        "repairedRegionCount",
+        "typesetEligibleRegionCount",
+        "typesetSkippedRegionCount",
+        "overflowCount",
+    },
+}
+
+
+def _public_job_output(kind: str, output: dict[str, Any]) -> dict[str, Any]:
+    if kind == "export":
+        conflicts: list[str] = []
+
+        def collect(value: Any) -> None:
+            if isinstance(value, dict):
+                conflict = value.get("conflict")
+                if isinstance(conflict, str):
+                    conflicts.append(conflict)
+                for nested in value.values():
+                    collect(nested)
+            elif isinstance(value, list):
+                for nested in value:
+                    collect(nested)
+
+        collect(output)
+        return {
+            "writtenArtifactCount": sum(conflict != "skipped" for conflict in conflicts),
+            "skippedArtifactCount": sum(conflict == "skipped" for conflict in conflicts),
+        }
+    normalized_kind = "render" if kind in {"render", "inpaint", "typeset"} else kind
+    allowed = _PUBLIC_JOB_OUTPUT_FIELDS.get(normalized_kind, set())
+    return {key: output[key] for key in allowed if key in output}
+
+
 def _job_dict(job: Job) -> dict[str, Any]:
+    public_error = _public_stage_error(job.kind)
     return {
         "id": job.id,
         "projectId": job.project_id,
@@ -214,18 +314,19 @@ def _job_dict(job: Job) -> dict[str, Any]:
         "progress": job.progress,
         "total": job.total,
         "completed": job.completed,
-        "error": redact(job.error) if job.error else None,
-        "options": redact(without_secrets(job.options)),
+        "error": public_error if job.error else None,
         "items": [
             {
                 "id": item.id,
                 "imageId": item.image_id,
-                "regionId": item.region_id,
                 "position": item.position,
                 "status": item.status,
                 "progress": item.progress,
-                "error": redact(item.error) if item.error else None,
-                "output": redact(without_secrets(item.output)),
+                "error": public_error if item.error else None,
+                "output": _public_job_output(
+                    job.kind,
+                    redact(without_secrets(item.output)),
+                ),
             }
             for item in job.items
         ],
@@ -440,6 +541,11 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             if body.settings is not None:
                 previous_settings = dict(project.settings)
                 project.settings = settings_with_defaults(body.settings, base=project.settings)
+                changed_settings = {
+                    key
+                    for key in previous_settings.keys() | project.settings.keys()
+                    if previous_settings.get(key) != project.settings.get(key)
+                }
                 invalidated_stages = _settings_invalidation(
                     previous_settings,
                     project.settings,
@@ -451,6 +557,44 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                         ).all()
                     )
                     for image in images:
+                        if changed_settings & {
+                            "preprocessorProvider",
+                            "preprocessing",
+                            "detectorProvider",
+                            "ocrProvider",
+                            "sourceLanguage",
+                        }:
+                            for region in image.regions:
+                                if region.ignored:
+                                    continue
+                                evidence = recognition_payload(region)
+                                detection_changed = (
+                                    "detectorProvider" in changed_settings
+                                    and recognition_has_detection_evidence(evidence)
+                                )
+                                ocr_changed = bool(
+                                    changed_settings & {"ocrProvider", "sourceLanguage"}
+                                    and recognition_has_ocr_evidence(evidence)
+                                )
+                                preprocessing_changed = bool(
+                                    changed_settings
+                                    & {"preprocessorProvider", "preprocessing"}
+                                    and recognition_uses_input_variant(
+                                        evidence,
+                                        "preprocessed",
+                                    )
+                                )
+                                if not (
+                                    detection_changed
+                                    or ocr_changed
+                                    or preprocessing_changed
+                                ):
+                                    continue
+                                if not (is_region_trusted(region) or region.confirmed):
+                                    continue
+                                region.recognition = invalidate_trust(evidence)
+                                region.confirmed = False
+                                region.revision += 1
                         invalidate_image_pipeline(store, image, invalidated_stages)
                         image.revision += 1
             add_revision(

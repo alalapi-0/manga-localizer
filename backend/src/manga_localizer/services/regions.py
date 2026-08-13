@@ -14,6 +14,15 @@ from manga_localizer.services.projects import (
     add_revision,
     region_payload,
 )
+from manga_localizer.services.trust import (
+    invalidate_trust,
+    is_region_trusted,
+    manual_recognition,
+    recognition_payload,
+    with_human_confirmation,
+    with_human_ignore,
+    with_human_unignore,
+)
 
 
 class RegionNotFound(ProjectError):
@@ -38,11 +47,15 @@ def _validate_repair_bounds(image: ImageAsset, repair: dict[str, Any]) -> None:
 def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[str]:
     keys = set(values)
     stages = {"export"}
+    if "recognition" in keys:
+        # Any trust promotion, withdrawal, ignore, or evidence invalidation changes
+        # which regions may enter translation and default safe image processing.
+        stages.update(("translation", "inpaint", "typeset"))
     if keys & {"source_text"}:
         stages.update(("translation", "inpaint", "typeset"))
     if keys & {"confidence", "confirmed"}:
-        # Safe repair eligibility depends on automatic OCR confidence and on
-        # explicit confirmation. Never reuse a mask produced under old trust data.
+        # Confidence is trust evidence and confirmation can promote safe repair.
+        # Never reuse a mask produced under an older trust decision.
         stages.update(("inpaint", "typeset"))
     if keys & {
         "translation_text",
@@ -127,12 +140,16 @@ def create_region(store: ProjectStore, image_id: str, values: dict[str, Any]) ->
             confirmed=values.get("confirmed", False),
             style=values.get("style", {}),
             repair={**DEFAULT_REPAIR_SETTINGS, **repair},
+            recognition=manual_recognition(
+                confirmed=values.get("confirmed", False),
+                ignored=values.get("ignored", False),
+            ),
             ocr_provider="manual" if values.get("source_text") else None,
             translation_provider="manual" if values.get("translation_text") else None,
             revision=1,
         )
         session.add(region)
-        stages = {"inpaint", "typeset", "export"}
+        stages = {"translation", "inpaint", "typeset", "export"}
         if not region.ignored and not region.source_text:
             stages.add("ocr")
         if not region.ignored and not region.translation_text:
@@ -178,12 +195,15 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
         _validate_bounds(image, proposed)
         project = store.project(session)
         before = region_payload(region)
-        explicit_reconfirmation = values.get("confirmed") is True and not region.confirmed
+        previous_recognition = recognition_payload(region)
+        explicit_trust_confirmation = (
+            values.get("confirmed") is True and not is_region_trusted(region)
+        )
         if values.get("ignored") is True:
-            if explicit_reconfirmation:
+            if values.get("confirmed") is True:
                 raise ProjectError("A region cannot be both ignored and confirmed")
             values["confirmed"] = False
-        elif explicit_reconfirmation and values.get("ignored", region.ignored):
+        elif values.get("confirmed") is True and values.get("ignored", region.ignored):
             raise ProjectError("An ignored region cannot be confirmed")
         mapping = {
             "type": "region_type",
@@ -213,9 +233,39 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
         if (
             changed_values.keys() & confirmation_stale_keys
             and region.confirmed
-            and not explicit_reconfirmation
+            and not explicit_trust_confirmation
         ):
             changed_values["confirmed"] = False
+        trust_input_keys = {
+            "x",
+            "y",
+            "width",
+            "height",
+            "rotation",
+            "source_text",
+            "type",
+            "direction",
+            "confidence",
+        }
+        prior_repair = region.repair or {}
+        next_repair = changed_values.get("repair", prior_repair)
+        recognition_repair_keys = {
+            "detectedTextCandidate",
+            "detectorGenerated",
+            "ocrAttemptCount",
+            "ocrInputVariant",
+        }
+        repair_changes_recognition = "repair" in changed_values and any(
+            prior_repair.get(key) != next_repair.get(key) for key in recognition_repair_keys
+        )
+        if changed_values.get("ignored") is True:
+            changed_values["recognition"] = with_human_ignore(previous_recognition)
+        elif explicit_trust_confirmation:
+            changed_values["recognition"] = with_human_confirmation(previous_recognition)
+        elif "ignored" in changed_values:
+            changed_values["recognition"] = with_human_unignore(previous_recognition)
+        elif (changed_values.keys() & trust_input_keys) or repair_changes_recognition:
+            changed_values["recognition"] = invalidate_trust(previous_recognition)
         geometry_keys = {"x", "y", "width", "height", "rotation"}
         if geometry_keys & changed_values.keys():
             repair = dict(changed_values.get("repair", region.repair or {}))
@@ -275,7 +325,11 @@ def delete_region(
         project = store.project(session)
         image = session.get(ImageAsset, region.image_id)
         assert image is not None
-        invalidate_image_pipeline(store, image, {"inpaint", "typeset", "export"})
+        invalidate_image_pipeline(
+            store,
+            image,
+            {"translation", "inpaint", "typeset", "export"},
+        )
         reset_image_review(image)
         image.revision += 1
         before = region_payload(region)

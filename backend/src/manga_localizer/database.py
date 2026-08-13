@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     create_engine,
+    inspect,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, sessionmaker
@@ -41,7 +42,7 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(255))
     root_path: Mapped[str] = mapped_column(Text)
     input_root: Mapped[str | None] = mapped_column(Text, nullable=True)
-    schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    schema_version: Mapped[int] = mapped_column(Integer, default=2)
     revision: Mapped[int] = mapped_column(Integer, default=0)
     settings: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -139,6 +140,7 @@ class TextRegion(Base):
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     style: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     repair: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    recognition: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     ocr_provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
     translation_provider: Mapped[str | None] = mapped_column(String(80), nullable=True)
     revision: Mapped[int] = mapped_column(Integer, default=0)
@@ -229,6 +231,19 @@ def create_project_engine(database_path: Path) -> Engine:
         connection.exec_driver_sql("PRAGMA foreign_keys=ON")
         connection.exec_driver_sql("PRAGMA journal_mode=WAL")
     Base.metadata.create_all(engine)
+    # ``create_all`` intentionally does not alter an existing portable SQLite
+    # project. Keep the migration small and idempotent so old projects reopen
+    # without requiring a separate migration tool or destructive rebuild.
+    columns = {column["name"] for column in inspect(engine).get_columns("text_regions")}
+    if "recognition" not in columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "ALTER TABLE text_regions ADD COLUMN recognition JSON NOT NULL DEFAULT '{}'"
+            )
+    # Do not normalize rows here. ``ProjectRegistry.open`` needs to observe an
+    # empty or malformed payload so it can fail closed and invalidate derived
+    # artifacts. Eager SQL backfills used to hide stale schema-2 rows by making
+    # them look current before the project-level migration ran.
     return engine
 
 

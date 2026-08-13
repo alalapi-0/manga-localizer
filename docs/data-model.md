@@ -40,8 +40,27 @@ common path, notably for selections spanning Windows drives.
 ## Text region
 
 Stores region/image IDs, a rotatable rectangular bounding box, direction, reading order, source and
-translated text, OCR confidence, text type, ignored/confirmed flags, provider provenance, typography,
-mask settings, and timestamps. Region numbers shown in the UI derive from editable reading order.
+translated text, compatibility confidence, text type, ignored/confirmed flags, provider provenance,
+typography, mask settings, timestamps, and a versioned `recognition` object. Recognition v1 contains
+separate detector evidence, OCR evidence and attempts/selected input/language, plus trust policy version,
+disposition (`review`, `trusted`, or `ignored`), and a stable reason code. The API projects the separate
+detector/OCR confidence values and trust state as read-only fields. Automatic evidence never grants
+trust; explicit confirmation does. Unknown policy versions fail closed to review while readable
+detection/OCR evidence remains intact. OCR attempts accumulate across reruns and the selected index is
+relative to that cumulative history. Preprocessed evidence is a variant label rather than an immutable
+artifact identity, so changing preprocessing output, provider, or settings revokes trust that depended
+on it.
+
+Opening a legacy SQLite project idempotently adds/backfills the recognition column and advances project
+schema version to 2. A legacy explicit confirmation maps to trusted; ambiguous legacy rows map to
+review. The migration also invalidates old translation/inpaint/typeset/export state and removes cached
+repair/typeset artifacts created under the former confidence policy. Source, geometry, type, direction,
+confidence, provider/language, or recognition provenance changes invalidate trust, while translation,
+typography, and ordinary mask edits retain it.
+Translation can retain OCR trust while clearing the separate current-content confirmation flag; page
+review requires every active region to be both trusted and confirmed after its latest content edit.
+
+Region numbers shown in the UI derive from editable reading order.
 `repair.maskEdits` stores a bounded versioned sequence of add/erase strokes, each with a radius and
 canonical image-coordinate points. Arbitrary polygon regions are not persisted by the MVP schema.
 
@@ -63,6 +82,15 @@ to one. Item-level failures do not discard successes. Pause and cancel take effe
 rather than interrupting image processing already running in a worker thread. On restart, interrupted
 running work becomes resumable; a running item whose parent was already cancelled becomes cancelled and
 is available to explicit retry.
+
+Public job stage outputs expose only an explicit operational/aggregate projection: provider and
+size/count metrics, confidence buckets, trust dispositions, and stable reason counts rather than OCR
+text, coordinates, region identifiers, internal options, or filesystem paths. Public error messages are
+stage-specific but fixed; detailed errors remain private project state. Operational job/item/image IDs
+remain in the response so the local workbench can control and label queued work. The authoritative
+database and portable project bundle retain the full job state needed for recovery. Text JSON exports are
+intentionally user content and additionally include detector/OCR confidence and trust metadata; treat
+them as private project data.
 
 Export jobs persist `bundleFinalized=false` when created and do not become terminally completed until the
 portable bundle is atomically finalized. Job-scoped owner markers distinguish recoverable partial output

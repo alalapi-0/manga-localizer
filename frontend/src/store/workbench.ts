@@ -30,6 +30,17 @@ import {
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
+const TRUST_POLICY_VERSION = 1;
+const TRUSTED_REASON_PAIRS = new Set(['human-confirmed', 'legacy-confirmed']);
+const REVIEW_REASON_PAIRS = new Set([
+  'automatic-ocr-complete',
+  'automatic-proposal',
+  'legacy-unverified',
+  'manual-unconfirmed',
+  'policy-version-changed',
+  'trust-input-changed',
+]);
+
 interface HistoryFrame {
   regionsByImage: Record<string, Region[]>;
 }
@@ -95,7 +106,7 @@ interface WorkbenchState {
   openProjectPath: (manifestPath: string) => Promise<boolean>;
   selectProject: (projectId: string, forceReload?: boolean) => Promise<boolean>;
   importFiles: (files: File[]) => Promise<boolean>;
-  loadRegions: (imageId: string, force?: boolean) => Promise<void>;
+  loadRegions: (imageId: string, force?: boolean) => Promise<boolean>;
   reloadActiveImage: () => Promise<void>;
   selectImage: (imageId: string) => Promise<boolean>;
   navigateImage: (direction: -1 | 1) => Promise<boolean>;
@@ -267,6 +278,13 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     regionCount: Number(image.regionCount ?? 0),
     confirmedCount: Number(image.confirmedCount ?? 0),
     ignoredCount: Number(image.ignoredCount ?? 0),
+    trustedCount: Number(image.trustedCount ?? image.confirmedCount ?? 0),
+    trustReviewCount: Number(
+      image.trustReviewCount
+        ?? Math.max(0, Number(image.regionCount ?? 0)
+          - Number(image.confirmedCount ?? 0)
+          - Number(image.ignoredCount ?? 0)),
+    ),
     revision: Number(image.revision ?? 0),
     stageReviews: image.stageReviews && typeof image.stageReviews === 'object'
       ? image.stageReviews
@@ -327,7 +345,27 @@ function hydrateRegion(region: Region): Region {
   const repairMethod = String(rawRepair.method ?? DEFAULT_REPAIR_SETTINGS.method)
     .toLowerCase()
     .replaceAll('-', '_');
-  const confirmed = Boolean(region.confirmed);
+  const ignored = Boolean(region.ignored);
+  const confirmed = ignored ? false : Boolean(region.confirmed);
+  const rawDisposition = region.trustDisposition;
+  const rawReason = region.trustReason;
+  const rawPolicyVersion = Number(region.trustPolicyVersion);
+  const hasCurrentPolicy = Number.isInteger(rawPolicyVersion)
+    && rawPolicyVersion === TRUST_POLICY_VERSION;
+  const trustedPairIsValid = rawDisposition === 'trusted'
+    && TRUSTED_REASON_PAIRS.has(rawReason)
+    && hasCurrentPolicy;
+  const reviewPairIsValid = rawDisposition === 'review'
+    && REVIEW_REASON_PAIRS.has(rawReason)
+    && hasCurrentPolicy;
+  const disposition = ignored ? 'ignored' : trustedPairIsValid ? 'trusted' : 'review';
+  const trustReason = ignored
+    ? 'human-ignored'
+    : trustedPairIsValid || reviewPairIsValid
+      ? rawReason
+      : rawDisposition === undefined && !rawReason && region.trustPolicyVersion === undefined
+        ? 'legacy-unverified'
+        : 'policy-version-changed';
   return {
     ...region,
     x: Number(region.x ?? 0),
@@ -343,7 +381,19 @@ function hydrateRegion(region: Region): Region {
     confidence: region.confidence === null || region.confidence === undefined
       ? null
       : Number(region.confidence),
-    ignored: confirmed ? false : Boolean(region.ignored),
+    detectorConfidence: region.detectorConfidence === null || region.detectorConfidence === undefined
+      ? null
+      : Number(region.detectorConfidence),
+    ocrConfidence: region.ocrConfidence === null || region.ocrConfidence === undefined
+      ? null
+      : Number(region.ocrConfidence),
+    trustDisposition: disposition,
+    trustReason,
+    trustPolicyVersion: TRUST_POLICY_VERSION,
+    recognition: region.recognition && typeof region.recognition === 'object'
+      ? region.recognition
+      : {},
+    ignored,
     confirmed,
     style: { ...DEFAULT_REGION_STYLE, ...(region.style ?? {}) },
     repair: {
@@ -382,6 +432,46 @@ function hasSubstantiveRegionChange(before: Region, after: Region): boolean {
     || JSON.stringify(before.repair) !== JSON.stringify(after.repair);
 }
 
+function hasTrustInputChange(before: Region, after: Region): boolean {
+  const keys: Array<keyof Region> = [
+    'x',
+    'y',
+    'width',
+    'height',
+    'rotation',
+    'sourceText',
+    'type',
+    'direction',
+    'confidence',
+  ];
+  return keys.some((key) => before[key] !== after[key]);
+}
+
+function pendingTrustCount(
+  state: Pick<WorkbenchState, 'images' | 'regionsByImage'>,
+  imageIds: string[],
+  regionIds?: string[],
+): number {
+  const selectedRegions = regionIds?.length ? new Set(regionIds.map(resolvedRegionId)) : null;
+  if (selectedRegions) {
+    const loadedRegions = imageIds.flatMap((imageId) => state.regionsByImage[imageId] ?? []);
+    return [...selectedRegions].filter((regionId) => {
+      const region = loadedRegions.find((entry) => entry.id === regionId);
+      return !region || (!region.ignored && region.trustDisposition !== 'trusted');
+    }).length;
+  }
+  return imageIds.reduce((total, imageId) => {
+    const image = state.images.find((entry) => entry.id === imageId);
+    const serverPending = Math.max(0, Number(image?.trustReviewCount ?? 0));
+    const loadedPending = (state.regionsByImage[imageId] ?? []).filter(
+      (region) => !region.ignored && region.trustDisposition !== 'trusted',
+    ).length;
+    // A just-completed OCR job can update the page aggregate before the region
+    // refresh lands. Fail closed against whichever authoritative view is newer.
+    return total + Math.max(serverPending, loadedPending);
+  }, 0);
+}
+
 function repairWithoutMaskPolygon(repair: Region['repair']): Region['repair'] {
   const normalized = { ...repair };
   delete normalized.maskPolygon;
@@ -402,6 +492,12 @@ function updateImageCounts(
           regionCount: regions.length,
           confirmedCount: regions.filter((region) => region.confirmed).length,
           ignoredCount: regions.filter((region) => region.ignored).length,
+          trustedCount: regions.filter((region) =>
+            !region.ignored && region.trustDisposition === 'trusted'
+          ).length,
+          trustReviewCount: regions.filter((region) =>
+            !region.ignored && region.trustDisposition !== 'trusted'
+          ).length,
           status: resetReview
             ? { ...image.status, reviewState: 'pending', reviewedAt: null }
             : image.status,
@@ -656,10 +752,17 @@ async function synchronizeImages(projectId: string): Promise<void> {
       .map((image) => hydrateImage(image, state.currentProject?.settings))
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
     return {
-      images: updateAllImageCounts(images.map((image) => {
+      images: images.map((image) => {
         const currentImage = state.images.find((entry) => entry.id === image.id);
-        return currentImage && currentImage.revision > image.revision ? currentImage : image;
-      }), state.regionsByImage),
+        if (currentImage && currentImage.revision > image.revision) return currentImage;
+        const hasPendingEdit = state.pendingRegionMutations.some(
+          (mutation) => mutation.imageId === image.id,
+        );
+        const localRegions = state.regionsByImage[image.id];
+        return hasPendingEdit && localRegions
+          ? updateImageCounts([image], image.id, localRegions, true)[0] ?? image
+          : image;
+      }),
     };
   });
 }
@@ -1070,7 +1173,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   },
 
   loadRegions: async (imageId, force = false) => {
-    if (!force && get().regionsByImage[imageId]) return;
+    if (!force && get().regionsByImage[imageId]) return true;
     const requestToken = Symbol(imageId);
     const regionsAtRequest = get().regionsByImage[imageId];
     regionLoadTokens.set(imageId, requestToken);
@@ -1080,6 +1183,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }));
     try {
       const regions = (await api.listRegions(imageId)).map(hydrateRegion).sort((a, b) => a.order - b.order);
+      let applied = false;
       set((state) => {
         if (regionLoadTokens.get(imageId) !== requestToken) return {};
         const localStateChanged = state.regionsByImage[imageId] !== regionsAtRequest;
@@ -1096,6 +1200,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           delete serverRegionRevisions[previous.id];
         }
         for (const region of regions) serverRegionRevisions[region.id] = region.revision;
+        applied = true;
         return {
           regionsByImage: { ...state.regionsByImage, [imageId]: regions },
           serverRegionRevisions,
@@ -1103,12 +1208,14 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           images: updateImageCounts(state.images, imageId, regions),
         };
       });
+      return applied;
     } catch (error) {
-      if (regionLoadTokens.get(imageId) !== requestToken) return;
+      if (regionLoadTokens.get(imageId) !== requestToken) return false;
       set((state) => ({
         regionsLoading: { ...state.regionsLoading, [imageId]: false },
         globalError: errorMessage(error),
       }));
+      return false;
     } finally {
       if (regionLoadTokens.get(imageId) === requestToken) {
         regionLoadTokens.delete(imageId);
@@ -1197,6 +1304,12 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       direction: 'auto',
       order: current.reduce((max, entry) => Math.max(max, entry.order), 0) + 1,
       confidence: null,
+      detectorConfidence: null,
+      ocrConfidence: null,
+      trustDisposition: 'review',
+      trustReason: 'manual-unconfirmed',
+      trustPolicyVersion: 1,
+      recognition: {},
       ignored: false,
       confirmed: false,
       style: { ...DEFAULT_REGION_STYLE },
@@ -1247,6 +1360,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     if (original.confirmed && hasSubstantiveRegionChange(original, updated)) {
       updated = { ...updated, confirmed: false };
     }
+    if (exclusivePatch.ignored === true) {
+      updated = { ...updated, trustDisposition: 'ignored', trustReason: 'human-ignored' };
+    } else if (exclusivePatch.ignored === false && original.trustDisposition === 'ignored') {
+      updated = { ...updated, trustDisposition: 'review', trustReason: 'trust-input-changed' };
+    } else if (original.trustDisposition === 'trusted' && hasTrustInputChange(original, updated)) {
+      updated = { ...updated, trustDisposition: 'review', trustReason: 'trust-input-changed' };
+    }
     const next = current.map((region) => (region.id === regionId ? updated : region));
     set((currentState) => ({
       regionsByImage: { ...currentState.regionsByImage, [imageId]: next },
@@ -1277,7 +1397,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       get().updateRegion(regionId, { confirmed: false });
       return true;
     }
-    if (region.confirmed) return true;
+    if (region.confirmed && !region.ignored && region.trustDisposition === 'trusted') return true;
 
     // Unignoring is itself substantive and must reach the server before the sparse reconfirmation.
     if (region.ignored) get().updateRegion(regionId, { ignored: false });
@@ -1295,7 +1415,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       });
       return false;
     }
-    if (refreshed.confirmed) return true;
+    if (
+      refreshed.confirmed
+      && !refreshed.ignored
+      && refreshed.trustDisposition === 'trusted'
+    ) return true;
 
     set((currentState) => ({
       pendingRegionMutations: replaceRegionMutation(currentState.pendingRegionMutations, {
@@ -1310,8 +1434,14 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }));
     const saved = await get().flushAutosave();
     if (!saved) return false;
+    const confirmedRegion = (get().regionsByImage[imageId] ?? []).find(
+      (entry) => entry.id === savedId,
+    );
     return Boolean(
-      (get().regionsByImage[imageId] ?? []).find((entry) => entry.id === savedId)?.confirmed,
+      confirmedRegion
+      && confirmedRegion.confirmed
+      && !confirmedRegion.ignored
+      && confirmedRegion.trustDisposition === 'trusted',
     );
   },
 
@@ -1383,7 +1513,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       confidence: confidenceValues.length
         ? confidenceValues.reduce((sum, value) => sum + value, 0) / confidenceValues.length
         : null,
-      ignored: selected.every((region) => region.ignored),
+      detectorConfidence: null,
+      ocrConfidence: null,
+      trustDisposition: 'review',
+      trustReason: 'manual-unconfirmed',
+      trustPolicyVersion: 1,
+      recognition: {},
+      ignored: false,
       confirmed: false,
       repair: repairWithoutMaskPolygon(first.repair),
       revision: 0,
@@ -1450,6 +1586,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       rotation: 0,
       sourceText: sourceA,
       translationText: translationA,
+      detectorConfidence: null,
+      ocrConfidence: null,
+      trustDisposition: 'review',
+      trustReason: 'manual-unconfirmed',
+      trustPolicyVersion: 1,
+      recognition: {},
+      ignored: false,
       confirmed: false,
       repair: repairWithoutMaskPolygon(original.repair),
       revision: 0,
@@ -1573,17 +1716,24 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const activeRegionsForReview = reviewRegions.filter(
       (region) => !region.ignored,
     );
-    const unconfirmedCount = activeRegionsForReview.filter((region) => !region.confirmed).length;
-    if (nextReviewState === 'no-text-reviewed' && activeRegionsForReview.length > 0) {
+    const loadedUnreadyCount = activeRegionsForReview.filter(
+      (region) => !region.confirmed || region.trustDisposition !== 'trusted',
+    ).length;
+    const serverPendingCount = Math.max(0, Number(image.trustReviewCount ?? 0));
+    const unreadyCount = Math.max(serverPendingCount, loadedUnreadyCount);
+    if (
+      nextReviewState === 'no-text-reviewed'
+      && (activeRegionsForReview.length > 0 || serverPendingCount > 0)
+    ) {
       set({ globalError: '当前页仍有活动文本框，不能标记为“确认无文字”。' });
+      return false;
+    }
+    if (nextReviewState === 'reviewed' && unreadyCount > 0) {
+      set({ globalError: `还有 ${unreadyCount} 个活动文本框尚未确认并信任。` });
       return false;
     }
     if (nextReviewState === 'reviewed' && activeRegionsForReview.length === 0) {
       set({ globalError: '当前页没有活动文本框，请使用“确认无文字”。' });
-      return false;
-    }
-    if (nextReviewState === 'reviewed' && unconfirmedCount > 0) {
-      set({ globalError: `还有 ${unconfirmedCount} 个活动文本框尚未确认。` });
       return false;
     }
     set({ globalError: '' });
@@ -1691,7 +1841,59 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
 
   startBatch: async (kinds, imageIds, exportOptions, concurrency = 1, regionIds) => {
     if (!get().currentProject || !imageIds.length || !kinds.length) return false;
+    const hasOcr = kinds.includes('ocr');
+    const trustGatedKinds = kinds.filter((kind) =>
+      kind === 'translate' || kind === 'inpaint' || kind === 'typeset'
+    );
+    if (hasOcr && trustGatedKinds.length) {
+      set({
+        globalError: 'OCR 与翻译、擦字修复或嵌字排版不能放在同一批次；请先完成 OCR 并人工确认文本框。',
+      });
+      return false;
+    }
+    if (trustGatedKinds.length) {
+      const pending = pendingTrustCount(get(), imageIds, regionIds);
+      if (pending > 0) {
+        set({
+          globalError: `所选范围还有 ${pending} 个 OCR 文本框待信任确认，不能开始翻译或安全图像处理。`,
+        });
+        return false;
+      }
+    }
     if (!(await get().flushAutosave())) return false;
+    if (trustGatedKinds.length) {
+      const projectAfterSave = get().currentProject;
+      if (!projectAfterSave) return false;
+      try {
+        await synchronizeImages(projectAfterSave.id);
+      } catch (error) {
+        set({
+          globalError: `无法刷新服务端信任状态，未创建下游任务：${errorMessage(error)}`,
+        });
+        return false;
+      }
+      if (regionIds?.length) {
+        const refreshed = await Promise.all(
+          imageIds.map((imageId) => get().loadRegions(imageId, true)),
+        );
+        if (refreshed.some((loaded) => !loaded)) {
+          set({ globalError: '无法刷新所选文本框的服务端信任状态，未创建下游任务。' });
+          return false;
+        }
+      }
+      const pending = regionIds?.length
+        ? pendingTrustCount(get(), imageIds, regionIds)
+        : imageIds.reduce((total, imageId) => {
+            const image = get().images.find((entry) => entry.id === imageId);
+            return total + Math.max(0, Number(image?.trustReviewCount ?? 0));
+          }, 0);
+      if (pending > 0) {
+        set({
+          globalError: `保存后所选范围有 ${pending} 个 OCR 文本框需要重新确认，未创建下游任务。`,
+        });
+        return false;
+      }
+    }
     const project = get().currentProject;
     if (!project) return false;
     set({ globalError: '' });

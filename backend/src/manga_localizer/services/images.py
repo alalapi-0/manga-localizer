@@ -29,6 +29,7 @@ from manga_localizer.services.projects import (
     RevisionConflict,
     add_revision,
 )
+from manga_localizer.services.trust import is_region_trusted
 
 SUPPORTED_FORMATS = {"JPEG", "PNG", "WEBP", "TIFF", "BMP", "GIF"}
 
@@ -200,11 +201,14 @@ def _validate_image_review_state(image: ImageAsset, review_state: str) -> None:
         return
     if not non_ignored_regions:
         raise ProjectError("Cannot mark image as reviewed without at least one non-ignored region")
-    unconfirmed_count = sum(not region.confirmed for region in non_ignored_regions)
-    if unconfirmed_count:
+    unready_count = sum(
+        not (region.confirmed and is_region_trusted(region))
+        for region in non_ignored_regions
+    )
+    if unready_count:
         raise ProjectError(
             "Cannot mark image as reviewed until every non-ignored region is confirmed "
-            f"({unconfirmed_count} unconfirmed)"
+            f"and trusted ({unready_count} not ready)"
         )
 
 

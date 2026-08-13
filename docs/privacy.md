@@ -4,10 +4,10 @@ Manga Localizer is local-first. Imported image bytes, masks, previews, OCR datab
 on the machine unless the user moves them with another tool. The application does not include telemetry.
 
 Remote translation is the only MVP feature designed to make an outbound content request. It is disabled
-until the user selects a remote provider and supplies configuration. Requests contain the current text,
-bounded preceding/following text regions by reading order on the same page, optional character names,
-and relevant glossary entries. They do not contain adjacent pages, the entire book, project paths, or
-image bytes.
+until the user selects a remote provider and supplies configuration. Requests contain only an explicitly
+trusted current text, explicitly trusted bounded preceding/following text regions by reading order on the
+same page, optional character names, and relevant glossary entries. They do not contain pending/ignored
+regions, adjacent pages, the entire book, project paths, or image bytes.
 Review the remote provider's retention policy before enabling it.
 
 Use HTTPS for non-loopback endpoints. Plain HTTP is suitable only for a trusted service bound to
@@ -24,6 +24,14 @@ frontend persistence, or normal logs. Health/error output is redacted.
 
 Public bug reports must use generated fixtures or artwork the reporter has permission to redistribute.
 Remove project manifests and logs if their filenames or translated text are sensitive.
+
+Project manifests, SQLite databases, and text JSON may contain OCR/translation text, provider IDs,
+confidence values, OCR-attempt provenance, and human trust decisions even when they contain no image
+bytes. Treat all of them as private. Public job responses omit internal options and filesystem paths;
+their stage output is an operational/aggregate projection without OCR text, coordinates, or region
+identifiers, and public errors use fixed stage messages. Operational envelope IDs remain available for
+queue control and page labels. That does not make the surrounding project or an exported portable bundle
+public-safe.
 
 The working SQLite database records cumulative exact local-import file/directory boundaries, including
 selections whose candidate files fail image validation, to guarantee that later exports cannot overwrite

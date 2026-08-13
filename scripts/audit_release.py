@@ -2,12 +2,34 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
+import stat
 import subprocess
 from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 MAX_BYTES = 10 * 1024 * 1024
+RASTER_SUFFIXES = {
+    ".bmp",
+    ".gif",
+    ".jpeg",
+    ".jpg",
+    ".png",
+    ".tif",
+    ".tiff",
+    ".webp",
+}
+ALLOWED_RASTER = {
+    PurePosixPath("docs/assets/workbench.jpg"): frozenset(
+        {
+            (
+                97_292,
+                "8e7c839df07430145d5100d80e60f9d28a60137aadc14caed7c8f980090d124d",
+            )
+        }
+    ),
+}
 PROHIBITED_SUFFIXES = {
     ".ckpt",
     ".db",
@@ -53,9 +75,14 @@ PROHIBITED_RUNTIME_PARTS = {
     "translated-text",
 }
 
-# Build path sentinels without embedding a real-looking personal path in this repository.
-PERSONAL_UNIX_PATH = re.compile(re.escape("/" + "Users" + "/") + r"[^/\s]+/")
-PERSONAL_WINDOWS_PATH = re.compile(r"[A-Za-z]:\\" + "Users" + r"\\[^\\\s]+\\")
+# Build path sentinels without embedding a real-looking personal path in this
+# repository.
+PERSONAL_PATHS = (
+    re.compile(re.escape("/" + "Users" + "/") + r"[^/\s]+/"),
+    re.compile(re.escape("/" + "home" + "/") + r"[^/\s]+/"),
+    re.compile(r"[A-Za-z]:\\" + "Users" + r"\\[^\\\s]+\\"),
+    re.compile(r"[A-Za-z]:/" + "Users" + r"/[^/\s]+/"),
+)
 SECRET_PATTERNS = {
     "private key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
     "GitHub token": re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
@@ -101,27 +128,80 @@ def candidate_files() -> list[Path]:
         check=True,
         capture_output=True,
     )
-    return [ROOT / item.decode() for item in result.stdout.split(b"\0") if item]
+    return [
+        ROOT / item.decode("utf-8", errors="surrogateescape")
+        for item in result.stdout.split(b"\0")
+        if item
+    ]
 
 
-def historical_blobs() -> list[tuple[str, PurePosixPath, int, str | None]]:
-    """Return each uniquely named historical blob without printing its contents."""
-
+def tracked_files() -> set[PurePosixPath]:
     result = subprocess.run(
-        ["git", "rev-list", "--objects", "--all"],
+        ["git", "ls-files", "-z"], cwd=ROOT, check=True, capture_output=True
+    )
+    return {
+        PurePosixPath(item.decode("utf-8", errors="surrogateescape"))
+        for item in result.stdout.split(b"\0")
+        if item
+    }
+
+
+def historical_blobs() -> list[
+    tuple[str, PurePosixPath, int, str | None, str | None, bool]
+]:
+    """Return historical blob/path pairs without following symlink targets."""
+
+    roots = set(
+        subprocess.run(
+            ["git", "rev-list", "--all"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.splitlines()
+    )
+    refs = subprocess.run(
+        ["git", "for-each-ref", "--format=%(refname)"],
         cwd=ROOT,
         check=True,
         capture_output=True,
         text=True,
-    )
-    objects: dict[str, str] = {}
-    for line in result.stdout.splitlines():
-        object_id, separator, object_path = line.partition(" ")
-        if separator and object_path:
-            objects.setdefault(object_id, object_path)
+    ).stdout.splitlines()
+    for ref in refs:
+        tree = subprocess.run(
+            ["git", "rev-parse", "--verify", f"{ref}^{{tree}}"],
+            cwd=ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if tree.returncode == 0:
+            roots.add(tree.stdout.strip())
+    entries: set[tuple[str, PurePosixPath, str]] = set()
+    for root in roots:
+        tree = subprocess.run(
+            ["git", "ls-tree", "-r", "-z", root],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+        ).stdout
+        for entry in tree.split(b"\0"):
+            if not entry:
+                continue
+            metadata, separator, raw_path = entry.partition(b"\t")
+            mode, object_type, object_id = metadata.decode("ascii").split(" ", 2)
+            if separator and object_type == "blob":
+                relative = PurePosixPath(
+                    raw_path.decode("utf-8", errors="surrogateescape")
+                )
+                entries.add((object_id, relative, mode))
 
-    blobs: list[tuple[str, PurePosixPath, int, str | None]] = []
-    for object_id, object_path in objects.items():
+    blobs: list[
+        tuple[str, PurePosixPath, int, str | None, str | None, bool]
+    ] = []
+    for object_id, relative, mode in sorted(
+        entries, key=lambda item: (str(item[1]), item[0], item[2])
+    ):
         metadata = subprocess.run(
             ["git", "cat-file", "--batch-check=%(objecttype) %(objectsize)"],
             cwd=ROOT,
@@ -134,9 +214,14 @@ def historical_blobs() -> list[tuple[str, PurePosixPath, int, str | None]]:
         if object_type != "blob":
             continue
         size = int(size_text)
-        relative = PurePosixPath(object_path)
+        is_symlink = mode == "120000"
         text: str | None = None
-        if relative.suffix.lower() in TEXT_SUFFIXES and size <= 2 * 1024 * 1024:
+        content_hash: str | None = None
+        if (
+            not is_symlink
+            and relative.suffix.lower() in TEXT_SUFFIXES
+            and size <= MAX_BYTES
+        ):
             content = subprocess.run(
                 ["git", "cat-file", "blob", object_id],
                 cwd=ROOT,
@@ -144,7 +229,28 @@ def historical_blobs() -> list[tuple[str, PurePosixPath, int, str | None]]:
                 capture_output=True,
             ).stdout
             text = content.decode("utf-8", errors="ignore")
-        blobs.append((f"history:{object_path}@{object_id[:12]}", relative, size, text))
+        elif (
+            not is_symlink
+            and relative.suffix.lower() in RASTER_SUFFIXES
+            and size <= MAX_BYTES
+        ):
+            content = subprocess.run(
+                ["git", "cat-file", "blob", object_id],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+            ).stdout
+            content_hash = hashlib.sha256(content).hexdigest()
+        blobs.append(
+            (
+                f"history:{relative}@{object_id[:12]}",
+                relative,
+                size,
+                text,
+                content_hash,
+                is_symlink,
+            )
+        )
     return blobs
 
 
@@ -153,6 +259,10 @@ def inspect_entry(
     relative: Path | PurePosixPath,
     size: int,
     text: str | None,
+    *,
+    content_hash: str | None = None,
+    is_symlink: bool = False,
+    tracked: bool = True,
 ) -> list[tuple[str, str]]:
     findings: list[tuple[str, str]] = []
     if any(part in PROHIBITED_RUNTIME_PARTS for part in relative.parts[:-1]):
@@ -163,11 +273,17 @@ def inspect_entry(
         findings.append((display_path, "prohibited filename"))
     if relative.suffix.lower() in PROHIBITED_SUFFIXES:
         findings.append((display_path, "database, model weight, or font artifact"))
+    if is_symlink:
+        findings.append((display_path, "symbolic link"))
+    if relative.suffix.lower() in RASTER_SUFFIXES:
+        allowed = ALLOWED_RASTER.get(PurePosixPath(*relative.parts))
+        if not tracked or allowed is None or (size, content_hash) not in allowed:
+            findings.append((display_path, "unexpected raster image"))
     if size > MAX_BYTES:
         findings.append((display_path, "file exceeds 10 MiB"))
     if text is None:
         return findings
-    if PERSONAL_UNIX_PATH.search(text) or PERSONAL_WINDOWS_PATH.search(text):
+    if any(pattern.search(text) for pattern in PERSONAL_PATHS):
         findings.append((display_path, "personal absolute path"))
     for label, pattern in SECRET_PATTERNS.items():
         if pattern.search(text):
@@ -177,19 +293,57 @@ def inspect_entry(
 
 def main() -> int:
     candidates = candidate_files()
+    tracked = tracked_files()
     history = historical_blobs()
     findings: list[tuple[str, str]] = []
     for path in candidates:
         relative = path.relative_to(ROOT)
-        if not path.is_file():
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            findings.append((str(relative), "candidate file is missing from working tree"))
             continue
-        size = path.stat().st_size
+        is_symlink = stat.S_ISLNK(metadata.st_mode)
+        if not is_symlink and not stat.S_ISREG(metadata.st_mode):
+            findings.append((str(relative), "non-regular file"))
+            continue
+        size = metadata.st_size
         text = None
-        if path.suffix.lower() in TEXT_SUFFIXES and size <= 2 * 1024 * 1024:
+        content_hash = None
+        if (
+            not is_symlink
+            and path.suffix.lower() in TEXT_SUFFIXES
+            and size <= MAX_BYTES
+        ):
             text = path.read_text(encoding="utf-8", errors="ignore")
-        findings.extend(inspect_entry(str(relative), relative, size, text))
-    for display_path, relative, size, text in history:
-        findings.extend(inspect_entry(display_path, relative, size, text))
+        elif (
+            not is_symlink
+            and path.suffix.lower() in RASTER_SUFFIXES
+            and size <= MAX_BYTES
+        ):
+            content_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+        findings.extend(
+            inspect_entry(
+                str(relative),
+                relative,
+                size,
+                text,
+                content_hash=content_hash,
+                is_symlink=is_symlink,
+                tracked=PurePosixPath(*relative.parts) in tracked,
+            )
+        )
+    for display_path, relative, size, text, content_hash, is_symlink in history:
+        findings.extend(
+            inspect_entry(
+                display_path,
+                relative,
+                size,
+                text,
+                content_hash=content_hash,
+                is_symlink=is_symlink,
+            )
+        )
 
     if findings:
         print("Release audit failed:")

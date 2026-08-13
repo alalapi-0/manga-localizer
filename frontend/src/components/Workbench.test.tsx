@@ -46,6 +46,7 @@ describe('desktop workbench interactions', () => {
     const user = userEvent.setup();
     const zeroText = imageFixture('image-1', {
       regionCount: 0,
+      trustReviewCount: 0,
       status: {
         ...imageFixture('image-1').status,
         ocr: 'done',
@@ -78,20 +79,35 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().images[0]?.status.reviewState).toBe('no-text-reviewed');
   });
 
-  it('only enables page review after every active region is confirmed and treats ignored-only pages as no-text', () => {
+  it('only enables page review after every active region is confirmed and trusted', () => {
     seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 2 })],
       regions: [
-        regionFixture('region-1', { confirmed: true }),
-        regionFixture('region-2', { confirmed: false }),
+        regionFixture('region-1', { confirmed: false, trustDisposition: 'trusted' }),
+        regionFixture('region-2', { confirmed: true, trustDisposition: 'review' }),
         regionFixture('region-3', { ignored: true }),
       ],
     });
     render(<App />);
 
-    expect(screen.getByText('还有 1 个活动文本框尚未确认')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '还需确认 1 个文本框' })).toBeDisabled();
+    expect(screen.getByText('还有 2 个活动文本框尚未确认并信任')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '还需确认并信任 2 个文本框' })).toBeDisabled();
 
-    act(() => useWorkbenchStore.getState().updateRegion('region-2', { confirmed: true }));
+    act(() => useWorkbenchStore.setState((state) => ({
+      images: state.images.map((image) => image.id === 'image-1'
+        ? { ...image, trustReviewCount: 0, trustedCount: 2 }
+        : image),
+      regionsByImage: {
+        ...state.regionsByImage,
+        'image-1': (state.regionsByImage['image-1'] ?? []).map((region) =>
+          region.id === 'region-2'
+            ? { ...region, trustDisposition: 'trusted', trustReason: 'human-confirmed' }
+            : region.id === 'region-1'
+              ? { ...region, confirmed: true }
+              : region
+        ),
+      },
+    })));
     expect(screen.getByRole('button', { name: '标记本页已检查' })).toBeEnabled();
 
     act(() => {
@@ -100,6 +116,20 @@ describe('desktop workbench interactions', () => {
     });
     expect(screen.getByText('本页没有活动文本框，可确认无文字')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '确认本页无文字' })).toBeEnabled();
+  });
+
+  it('keeps page review disabled when the server trust aggregate is ahead of loaded regions', () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 2 })],
+      regions: [],
+    });
+    render(<App />);
+
+    expect(screen.getByText('还有 2 个活动文本框尚未确认并信任')).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: '还需确认并信任 2 个文本框',
+    })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: '确认本页无文字' })).not.toBeInTheDocument();
   });
 
   it('edits source, translation, type, direction, order, and keeps review flags exclusive', async () => {
@@ -117,7 +147,14 @@ describe('desktop workbench interactions', () => {
       const current = useWorkbenchStore.getState().regionsByImage['image-1']?.find(
         (region) => region.id === regionId,
       ) ?? regionFixture(regionId);
-      return { ...current, ...patch, revision };
+      return {
+        ...current,
+        ...patch,
+        ...(patch.confirmed === true
+          ? { trustDisposition: 'trusted' as const, trustReason: 'human-confirmed' }
+          : {}),
+        revision,
+      };
     });
     render(<App />);
 
@@ -147,6 +184,8 @@ describe('desktop workbench interactions', () => {
       order: 7,
       confirmed: false,
       ignored: true,
+      trustDisposition: 'ignored',
+      trustReason: 'human-ignored',
     });
     const typeOptions = within(screen.getByRole('combobox', { name: '文本类型' }))
       .getAllByRole('option')
@@ -154,6 +193,99 @@ describe('desktop workbench interactions', () => {
     expect(typeOptions).toEqual(expect.arrayContaining([
       'dialogue', 'narration', 'sound_effect', 'title', 'ruby', 'background', 'unknown', 'speech',
     ]));
+  });
+
+  it('presents OCR trust separately from page review and explains the batch gate accessibly', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 1 })],
+      selectedRegionIds: ['region-1'],
+      regions: [regionFixture('region-1', {
+        confirmed: true,
+        detectorConfidence: 0.41,
+        ocrConfidence: 0.99,
+        trustDisposition: 'review',
+        trustReason: 'automatic-ocr-complete',
+      })],
+    });
+    render(<App />);
+
+    const trustStatus = screen.getByRole('region', { name: 'OCR 信任状态' });
+    expect(trustStatus).toHaveTextContent('OCR 待信任');
+    expect(trustStatus).toHaveTextContent('置信度不能代替人工确认');
+    expect(trustStatus).toHaveTextContent('检测 41% · OCR 99%');
+    expect(screen.getByRole('checkbox', { name: /确认此文本框/ })).not.toBeChecked();
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
+    await user.click(within(drawer).getByRole('checkbox', { name: /日文 OCR/ }));
+    await user.click(within(drawer).getByRole('checkbox', { name: /翻译/ }));
+    expect(within(drawer).getByRole('status')).toHaveTextContent('1 个 OCR 文本框待信任确认');
+    expect(within(drawer).getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  });
+
+  it('reconfirms a stale confirmed flag in one click and checks the switch only after trust returns', async () => {
+    const user = userEvent.setup();
+    const stale = regionFixture('region-1', {
+      confirmed: true,
+      trustDisposition: 'review',
+      trustReason: 'trust-input-changed',
+    });
+    seedWorkbench({ selectedRegionIds: ['region-1'], regions: [stale] });
+    const update = vi.spyOn(api, 'updateRegion').mockResolvedValue({
+      ...stale,
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      revision: 5,
+    });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture()
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images
+    );
+    render(<App />);
+
+    const confirm = screen.getByRole('checkbox', { name: /确认此文本框/ });
+    expect(confirm).not.toBeChecked();
+    await user.click(confirm);
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith('region-1', {
+      confirmed: true,
+      expectedRevision: 4,
+    }));
+    await waitFor(() => expect(confirm).toBeChecked());
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      confirmed: true,
+      trustDisposition: 'trusted',
+    });
+  });
+
+  it('derives batch confirmation from trust and lets ignored state take precedence', () => {
+    seedWorkbench({
+      selectedRegionIds: ['region-1', 'region-2'],
+      regions: [
+        regionFixture('region-1', { confirmed: true, trustDisposition: 'review' }),
+        regionFixture('region-2', { confirmed: true, trustDisposition: 'trusted' }),
+      ],
+    });
+    const { rerender } = render(<App />);
+
+    expect(screen.getByRole('checkbox', { name: '全部确认' })).not.toBeChecked();
+
+    act(() => useWorkbenchStore.setState((state) => ({
+      regionsByImage: {
+        ...state.regionsByImage,
+        'image-1': (state.regionsByImage['image-1'] ?? []).map((region) => ({
+          ...region,
+          trustDisposition: 'trusted',
+          ...(region.id === 'region-2' ? { ignored: true } : {}),
+        })),
+      },
+    })));
+    rerender(<App />);
+
+    expect(screen.getByRole('checkbox', { name: '全部确认' })).not.toBeChecked();
   });
 
   it('creates and deletes a real box from the canvas toolbar', async () => {
@@ -397,7 +529,9 @@ describe('desktop workbench interactions', () => {
     })));
     fireEvent.keyDown(window, { key: 'b' });
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
-    fireEvent.keyDown(window, { key: 'Tab' });
+    expect(fireEvent.keyDown(window, { key: 'Tab' })).toBe(true);
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
+    fireEvent.keyDown(window, { key: 'ArrowDown', altKey: true });
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
     fireEvent.keyDown(window, { key: 'Enter' });
     await waitFor(() => expect(

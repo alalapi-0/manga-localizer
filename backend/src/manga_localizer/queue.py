@@ -46,6 +46,18 @@ from manga_localizer.services.projects import (
     region_payload,
     safe_error,
 )
+from manga_localizer.services.trust import (
+    TRUST_POLICY_VERSION,
+    invalidate_trust,
+    is_region_trusted,
+    persist_legacy_recognition,
+    recognition_payload,
+    recognition_uses_input_variant,
+    region_trust,
+    with_detection_evidence,
+    with_human_ignore,
+    with_ocr_evidence,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -856,7 +868,6 @@ class PersistentJobQueue:
             source = image_path(store, image)
             expected_image_revision = image.revision
             target = self._preprocessed_path(store, image.relative_path)
-            relative = target.relative_to(store.root)
         try:
             provider = self.providers.preprocessor(requested_provider_name)
         except ValueError as error:
@@ -865,6 +876,10 @@ class PersistentJobQueue:
         preprocess_options = self._preprocess_options(options, project_settings)
         result = provider.preprocess(source, **preprocess_options)
         artifact = self._png_bytes(result.image)
+        try:
+            artifact_changed = not target.is_file() or target.read_bytes() != artifact
+        except OSError:
+            artifact_changed = True
         with store.session() as session:
             image = self._assert_image_unchanged(
                 session,
@@ -873,6 +888,36 @@ class PersistentJobQueue:
                 None,
                 "image preprocessing",
             )
+            project = store.project(session)
+            provenance_changed = (
+                artifact_changed
+                or image.status.get("preprocessingProvider") != provider_name
+            )
+            if provenance_changed:
+                for region in session.scalars(
+                    select(TextRegion).where(TextRegion.image_id == image_id)
+                ).all():
+                    evidence = recognition_payload(region)
+                    if (
+                        region.ignored
+                        or not recognition_uses_input_variant(evidence, "preprocessed")
+                        or not (is_region_trusted(region) or region.confirmed)
+                    ):
+                        continue
+                    before = region_payload(region)
+                    region.recognition = invalidate_trust(evidence)
+                    region.confirmed = False
+                    region.revision += 1
+                    session.flush()
+                    add_revision(
+                        session,
+                        project,
+                        entity_type="region",
+                        entity_id=region.id,
+                        operation="preprocess-revoke",
+                        before=before,
+                        after=region_payload(region),
+                    )
             atomic_write_bytes(target, artifact)
             invalidate_image_pipeline(
                 store,
@@ -893,12 +938,36 @@ class PersistentJobQueue:
         return {
             "provider": provider_name,
             "profile": preprocess_options.get("profile", "off"),
-            "artifact": relative.as_posix(),
-            "url": f"/api/images/{image_id}/content?variant=preprocessed",
             "originalSize": list(result.original_size),
             "processedSize": list(result.processed_size),
             "scale": [result.scale_x, result.scale_y],
         }
+
+    @staticmethod
+    def _confidence_buckets(values: list[float | None]) -> dict[str, int]:
+        buckets = {"missing": 0, "low": 0, "medium": 0, "high": 0}
+        for value in values:
+            if value is None:
+                buckets["missing"] += 1
+            elif value < 0.5:
+                buckets["low"] += 1
+            elif value < 0.8:
+                buckets["medium"] += 1
+            else:
+                buckets["high"] += 1
+        return buckets
+
+    @staticmethod
+    def _trust_counts(regions: list[TextRegion]) -> tuple[dict[str, int], dict[str, int]]:
+        dispositions: dict[str, int] = {}
+        reasons: dict[str, int] = {}
+        for region in regions:
+            trust = region_trust(region)
+            disposition = str(trust["disposition"])
+            reason = str(trust["reason"])
+            dispositions[disposition] = dispositions.get(disposition, 0) + 1
+            reasons[reason] = reasons.get(reason, 0) + 1
+        return dispositions, reasons
 
     @staticmethod
     def _region_versions(session, image_id: str) -> dict[str, int]:
@@ -998,7 +1067,7 @@ class PersistentJobQueue:
                     polygon=polygon,
                 )
             )
-        created_ids: list[str] = []
+        created_count = 0
         with store.session() as session:
             project = store.project(session)
             image = self._assert_image_unchanged(
@@ -1011,20 +1080,10 @@ class PersistentJobQueue:
             existing = list(
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
-            for region in existing:
-                if region.repair.get("detectorGenerated") and not region.confirmed:
-                    before = region_payload(region)
-                    session.delete(region)
-                    add_revision(
-                        session,
-                        project,
-                        entity_type="region",
-                        entity_id=region.id,
-                        operation="detect-replace",
-                        before=before,
-                        after=None,
-                    )
-            for order, detection in enumerate(detections):
+            next_reading_order = (
+                max((region.reading_order for region in existing), default=-1) + 1
+            )
+            for offset, detection in enumerate(detections):
                 region = TextRegion(
                     image_id=image_id,
                     x=detection.x,
@@ -1035,7 +1094,7 @@ class PersistentJobQueue:
                     confidence=detection.confidence,
                     direction=detection.direction,
                     region_type="unknown",
-                    reading_order=order,
+                    reading_order=next_reading_order + offset,
                     repair={
                         **DEFAULT_REPAIR_SETTINGS,
                         "detectorGenerated": True,
@@ -1046,11 +1105,18 @@ class PersistentJobQueue:
                             else {}
                         ),
                     },
+                    recognition=with_detection_evidence(
+                        None,
+                        detection.confidence,
+                        provider_name,
+                        input_variant=input_variant,
+                        language=language,
+                    ),
                     revision=1,
                 )
                 session.add(region)
                 session.flush()
-                created_ids.append(region.id)
+                created_count += 1
                 add_revision(
                     session,
                     project,
@@ -1074,12 +1140,20 @@ class PersistentJobQueue:
                 error for error in (image.processing_errors or []) if error.get("stage") != "detect"
             ]
             image.revision += 1
+            all_regions = list(
+                session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
+            )
+            disposition_counts, reason_counts = self._trust_counts(all_regions)
         return {
             "provider": provider_name,
             "inputVariant": input_variant,
-            "regionIds": created_ids,
-            "count": len(created_ids),
-            "candidates": [detection.to_dict() for detection in detections],
+            "policyVersion": TRUST_POLICY_VERSION,
+            "count": created_count,
+            "confidenceBuckets": self._confidence_buckets(
+                [detection.confidence for detection in detections]
+            ),
+            "dispositionCounts": disposition_counts,
+            "reasonCounts": reason_counts,
         }
 
     def _process_ocr(
@@ -1175,7 +1249,7 @@ class PersistentJobQueue:
                         ),
                     }
                 )
-        results: list[tuple[str, OCRRegion, int, str]] = []
+        results: list[tuple[str, OCRRegion, list[dict[str, Any]], int, str, str | None]] = []
         for target in target_snapshots:
             target_direction = str(target["direction"])
             language = self._ocr_language(target_direction, options.get("language"))
@@ -1206,7 +1280,31 @@ class PersistentJobQueue:
                     candidate[0].confidence or 0.0,
                 ),
             )
-            results.append((str(target["id"]), selected, len(candidates), selected_variant))
+            selected_index = next(
+                index
+                for index, candidate in enumerate(candidates)
+                if candidate[0] is selected and candidate[1] == selected_variant
+            )
+            attempts = [
+                {
+                    "provider": provider_name,
+                    "inputVariant": variant,
+                    "confidence": candidate.confidence,
+                    "direction": candidate.direction,
+                    "language": language,
+                }
+                for candidate, variant in candidates
+            ]
+            results.append(
+                (
+                    str(target["id"]),
+                    selected,
+                    attempts,
+                    selected_index,
+                    selected_variant,
+                    language,
+                )
+            )
         with store.session() as session:
             image = self._assert_image_unchanged(
                 session,
@@ -1216,7 +1314,14 @@ class PersistentJobQueue:
                 "OCR",
             )
             project = store.project(session)
-            for target_id, result, attempt_count, selected_variant in results:
+            for (
+                target_id,
+                result,
+                attempts,
+                selected_index,
+                selected_variant,
+                effective_language,
+            ) in results:
                 current = session.get(TextRegion, target_id)
                 assert current is not None
                 before = region_payload(current)
@@ -1225,9 +1330,23 @@ class PersistentJobQueue:
                 current.direction = result.direction
                 current.confirmed = False
                 current.ocr_provider = provider_name
+                current.recognition = with_ocr_evidence(
+                    current.recognition,
+                    result.confidence,
+                    provider_name,
+                    attempt_count=len(attempts),
+                    input_variant=selected_variant,
+                    direction=result.direction,
+                    attempts=attempts,
+                    selected_index=selected_index,
+                    language=effective_language,
+                )
+                if current.ignored:
+                    current.recognition = with_human_ignore(current.recognition)
+                persisted_ocr = current.recognition.get("ocr") or {}
                 current.repair = {
                     **dict(current.repair or {}),
-                    "ocrAttemptCount": attempt_count,
+                    "ocrAttemptCount": persisted_ocr.get("attemptCount", len(attempts)),
                     "ocrInputVariant": selected_variant,
                 }
                 current.revision += 1
@@ -1255,19 +1374,34 @@ class PersistentJobQueue:
                 error for error in (image.processing_errors or []) if error.get("stage") != "ocr"
             ]
             image.revision += 1
-        recognized = [
-            {
-                **result.to_dict(),
-                "attemptCount": attempt_count,
-                "inputVariant": selected_variant,
-            }
-            for _target_id, result, attempt_count, selected_variant in results
-        ]
+            current_regions = list(
+                session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
+            )
+            disposition_counts, reason_counts = self._trust_counts(current_regions)
+        input_variant_counts: dict[str, int] = {}
+        for (
+            _target_id,
+            _result,
+            _attempts,
+            _selected_index,
+            selected_variant,
+            _effective_language,
+        ) in results:
+            input_variant_counts[selected_variant] = (
+                input_variant_counts.get(selected_variant, 0) + 1
+            )
         return {
             "provider": provider_name,
             "inputVariant": input_variant,
-            "regions": recognized,
-            "count": len(recognized),
+            "policyVersion": TRUST_POLICY_VERSION,
+            "count": len(results),
+            "attemptCount": sum(len(attempts) for _, _, attempts, _, _, _ in results),
+            "selectedInputVariantCounts": input_variant_counts,
+            "confidenceBuckets": self._confidence_buckets(
+                [result.confidence for _, result, _, _, _, _ in results]
+            ),
+            "dispositionCounts": disposition_counts,
+            "reasonCounts": reason_counts,
         }
 
     def _process_translation(
@@ -1292,11 +1426,17 @@ class PersistentJobQueue:
                 ).all()
             )
             expected_region_versions = {region.id: region.revision for region in page_regions}
-        targets = [region for region in page_regions if not region.ignored]
+        eligible_regions = [region for region in page_regions if is_region_trusted(region)]
+        targets = eligible_regions
         if region_id:
-            targets = [region for region in targets if region.id == region_id]
-            if not targets:
-                raise ProjectError("Translation region was not found or is ignored")
+            requested = next((region for region in page_regions if region.id == region_id), None)
+            if requested is None:
+                raise ProjectError("Translation region was not found")
+            if not is_region_trusted(requested):
+                raise ProjectError(
+                    "Translation region requires explicit human trust confirmation"
+                )
+            targets = [requested]
         provider_name = str(
             options.get("provider") or project_settings.get("translatorProvider") or "manual"
         )
@@ -1313,7 +1453,7 @@ class PersistentJobQueue:
                     if not 0 <= index < len(page_regions):
                         continue
                     neighbor = page_regions[index]
-                    if not neighbor.ignored and neighbor.source_text:
+                    if is_region_trusted(neighbor) and neighbor.source_text:
                         context.append(neighbor.source_text)
             if provider_name == "manual":
                 # A manual batch is a no-op; never copy Japanese into or erase reviewed Chinese.
@@ -1347,6 +1487,7 @@ class PersistentJobQueue:
                 before = region_payload(current)
                 if current.translation_text != value:
                     review_changed = True
+                    persist_legacy_recognition(current)
                     current.confirmed = False
                 current.translation_text = value
                 current.translation_provider = (
@@ -1380,12 +1521,19 @@ class PersistentJobQueue:
                 if error.get("stage") != "translate"
             ]
             current_image.revision += 1
+            current_regions = list(
+                session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
+            )
+            disposition_counts, reason_counts = self._trust_counts(current_regions)
         return {
             "provider": provider_name,
-            "regions": [
-                {"regionId": target_id, "translation": value} for target_id, value in translated
-            ],
+            "policyVersion": TRUST_POLICY_VERSION,
             "count": len(translated),
+            "skippedUntrustedCount": (
+                len(page_regions) - len(eligible_regions) if region_id is None else 0
+            ),
+            "dispositionCounts": disposition_counts,
+            "reasonCounts": reason_counts,
         }
 
     @staticmethod
@@ -1420,6 +1568,9 @@ class PersistentJobQueue:
         options: dict[str, Any],
         kind: str,
     ) -> dict[str, Any]:
+        repair_policy = str(options.get("repairPolicy", "safe"))
+        if repair_policy not in {"safe", "recognized", "all"}:
+            raise ProjectError("repairPolicy must be safe, recognized, or all")
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
             if image is None:
@@ -1434,6 +1585,9 @@ class PersistentJobQueue:
                 or "pillow"
             )
             inpaint_is_current = image.status.get("inpaint") == "done"
+            recorded_repair_policy = image.status.get("inpaintingRepairPolicy") or image.status.get(
+                "repairPolicy"
+            )
             recorded_inpainting_provider = image.status.get("inpaintingProvider")
             persisted_inpainting_provider = recorded_inpainting_provider
             if persisted_inpainting_provider not in {
@@ -1466,15 +1620,6 @@ class PersistentJobQueue:
         if kind != "inpaint" and typesetting_provider_name != "pillow":
             raise ProjectError(f"Unknown typesetting provider: {typesetting_provider_name}")
         active_regions = [region_payload(region) for region in regions if not region.ignored]
-        repair_policy = str(options.get("repairPolicy", "safe"))
-        if repair_policy not in {"safe", "recognized", "all"}:
-            raise ProjectError("repairPolicy must be safe, recognized, or all")
-        try:
-            minimum_confidence = float(options.get("minimumRepairConfidence", 0.65))
-        except (TypeError, ValueError) as error:
-            raise ProjectError("minimumRepairConfidence must be between zero and one") from error
-        if not 0 <= minimum_confidence <= 1:
-            raise ProjectError("minimumRepairConfidence must be between zero and one")
 
         def should_repair(region: dict[str, Any]) -> bool:
             if repair_policy == "all":
@@ -1482,15 +1627,15 @@ class PersistentJobQueue:
             source_text = str(region.get("sourceText", "")).strip()
             if repair_policy == "recognized":
                 return bool(source_text)
-            if bool(region.get("confirmed")):
-                return True
-            repair = region.get("repair") if isinstance(region.get("repair"), dict) else {}
-            if not source_text:
+            recognition = region.get("recognition")
+            if not isinstance(recognition, dict):
                 return False
-            if not repair.get("detectorGenerated"):
-                return True
-            confidence = region.get("confidence")
-            return confidence is not None and float(confidence) >= minimum_confidence
+            trust = recognition.get("trust")
+            return (
+                isinstance(trust, dict)
+                and trust.get("policyVersion") == TRUST_POLICY_VERSION
+                and trust.get("disposition") == "trusted"
+            )
 
         repair_data = [region for region in active_regions if should_repair(region)]
         typesetting_data = [
@@ -1523,7 +1668,12 @@ class PersistentJobQueue:
         effective_inpainting_provider_name = str(
             recorded_inpainting_provider or page_inpainting_provider_name
         )
-        if kind != "typeset" or not inpaint_is_current or not inpaint_path.exists():
+        if (
+            kind != "typeset"
+            or not inpaint_is_current
+            or recorded_repair_policy != repair_policy
+            or not inpaint_path.exists()
+        ):
             try:
                 page_inpainting_provider = self.providers.inpainter(page_inpainting_provider_name)
             except ValueError as error:
@@ -1715,6 +1865,8 @@ class PersistentJobQueue:
             status["inpaint"] = "done"
             if mask_bytes is not None:
                 status["inpaintingProvider"] = effective_inpainting_provider_name
+                status["inpaintingRepairPolicy"] = repair_policy
+                status.pop("repairPolicy", None)
             if kind != "inpaint":
                 status["typeset"] = "done"
                 status["typesettingProvider"] = typesetting_provider_name
@@ -1739,7 +1891,6 @@ class PersistentJobQueue:
             ),
             "inpaintingProvider": effective_inpainting_provider_name,
             "inpaintingProviders": sorted(set(region_inpainting_providers.values())),
-            "regionInpaintingProviders": region_inpainting_providers,
             "typesettingProvider": (typesetting_provider_name if kind != "inpaint" else None),
             "repairPolicy": repair_policy,
             "eligibleRegionCount": len(repair_data),
@@ -1753,14 +1904,5 @@ class PersistentJobQueue:
                 if kind != "inpaint"
                 else None
             ),
-            "inpaintedArtifact": inpaint_relative.as_posix(),
-            "inpaintedUrl": f"/api/images/{image_id}/content?variant=erased",
-            "maskArtifact": mask_relative.as_posix(),
-            "maskUrl": f"/api/images/{image_id}/generated/mask",
-            "typesetArtifact": typeset_relative.as_posix() if kind != "inpaint" else None,
-            "typesetUrl": (
-                f"/api/images/{image_id}/content?variant=typeset" if kind != "inpaint" else None
-            ),
-            "layouts": layouts,
             "overflowCount": sum(bool(layout["overflow"]) for layout in layouts),
         }

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from manga_localizer.database import ImageAsset, Revision
+from manga_localizer.database import ImageAsset, Revision, TextRegion
 from manga_localizer.main import create_app
 from manga_localizer.security import (
     UnsafePathError,
@@ -17,6 +17,7 @@ from manga_localizer.security import (
     safe_relative_path,
 )
 from manga_localizer.services.images import invalidate_image_pipeline, stage_reviews
+from manga_localizer.services.trust import with_detection_evidence, with_ocr_evidence
 
 from .conftest import create_project, png_bytes, upload_image
 
@@ -652,7 +653,7 @@ def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_pa
     project = response.json()
     assert project["outputRoot"] == str(root.resolve())
     assert project["inputRoot"] is None
-    assert project["schemaVersion"] == 1
+    assert project["schemaVersion"] == 2
     assert project["settings"]["translatorProvider"] == "manual"
     assert project["settings"]["detectorProvider"] == "tesseract"
     assert project["settings"]["ocrProvider"] == "tesseract"
@@ -693,6 +694,387 @@ def test_open_portable_project_with_a_fresh_catalog(
         assert opened.status_code == 200, opened.text
         assert opened.json()["id"] == project["id"]
         assert fresh.get("/api/projects").json()[0]["id"] == project["id"]
+
+
+def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmation(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    root = tmp_path / "legacy-recognition"
+    project = create_project(client, root)
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "sourceText": "人工确认",
+            "confirmed": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    region_id = created.json()["id"]
+    unconfirmed = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={"x": 50, "y": 10, "width": 30, "height": 30, "sourceText": "未确认"},
+    )
+    assert unconfirmed.status_code == 201, unconfirmed.text
+    unconfirmed_id = unconfirmed.json()["id"]
+    project_root = root
+    generated_bytes = png_bytes()
+    generated_paths = {
+        directory: project_root / "generated" / directory / "第一章/ページ一.png"
+        for directory in ("preprocessed", "inpainted", "masks", "typeset")
+    }
+    for path in generated_paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(generated_bytes)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        asset = session.get(ImageAsset, image["id"])
+        assert asset is not None
+        asset.status = {
+            **asset.status,
+            "preprocess": "done",
+            "detection": "done",
+            "ocr": "done",
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-13T10:00:00+00:00",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-13T10:00:00+00:00",
+                    "resultRevision": asset.revision,
+                    "artifactChecksum": _checksum(generated_bytes),
+                    "maskChecksum": _checksum(generated_bytes),
+                },
+                "typeset": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-13T10:00:00+00:00",
+                    "resultRevision": asset.revision,
+                    "artifactChecksum": _checksum(generated_bytes),
+                },
+            },
+        }
+    for store in app.state.registry.stores():
+        store.engine.dispose()
+    database_path = root / "project/project.sqlite3"
+    with sqlite3.connect(database_path) as database:
+        database.execute("ALTER TABLE text_regions DROP COLUMN recognition")
+        database.execute("UPDATE projects SET schema_version = 1")
+
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "legacy-recognition-catalog"}
+    )
+    with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+        reopened = fresh.post(
+            "/api/projects/open",
+            json={"manifestPath": str(root / "project/project.json")},
+        )
+        assert reopened.status_code == 200, reopened.text
+        assert reopened.json()["schemaVersion"] == 2
+        regions = fresh.get(f"/api/images/{image['id']}/regions")
+        assert regions.status_code == 200, regions.text
+        migrated = next(value for value in regions.json() if value["id"] == region_id)
+        assert migrated["trustDisposition"] == "trusted"
+        assert migrated["trustReason"] == "legacy-confirmed"
+        assert migrated["recognition"]["version"] == 1
+        legacy_review = next(value for value in regions.json() if value["id"] == unconfirmed_id)
+        assert legacy_review["trustDisposition"] == "review"
+        assert legacy_review["trustReason"] == "legacy-unverified"
+        migrated_image = fresh.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert migrated_image["status"]["preprocess"] == "done"
+        assert migrated_image["status"]["detection"] == "done"
+        assert migrated_image["status"]["ocr"] == "done"
+        for stage in ("translation", "inpaint", "typeset", "export"):
+            assert migrated_image["status"][stage] == "pending"
+        assert migrated_image["status"]["reviewState"] == "pending"
+        assert migrated_image["stageReviews"] == {}
+        first_migrated_revision = migrated_image["revision"]
+        assert generated_paths["preprocessed"].is_file()
+        for directory in ("inpainted", "masks", "typeset"):
+            assert not generated_paths[directory].exists()
+
+    with TestClient(create_app(fresh_settings, start_worker=False)) as second_fresh:
+        reopened_again = second_fresh.post(
+            "/api/projects/open",
+            json={"manifestPath": str(root / "project/project.json")},
+        )
+        assert reopened_again.status_code == 200, reopened_again.text
+        idempotent_image = second_fresh.get(
+            f"/api/projects/{project['id']}/images"
+        ).json()[0]
+        assert idempotent_image["revision"] == first_migrated_revision
+
+    with sqlite3.connect(database_path) as database:
+        columns = {row[1] for row in database.execute("PRAGMA table_info(text_regions)")}
+        assert "recognition" in columns
+        assert database.execute("SELECT schema_version FROM projects").fetchone()[0] == 2
+        stored_recognition = json.loads(
+            database.execute(
+                "SELECT recognition FROM text_regions WHERE id = ?", (region_id,)
+            ).fetchone()[0]
+        )
+        assert stored_recognition["trust"] == {
+            "policyVersion": 1,
+            "disposition": "trusted",
+            "reason": "legacy-confirmed",
+        }
+
+
+def test_open_schema_two_empty_recognition_invalidates_derived_artifacts(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    root = tmp_path / "schema-two-empty-recognition"
+    project = create_project(client, root)
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "sourceText": "旧人工确认",
+            "confirmed": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    generated_paths = {
+        directory: root / "generated" / directory / "第一章/ページ一.png"
+        for directory in ("inpainted", "masks", "typeset")
+    }
+    for path in generated_paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png_bytes())
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        region = session.get(TextRegion, created.json()["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert region is not None and asset is not None
+        region.recognition = {}
+        asset.status = {
+            **asset.status,
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+        }
+    for opened_store in app.state.registry.stores():
+        opened_store.engine.dispose()
+
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "schema-two-empty-catalog"}
+    )
+    with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+        reopened = fresh.post(
+            "/api/projects/open",
+            json={"manifestPath": str(root / "project/project.json")},
+        )
+        assert reopened.status_code == 200, reopened.text
+        current = fresh.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current["trustDisposition"] == "trusted"
+        assert current["trustReason"] == "legacy-confirmed"
+        state = fresh.get(f"/api/projects/{project['id']}/images").json()[0]
+        for stage in ("translation", "inpaint", "typeset", "export"):
+            assert state["status"][stage] == "pending"
+        assert all(not path.exists() for path in generated_paths.values())
+
+
+def test_open_persists_noncanonical_evidence_fail_closed_and_discards_old_artifacts(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    root = tmp_path / "policy-migration-artifacts"
+    project = create_project(client, root)
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "sourceText": "公開合成",
+            "confirmed": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    generated_bytes = png_bytes()
+    generated_paths = {
+        directory: root / "generated" / directory / "第一章/ページ一.png"
+        for directory in ("inpainted", "masks", "typeset")
+    }
+    for path in generated_paths.values():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(generated_bytes)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        region = session.get(TextRegion, created.json()["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert region is not None and asset is not None
+        recognition = with_detection_evidence({}, 0.88, "generated-detector")
+        recognition["detection"].pop("inputVariant")
+        recognition["trust"] = {
+            "policyVersion": 1,
+            "disposition": "trusted",
+            "reason": "human-confirmed",
+        }
+        region.recognition = recognition
+        asset.status = {
+            **asset.status,
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-13T10:00:00+00:00",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-13T10:00:00+00:00",
+                    "resultRevision": asset.revision,
+                    "artifactChecksum": _checksum(generated_bytes),
+                    "maskChecksum": _checksum(generated_bytes),
+                },
+                "typeset": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-13T10:00:00+00:00",
+                    "resultRevision": asset.revision,
+                    "artifactChecksum": _checksum(generated_bytes),
+                },
+            },
+        }
+    for opened_store in app.state.registry.stores():
+        opened_store.engine.dispose()
+
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "policy-migration-catalog"}
+    )
+    with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+        reopened = fresh.post(
+            "/api/projects/open",
+            json={"manifestPath": str(root / "project/project.json")},
+        )
+        assert reopened.status_code == 200, reopened.text
+        current_region = fresh.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current_region["detectorConfidence"] == 0.88
+        assert current_region["trustDisposition"] == "review"
+        assert current_region["trustReason"] == "policy-version-changed"
+        current_image = fresh.get(f"/api/projects/{project['id']}/images").json()[0]
+        for stage in ("translation", "inpaint", "typeset", "export"):
+            assert current_image["status"][stage] == "pending"
+        assert current_image["stageReviews"] == {}
+        for path in generated_paths.values():
+            assert not path.exists()
+
+    with sqlite3.connect(root / "project/project.sqlite3") as database:
+        stored = json.loads(
+            database.execute(
+                "SELECT recognition FROM text_regions WHERE id = ?",
+                (created.json()["id"],),
+            ).fetchone()[0]
+        )
+    assert stored["detection"] == {
+        "confidence": 0.88,
+        "provider": "generated-detector",
+        "inputVariant": None,
+        "language": None,
+    }
+    assert stored["trust"] == {
+        "policyVersion": 1,
+        "disposition": "review",
+        "reason": "policy-version-changed",
+    }
+
+
+def test_open_preserves_current_recognition_evidence_and_human_trust(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    root = tmp_path / "recognition-reopen"
+    project = create_project(client, root)
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "sourceText": "公開合成テスト",
+        },
+    )
+    assert created.status_code == 201, created.text
+    region = created.json()
+    recognition = with_detection_evidence({}, 0.37, "generated-detector")
+    recognition = with_ocr_evidence(
+        recognition,
+        0.81,
+        "generated-ocr",
+        attempts=[
+            {
+                "provider": "generated-ocr",
+                "inputVariant": "preprocessed",
+                "confidence": 0.18,
+                "direction": "vertical",
+                "language": None,
+            },
+            {
+                "provider": "generated-ocr",
+                "inputVariant": "original",
+                "confidence": 0.81,
+                "direction": "vertical",
+                "language": None,
+            },
+        ],
+        selected_index=1,
+    )
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        assert persisted is not None
+        persisted.recognition = recognition
+    trusted = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert trusted.status_code == 200, trusted.text
+
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "recognition-reopen-catalog"}
+    )
+    with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+        reopened = fresh.post(
+            "/api/projects/open",
+            json={"manifestPath": str(root / "project/project.json")},
+        )
+        assert reopened.status_code == 200, reopened.text
+        current = fresh.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current["detectorConfidence"] == 0.37
+        assert current["ocrConfidence"] == 0.81
+        assert current["trustDisposition"] == "trusted"
+        assert current["trustReason"] == "human-confirmed"
+        assert current["recognition"]["ocr"]["selectedIndex"] == 1
+        assert current["recognition"]["ocr"]["attempts"] == [
+            {
+                "provider": "generated-ocr",
+                "inputVariant": "preprocessed",
+                "confidence": 0.18,
+                "direction": "vertical",
+                "language": None,
+            },
+            {
+                "provider": "generated-ocr",
+                "inputVariant": "original",
+                "confidence": 0.81,
+                "direction": "vertical",
+                "language": None,
+            },
+        ]
 
 
 def test_open_scrubs_legacy_secrets_from_response_history_and_database(tmp_path: Path) -> None:
@@ -1100,3 +1482,185 @@ def test_trusted_import_across_drives_uses_exact_boundaries_without_a_common_roo
     assert client.get(f"/api/projects/{project['id']}").json()["inputRoot"] is None
     with sqlite3.connect(tmp_path / "project/project/project.sqlite3") as database:
         assert database.execute("SELECT count(*) FROM import_boundaries").fetchone()[0] == 2
+
+
+@pytest.mark.parametrize(
+    ("setting_name", "setting_value", "affected_evidence", "unaffected_evidence"),
+    (
+        ("detectorProvider", "mock", "detection", "ocr"),
+        ("ocrProvider", "mock", "ocr", "detection"),
+        ("sourceLanguage", "en", "ocr", "detection"),
+    ),
+)
+def test_recognition_provider_settings_revoke_only_matching_nonignored_trust(
+    client: TestClient,
+    app,
+    tmp_path: Path,
+    setting_name: str,
+    setting_value: str,
+    affected_evidence: str,
+    unaffected_evidence: str,
+) -> None:
+    project = create_project(client, tmp_path / f"trust-settings-{setting_name}")
+    image = upload_image(client, project["id"])
+
+    def create_trusted(x: int) -> dict:
+        response = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": x,
+                "y": 10,
+                "width": 30,
+                "height": 30,
+                "sourceText": "公開テスト",
+                "confirmed": True,
+            },
+        )
+        assert response.status_code == 201, response.text
+        return response.json()
+
+    affected = create_trusted(10)
+    unaffected = create_trusted(50)
+    ignored = create_trusted(90)
+    ignored_response = client.patch(
+        f"/api/regions/{ignored['id']}",
+        json={"ignored": True, "expectedRevision": ignored["revision"]},
+    )
+    assert ignored_response.status_code == 200, ignored_response.text
+
+    def evidence_payload(recognition: dict, kind: str) -> dict:
+        if kind == "detection":
+            return with_detection_evidence(recognition, 0.81, "tesseract")
+        return with_ocr_evidence(
+            recognition,
+            0.87,
+            "tesseract",
+            input_variant="original",
+            direction="vertical",
+            attempts=[
+                {
+                    "provider": "tesseract",
+                    "inputVariant": "original",
+                    "confidence": 0.87,
+                    "direction": "vertical",
+                }
+            ],
+            selected_index=0,
+        )
+
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        affected_row = session.get(TextRegion, affected["id"])
+        unaffected_row = session.get(TextRegion, unaffected["id"])
+        ignored_row = session.get(TextRegion, ignored["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert all(value is not None for value in (affected_row, unaffected_row, ignored_row))
+        assert asset is not None
+        for row, kind, disposition, reason in (
+            (affected_row, affected_evidence, "trusted", "human-confirmed"),
+            (unaffected_row, unaffected_evidence, "trusted", "human-confirmed"),
+            (ignored_row, affected_evidence, "ignored", "human-ignored"),
+        ):
+            assert row is not None
+            recognition = evidence_payload(row.recognition, kind)
+            recognition["trust"] = {
+                "policyVersion": 1,
+                "disposition": disposition,
+                "reason": reason,
+            }
+            row.recognition = recognition
+        asset.status = {
+            **asset.status,
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+        }
+
+    current_project = client.get(f"/api/projects/{project['id']}").json()
+    changed = client.patch(
+        f"/api/projects/{project['id']}",
+        json={
+            "settings": {setting_name: setting_value},
+            "expectedRevision": current_project["revision"],
+        },
+    )
+    assert changed.status_code == 200, changed.text
+
+    regions = {
+        region["id"]: region
+        for region in client.get(f"/api/images/{image['id']}/regions").json()
+    }
+    assert regions[affected["id"]]["confirmed"] is False
+    assert regions[affected["id"]]["trustDisposition"] == "review"
+    assert regions[affected["id"]]["trustReason"] == "trust-input-changed"
+    assert regions[unaffected["id"]]["confirmed"] is True
+    assert regions[unaffected["id"]]["trustDisposition"] == "trusted"
+    assert regions[unaffected["id"]]["trustReason"] == "human-confirmed"
+    assert regions[ignored["id"]]["ignored"] is True
+    assert regions[ignored["id"]]["trustDisposition"] == "ignored"
+    assert regions[ignored["id"]]["trustReason"] == "human-ignored"
+    status = client.get(f"/api/projects/{project['id']}/images").json()[0]["status"]
+    for stage in ("translation", "inpaint", "typeset", "export"):
+        assert status[stage] == "pending"
+
+
+def test_preprocessing_setting_revokes_only_trust_using_preprocessed_evidence(
+    client: TestClient,
+    app,
+    tmp_path: Path,
+) -> None:
+    project = create_project(client, tmp_path / "preprocessing-trust-setting")
+    image = upload_image(client, project["id"])
+    regions = []
+    for x in (10, 50):
+        created = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": x,
+                "y": 10,
+                "width": 30,
+                "height": 30,
+                "sourceText": "公開テスト",
+                "confirmed": True,
+            },
+        )
+        assert created.status_code == 201, created.text
+        regions.append(created.json())
+
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        for region, input_variant in zip(regions, ("preprocessed", "original"), strict=True):
+            row = session.get(TextRegion, region["id"])
+            assert row is not None
+            recognition = with_detection_evidence(
+                row.recognition,
+                0.82,
+                "tesseract",
+                input_variant=input_variant,
+            )
+            recognition["trust"] = {
+                "policyVersion": 1,
+                "disposition": "trusted",
+                "reason": "human-confirmed",
+            }
+            row.recognition = recognition
+
+    current_project = client.get(f"/api/projects/{project['id']}").json()
+    changed = client.patch(
+        f"/api/projects/{project['id']}",
+        json={
+            "settings": {"preprocessing": {"threshold": 181}},
+            "expectedRevision": current_project["revision"],
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    current = {
+        region["id"]: region
+        for region in client.get(f"/api/images/{image['id']}/regions").json()
+    }
+    assert current[regions[0]["id"]]["confirmed"] is False
+    assert current[regions[0]["id"]]["trustDisposition"] == "review"
+    assert current[regions[0]["id"]]["trustReason"] == "trust-input-changed"
+    assert current[regions[1]["id"]]["confirmed"] is True
+    assert current[regions[1]["id"]]["trustDisposition"] == "trusted"

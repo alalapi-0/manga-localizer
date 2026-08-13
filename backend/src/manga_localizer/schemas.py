@@ -75,6 +75,8 @@ class ImageOut(APIModel):
     )
     region_count: int
     confirmed_count: int
+    trusted_count: int
+    trust_review_count: int
     ignored_count: int
     processing_errors: list[dict[str, Any]]
     error: str | None
@@ -225,6 +227,12 @@ class RegionOut(APIModel):
     direction: str
     order: int
     confidence: float | None
+    recognition: dict[str, Any]
+    detector_confidence: float | None
+    ocr_confidence: float | None
+    trust_disposition: Literal["review", "trusted", "ignored"]
+    trust_reason: str
+    trust_policy_version: int
     ignored: bool
     confirmed: bool
     style: dict[str, Any]
@@ -250,7 +258,6 @@ class JobRequest(APIModel):
 class JobItemOut(APIModel):
     id: str
     image_id: str | None
-    region_id: str | None
     position: int
     status: str
     progress: float
@@ -267,7 +274,6 @@ class JobOut(APIModel):
     total: int
     completed: int
     error: str | None
-    options: dict[str, Any]
     items: list[JobItemOut]
     created_at: datetime
     updated_at: datetime

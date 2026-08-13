@@ -44,6 +44,13 @@ function visualStageForMode(mode: CanvasMode): VisualStage | null {
   return null;
 }
 
+function regionStatusStroke(
+  region: Pick<Region, 'confirmed' | 'ignored' | 'trustDisposition'>,
+): string {
+  if (region.ignored || region.trustDisposition === 'ignored') return '#7b818a';
+  return region.confirmed && region.trustDisposition === 'trusted' ? '#50c878' : '#f4b957';
+}
+
 type CanvasReviewObservation = Pick<StageReviewObservation, 'imageId' | 'stage' | 'revision'> & (
   | { state: 'loading' | 'error'; artifactChecksum?: undefined; maskChecksum?: undefined }
   | { state: 'ready'; artifactChecksum: string; maskChecksum?: string }
@@ -170,11 +177,7 @@ function RegionShape({
 
   const stroke = selected
     ? '#5f9dff'
-    : region.ignored
-      ? '#7b818a'
-      : region.confirmed
-        ? '#50c878'
-        : '#f4b957';
+    : regionStatusStroke(region);
   const confidence = region.confidence === null
     ? '—'
     : `${Math.round((region.confidence <= 1 ? region.confidence * 100 : region.confidence))}%`;

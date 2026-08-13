@@ -321,12 +321,70 @@ test('runs real local detection and Japanese OCR before review and export', asyn
     id: string;
     sourceText: string;
     order: number;
+    revision: number;
+    ignored: boolean;
+    trustDisposition: 'review' | 'trusted' | 'ignored';
   }>;
   const recognizedRegion = recognizedRegions.find((region) => region.sourceText.trim().length > 0);
   expect(recognizedRegion, JSON.stringify(recognizedRegions)).toBeDefined();
+  expect(recognizedRegion?.trustDisposition).toBe('review');
+  expect(JSON.stringify(detected)).not.toContain('"regionId"');
+
+  await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+  const trustDialog = page.getByRole('dialog', { name: '批处理与导出' });
+  await trustDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
+  await selectOnlyStage(trustDialog, '翻译');
+  await expect(trustDialog.getByText(/还有 \d+ 个 OCR 文本框待信任确认/)).toBeVisible();
+  await expect(trustDialog.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  await trustDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+
+  await inspector.getByRole('tab', { name: '文本' }).click();
+  await inspector
+    .locator('.region-index button')
+    .filter({ hasText: recognizedRegion!.sourceText })
+    .first()
+    .click();
+  const trustStatus = inspector.getByRole('region', { name: 'OCR 信任状态' });
+  await expect(trustStatus).toContainText('OCR 待信任');
+  await expect(trustStatus).toContainText('OCR 已完成，置信度不能代替人工确认');
+  await expect(trustStatus).toContainText(/检测 .* · OCR .*/);
+  const confirmTrustResponse = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH'
+      && response.url().endsWith(`/api/regions/${recognizedRegion!.id}`),
+  );
+  await inspector.getByLabel('确认此文本框').click();
+  expect((await confirmTrustResponse).status()).toBe(200);
+  await expect(inspector.getByLabel('确认此文本框')).toBeChecked();
+  await expect(trustStatus).toContainText('OCR 已信任');
+
+  const pendingRegionsResponse = await page.request.get(
+    `/api/images/${recognizedImages[0]?.id}/regions`,
+  );
+  const pendingRegions = await pendingRegionsResponse.json() as Array<{
+    id: string;
+    sourceText: string;
+    revision: number;
+    trustDisposition: 'review' | 'trusted' | 'ignored';
+  }>;
+  for (const region of pendingRegions.filter((entry) => entry.trustDisposition === 'review')) {
+    const response = await page.request.patch(`/api/regions/${region.id}`, {
+      data: region.sourceText.trim()
+        ? { confirmed: true, ignored: false, expectedRevision: region.revision }
+        : { confirmed: false, ignored: true, expectedRevision: region.revision },
+    });
+    expect(response.ok()).toBe(true);
+  }
+
+  await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+  const translatedDialog = page.getByRole('dialog', { name: '批处理与导出' });
+  await translatedDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
   await runOnlyStage(page, project.id, '翻译', 'translate');
 
-  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await translatedDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await inspector.getByRole('tab', { name: '文本' }).click();
   await inspector
     .locator('.region-index button')
@@ -371,12 +429,12 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await inspector.getByRole('tab', { name: '修复' }).click();
-  await inspector.getByLabel('显示实际蒙版').check();
-  await expect(inspector.getByLabel('显示实际蒙版')).toBeChecked();
   const maskResponsePromise = page.waitForResponse(
     (response) => response.request().method() === 'GET'
       && response.url().includes('/generated/mask'),
   );
+  await inspector.getByLabel('显示实际蒙版').check();
+  await expect(inspector.getByLabel('显示实际蒙版')).toBeChecked();
   await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
   expect((await maskResponsePromise).status()).toBe(200);
   await page.getByRole('button', { name: '批处理与导出' }).click();

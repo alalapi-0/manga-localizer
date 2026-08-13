@@ -103,6 +103,68 @@ def test_bootstrap_materializes_and_verifies_explicit_no_text_page(
     assert region_count == 0
 
 
+def test_bootstrap_candidates_persist_review_only_detection_evidence(
+    tmp_path: Path,
+) -> None:
+    script = load_script("bootstrap_clean_plate_run.py")
+    input_root = tmp_path / "input"
+    input_root.mkdir()
+    Image.new("RGB", (32, 24), "white").save(input_root / "page.png")
+    app = script.create_app(
+        script.Settings(data_dir=tmp_path / "catalog"),
+        start_worker=False,
+    )
+
+    with script.TestClient(app) as client:
+        project = client.post(
+            "/api/projects",
+            json={"name": "generated-review", "outputPath": str(tmp_path / "project")},
+        ).json()
+        imported = client.post(
+            f"/api/projects/{project['id']}/images/import-local",
+            json={"paths": [str(input_root)]},
+        )
+        assert imported.status_code == 201
+        image_by_path = script.bootstrap_candidates(
+            client,
+            project["id"],
+            [
+                {
+                    "imageId": "page-0001",
+                    "sourceRelativePath": "page.png",
+                    "regions": [
+                        {
+                            "geometry": {
+                                "x": 2,
+                                "y": 3,
+                                "width": 10,
+                                "height": 8,
+                                "rotation": 0,
+                            },
+                            "confidence": 0.73,
+                        }
+                    ],
+                }
+            ],
+            set(),
+        )
+        regions = client.get(
+            f"/api/images/{image_by_path['page.png']['id']}/regions"
+        ).json()
+
+    assert len(regions) == 1
+    assert regions[0]["detectorConfidence"] == 0.73
+    assert regions[0]["ocrConfidence"] is None
+    assert regions[0]["trustDisposition"] == "review"
+    assert regions[0]["trustReason"] == "automatic-proposal"
+    assert regions[0]["recognition"]["detection"] == {
+        "confidence": 0.73,
+        "provider": "visual-review-union-candidates",
+        "inputVariant": "original",
+        "language": None,
+    }
+
+
 def test_review_pack_writes_anonymous_full_resolution_overlays(tmp_path: Path) -> None:
     script = load_script("prepare_clean_plate_review.py")
     input_root = tmp_path / "input"

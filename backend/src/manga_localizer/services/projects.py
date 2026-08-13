@@ -33,6 +33,12 @@ from manga_localizer.security import (
     normalize_remote_endpoints,
     resolve_write_target,
 )
+from manga_localizer.services.trust import (
+    invalidate_trust,
+    recognition_payload,
+    recognition_policy_is_current,
+    with_human_ignore,
+)
 
 
 class ProjectError(RuntimeError):
@@ -349,6 +355,8 @@ class ProjectStore:
 
 
 def region_payload(region: TextRegion) -> dict[str, Any]:
+    recognition = recognition_payload(region)
+    trust = recognition["trust"]
     return {
         "id": region.id,
         "imageId": region.image_id,
@@ -363,6 +371,14 @@ def region_payload(region: TextRegion) -> dict[str, Any]:
         "direction": region.direction,
         "order": region.reading_order,
         "confidence": region.confidence,
+        "recognition": recognition,
+        "detectorConfidence": (
+            recognition["detection"]["confidence"] if recognition["detection"] else None
+        ),
+        "ocrConfidence": recognition["ocr"]["confidence"] if recognition["ocr"] else None,
+        "trustDisposition": trust["disposition"],
+        "trustReason": trust["reason"],
+        "trustPolicyVersion": trust["policyVersion"],
         "ignored": region.ignored,
         "confirmed": region.confirmed,
         "style": region.style,
@@ -476,7 +492,7 @@ class ProjectRegistry:
                 name=name,
                 root_path=str(root),
                 settings=validated_settings,
-                schema_version=1,
+                schema_version=2,
             )
             session.add(project)
             session.flush()
@@ -510,6 +526,44 @@ class ProjectRegistry:
             raise ProjectError("Manifest and database project ids do not match")
         with store.session() as session:
             current = store.project(session)
+            migrate_trust_schema = current.schema_version < 2
+            stale_trust_image_ids: set[str] = set()
+            for region in session.scalars(select(TextRegion)).all():
+                stored_recognition = region.recognition
+                if recognition_policy_is_current(
+                    stored_recognition,
+                    ignored=region.ignored,
+                ):
+                    continue
+                normalized = recognition_payload(region)
+                is_legacy_empty = stored_recognition is None or stored_recognition == {}
+                if region.ignored:
+                    normalized = with_human_ignore(normalized)
+                elif not is_legacy_empty:
+                    normalized = invalidate_trust(normalized, "policy-version-changed")
+                    region.confirmed = False
+                region.recognition = normalized
+                region.revision += 1
+                stale_trust_image_ids.add(region.image_id)
+            if migrate_trust_schema:
+                current.schema_version = 2
+                stale_trust_image_ids.update(
+                    session.scalars(select(ImageAsset.id)).all()
+                )
+            if stale_trust_image_ids:
+                # Imported lazily to avoid the images -> projects module dependency
+                # during application startup.
+                from manga_localizer.services.images import invalidate_image_pipeline
+
+                for image in session.scalars(
+                    select(ImageAsset).where(ImageAsset.id.in_(stale_trust_image_ids))
+                ).all():
+                    invalidate_image_pipeline(
+                        store,
+                        image,
+                        {"translation", "inpaint", "typeset", "export"},
+                    )
+                    image.revision += 1
             current.settings = settings_with_defaults(
                 None,
                 base=current.settings,

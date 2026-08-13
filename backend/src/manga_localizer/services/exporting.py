@@ -26,6 +26,7 @@ from manga_localizer.security import (
 )
 from manga_localizer.services.images import stage_artifact_checksums, stage_reviews
 from manga_localizer.services.projects import ProjectError, ProjectStore
+from manga_localizer.services.trust import recognition_payload
 
 _BUNDLE_TEMP_RE = re.compile(r"^\.project\.(?:json|sqlite3)\.[0-9a-f]{32}\.tmp$")
 _BUNDLE_SQLITE_SIDECAR_RE = re.compile(
@@ -38,6 +39,19 @@ _BUNDLE_OWNER_RE = re.compile(r"^\.manga-localizer-bundle\.[0-9a-f]{32}\.owner$"
 class _InputProtection:
     files: frozenset[Path]
     directories: frozenset[Path]
+
+
+def _recognition_export_fields(region: TextRegion) -> dict[str, Any]:
+    recognition = recognition_payload(region)
+    return {
+        "detectorConfidence": (
+            recognition["detection"]["confidence"] if recognition["detection"] else None
+        ),
+        "ocrConfidence": recognition["ocr"]["confidence"] if recognition["ocr"] else None,
+        "trustDisposition": recognition["trust"]["disposition"],
+        "trustReason": recognition["trust"]["reason"],
+        "trustPolicyVersion": recognition["trust"]["policyVersion"],
+    }
 
 
 def _database_project_id(database_path: Path) -> str:
@@ -1107,6 +1121,7 @@ def export_image(
             **image_payload,
             "regions": [
                 {
+                    **_recognition_export_fields(region),
                     "id": region.id,
                     "order": region.reading_order,
                     "sourceText": region.source_text,
@@ -1129,6 +1144,7 @@ def export_image(
             **image_payload,
             "regions": [
                 {
+                    **_recognition_export_fields(region),
                     "id": region.id,
                     "order": region.reading_order,
                     "translationText": region.translation_text,

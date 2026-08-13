@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, TextRegion
 from manga_localizer.main import create_app
+from manga_localizer.services.trust import with_detection_evidence
 from PIL import Image, ImageOps
 from sqlalchemy import select
 
@@ -288,6 +289,12 @@ def bootstrap_candidates(
                             ignored=False,
                             confirmed=False,
                             repair=_candidate_repair(candidate),
+                            recognition=with_detection_evidence(
+                                None,
+                                candidate.get("confidence"),
+                                "visual-review-union-candidates",
+                                input_variant="original",
+                            ),
                             revision=1,
                         )
                     )

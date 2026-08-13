@@ -193,6 +193,231 @@ describe('workbench store', () => {
     });
   });
 
+  it('hydrates separate recognition evidence and fails legacy trust state closed', async () => {
+    seedWorkbench({ regions: [] });
+    const legacy = regionFixture('region-1', {
+      detectorConfidence: undefined as unknown as null,
+      ocrConfidence: undefined as unknown as null,
+      trustDisposition: undefined as unknown as 'review',
+      trustReason: '',
+      trustPolicyVersion: undefined as unknown as number,
+      recognition: undefined as unknown as Record<string, unknown>,
+    });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([legacy]);
+
+    await useWorkbenchStore.getState().loadRegions('image-1', true);
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      detectorConfidence: null,
+      ocrConfidence: null,
+      trustDisposition: 'review',
+      trustReason: 'legacy-unverified',
+      trustPolicyVersion: 1,
+      recognition: {},
+    });
+  });
+
+  it('lets an explicit ignore win over a corrupt simultaneous confirmation', async () => {
+    seedWorkbench({ regions: [] });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('region-1', {
+        confirmed: true,
+        ignored: true,
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+      }),
+    ]);
+
+    await useWorkbenchStore.getState().loadRegions('image-1', true);
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      confirmed: false,
+      ignored: true,
+      trustDisposition: 'ignored',
+    });
+  });
+
+  it('fails contradictory and stale trust evidence closed during hydration', async () => {
+    seedWorkbench({ regions: [] });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('bad-pair', {
+        confirmed: true,
+        trustDisposition: 'trusted',
+        trustReason: 'automatic-proposal',
+      }),
+      regionFixture('ignored-mismatch', {
+        confirmed: true,
+        ignored: false,
+        trustDisposition: 'ignored',
+        trustReason: 'human-ignored',
+      }),
+      regionFixture('old-policy', {
+        confirmed: true,
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+        trustPolicyVersion: 2,
+      }),
+      regionFixture('valid-trust', {
+        confirmed: true,
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+        trustPolicyVersion: 1,
+      }),
+    ]);
+
+    await useWorkbenchStore.getState().loadRegions('image-1', true);
+
+    const regions = useWorkbenchStore.getState().regionsByImage['image-1'] ?? [];
+    for (const regionId of ['bad-pair', 'ignored-mismatch', 'old-policy']) {
+      expect(regions.find((region) => region.id === regionId)).toMatchObject({
+        trustDisposition: 'review',
+        trustReason: 'policy-version-changed',
+        trustPolicyVersion: 1,
+      });
+    }
+    expect(regions.find((region) => region.id === 'valid-trust')).toMatchObject({
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      trustPolicyVersion: 1,
+    });
+  });
+
+  it('blocks trust-gated work until every active region is explicitly trusted', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 1 })],
+      regions: [
+        regionFixture('region-1', { trustDisposition: 'trusted', trustReason: 'human-confirmed' }),
+        regionFixture('region-2', { trustDisposition: 'review' }),
+      ],
+    });
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({ kind: 'translate' }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['translate'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+    )).toBe(false);
+    expect(startJob).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().globalError).toContain('1 个 OCR 文本框待信任确认');
+  });
+
+  it('fails closed when the page trust aggregate is newer than loaded regions', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 2 })],
+      regions: [],
+    });
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({ kind: 'translate' }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['translate'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+    )).toBe(false);
+
+    expect(startJob).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().globalError).toContain('2 个 OCR 文本框待信任确认');
+  });
+
+  it('refreshes the authoritative page trust aggregate before downstream enqueue', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 0 })],
+      regions: [regionFixture('region-1', {
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+      })],
+    });
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', { revision: 8, trustReviewCount: 2 }),
+    ]);
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({ kind: 'translate' }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['translate'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+    )).toBe(false);
+
+    expect(api.listImages).toHaveBeenCalledWith('project-1');
+    expect(startJob).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().images[0]?.trustReviewCount).toBe(2);
+    expect(useWorkbenchStore.getState().globalError).toContain('2 个 OCR 文本框需要重新确认');
+  });
+
+  it('aborts selected-region downstream work when its trust refresh fails', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 0 })],
+      regions: [regionFixture('region-1', {
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+      })],
+    });
+    vi.spyOn(api, 'listRegions').mockRejectedValue(new Error('region refresh unavailable'));
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({ kind: 'translate' }));
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['translate'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+      1,
+      ['region-1'],
+    )).toBe(false);
+
+    expect(api.listRegions).toHaveBeenCalledWith('image-1');
+    expect(startJob).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().globalError).toContain('无法刷新所选文本框');
+  });
+
+  it('keeps fresh server trust counts when a forced region refresh fails', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 0 })],
+      regions: [regionFixture('region-1', {
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+      })],
+    });
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', { revision: 9, trustReviewCount: 3 }),
+    ]);
+    vi.spyOn(api, 'listRegions').mockRejectedValue(new Error('region refresh unavailable'));
+
+    await useWorkbenchStore.getState().reloadActiveImage();
+
+    expect(useWorkbenchStore.getState().images[0]?.trustReviewCount).toBe(3);
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.trustDisposition).toBe(
+      'trusted',
+    );
+    expect(useWorkbenchStore.getState().globalError).toBe('region refresh unavailable');
+  });
+
+  it('rechecks the trust gate after saving authoritative server state', async () => {
+    seedWorkbench({
+      regions: [regionFixture('region-1', {
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+      })],
+    });
+    vi.spyOn(api, 'updateRegion').mockImplementation(async (_regionId, patch) => ({
+      ...regionFixture('region-1'),
+      ...patch,
+      trustDisposition: 'review',
+      trustReason: 'trust-input-changed',
+      confirmed: false,
+      revision: 5,
+    }));
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({ kind: 'translate' }));
+    useWorkbenchStore.getState().updateRegion('region-1', { translationText: '保存后由后端降级' });
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['translate'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+    )).toBe(false);
+
+    expect(api.updateRegion).toHaveBeenCalledOnce();
+    expect(startJob).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().globalError).toContain('保存后所选范围有 1 个');
+  });
+
   it('sends expected revision on edit and delete', async () => {
     seedWorkbench({ selectedRegionIds: ['region-1'] });
     const update = vi.spyOn(api, 'updateRegion').mockImplementation(async (_id, patch) => ({
@@ -276,60 +501,74 @@ describe('workbench store', () => {
     }));
   });
 
-  it('flushes a delayed substantive edit before sending a sparse reconfirmation', async () => {
+  it('reconfirms a stale page flag with a sparse write and requires trusted server state', async () => {
     vi.useFakeTimers();
-    const confirmed = regionFixture('region-1', { confirmed: true });
+    const confirmed = regionFixture('region-1', {
+      confirmed: true,
+      trustDisposition: 'review',
+      trustReason: 'trust-input-changed',
+    });
     seedWorkbench({ regions: [confirmed] });
-    const firstSave = deferred<ReturnType<typeof regionFixture>>();
-    let callCount = 0;
-    const update = vi.spyOn(api, 'updateRegion').mockImplementation(async (_id, patch) => {
-      callCount += 1;
-      if (callCount === 1) return firstSave.promise;
-      return {
-        ...confirmed,
-        translationText: '编辑后译文',
-        confirmed: true,
-        revision: 6,
-        ...patch,
-      };
-    });
-
-    useWorkbenchStore.getState().updateRegion('region-1', {
-      translationText: '编辑后译文',
-    });
-    expect(vi.getTimerCount()).toBe(1);
-    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed).toBe(false);
-
-    const reconfirming = useWorkbenchStore.getState().setRegionConfirmed('region-1', true);
-    await vi.advanceTimersByTimeAsync(0);
-    expect(update).toHaveBeenCalledTimes(1);
-    expect(update).toHaveBeenNthCalledWith(1, 'region-1', expect.objectContaining({
-      translationText: '编辑后译文',
-      confirmed: false,
-      expectedRevision: 4,
-    }));
-    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.confirmed).toBe(false);
-
-    firstSave.resolve({
+    const update = vi.spyOn(api, 'updateRegion').mockResolvedValue({
       ...confirmed,
-      translationText: '编辑后译文',
-      confirmed: false,
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
       revision: 5,
     });
-    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2));
 
-    expect(update).toHaveBeenNthCalledWith(2, 'region-1', {
+    expect(await useWorkbenchStore.getState().setRegionConfirmed('region-1', true)).toBe(true);
+    expect(update).toHaveBeenCalledOnce();
+    expect(update).toHaveBeenCalledWith('region-1', {
       confirmed: true,
-      expectedRevision: 5,
+      expectedRevision: 4,
     });
-    expect(await reconfirming).toBe(true);
     expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
-      translationText: '编辑后译文',
       confirmed: true,
-      revision: 6,
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      revision: 5,
     });
     expect(useWorkbenchStore.getState().pendingRegionMutations).toHaveLength(0);
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('does not report reconfirmation success when the server keeps the region in review', async () => {
+    const stale = regionFixture('region-1', {
+      confirmed: true,
+      trustDisposition: 'review',
+    });
+    seedWorkbench({ regions: [stale] });
+    vi.spyOn(api, 'updateRegion').mockResolvedValue({ ...stale, revision: 5 });
+
+    expect(await useWorkbenchStore.getState().setRegionConfirmed('region-1', true)).toBe(false);
+    expect(api.updateRegion).toHaveBeenCalledWith('region-1', {
+      confirmed: true,
+      expectedRevision: 4,
+    });
+  });
+
+  it('restores page confirmation with a sparse write when OCR trust already remains valid', async () => {
+    const trusted = regionFixture('region-1', {
+      confirmed: false,
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+    });
+    seedWorkbench({ regions: [trusted] });
+    const update = vi.spyOn(api, 'updateRegion').mockResolvedValue({
+      ...trusted,
+      confirmed: true,
+      revision: 5,
+    });
+
+    expect(await useWorkbenchStore.getState().setRegionConfirmed('region-1', true)).toBe(true);
+    expect(update).toHaveBeenCalledWith('region-1', {
+      confirmed: true,
+      expectedRevision: 4,
+    });
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      confirmed: true,
+      trustDisposition: 'trusted',
+    });
   });
 
   it('keeps a region unconfirmed and surfaces the error when sparse reconfirmation fails', async () => {
@@ -346,15 +585,35 @@ describe('workbench store', () => {
   it('rejects page review states that do not match active region eligibility', async () => {
     seedWorkbench({
       regions: [
-        regionFixture('region-1', { confirmed: true }),
-        regionFixture('region-2', { confirmed: false }),
+        regionFixture('region-1', { confirmed: false, trustDisposition: 'trusted' }),
+        regionFixture('region-2', { confirmed: true, trustDisposition: 'review' }),
       ],
     });
     const review = vi.spyOn(api, 'reviewImage');
 
     expect(await useWorkbenchStore.getState().reviewActiveImage('reviewed')).toBe(false);
-    expect(useWorkbenchStore.getState().globalError).toBe('还有 1 个活动文本框尚未确认。');
+    expect(useWorkbenchStore.getState().globalError).toBe(
+      '还有 2 个活动文本框尚未确认并信任。',
+    );
     expect(await useWorkbenchStore.getState().reviewActiveImage('no-text-reviewed')).toBe(false);
+    expect(review).not.toHaveBeenCalled();
+  });
+
+  it('rejects page review when the server trust aggregate is newer than loaded regions', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 2 })],
+      regions: [],
+    });
+    const review = vi.spyOn(api, 'reviewImage');
+
+    expect(await useWorkbenchStore.getState().reviewActiveImage('reviewed')).toBe(false);
+    expect(useWorkbenchStore.getState().globalError).toBe(
+      '还有 2 个活动文本框尚未确认并信任。',
+    );
+    expect(await useWorkbenchStore.getState().reviewActiveImage('no-text-reviewed')).toBe(false);
+    expect(useWorkbenchStore.getState().globalError).toBe(
+      '当前页仍有活动文本框，不能标记为“确认无文字”。',
+    );
     expect(review).not.toHaveBeenCalled();
   });
 
@@ -725,6 +984,14 @@ describe('workbench store', () => {
       width: 480,
       height: 400,
       sourceText: 'こんにちは\nありがとう',
+      detectorConfidence: null,
+      ocrConfidence: null,
+      recognition: {},
+      trustDisposition: 'review',
+      trustReason: 'manual-unconfirmed',
+      trustPolicyVersion: 1,
+      confirmed: false,
+      ignored: false,
     });
     expect(merged?.[0]?.repair).not.toHaveProperty('maskPolygon');
     expect(useWorkbenchStore.getState().pendingRegionMutations.map((entry) => entry.kind)).toEqual([
@@ -758,6 +1025,16 @@ describe('workbench store', () => {
     expect(split).toHaveLength(2);
     expect(split?.[0]?.width).toBe(110);
     expect(split?.[1]).toMatchObject({ x: 210, width: 110 });
+    expect(split?.every((region) =>
+      region.detectorConfidence === null
+      && region.ocrConfidence === null
+      && Object.keys(region.recognition).length === 0
+      && region.trustDisposition === 'review'
+      && region.trustReason === 'manual-unconfirmed'
+      && region.trustPolicyVersion === 1
+      && !region.confirmed
+      && !region.ignored
+    )).toBe(true);
     expect(split?.every((region) => region.repair.maskPolygon === undefined)).toBe(true);
     expect(
       useWorkbenchStore.getState().pendingRegionMutations
@@ -886,7 +1163,7 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().saveError).toContain('revision mismatch');
   });
 
-  it('always queues pipeline stages in detect-to-export order', async () => {
+  it('blocks OCR from sharing a batch with trust-gated downstream stages', async () => {
     seedWorkbench({
       project: projectFixture({
         settings: {
@@ -911,19 +1188,10 @@ describe('workbench store', () => {
       ['image-1'],
       { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
       3,
-    )).toBe(true);
+    )).toBe(false);
 
-    expect(calls).toEqual(['detect', 'ocr', 'translate', 'inpaint', 'typeset', 'export']);
-    expect(useWorkbenchStore.getState().currentProject?.revision).toBe(12);
-    expect(vi.mocked(api.startJob).mock.calls.find((call) => call[1] === 'translate')?.[2])
-      .toEqual(expect.objectContaining({
-        options: expect.objectContaining({
-          targetLanguage: 'zh-CN',
-          characterNames: { 桜: '桜', 太郎: '小明' },
-          concurrency: 3,
-        }),
-      }));
-    expect(vi.mocked(api.exportProject).mock.calls[0]?.[1].options.concurrency).toBe(1);
+    expect(calls).toEqual([]);
+    expect(useWorkbenchStore.getState().globalError).toContain('OCR 与翻译');
   });
 
   it('serializes preprocessing settings and marks the selected images as queued', async () => {

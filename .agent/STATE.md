@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-13
+Updated: 2026-08-14
 
 ## Authority and purpose
 
@@ -26,9 +26,16 @@ CI-only repair. GitHub CI run `31708706339` passed the complete backend, fronten
 gates for that exact remote commit. Round 8 prepared review material for all 130 pages but has explicit
 completed output review for only 18; it remains a partial result, not a full-book visual acceptance.
 Ignored Round 9 aggregate evidence confirms that confidence is not a sufficient text-validity gate and
-that structurally safe complex repairs can remain visually unacceptable. The full product goal remains
-active; the next quality checkpoint is the automatic post-OCR trust/disposition gate. No merge, tag,
-release, or deployment has occurred.
+that structurally safe complex repairs can remain visually unacceptable. A post-Round-9 OCR
+trust/disposition working candidate is now present locally and uncommitted: it persists versioned
+detection/OCR evidence (including provider, attempted input, effective language, confidence, and selected
+attempt), leaves automatic proposals in review regardless of confidence, requires explicit human trust
+before translation or default safe rendering, and invalidates trust when recognition inputs or policy
+change. Legacy/policy migration also discards old repair/typeset cache created under the earlier
+confidence policy. Public regression, private real-data evaluation, independent review, commit, and delivery are
+pending; local frontend/static/privacy checks have passed, but prior Round 9 evidence does not verify this
+candidate and its full backend/browser gates still require CI. The full product goal remains active. No
+merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -52,12 +59,18 @@ release, or deployment has occurred.
   authoritative and is not silently replaced during OCR.
 - Low/empty OCR on a preprocessed crop is retried against the immutable original crop, with the selected
   input and attempt count persisted as provenance.
+- Detector confidence, OCR confidence, every OCR attempt across reruns, and the selected input are
+  stored separately.
+  Automatic proposals always remain `review`; only explicit human confirmation creates `trusted`, and
+  confidence alone never authorizes translation or default safe rendering. Recognition-input edits or
+  replacement of depended-on preprocessing revoke trust; translation/style/mask-only edits preserve it.
 - Inpainting uses exact provider routing. OpenCV is the guaranteed fallback; optional LaMa ONNX is lazy,
   local, context-cropped, and composites with exact mask-outside preservation.
 - Repair defaults to the `safe` eligibility policy. Canonical repair settings are persisted across API,
   queue, and UI; text/full-region masks support padding, dilation, feathering, editable geometry, and an
   actual-mask preview. Bounded add/erase strokes are persisted per region. Typesetting requires safe
-  eligibility and intersection with the generated mask.
+  eligibility and intersection with the generated mask, and cannot reuse an inpaint cache made under a
+  different repair policy.
 - Preprocess, inpaint, and typeset results have revision-guarded accept/reject records bound to the
   exact response bytes decoded in the review canvas; inpaint also binds and visibly reviews its mask.
   Regeneration, changed bytes, or an upstream change clears or conflicts with affected reviews.
@@ -70,6 +83,8 @@ release, or deployment has occurred.
 - The private evaluator is path-parameterized, refuses a non-empty output directory, omits OCR text and
   model paths, and records non-sensitive configuration plus per-image structural metrics.
 - Secrets are environment- or session-only and are never written to project JSON, SQLite, or logs.
+- Public job stage outputs and failure messages are fixed operational/aggregate projections. Detailed
+  options, paths, provider exceptions, and delivery metadata remain only in private project state.
 
 ## Protected boundaries
 
@@ -103,6 +118,8 @@ release, or deployment has occurred.
 - [ ] Round 8: full-book clean-plate visual review is partial at 18/130 explicitly completed pages.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
+- [ ] Round 10: post-OCR evidence/trust gate is implemented locally; public regression, private-safe
+  real-data evaluation, governed review, commit, push, and CI verification remain pending.
 
 ## Verification evidence
 
@@ -130,6 +147,12 @@ release, or deployment has occurred.
   E2E spec lint and two-test discovery, `uv lock --check`, compileall, `git diff --check`, and the direct
   release audit. Backend dependencies were unavailable in the offline local environment, so the exact
   remote candidate's successful CI is the authoritative backend and live-browser evidence.
+- Current Round 10 local candidate verification: 2 launcher tests; frontend ESLint, TypeScript, 92
+  Vitest cases, and production build; two-test Playwright discovery/compilation; 10 isolated release-audit
+  tests; `uv lock --check --offline`; compileall; `git diff --check`; and a direct release audit over 110
+  candidate files plus 202 historical entries all passed. The task-created incomplete backend virtual
+  environment was moved out of the repository. Full backend pytest/Ruff and live Playwright remain
+  unavailable locally and must pass on the exact remote candidate before this round is accepted.
 
 ## Known limitations and blockers
 
@@ -142,7 +165,8 @@ unattended full-book output quality.
 - The representative export uses deterministic mock translations for structural testing. Real Chinese
   translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
   reconstruction artifacts still prevent unattended publication.
-- MangaOCR/PaddleOCR recognition, an automatic post-OCR trust gate, arbitrary polygon/whole-page mask
-  editing, line-art-aware restoration, and a real Real-ESRGAN run remain roadmap work.
-- Automatic regions still need a post-OCR trust/disposition gate that retains every proposal for human
-  review while preventing unconfirmed automatic OCR from reaching translation or safe repair.
+- MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, line-art-aware restoration,
+  and a real Real-ESRGAN run remain roadmap work.
+- The post-OCR trust/disposition candidate still needs full backend/live-browser CI, privacy-safe
+  real-data aggregate evaluation, governed delivery, and exact-commit verification before it is durable
+  evidence.

@@ -21,6 +21,9 @@ inpainting, typesetting, review, and export as separate replaceable stages.
   and original-coordinate mapping
 - Offline Tesseract Japanese OCR plus optional PP-OCRv3 polygon detection, including horizontal and
   vertical workflows, low-confidence original-image retry, and actual provider provenance
+- Versioned detector/OCR evidence with separate confidence values, provider/input/language provenance,
+  OCR attempts retained across reruns, and a fail-closed human trust checkpoint; automatic proposals
+  remain reviewable regardless of confidence, while preprocessing changes revoke dependent trust
 - Manual, deterministic mock, local dictionary, and configurable OpenAI-compatible translation
 - Bounded same-page reading-order context, glossary controls, and remote privacy warnings
 - Text-aware or region masks with padding, dilation, feathering, a visible mask overlay, editable
@@ -39,9 +42,9 @@ Optional models and ONNX Runtime are not part of the default install, and the ap
 downloads them at startup. Pixel mask edits are bounded, ordered strokes attached to one selected
 region; arbitrary whole-page raster editing and arbitrary persisted region polygons are not yet
 available. PP-OCR/Tesseract can still confuse detailed line art with text, and LaMa
-can leave a visible reconstruction band where lettering covers complex line work. A confirmed or
-recognized-region policy prevents those uncertain boxes from being repaired automatically, but human
-review remains required.
+can leave a visible reconstruction band where lettering covers complex line work. The default safe
+workflow requires explicit human trust before translation or image repair; confidence never grants
+that trust automatically. Human review remains required.
 
 The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, artistic
 sound-effect redraw, automatic font matching, reliable speech-bubble classification, PDF/EPUB import,
@@ -59,7 +62,8 @@ flowchart TB
   Queue --> P[Optional image preprocessing]
   P --> D[Text detection]
   D --> O[Japanese OCR provider]
-  O --> R[Reading order]
+  O --> H[Confirm or ignore OCR proposals]
+  H --> R[Reading order]
   R --> T[Translation provider]
   T --> I[Inpainting provider]
   I --> Y[Typesetting engine]
@@ -175,9 +179,12 @@ Package names differ between distributions; verify `tesseract --list-langs` cont
 3. Import images or a folder. Folder import removes the selected root folder itself and preserves all
    paths beneath it, so selecting `input/` retains `chapter-01/001.png`.
 4. Optionally run preprocessing, compare the enhanced image with the original, then detect and OCR.
-5. Review numbered regions in the canvas and Text panel; empty or uncertain detections are not safe
-   repair candidates until corrected or confirmed.
-6. Enter Chinese manually or choose a configured translation provider.
+5. Review every numbered OCR proposal in the canvas and Text panel, then explicitly confirm or ignore
+   it. Confidence is evidence only and never authorizes translation or default safe repair.
+6. Enter Chinese manually or choose a configured translation provider. Only trusted text and trusted
+   bounded same-page context reach a translator. Automatic translation that changes the translated text
+   clears the current content confirmation, so inspect the result and confirm the region again before
+   completing page review.
 7. Inspect the real mask overlay, choose text/full-region masking and an available inpainter, adjust
    the selected region with the mask brush/eraser, then rerun repair and typesetting as needed.
 8. Confirm or ignore each text region, explicitly accept the enhanced/repair/typeset results you will
@@ -237,9 +244,10 @@ health state when the executable is not installed. It does not download an execu
 optional AI provider and runs the OpenCV Zoo 512×512 model locally through ONNX Runtime. It performs
 context-cropped inference and composites only inside the mask, preserving every zero-mask pixel.
 
-The default `safe` repair policy repairs confirmed regions, manual recognized regions, and
-detector-generated recognized regions above the confidence threshold. Empty or low-confidence automatic
-detections are skipped. Use `recognized` or `all` only for deliberate review/testing. AI restoration is
+The default `safe` repair policy repairs only regions with a current explicit human trust decision.
+Automatic proposals remain pending even at high confidence. Use `recognized` or `all` only as deliberate
+high-risk review/testing overrides; plates created by those overrides are not reused by a later `safe`
+typesetting run. AI restoration is
 materially better than whole-page rectangular OpenCV repair on tested complex pages, but it cannot
 reconstruct line work hidden entirely by the original glyphs and may still need an external editor.
 
@@ -252,9 +260,9 @@ reconstruct line work hidden entirely by the original glyphs and may still need 
 
 Copy `.env.example` to `.env` for process configuration, or enter an API key in Project Settings for
 the current backend session only. Never paste a production credential into a project manifest. Each
-remote request contains the current text, a bounded number of preceding/following text regions by
-reading order on the same page, optional character names/glossary, and no image bytes or whole-book
-context.
+remote request contains one explicitly trusted current text, a bounded number of explicitly trusted
+preceding/following text regions by reading order on the same page, optional character names/glossary,
+and no image bytes or whole-book context.
 
 Use HTTPS for every non-loopback endpoint. Plain HTTP is appropriate only for a trusted service bound
 to loopback, because the configured API key is sent to that endpoint as a Bearer credential. Endpoint
@@ -323,6 +331,9 @@ The prior Round 7 candidate was verified on 2026-08-12:
 Coverage counts and OCR confidence are not accuracy claims because the supplied set has no annotated
 box/transcription ground truth. See [Real-data iteration status](docs/real-data-iteration-status.md) for
 the measured tradeoffs, visual findings, and remaining roadmap.
+
+The post-Round-9 OCR trust/disposition work described above is a current working candidate. Its public
+regression and delivery gates are not yet registered, and prior Round 7/9 evidence does not verify it.
 
 The 0.2.0 source tree was verified on 2026-08-06:
 

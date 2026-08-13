@@ -144,6 +144,7 @@ export function BatchDrawer() {
   const setOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const project = useWorkbenchStore((state) => state.currentProject);
   const images = useWorkbenchStore((state) => state.images);
+  const regionsByImage = useWorkbenchStore((state) => state.regionsByImage);
   const selectedImageIds = useWorkbenchStore((state) => state.selectedImageIds);
   const providers = useWorkbenchStore((state) => state.capabilities.providers);
   const jobs = useWorkbenchStore((state) => state.jobs);
@@ -208,6 +209,20 @@ export function BatchDrawer() {
       || (requiresInpaint && unacceptedInpaintCount > 0));
   const pipelineExportBlocked = steps.export
     && (Object.keys(steps) as JobKind[]).some((kind) => kind !== 'export' && steps[kind]);
+  const trustGatedKinds: JobKind[] = ['translate', 'inpaint', 'typeset'];
+  const ocrDownstreamMixed = steps.ocr && trustGatedKinds.some((kind) => steps[kind]);
+  const trustGateEnabled = trustGatedKinds.some((kind) => steps[kind]);
+  const pendingTrustCount = trustGateEnabled
+    ? imageIds.reduce((total, imageId) => {
+        const image = images.find((entry) => entry.id === imageId);
+        const serverPending = Math.max(0, Number(image?.trustReviewCount ?? 0));
+        const loadedPending = (regionsByImage[imageId] ?? []).filter(
+          (region) => !region.ignored && region.trustDisposition !== 'trusted',
+        ).length;
+        return total + Math.max(serverPending, loadedPending);
+      }, 0)
+    : 0;
+  const trustGateBlocked = trustGateEnabled && pendingTrustCount > 0;
   const outputPathHint = exportOptions.format === 'json'
     ? '仅写入文本元数据；不会复制图像，也不会创建可重开的项目快照。'
     : exportOptions.format === 'images'
@@ -218,7 +233,7 @@ export function BatchDrawer() {
   const selectedKinds = (Object.keys(steps) as JobKind[]).filter((kind) => steps[kind]);
 
   async function run() {
-    if (imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked) return;
+    if (imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked || ocrDownstreamMixed || trustGateBlocked) return;
     setStarting(true);
     const success = await startBatch(selectedKinds, imageIds, exportOptions, concurrency);
     setStarting(false);
@@ -271,6 +286,12 @@ export function BatchDrawer() {
               ) : null}
             {pipelineExportBlocked ? (
               <div className="notice notice--warning" role="status"><b>先处理→复核→再导出</b><span>处理阶段会使旧产物或复核结论失效，不能与导出一次性排队。请先完成处理，逐页复核后再单独导出。</span></div>
+            ) : null}
+            {ocrDownstreamMixed ? (
+              <div className="notice notice--warning" role="status"><b>OCR 后必须先人工确认</b><span>OCR 不能与翻译、擦字修复或嵌字排版放进同一批次。请先单独完成 OCR，再确认每个候选框。</span></div>
+            ) : null}
+            {trustGateBlocked ? (
+              <div className="notice notice--warning" role="status"><b>还有 {pendingTrustCount} 个 OCR 文本框待信任确认</b><span>置信度不是放行依据。请逐个确认或忽略后，再开始翻译和安全图像处理。</span></div>
             ) : null}
           </section>
           <section className="drawer-section">
@@ -355,7 +376,7 @@ export function BatchDrawer() {
           </section>
         </div>
         <footer className="batch-drawer__footer">
-          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length || imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked} onClick={() => void run()} type="button">
+          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length || imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked || ocrDownstreamMixed || trustGateBlocked} onClick={() => void run()} type="button">
             {starting ? '正在创建队列…' : `加入队列 · ${imageIds.length} 张 · ${selectedKinds.length} 步`}
           </button>
         </footer>

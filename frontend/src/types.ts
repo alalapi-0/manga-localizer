@@ -5,6 +5,7 @@ export type RightPanelTab = 'text' | 'typesetting' | 'repair' | 'project';
 export type ReviewState = 'pending' | 'reviewed' | 'no-text-reviewed';
 export type VisualStage = 'preprocess' | 'inpaint' | 'typeset';
 export type StageReviewState = 'pending' | 'accepted' | 'rejected';
+export type RegionDisposition = 'review' | 'trusted' | 'ignored';
 
 export interface StageReview {
   state: Exclude<StageReviewState, 'pending'>;
@@ -130,6 +131,8 @@ export interface ImageAsset {
   regionCount: number;
   confirmedCount: number;
   ignoredCount: number;
+  trustedCount: number;
+  trustReviewCount: number;
   status: PipelineStatus;
   stageReviews: Partial<Record<VisualStage, StageReview>>;
   preprocessingProvider?: string;
@@ -197,6 +200,12 @@ export interface Region {
   direction: TextDirection;
   order: number;
   confidence: number | null;
+  detectorConfidence: number | null;
+  ocrConfidence: number | null;
+  trustDisposition: RegionDisposition;
+  trustReason: string;
+  trustPolicyVersion: number;
+  recognition: Record<string, unknown>;
   ignored: boolean;
   confirmed: boolean;
   style: RegionStyle;

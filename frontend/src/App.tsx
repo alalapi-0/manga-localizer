@@ -68,28 +68,28 @@ function useGlobalShortcuts() {
         }
         return;
       }
-      if (event.key === 'Tab') {
+      if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
         const regions = state.activeImageId
           ? [...(state.regionsByImage[state.activeImageId] ?? [])].sort((a, b) => a.order - b.order)
           : [];
         if (regions.length) {
           event.preventDefault();
           const currentIndex = regions.findIndex((region) => region.id === state.selectedRegionIds[0]);
-          const offset = event.shiftKey ? -1 : 1;
+          const offset = event.key === 'ArrowUp' ? -1 : 1;
           const nextIndex = currentIndex < 0
-            ? event.shiftKey ? regions.length - 1 : 0
+            ? event.key === 'ArrowUp' ? regions.length - 1 : 0
             : (currentIndex + offset + regions.length) % regions.length;
           const nextRegion = regions[nextIndex];
           if (nextRegion) state.selectRegion(nextRegion.id);
         }
         return;
       }
-      if (event.key === 'ArrowLeft' || event.key === '[') {
+      if (!event.altKey && (event.key === 'ArrowLeft' || event.key === '[')) {
         event.preventDefault();
         void state.navigateImage(-1);
         return;
       }
-      if (event.key === 'ArrowRight' || event.key === ']') {
+      if (!event.altKey && (event.key === 'ArrowRight' || event.key === ']')) {
         event.preventDefault();
         void state.navigateImage(1);
         return;

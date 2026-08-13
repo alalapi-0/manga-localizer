@@ -12,6 +12,7 @@ import type {
   Region,
   RegionType,
   TextDirection,
+  RegionDisposition,
 } from '../types';
 import { EmptyState, Field, ProviderBadge, Toggle } from './Primitives';
 
@@ -82,6 +83,35 @@ const defaultExportOptions: ExportOptions = {
 
 const EMPTY_REGIONS: Region[] = [];
 
+const dispositionLabels: Record<RegionDisposition, string> = {
+  review: 'OCR 待信任',
+  trusted: 'OCR 已信任',
+  ignored: '人工已忽略',
+};
+
+const dispositionReasonLabels: Record<string, string> = {
+  'automatic-proposal': '自动检测候选，等待人工确认',
+  'automatic-ocr-complete': 'OCR 已完成，置信度不能代替人工确认',
+  'manual-unconfirmed': '手动创建，等待人工确认',
+  'human-confirmed': '已由人工明确确认',
+  'human-ignored': '已由人工明确忽略',
+  'trust-input-changed': '原文或识别范围已变化，需要重新确认',
+  'legacy-confirmed': '兼容旧项目中的人工确认记录',
+  'legacy-unverified': '旧记录没有明确的信任决定',
+  'policy-version-changed': '信任策略已更新，需要重新确认',
+};
+
+function dispositionReason(region: Region): string {
+  return dispositionReasonLabels[region.trustReason]
+    ?? `原因：${region.trustReason || '未提供'}`;
+}
+
+function percent(value: number | null): string {
+  if (value === null) return '未评分';
+  const normalized = value <= 1 ? value * 100 : value;
+  return `${Math.round(normalized * 10) / 10}%`;
+}
+
 function PageReviewControl({ regions }: { regions: Region[] }) {
   const image = useWorkbenchStore(activeImage);
   const reviewActiveImage = useWorkbenchStore((state) => state.reviewActiveImage);
@@ -92,18 +122,23 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
   if (!image) return null;
   const state = image.status.reviewState;
   const activeRegions = regions.filter((region) => !region.ignored);
-  const unconfirmedCount = activeRegions.filter((region) => !region.confirmed).length;
-  const actionState = activeRegions.length === 0 ? 'no-text-reviewed' : 'reviewed';
+  const loadedUnreadyCount = activeRegions.filter(
+    (region) => !region.confirmed || region.trustDisposition !== 'trusted',
+  ).length;
+  const serverPendingCount = Math.max(0, Number(image.trustReviewCount ?? 0));
+  const unreadyCount = Math.max(serverPendingCount, loadedUnreadyCount);
+  const hasKnownActiveRegions = activeRegions.length > 0 || serverPendingCount > 0;
+  const actionState = hasKnownActiveRegions ? 'reviewed' : 'no-text-reviewed';
   const reviewed = state !== 'pending';
   const label = state === 'reviewed'
     ? '本页已标记检查完毕'
     : state === 'no-text-reviewed'
       ? '本页已确认无文字'
-      : activeRegions.length === 0
-        ? '本页没有活动文本框，可确认无文字'
-        : unconfirmedCount > 0
-          ? `还有 ${unconfirmedCount} 个活动文本框尚未确认`
-          : `${activeRegions.length} 个活动文本框均已确认，可完成页面检查`;
+      : unreadyCount > 0
+        ? `还有 ${unreadyCount} 个活动文本框尚未确认并信任`
+        : activeRegions.length === 0
+          ? '本页没有活动文本框，可确认无文字'
+          : `${activeRegions.length} 个活动文本框均已信任，可完成页面检查`;
 
   async function submit() {
     setSubmitting(true);
@@ -119,7 +154,7 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
       </div>
       <button
         className={`button button--compact ${reviewed ? '' : 'button--accent'}`}
-        disabled={submitting || regionsLoading || (!reviewed && unconfirmedCount > 0)}
+        disabled={submitting || regionsLoading || (!reviewed && unreadyCount > 0)}
         onClick={() => void submit()}
         type="button"
       >
@@ -129,10 +164,10 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
           ? '正在保存…'
           : reviewed
             ? '撤回检查标记'
-            : activeRegions.length === 0
-              ? '确认本页无文字'
-              : unconfirmedCount > 0
-                ? `还需确认 ${unconfirmedCount} 个文本框`
+            : unreadyCount > 0
+              ? `还需确认并信任 ${unreadyCount} 个文本框`
+              : activeRegions.length === 0
+                ? '确认本页无文字'
                 : '标记本页已检查'}
       </button>
     </section>
@@ -184,7 +219,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           <button key={region.id} onClick={() => selectRegion(region.id)} type="button">
             <b>#{region.order}</b>
             <span>{region.sourceText || '（空文本）'}</span>
-            <em>{region.confirmed ? '已确认' : region.ignored ? '已忽略' : '待复核'}</em>
+            <em>{dispositionLabels[region.trustDisposition]}</em>
           </button>
         ))}
       </div>
@@ -192,7 +227,9 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
   }
 
   if (selected.length > 1) {
-    const allConfirmed = selected.every((region) => region.confirmed);
+    const allTrusted = selected.every(
+      (region) => region.confirmed && !region.ignored && region.trustDisposition === 'trusted',
+    );
     const allIgnored = selected.every((region) => region.ignored);
     return (
       <div className="form-stack">
@@ -219,7 +256,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           </select>
         </Field>
         <Toggle
-          checked={allConfirmed}
+          checked={allTrusted}
           label="全部确认"
           onChange={(event) => selected.forEach((region) => {
             void setRegionConfirmed(region.id, event.target.checked);
@@ -247,10 +284,15 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
     <div className="form-stack text-inspector">
       <div className="region-heading">
         <div><span>文本框</span><strong>#{region.order}</strong></div>
-        <span className={`review-state review-state--${region.confirmed ? 'confirmed' : region.ignored ? 'ignored' : 'pending'}`}>
-          {region.confirmed ? '已确认' : region.ignored ? '已忽略' : '待复核'}
+        <span className={`review-state review-state--${region.ignored || region.trustDisposition === 'ignored' ? 'ignored' : region.confirmed && region.trustDisposition === 'trusted' ? 'confirmed' : 'pending'}`}>
+          {dispositionLabels[region.trustDisposition]}
         </span>
       </div>
+      <section className={`trust-summary trust-summary--${region.trustDisposition}`} aria-label="OCR 信任状态">
+        <strong>{dispositionLabels[region.trustDisposition]}</strong>
+        <span>{dispositionReason(region)}</span>
+        <small>检测 {percent(region.detectorConfidence)} · OCR {percent(region.ocrConfidence)} · 策略 v{region.trustPolicyVersion}</small>
+      </section>
       <Field label="日文原文">
         <textarea
           aria-label="日文原文"
@@ -260,7 +302,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           value={region.sourceText}
         />
       </Field>
-      <div className="text-meta"><span>{region.sourceText.length} 字符</span><span>OCR {confidencePercent === '' ? '未评分' : `${confidencePercent}%`}</span></div>
+      <div className="text-meta"><span>{region.sourceText.length} 字符</span><span>兼容评分 {confidencePercent === '' ? '未评分' : `${confidencePercent}%`}</span></div>
       <Field label="中文译文">
         <textarea
           aria-label="中文译文"
@@ -291,7 +333,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
             value={region.order || ''}
           />
         </Field>
-        <Field label="置信度 %" hint="可手动校正 OCR 评分">
+        <Field label="兼容评分 %" hint="仅供旧项目显示；不会自动建立 OCR 信任">
           <input
             aria-label="置信度"
             max={100}
@@ -303,7 +345,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           />
         </Field>
       </div>
-      <Toggle checked={region.confirmed} description="计入页面复核进度" label="确认此文本框" onChange={(event) => {
+      <Toggle checked={region.confirmed && !region.ignored && region.trustDisposition === 'trusted'} description={region.trustDisposition === 'trusted' ? 'OCR 已由人工信任；修改或翻译后还需再确认当前内容，才可完成页面复核' : '明确确认后才允许翻译和安全图像处理，并获得页面复核资格'} label="确认此文本框" onChange={(event) => {
         void setRegionConfirmed(region.id, event.target.checked);
       }} />
       <Toggle checked={region.ignored} description="图像处理会跳过；导出 JSON 仍保留此记录" label="忽略此文本框" onChange={(event) => updateRegion(region.id, { ignored: event.target.checked })} />

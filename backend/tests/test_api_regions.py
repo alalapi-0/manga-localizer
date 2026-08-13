@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
+
+from manga_localizer.database import ImageAsset, TextRegion
+from manga_localizer.services.trust import with_detection_evidence, with_ocr_evidence
 
 from .conftest import create_project, upload_image
 
@@ -30,6 +34,11 @@ def test_region_crud_revision_history_and_conflict(client: TestClient, tmp_path:
     assert region["revision"] == 1
     assert region["type"] == "dialogue"
     assert region["ocrProvider"] == "manual"
+    assert region["trustDisposition"] == "review"
+    assert region["trustReason"] == "manual-unconfirmed"
+    assert region["trustPolicyVersion"] == 1
+    assert region["detectorConfidence"] is None
+    assert region["ocrConfidence"] is None
 
     updated = client.patch(
         f"/api/regions/{region['id']}",
@@ -64,6 +73,215 @@ def test_region_crud_revision_history_and_conflict(client: TestClient, tmp_path:
     deleted = client.delete(f"/api/regions/{region['id']}", params={"expectedRevision": 2})
     assert deleted.status_code == 204
     assert client.get(f"/api/images/{image['id']}/regions").json() == []
+
+
+def test_deleting_a_trusted_region_invalidates_translation(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "delete-trusted-region")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        asset = session.get(ImageAsset, image["id"])
+        assert asset is not None
+        asset.status = {**asset.status, "translation": "done"}
+
+    deleted = client.delete(
+        f"/api/regions/{region['id']}",
+        params={"expectedRevision": confirmed.json()["revision"]},
+    )
+    assert deleted.status_code == 204, deleted.text
+    state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert state["status"]["translation"] == "pending"
+
+
+def test_recognition_trust_is_read_only_and_has_fail_closed_transitions(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "recognition-project")
+    image = upload_image(client, project["id"])
+    rejected = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 10,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "recognition": {
+                "version": 1,
+                "trust": {
+                    "policyVersion": 1,
+                    "disposition": "trusted",
+                    "reason": "human-confirmed",
+                },
+            },
+        },
+    )
+    assert rejected.status_code == 422
+
+    region = _create_region(client, image["id"], 20, 30)
+    assert region["recognition"]["version"] == 1
+    assert region["trustDisposition"] == "review"
+
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    trusted = confirmed.json()
+    assert trusted["confirmed"] is True
+    assert trusted["trustDisposition"] == "trusted"
+    assert trusted["trustReason"] == "human-confirmed"
+
+    translated = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"translationText": "下游译文", "expectedRevision": trusted["revision"]},
+    )
+    assert translated.status_code == 200, translated.text
+    downstream = translated.json()
+    assert downstream["confirmed"] is False
+    assert downstream["trustDisposition"] == "trusted"
+    assert downstream["trustReason"] == "human-confirmed"
+    image_counts = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert image_counts["confirmedCount"] == 0
+    assert image_counts["trustedCount"] == 1
+    assert image_counts["trustReviewCount"] == 0
+
+    changed_source = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"sourceText": "修改原文", "expectedRevision": downstream["revision"]},
+    )
+    assert changed_source.status_code == 200, changed_source.text
+    review = changed_source.json()
+    assert review["trustDisposition"] == "review"
+    assert review["trustReason"] == "trust-input-changed"
+
+    reconfirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": review["revision"]},
+    )
+    assert reconfirmed.status_code == 200, reconfirmed.text
+    assert reconfirmed.json()["trustDisposition"] == "trusted"
+
+    ignored = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"ignored": True, "expectedRevision": reconfirmed.json()["revision"]},
+    )
+    assert ignored.status_code == 200, ignored.text
+    assert ignored.json()["trustDisposition"] == "ignored"
+    assert ignored.json()["trustReason"] == "human-ignored"
+
+    unignored = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"ignored": False, "expectedRevision": ignored.json()["revision"]},
+    )
+    assert unignored.status_code == 200, unignored.text
+    assert unignored.json()["trustDisposition"] == "review"
+    assert unignored.json()["trustReason"] == "trust-input-changed"
+
+
+def test_policy_change_preserves_readable_detection_and_ocr_evidence(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "policy-change-project")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    recognition = with_detection_evidence({}, 0.77, "generated-detector")
+    recognition = with_ocr_evidence(
+        recognition,
+        0.82,
+        "generated-ocr",
+        attempts=[
+            {
+                "provider": "generated-ocr",
+                "inputVariant": "original",
+                "confidence": 0.82,
+                "direction": "vertical",
+            }
+        ],
+        selected_index=0,
+    )
+    recognition["trust"] = {
+        "policyVersion": 0,
+        "disposition": "trusted",
+        "reason": "human-confirmed",
+    }
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        assert persisted is not None
+        persisted.recognition = recognition
+        persisted.confirmed = True
+
+    current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+    assert current["confirmed"] is True
+    assert current["detectorConfidence"] == 0.77
+    assert current["ocrConfidence"] == 0.82
+    assert current["recognition"]["ocr"]["attempts"][0]["inputVariant"] == "original"
+    assert current["trustDisposition"] == "review"
+    assert current["trustReason"] == "policy-version-changed"
+
+    reconfirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": current["revision"]},
+    )
+    assert reconfirmed.status_code == 200, reconfirmed.text
+    assert reconfirmed.json()["confirmed"] is True
+    assert reconfirmed.json()["trustDisposition"] == "trusted"
+    assert reconfirmed.json()["trustReason"] == "human-confirmed"
+
+
+@pytest.mark.parametrize(
+    ("disposition", "reason", "expected_reason"),
+    (
+        ("trusted", "automatic-proposal", "policy-version-changed"),
+        ("ignored", "human-ignored", "trust-input-changed"),
+    ),
+)
+def test_contradictory_trust_records_fail_closed_and_can_be_reconfirmed(
+    client: TestClient,
+    app,
+    tmp_path: Path,
+    disposition: str,
+    reason: str,
+    expected_reason: str,
+) -> None:
+    project = create_project(client, tmp_path / f"contradictory-{disposition}")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    recognition = with_detection_evidence({}, 0.99, "generated-detector")
+    recognition["trust"] = {
+        "policyVersion": 1,
+        "disposition": disposition,
+        "reason": reason,
+    }
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        assert persisted is not None
+        persisted.recognition = recognition
+        persisted.confirmed = True
+        persisted.ignored = False
+
+    current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+    assert current["confirmed"] is True
+    assert current["ignored"] is False
+    assert current["trustDisposition"] == "review"
+    assert current["trustReason"] == expected_reason
+
+    reconfirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": current["revision"]},
+    )
+    assert reconfirmed.status_code == 200, reconfirmed.text
+    assert reconfirmed.json()["trustDisposition"] == "trusted"
+    assert reconfirmed.json()["trustReason"] == "human-confirmed"
 
 
 def test_region_must_remain_inside_image(client: TestClient, tmp_path: Path) -> None:
@@ -265,7 +483,8 @@ def test_page_review_is_explicit_revisioned_and_reset_by_region_changes(
     )
     assert unconfirmed_bypass.status_code == 400
     assert unconfirmed_bypass.json()["detail"] == (
-        "Cannot mark image as reviewed until every non-ignored region is confirmed (1 unconfirmed)"
+        "Cannot mark image as reviewed until every non-ignored region is confirmed "
+        "and trusted (1 not ready)"
     )
 
     confirmed = client.patch(
@@ -518,3 +737,5 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
     )
     assert autosaved_repair.status_code == 200, autosaved_repair.text
     assert autosaved_repair.json()["confirmed"] is False
+    assert autosaved_repair.json()["trustDisposition"] == "trusted"
+    assert autosaved_repair.json()["trustReason"] == "human-confirmed"

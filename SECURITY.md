@@ -21,8 +21,9 @@ It is not safe to expose directly to a LAN or the internet. Project and import r
 boundaries even in local mode; traversal, symlink escape, source overwrite, and unsafe artifact access
 are rejected.
 
-Remote translation is opt-in and transmits the current text plus bounded preceding/following text by
-reading order on the same page to the configured service. Use HTTPS for every non-loopback endpoint.
+Remote translation is opt-in and transmits only explicitly trusted current text plus explicitly trusted
+bounded preceding/following text by reading order on the same page to the configured service. Pending
+and ignored regions are excluded. Use HTTPS for every non-loopback endpoint.
 Plain HTTP is appropriate only for a deliberately configured service on trusted loopback:
 OpenAI-compatible API keys travel as bearer credentials and are otherwise exposed in transit.
 Remote base URLs containing embedded credentials, queries, fragments, control characters, or

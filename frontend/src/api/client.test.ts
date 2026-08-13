@@ -100,6 +100,12 @@ describe('api client contract', () => {
     expect(body).not.toHaveProperty('revision');
     expect(body).not.toHaveProperty('createdAt');
     expect(body).not.toHaveProperty('updatedAt');
+    expect(body).not.toHaveProperty('trustDisposition');
+    expect(body).not.toHaveProperty('trustReason');
+    expect(body).not.toHaveProperty('trustPolicyVersion');
+    expect(body).not.toHaveProperty('detectorConfidence');
+    expect(body).not.toHaveProperty('ocrConfidence');
+    expect(body).not.toHaveProperty('recognition');
   });
 
   it('preserves backend-supported repair settings on region patches too', async () => {
@@ -134,6 +140,31 @@ describe('api client contract', () => {
       },
     });
     expect(body.repair).not.toHaveProperty('padding');
+  });
+
+  it('omits server-owned trust evidence from region patches', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(
+      regionFixture('region-1'),
+    ));
+
+    await api.updateRegion('region-1', {
+      ...regionFixture('region-1', {
+        trustDisposition: 'trusted',
+        trustReason: 'human-confirmed',
+        detectorConfidence: 0.42,
+        ocrConfidence: 0.99,
+        recognition: { provider: 'test-provider' },
+      }),
+      expectedRevision: 4,
+    });
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, unknown>;
+    expect(body).not.toHaveProperty('trustDisposition');
+    expect(body).not.toHaveProperty('trustReason');
+    expect(body).not.toHaveProperty('trustPolicyVersion');
+    expect(body).not.toHaveProperty('detectorConfidence');
+    expect(body).not.toHaveProperty('ocrConfidence');
+    expect(body).not.toHaveProperty('recognition');
   });
 
   it('sends the explicit page review state with its required image revision', async () => {

@@ -75,11 +75,7 @@ def test_visual_stage_review_is_normalized_revision_guarded_and_reopenable(
     with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
         reopened = fresh.post(
             "/api/projects/open",
-            json={
-                "manifestPath": str(
-                    tmp_path / "stage-review-project/project/project.json"
-                )
-            },
+            json={"manifestPath": str(tmp_path / "stage-review-project/project/project.json")},
         )
         assert reopened.status_code == 200, reopened.text
         persisted = fresh.get(f"/api/projects/{project['id']}/images").json()[0]
@@ -476,9 +472,7 @@ def test_accepting_changed_upstream_artifact_clears_dependent_review(
     assert set(changed.json()["stageReviews"]) == {"inpaint"}
 
 
-def test_visual_stage_review_requires_completed_stage(
-    client: TestClient, tmp_path: Path
-) -> None:
+def test_visual_stage_review_requires_completed_stage(client: TestClient, tmp_path: Path) -> None:
     project = create_project(client, tmp_path / "unfinished-stage-review")
     image = upload_image(client, project["id"])
     response = client.patch(
@@ -532,6 +526,7 @@ def test_openai_session_key_enables_provider_without_persisting_or_returning_sec
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     from manga_localizer.config import Settings
+
     data_dir = tmp_path / "session-catalog"
     app = create_app(Settings(data_dir=data_dir), start_worker=False)
     secret = "sk-session-test-value"
@@ -691,6 +686,7 @@ def test_open_portable_project_with_a_fresh_catalog(
     manifest = root / "project/project.json"
 
     from manga_localizer.config import Settings
+
     fresh_settings = Settings(data_dir=tmp_path / "other-catalog")
     with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
         opened = fresh.post("/api/projects/open", json={"manifestPath": str(manifest)})
@@ -701,6 +697,7 @@ def test_open_portable_project_with_a_fresh_catalog(
 
 def test_open_scrubs_legacy_secrets_from_response_history_and_database(tmp_path: Path) -> None:
     from manga_localizer.config import Settings
+
     root = tmp_path / "legacy"
     setup_app = create_app(Settings(data_dir=tmp_path / "setup-catalog"), start_worker=False)
     with TestClient(setup_app) as setup_client:
@@ -1018,6 +1015,7 @@ def test_open_rejects_database_symlink_without_mutating_the_other_project(
     tmp_path: Path,
 ) -> None:
     from manga_localizer.config import Settings
+
     first_root = tmp_path / "first"
     second_root = tmp_path / "second"
     app = create_app(Settings(data_dir=tmp_path / "catalog"), start_worker=False)

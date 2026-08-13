@@ -153,10 +153,7 @@ def stage_reviews(image: ImageAsset) -> dict[str, dict[str, str | int]]:
             or not _SHA256_RE.fullmatch(artifact_checksum)
             or (
                 stage == "inpaint"
-                and (
-                    not isinstance(mask_checksum, str)
-                    or not _SHA256_RE.fullmatch(mask_checksum)
-                )
+                and (not isinstance(mask_checksum, str) or not _SHA256_RE.fullmatch(mask_checksum))
             )
         ):
             continue
@@ -587,10 +584,7 @@ def review_image_stage(
             if state != "pending" and image.status.get(stage) != "done":
                 raise ProjectError(f"Cannot review {stage} output until that stage is done")
             if state == "pending":
-                if (
-                    observed_artifact_checksum is not None
-                    or observed_mask_checksum is not None
-                ):
+                if observed_artifact_checksum is not None or observed_mask_checksum is not None:
                     raise ProjectError("Pending visual reviews cannot include observed checksums")
                 checksums: dict[str, str] = {}
             else:
@@ -606,9 +600,7 @@ def review_image_stage(
                 observed = {"artifactChecksum": observed_artifact_checksum}
                 if stage == "inpaint":
                     observed["maskChecksum"] = observed_mask_checksum
-                mismatches = [
-                    key for key, value in observed.items() if value != checksums.get(key)
-                ]
+                mismatches = [key for key, value in observed.items() if value != checksums.get(key)]
                 if mismatches:
                     raise StageReviewObservationConflict(
                         "The reviewed visual no longer matches the current stage output",
@@ -657,9 +649,7 @@ def review_image_stage(
             status["export"] = "pending"
             image.status = status
             image.processing_errors = [
-                error
-                for error in (image.processing_errors or [])
-                if error.get("stage") != "export"
+                error for error in (image.processing_errors or []) if error.get("stage") != "export"
             ]
             image.revision += 1
             session.flush()

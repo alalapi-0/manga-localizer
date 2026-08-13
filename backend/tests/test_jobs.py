@@ -1467,9 +1467,7 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert rejected_job["status"] == "failed"
         assert "Stage review must be accepted for inpaint" in rejected_job["items"][0]["error"]
         assert not rejected_root.exists()
-        current_after_rejection = client.get(
-            f"/api/projects/{project['id']}/images"
-        ).json()[0]
+        current_after_rejection = client.get(f"/api/projects/{project['id']}/images").json()[0]
         page_reviewed = _set_stage_review(
             client,
             current_after_rejection,

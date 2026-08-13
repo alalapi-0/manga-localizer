@@ -522,9 +522,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         )
         return _image_dict(reviewed)
 
-    @router.patch(
-        "/images/{image_id}/stage-reviews/{stage}", response_model=ImageOut
-    )
+    @router.patch("/images/{image_id}/stage-reviews/{stage}", response_model=ImageOut)
     async def image_stage_review(
         image_id: str, stage: str, body: StageReviewRequest
     ) -> dict[str, Any]:

@@ -684,9 +684,7 @@ class PersistentJobQueue:
                     raise JobConflict("Job has no failed or cancelled items to retry")
             job.status = JobStatus.QUEUED.value
             job.error = None
-            job.completed = sum(
-                item.status == JobStatus.COMPLETED.value for item in job.items
-            )
+            job.completed = sum(item.status == JobStatus.COMPLETED.value for item in job.items)
             job.progress = job.completed / job.total if job.total else 0.0
         store.write_snapshot()
         return self.get_job(store, job_id)

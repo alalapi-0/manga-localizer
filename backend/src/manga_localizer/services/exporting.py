@@ -893,8 +893,7 @@ def validate_image_export_readiness(
     missing_reviews = [
         stage
         for stage in required_reviews
-        if not isinstance(reviews.get(stage), dict)
-        or reviews[stage].get("state") != "accepted"
+        if not isinstance(reviews.get(stage), dict) or reviews[stage].get("state") != "accepted"
     ]
     if missing_reviews:
         labels = ", ".join(missing_reviews)

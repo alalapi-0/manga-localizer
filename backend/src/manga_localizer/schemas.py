@@ -70,9 +70,9 @@ class ImageOut(APIModel):
     height: int
     media_type: str
     status: dict[str, str]
-    stage_reviews: dict[
-        Literal["preprocess", "inpaint", "typeset"], dict[str, str | int]
-    ] = Field(default_factory=dict)
+    stage_reviews: dict[Literal["preprocess", "inpaint", "typeset"], dict[str, str | int]] = Field(
+        default_factory=dict
+    )
     region_count: int
     confirmed_count: int
     ignored_count: int
@@ -117,9 +117,7 @@ class StageReviewRequest(APIModel):
             ):
                 raise ValueError("Pending visual reviews cannot include observed checksums")
         elif self.observed_artifact_checksum is None:
-            raise ValueError(
-                "Accepted and rejected reviews require an observed artifact checksum"
-            )
+            raise ValueError("Accepted and rejected reviews require an observed artifact checksum")
         return self
 
 

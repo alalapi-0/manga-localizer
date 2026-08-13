@@ -5,7 +5,6 @@ from pathlib import Path, PurePosixPath
 
 import pytest
 
-
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "audit_release.py"
 SPEC = importlib.util.spec_from_file_location("audit_release", SCRIPT)
 assert SPEC is not None and SPEC.loader is not None

@@ -371,13 +371,14 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await inspector.getByRole('tab', { name: '修复' }).click();
+  await inspector.getByLabel('显示实际蒙版').check();
+  await expect(inspector.getByLabel('显示实际蒙版')).toBeChecked();
   const maskResponsePromise = page.waitForResponse(
     (response) => response.request().method() === 'GET'
       && response.url().includes('/generated/mask'),
   );
-  await inspector.getByLabel('显示实际蒙版').check();
-  expect((await maskResponsePromise).status()).toBe(200);
   await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
+  expect((await maskResponsePromise).status()).toBe(200);
   await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '嵌字排版', 'typeset');
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();

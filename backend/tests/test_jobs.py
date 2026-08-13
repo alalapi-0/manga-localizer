@@ -319,8 +319,11 @@ def test_export_failure_guard_refreshes_after_acquiring_the_export_lock(
         failed = app.state.queue.get_job(store, job_id)
         assert failed.items[0].status == JobStatus.FAILED.value
         assert failed.items[0].error == "current export failure"
+        with store.session() as session:
+            persisted_image = session.get(ImageAsset, image["id"])
+            assert persisted_image is not None
+            assert persisted_image.status["manualMarker"] == "edited"
         current_image = client.get(f"/api/projects/{project['id']}/images").json()[0]
-        assert current_image["status"]["manualMarker"] == "edited"
         assert current_image["status"]["export"] == "failed"
         assert current_image["revision"] == edited_revision[0] + 1
         assert current_image["processingErrors"][-1]["error"] == "current export failure"
@@ -1162,10 +1165,11 @@ def test_artifact_publication_and_revision_commit_are_atomic_with_stage_review(
     producer_errors: list[Exception] = []
     review_errors: list[Exception] = []
     original_atomic_write = queue_module.atomic_write_bytes
+    blocked_root = store.root / "generated" / blocked_directory
 
     def blocking_atomic_write(path: Path, data: bytes) -> None:
         original_atomic_write(path, data)
-        if path.parent.name == blocked_directory and not artifact_published.is_set():
+        if path.is_relative_to(blocked_root) and not artifact_published.is_set():
             artifact_published.set()
             assert release_publication.wait(3)
 
@@ -2310,6 +2314,16 @@ def test_export_retry_requeues_a_completed_page_that_changed_after_partial_failu
             },
         )
         assert changed.status_code == 200, changed.text
+        assert changed.json()["confirmed"] is False
+        reconfirmed = client.patch(
+            f"/api/regions/{first_region['id']}",
+            json={
+                "confirmed": True,
+                "expectedRevision": changed.json()["revision"],
+            },
+        )
+        assert reconfirmed.status_code == 200, reconfirmed.text
+        assert reconfirmed.json()["confirmed"] is True
         rerendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [first["id"]], "options": {}},

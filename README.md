@@ -24,8 +24,10 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 - Manual, deterministic mock, local dictionary, and configurable OpenAI-compatible translation
 - Bounded same-page reading-order context, glossary controls, and remote privacy warnings
 - Text-aware or region masks with padding, dilation, feathering, a visible mask overlay, editable
-  region boundaries, safe repair gating, OpenCV fallback, optional local LaMa ONNX restoration, and
-  Pillow horizontal or vertical Chinese typesetting
+  region boundaries, persisted per-region brush/eraser strokes, safe repair gating, OpenCV fallback,
+  optional local LaMa ONNX restoration, and Pillow horizontal or vertical Chinese typesetting
+- Persisted accept/reject review for enhanced, repaired, and typeset images; generated-image export
+  requires accepted reviews that still match the exact image and repair-mask bytes
 - Persistent non-blocking batch jobs with a 1–8 item limit, progress, cooperative controls, failure
   details, and retry; export is serialized for conflict-safe naming
 - Safe single/batch export preserving relative folders and emitting original/translated text JSON
@@ -34,9 +36,9 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 ## Honest limitations
 
 Optional models and ONNX Runtime are not part of the default install, and the application never
-downloads them at startup. There is still no pixel-level mask brush/eraser: manual mask correction is
-performed by moving/resizing/rotating a region or switching between its detector polygon, text-aware
-mask, and full region mask. PP-OCR/Tesseract can still confuse detailed line art with text, and LaMa
+downloads them at startup. Pixel mask edits are bounded, ordered strokes attached to one selected
+region; arbitrary whole-page raster editing and arbitrary persisted region polygons are not yet
+available. PP-OCR/Tesseract can still confuse detailed line art with text, and LaMa
 can leave a visible reconstruction band where lettering covers complex line work. A confirmed or
 recognized-region policy prevents those uncertain boxes from being repaired automatically, but human
 review remains required.
@@ -176,9 +178,10 @@ Package names differ between distributions; verify `tesseract --list-langs` cont
 5. Review numbered regions in the canvas and Text panel; empty or uncertain detections are not safe
    repair candidates until corrected or confirmed.
 6. Enter Chinese manually or choose a configured translation provider.
-7. Inspect the real mask overlay, choose text/full-region masking and an available inpainter, then
-   preview repair and typesetting. Moving or resizing a region also corrects its mask boundary.
-8. Confirm or ignore each text region and export. Original files are never replaced.
+7. Inspect the real mask overlay, choose text/full-region masking and an available inpainter, adjust
+   the selected region with the mask brush/eraser, then rerun repair and typesetting as needed.
+8. Confirm or ignore each text region, explicitly accept the enhanced/repair/typeset results you will
+   keep, then export. Original files are never replaced.
 
 Default project output resembles:
 
@@ -280,6 +283,11 @@ and [Security](SECURITY.md) before enabling remote services.
 - Project and region writes carry revision guards. Autosave rebases newer local edits and project
   settings onto acknowledged server revisions; an unresolved concurrent conflict is surfaced instead of
   silently overwriting another edit.
+- Visual-stage reviews are revision guarded and persist SHA-256 values calculated from the exact bytes
+  decoded in the review canvas; inpaint review also loads and visibly presents its mask. Upstream
+  rejection, withdrawal, regeneration, or changed bytes clears or blocks dependent acceptance.
+  JSON-only export is exempt, while generated-image export requires accepted, checksum-current inpaint
+  and, when applicable, typeset results.
 - Pause/cancel is cooperative: active items may finish, queued items stop, and persisted running work is
   recovered after restart. An interrupted cancelled item remains cancelled and can be retried explicitly.
 - Export files and the portable manifest/database pair use atomic replacement. A job-scoped owner marker
@@ -300,7 +308,7 @@ npm run audit:release       # secrets, personal paths, weights, fonts, DBs, larg
 Run `npm run setup:test` once before the first Playwright run. Backend-only and frontend-only
 commands are documented in [Development](docs/development.md).
 
-The current Unreleased candidate was verified on 2026-08-12:
+The prior Round 7 candidate was verified on 2026-08-12:
 
 - `npm run check`: 2 launcher tests, Ruff lint/format, 130 backend pytest cases, ESLint, TypeScript,
   64 frontend Vitest cases, and the production Vite build
@@ -347,8 +355,8 @@ No. Detection, OCR, reading order, and translation are explicit separate stages.
 
 OpenCV only interpolates nearby pixels, while LaMa predicts plausible local content; neither can know
 the line art that was fully hidden by a glyph. Inspect the mask overlay, adjust the region and
-padding/dilation/feathering, switch between text and full-region masks, and keep difficult textures for
-manual review. The current workbench has editable mask boundaries but no pixel brush.
+padding/dilation/feathering, switch between text and full-region masks, refine the selected region with
+the mask brush/eraser, and keep difficult textures for manual review.
 
 ### Can I use a commercial font?
 

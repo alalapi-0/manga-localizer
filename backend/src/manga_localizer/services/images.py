@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import re
 import shutil
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -36,6 +37,21 @@ class InvalidImage(ProjectError):
     pass
 
 
+class StageReviewObservationConflict(ProjectError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        resource: str,
+        stage: str,
+        mismatches: list[str],
+    ):
+        super().__init__(message)
+        self.resource = resource
+        self.stage = stage
+        self.mismatches = mismatches
+
+
 _PROVIDER_STATUS_KEYS = {
     "preprocess": "preprocessingProvider",
     "detection": "detectorProvider",
@@ -56,6 +72,117 @@ _ERROR_STAGE_KEYS = {
 }
 
 REVIEW_STATES = {"pending", "reviewed", "no-text-reviewed"}
+VISUAL_REVIEW_STAGES = {"preprocess", "inpaint", "typeset"}
+VISUAL_REVIEW_STATES = {"accepted", "rejected"}
+VISUAL_REVIEW_DEPENDENTS = {
+    "preprocess": {"inpaint", "typeset"},
+    "inpaint": {"typeset"},
+    "typeset": set(),
+}
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _generated_stage_path(
+    store: ProjectStore,
+    image: ImageAsset,
+    stage: str,
+) -> Path:
+    directory = {
+        "preprocess": "preprocessed",
+        "inpaint": "inpainted",
+        "typeset": "typeset",
+    }[stage]
+    relative = safe_relative_path(image.relative_path).with_suffix(".png")
+    return resolve_write_target(
+        store.root,
+        Path("generated") / directory / relative,
+        protected_roots=(store.source_root,),
+    )
+
+
+def _sha256_file(path: Path) -> str:
+    try:
+        if not path.is_file():
+            raise ProjectError("Generated visual-stage artifact is missing; rerun the stage")
+        with path.open("rb") as handle:
+            return hashlib.file_digest(handle, "sha256").hexdigest()
+    except OSError as error:
+        raise ProjectError(
+            "Generated visual-stage artifact could not be read; rerun the stage"
+        ) from error
+
+
+def stage_artifact_checksums(
+    store: ProjectStore,
+    image: ImageAsset,
+    stage: str,
+) -> dict[str, str]:
+    checksums = {"artifactChecksum": _sha256_file(_generated_stage_path(store, image, stage))}
+    if stage == "inpaint":
+        relative = safe_relative_path(image.relative_path).with_suffix(".png")
+        mask_path = resolve_write_target(
+            store.root,
+            Path("generated") / "masks" / relative,
+            protected_roots=(store.source_root,),
+        )
+        checksums["maskChecksum"] = _sha256_file(mask_path)
+    return checksums
+
+
+def stage_reviews(image: ImageAsset) -> dict[str, dict[str, str | int]]:
+    """Normalize durable visual reviews while treating absent/legacy data as pending."""
+    raw = (image.status or {}).get("stageReviews")
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, dict[str, str | int]] = {}
+    for stage in VISUAL_REVIEW_STAGES:
+        record = raw.get(stage)
+        if not isinstance(record, dict) or record.get("state") not in VISUAL_REVIEW_STATES:
+            continue
+        reviewed_at = record.get("reviewedAt")
+        result_revision = record.get("resultRevision")
+        artifact_checksum = record.get("artifactChecksum")
+        mask_checksum = record.get("maskChecksum")
+        if (
+            not isinstance(reviewed_at, str)
+            or not reviewed_at
+            or not isinstance(result_revision, int)
+            or isinstance(result_revision, bool)
+            or result_revision < 0
+            or not isinstance(artifact_checksum, str)
+            or not _SHA256_RE.fullmatch(artifact_checksum)
+            or (
+                stage == "inpaint"
+                and (
+                    not isinstance(mask_checksum, str)
+                    or not _SHA256_RE.fullmatch(mask_checksum)
+                )
+            )
+        ):
+            continue
+        normalized[stage] = {
+            "state": str(record["state"]),
+            "reviewedAt": reviewed_at,
+            "resultRevision": result_revision,
+            "artifactChecksum": artifact_checksum,
+        }
+        if stage == "inpaint":
+            normalized[stage]["maskChecksum"] = str(mask_checksum)
+    return normalized
+
+
+def clear_stage_reviews(image: ImageAsset, stages: set[str]) -> bool:
+    reviews = stage_reviews(image)
+    changed = False
+    for stage in VISUAL_REVIEW_STAGES & stages:
+        changed = reviews.pop(stage, None) is not None or changed
+    status = dict(image.status or {})
+    if reviews:
+        status["stageReviews"] = reviews
+    else:
+        status.pop("stageReviews", None)
+    image.status = status
+    return changed
 
 
 def reset_image_review(image: ImageAsset) -> bool:
@@ -103,6 +230,7 @@ def invalidate_image_pipeline(
         raise ValueError("Unknown pipeline stage invalidation")
     if stages & {"detection", "ocr", "translation", "inpaint", "typeset"}:
         reset_image_review(image)
+    clear_stage_reviews(image, stages)
     status = dict(image.status)
     for stage in stages:
         status[stage] = "pending"
@@ -423,6 +551,132 @@ def review_image(
             },
         )
     store.write_snapshot()
+    return image
+
+
+def review_image_stage(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    stage: str,
+    state: str,
+    expected_revision: int,
+    observed_artifact_checksum: str | None = None,
+    observed_mask_checksum: str | None = None,
+) -> ImageAsset:
+    if stage not in VISUAL_REVIEW_STAGES:
+        raise ProjectError("Visual review stage must be preprocess, inpaint, or typeset")
+    if state not in {"pending", *VISUAL_REVIEW_STATES}:
+        raise ProjectError("Visual review state must be pending, accepted, or rejected")
+    with store.lock:
+        with store.session() as session:
+            image = session.scalar(
+                select(ImageAsset)
+                .options(selectinload(ImageAsset.regions))
+                .where(ImageAsset.id == image_id)
+            )
+            if image is None:
+                raise ProjectError("Image was not found in this project")
+            if image.revision != expected_revision:
+                raise RevisionConflict(
+                    f"Image revision is {image.revision}, expected {expected_revision}",
+                    expected_revision=expected_revision,
+                    actual_revision=image.revision,
+                    resource=f"image:{image.id}",
+                )
+            if state != "pending" and image.status.get(stage) != "done":
+                raise ProjectError(f"Cannot review {stage} output until that stage is done")
+            if state == "pending":
+                if (
+                    observed_artifact_checksum is not None
+                    or observed_mask_checksum is not None
+                ):
+                    raise ProjectError("Pending visual reviews cannot include observed checksums")
+                checksums: dict[str, str] = {}
+            else:
+                if observed_artifact_checksum is None:
+                    raise ProjectError(
+                        "Accepted and rejected reviews require an observed artifact checksum"
+                    )
+                if stage == "inpaint" and observed_mask_checksum is None:
+                    raise ProjectError("Inpaint reviews require an observed mask checksum")
+                if stage != "inpaint" and observed_mask_checksum is not None:
+                    raise ProjectError(f"{stage} reviews cannot include an observed mask checksum")
+                checksums = stage_artifact_checksums(store, image, stage)
+                observed = {"artifactChecksum": observed_artifact_checksum}
+                if stage == "inpaint":
+                    observed["maskChecksum"] = observed_mask_checksum
+                mismatches = [
+                    key for key, value in observed.items() if value != checksums.get(key)
+                ]
+                if mismatches:
+                    raise StageReviewObservationConflict(
+                        "The reviewed visual no longer matches the current stage output",
+                        resource=f"image:{image.id}",
+                        stage=stage,
+                        mismatches=mismatches,
+                    )
+            project = store.project(session)
+            reviews = stage_reviews(image)
+            dependent_reviews = {
+                dependent: reviews[dependent]
+                for dependent in VISUAL_REVIEW_DEPENDENTS[stage]
+                if dependent in reviews
+            }
+            before = {
+                "stage": stage,
+                "review": reviews.get(stage),
+            }
+            if state == "pending":
+                reviews.pop(stage, None)
+                after = None
+                artifact_changed = False
+            else:
+                previous_review = reviews.get(stage)
+                artifact_changed = previous_review is None or any(
+                    previous_review.get(key) != value for key, value in checksums.items()
+                )
+                after = {
+                    "state": state,
+                    "reviewedAt": datetime.now(UTC).isoformat(),
+                    "resultRevision": image.revision,
+                    **checksums,
+                }
+                reviews[stage] = after
+            clear_dependents = state != "accepted" or artifact_changed
+            cleared_dependents = dependent_reviews if clear_dependents else {}
+            if clear_dependents:
+                for dependent in cleared_dependents:
+                    reviews.pop(dependent, None)
+            before["clearedDependents"] = cleared_dependents
+            status = dict(image.status or {})
+            if reviews:
+                status["stageReviews"] = reviews
+            else:
+                status.pop("stageReviews", None)
+            status["export"] = "pending"
+            image.status = status
+            image.processing_errors = [
+                error
+                for error in (image.processing_errors or [])
+                if error.get("stage") != "export"
+            ]
+            image.revision += 1
+            session.flush()
+            add_revision(
+                session,
+                project,
+                entity_type="image",
+                entity_id=image.id,
+                operation="stage-review",
+                before=before,
+                after={
+                    "stage": stage,
+                    "review": after,
+                    "clearedDependents": sorted(cleared_dependents),
+                },
+            )
+        store.write_snapshot()
     return image
 
 

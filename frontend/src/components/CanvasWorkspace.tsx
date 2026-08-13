@@ -1,6 +1,6 @@
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Group, Image as KonvaImage, Label, Layer, Line, Rect, Stage, Tag, Text, Transformer } from 'react-konva';
 
 import { api } from '../api/client';
@@ -10,7 +10,14 @@ import {
   hasGeneratedPreview,
   useWorkbenchStore,
 } from '../store/workbench';
-import type { CanvasMode, ImageAsset, MaskEditStroke, Region } from '../types';
+import type {
+  CanvasMode,
+  ImageAsset,
+  MaskEditStroke,
+  Region,
+  StageReviewObservation,
+  VisualStage,
+} from '../types';
 import {
   buildMaskStroke,
   canonicalPoint,
@@ -29,6 +36,18 @@ function canvasModeAvailable(image: ImageAsset | null | undefined, mode: CanvasM
   if (mode === 'erased') return image.status.inpaint === 'done';
   return image.status.typeset === 'done';
 }
+
+function visualStageForMode(mode: CanvasMode): VisualStage | null {
+  if (mode === 'preprocessed') return 'preprocess';
+  if (mode === 'erased') return 'inpaint';
+  if (mode === 'typeset') return 'typeset';
+  return null;
+}
+
+type CanvasReviewObservation = Pick<StageReviewObservation, 'imageId' | 'stage' | 'revision'> & (
+  | { state: 'loading' | 'error'; artifactChecksum?: undefined; maskChecksum?: undefined }
+  | { state: 'ready'; artifactChecksum: string; maskChecksum?: string }
+);
 
 function useElementSize() {
   const ref = useRef<HTMLDivElement>(null);
@@ -56,14 +75,16 @@ function useElementSize() {
 function useCanvasImage(
   src: string | null,
   expectedSize: { width: number; height: number },
+  allowCanonicalScale = false,
 ) {
   const expectedWidth = expectedSize.width;
   const expectedHeight = expectedSize.height;
   const [result, setResult] = useState<{
     src: string;
     image: ImageBitmap | null;
+    checksum: string | null;
     state: 'loading' | 'ready' | 'error';
-  }>({ src: '', image: null, state: 'loading' });
+  }>({ src: '', image: null, checksum: null, state: 'loading' });
 
   useEffect(() => {
     if (!src) return;
@@ -73,24 +94,26 @@ function useCanvasImage(
     void loadCanonicalCanvasImage(src, {
       width: expectedWidth,
       height: expectedHeight,
-    }, controller.signal)
-      .then((image) => {
-        decoded = image;
-        if (disposed) image.close();
-        else setResult({ src, image, state: 'ready' });
+    }, controller.signal, allowCanonicalScale)
+      .then((loaded) => {
+        decoded = loaded.image;
+        if (disposed) loaded.image.close();
+        else setResult({ src, image: loaded.image, checksum: loaded.checksum, state: 'ready' });
       })
       .catch(() => {
-        if (!disposed) setResult({ src, image: null, state: 'error' });
+        if (!disposed) setResult({ src, image: null, checksum: null, state: 'error' });
       });
     return () => {
       disposed = true;
       controller.abort();
       decoded?.close();
     };
-  }, [expectedHeight, expectedWidth, src]);
+  }, [allowCanonicalScale, expectedHeight, expectedWidth, src]);
 
-  if (!src) return { src: '', image: null, state: 'ready' as const };
-  return result.src === src ? result : { src, image: null, state: 'loading' as const };
+  if (!src) return { src: '', image: null, checksum: null, state: 'ready' as const };
+  return result.src === src
+    ? result
+    : { src, image: null, checksum: null, state: 'loading' as const };
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -260,21 +283,35 @@ function CanvasViewport({
   mode,
   editable,
   zoomSignal,
+  observationStage,
+  onReviewObservation,
 }: {
   imageAsset: ImageAsset;
   mode: CanvasMode;
   editable: boolean;
   zoomSignal: { direction: -1 | 0 | 1; nonce: number };
+  observationStage?: VisualStage | null;
+  onReviewObservation?: (observation: CanvasReviewObservation) => void;
 }) {
   const { ref: containerRef, size } = useElementSize();
   const source = api.contentUrl(imageAsset.id, mode, imageAsset.revision);
   const canonicalSize = { width: imageAsset.width, height: imageAsset.height };
-  const { image, state: imageLoadState } = useCanvasImage(source, canonicalSize);
+  const {
+    image,
+    checksum: artifactChecksum,
+    state: imageLoadState,
+  } = useCanvasImage(source, canonicalSize, mode === 'preprocessed');
   const showMask = useWorkbenchStore((state) => state.showMask);
-  const maskSource = showMask && imageAsset.status.inpaint === 'done'
+  const maskSource = mode === 'erased'
+    && (showMask || observationStage === 'inpaint')
+    && imageAsset.status.inpaint === 'done'
     ? api.maskUrl(imageAsset.id, imageAsset.revision)
     : null;
-  const { image: maskImage } = useCanvasImage(maskSource, canonicalSize);
+  const {
+    image: maskImage,
+    checksum: maskChecksum,
+    state: maskLoadState,
+  } = useCanvasImage(maskSource, canonicalSize);
   const regions = useWorkbenchStore(activeRegions);
   const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const tool = useWorkbenchStore((state) => state.canvasTool);
@@ -300,6 +337,41 @@ function CanvasViewport({
     ? regions.find((region) => region.id === selectedRegionIds[0])
     : undefined;
   const maskEditing = tool === 'mask-brush' || tool === 'mask-eraser';
+
+  useEffect(() => {
+    if (!observationStage || !onReviewObservation) return;
+    const identity = {
+      imageId: imageAsset.id,
+      stage: observationStage,
+      revision: imageAsset.revision,
+    };
+    if (imageLoadState === 'error'
+      || (observationStage === 'inpaint' && maskLoadState === 'error')) {
+      onReviewObservation({ ...identity, state: 'error' });
+      return;
+    }
+    if (imageLoadState !== 'ready'
+      || !artifactChecksum
+      || (observationStage === 'inpaint' && (maskLoadState !== 'ready' || !maskChecksum))) {
+      onReviewObservation({ ...identity, state: 'loading' });
+      return;
+    }
+    onReviewObservation({
+      ...identity,
+      state: 'ready',
+      artifactChecksum,
+      ...(observationStage === 'inpaint' ? { maskChecksum: maskChecksum! } : {}),
+    });
+  }, [
+    artifactChecksum,
+    imageAsset.id,
+    imageAsset.revision,
+    imageLoadState,
+    maskChecksum,
+    maskLoadState,
+    observationStage,
+    onReviewObservation,
+  ]);
 
   useEffect(() => {
     // Canvas viewport follows measured container geometry and an explicit fit command.
@@ -533,7 +605,10 @@ function CanvasViewport({
                 width={imageAsset.width}
               />
             ) : null}
-            {showMask && maskImage && imageAsset.status.inpaint === 'done' ? (
+            {mode === 'erased'
+              && showMask
+              && maskImage
+              && imageAsset.status.inpaint === 'done' ? (
               <KonvaImage
                 globalCompositeOperation="difference"
                 height={imageAsset.height}
@@ -597,8 +672,10 @@ function CanvasViewport({
 
 function CanvasToolbar({
   onZoom,
+  observation,
 }: {
   onZoom: (direction: -1 | 1) => void;
+  observation: CanvasReviewObservation | null;
 }) {
   const image = useWorkbenchStore(activeImage);
   const mode = useWorkbenchStore((state) => state.canvasMode);
@@ -607,6 +684,7 @@ function CanvasToolbar({
   const showRegions = useWorkbenchStore((state) => state.showRegions);
   const showOrder = useWorkbenchStore((state) => state.showOrder);
   const showConfidence = useWorkbenchStore((state) => state.showConfidence);
+  const showMask = useWorkbenchStore((state) => state.showMask);
   const maskBrushRadius = useWorkbenchStore((state) => state.maskBrushRadius);
   const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const setCanvasMode = useWorkbenchStore((state) => state.setCanvasMode);
@@ -615,12 +693,65 @@ function CanvasToolbar({
   const setShowRegions = useWorkbenchStore((state) => state.setShowRegions);
   const setShowOrder = useWorkbenchStore((state) => state.setShowOrder);
   const setShowConfidence = useWorkbenchStore((state) => state.setShowConfidence);
+  const setShowMask = useWorkbenchStore((state) => state.setShowMask);
   const setMaskBrushRadius = useWorkbenchStore((state) => state.setMaskBrushRadius);
   const requestFit = useWorkbenchStore((state) => state.requestFit);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
+  const reviewActiveImageStage = useWorkbenchStore((state) => state.reviewActiveImageStage);
+  const stageReviewSaving = useWorkbenchStore((state) => state.stageReviewSaving);
   const compareAvailable = hasGeneratedPreview(image);
   const maskToolAvailable = Boolean(image && selectedRegionIds.length === 1);
   const maskToolActive = tool === 'mask-brush' || tool === 'mask-eraser';
+  const reviewStage = visualStageForMode(mode);
+  const stageReviewState = reviewStage
+    ? image?.stageReviews?.[reviewStage]?.state ?? 'pending'
+    : 'pending';
+  const observationMatchesIdentity = Boolean(
+    image
+      && reviewStage
+      && observation
+      && observation.imageId === image.id
+      && observation.stage === reviewStage
+      && observation.revision === image.revision,
+  );
+  const observationReady = Boolean(
+    observationMatchesIdentity
+      && observation?.state === 'ready'
+      && observation.artifactChecksum
+      && (reviewStage !== 'inpaint' || observation.maskChecksum),
+  );
+  const stageReviewEnabled = Boolean(
+    image
+      && reviewStage
+      && image.status[reviewStage] === 'done'
+      && observationReady
+      && (reviewStage !== 'inpaint' || showMask),
+  );
+  const stageReviewBusy = stageReviewSaving !== null;
+  const submittedObservation: StageReviewObservation | undefined = observation?.state === 'ready'
+    ? {
+        imageId: observation.imageId,
+        stage: observation.stage,
+        revision: observation.revision,
+        artifactChecksum: observation.artifactChecksum,
+        ...(observation.maskChecksum ? { maskChecksum: observation.maskChecksum } : {}),
+      }
+    : undefined;
+  const observationStatus = stageReviewBusy
+    ? '保存中'
+    : !image || !reviewStage || image.status[reviewStage] !== 'done'
+      ? '尚未生成'
+      : observationMatchesIdentity && observation?.state === 'error'
+        ? '复核文件读取失败'
+        : stageReviewState === 'accepted'
+          ? '已接受'
+          : stageReviewState === 'rejected'
+            ? '已拒绝'
+        : !observationReady
+          ? '正在校验复核文件'
+          : reviewStage === 'inpaint' && !showMask
+            ? '请显示蒙版复核'
+            : '待复核';
 
   function quickCreate() {
     if (!image) return;
@@ -647,6 +778,25 @@ function CanvasToolbar({
           <button aria-pressed={mode === value} disabled={!canvasModeAvailable(image, value)} key={value} onClick={() => setCanvasMode(value)} title={!canvasModeAvailable(image, value) && value !== 'original' ? '尚未生成，请先运行对应步骤' : undefined} type="button">{label}</button>
         ))}
       </div>
+      {reviewStage ? (
+        <div className="stage-review-controls" aria-busy={stageReviewBusy} aria-label="当前视觉阶段复核" role="group">
+          <span aria-live="polite" className={`stage-review-state stage-review-state--${stageReviewState}`} role="status">
+            {observationStatus}
+          </span>
+          {reviewStage === 'inpaint' ? (
+            <label className="toolbar-check">
+              <input
+                checked={showMask}
+                onChange={(event) => setShowMask(event.target.checked)}
+                type="checkbox"
+              />复核蒙版
+            </label>
+          ) : null}
+          <button disabled={!stageReviewEnabled || stageReviewBusy || stageReviewState === 'accepted'} onClick={() => void reviewActiveImageStage(reviewStage, 'accepted', submittedObservation)} type="button">接受</button>
+          <button disabled={!stageReviewEnabled || stageReviewBusy || stageReviewState === 'rejected'} onClick={() => void reviewActiveImageStage(reviewStage, 'rejected', submittedObservation)} type="button">拒绝</button>
+          <button disabled={stageReviewBusy || stageReviewState === 'pending'} onClick={() => void reviewActiveImageStage(reviewStage, 'pending')} type="button">撤回复核</button>
+        </div>
+      ) : null}
       <span className="toolbar-divider" />
       <div className="tool-buttons" aria-label="编辑工具">
         <IconButton aria-label="选择工具" className={tool === 'select' ? 'is-active' : ''} onClick={() => setCanvasTool('select')} title="选择 V">↖</IconButton>
@@ -703,6 +853,7 @@ export function CanvasWorkspace() {
     state.activeImageId ? state.regionsLoading[state.activeImageId] : false,
   );
   const [zoomSignal, setZoomSignal] = useState({ direction: 0 as -1 | 0 | 1, nonce: 0 });
+  const [reviewObservation, setReviewObservation] = useState<CanvasReviewObservation | null>(null);
 
   const mode: CanvasMode = canvasModeAvailable(image, requestedMode) ? requestedMode : 'original';
   const resultMode = useMemo<CanvasMode>(() => {
@@ -714,6 +865,23 @@ export function CanvasWorkspace() {
   }, [image, mode]);
   const compareAvailable = hasGeneratedPreview(image);
   const showCompare = compareMode && compareAvailable;
+  const reviewStage = visualStageForMode(mode);
+  const reviewIdentity = image && reviewStage
+    ? `${image.id}:${image.revision}:${reviewStage}`
+    : '';
+  const reviewIdentityRef = useRef(reviewIdentity);
+  useLayoutEffect(() => {
+    reviewIdentityRef.current = reviewIdentity;
+  }, [reviewIdentity]);
+  const handleReviewObservation = useCallback((observation: CanvasReviewObservation) => {
+    if (`${observation.imageId}:${observation.revision}:${observation.stage}` !== reviewIdentityRef.current) {
+      return;
+    }
+    setReviewObservation((current) => {
+      if (JSON.stringify(current) === JSON.stringify(observation)) return current;
+      return observation;
+    });
+  }, []);
 
   useEffect(() => {
     if (requestedMode !== mode) setCanvasMode(mode);
@@ -726,6 +894,7 @@ export function CanvasWorkspace() {
   return (
     <main className="canvas-panel panel">
       <CanvasToolbar
+        observation={reviewObservation}
         onZoom={(direction) => setZoomSignal((signal) => ({ direction, nonce: signal.nonce + 1 }))}
       />
       <div className={`canvas-area ${showCompare ? 'canvas-area--compare' : ''}`}>
@@ -743,11 +912,25 @@ export function CanvasWorkspace() {
             </section>
             <section className="compare-pane">
               <span className="compare-pane__label">{resultMode === 'preprocessed' ? '增强结果' : resultMode === 'erased' ? '擦除结果' : resultMode === 'typeset' ? '嵌字成品' : '原图'}</span>
-              <CanvasViewport editable imageAsset={image} mode={resultMode} zoomSignal={zoomSignal} />
+              <CanvasViewport
+                editable
+                imageAsset={image}
+                mode={resultMode}
+                observationStage={reviewStage}
+                onReviewObservation={reviewStage ? handleReviewObservation : undefined}
+                zoomSignal={zoomSignal}
+              />
             </section>
           </>
         ) : (
-          <CanvasViewport editable imageAsset={image} mode={mode} zoomSignal={zoomSignal} />
+          <CanvasViewport
+            editable
+            imageAsset={image}
+            mode={mode}
+            observationStage={reviewStage}
+            onReviewObservation={reviewStage ? handleReviewObservation : undefined}
+            zoomSignal={zoomSignal}
+          />
         )}
         {regionsLoading ? <div className="canvas-regions-loading"><LoadingState label="读取文本框…" /></div> : null}
       </div>

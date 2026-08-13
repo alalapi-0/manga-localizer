@@ -24,6 +24,7 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
+from manga_localizer.services.images import stage_artifact_checksums, stage_reviews
 from manga_localizer.services.projects import ProjectError, ProjectStore
 
 _BUNDLE_TEMP_RE = re.compile(r"^\.project\.(?:json|sqlite3)\.[0-9a-f]{32}\.tmp$")
@@ -58,13 +59,86 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _atomic_copy_verified(
+    source: Path,
+    destination: Path,
+    expected_checksum: str,
+    *,
+    label: str,
+) -> None:
+    """Copy one opened byte stream and publish it only when its digest is approved."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+    digest = hashlib.sha256()
+    try:
+        try:
+            with source.open("rb") as source_handle, temporary.open("xb") as target_handle:
+                for chunk in iter(lambda: source_handle.read(1024 * 1024), b""):
+                    digest.update(chunk)
+                    target_handle.write(chunk)
+                target_handle.flush()
+                os.fsync(target_handle.fileno())
+        except OSError as error:
+            raise ProjectError(f"{label} could not be copied safely") from error
+        if digest.hexdigest() != expected_checksum:
+            raise ProjectError(f"{label} changed after review; review it again before exporting")
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _portable_image_status(
+    value: Any,
+    available_stages: set[str],
+    *,
+    include_provider_keys: bool = True,
+) -> dict[str, Any]:
+    status = dict(value) if isinstance(value, dict) else {}
+    provider_keys = {
+        "preprocess": "preprocessingProvider",
+        "inpaint": "inpaintingProvider",
+        "typeset": "typesettingProvider",
+    }
+    for stage, provider_key in provider_keys.items():
+        if stage in available_stages:
+            continue
+        status[stage] = "pending"
+        if include_provider_keys:
+            status[provider_key] = ""
+        else:
+            status.pop(provider_key, None)
+    reviews = status.get("stageReviews")
+    if isinstance(reviews, dict):
+        retained: dict[str, dict[str, str | int]] = {}
+        for stage in available_stages:
+            record = reviews.get(stage)
+            if not isinstance(record, dict):
+                continue
+            keys = ["state", "reviewedAt", "resultRevision", "artifactChecksum"]
+            if stage == "inpaint":
+                keys.append("maskChecksum")
+            retained[stage] = {key: record[key] for key in keys if key in record}
+        if retained:
+            status["stageReviews"] = retained
+        else:
+            status.pop("stageReviews", None)
+    if "inpaint" not in available_stages or "typeset" not in available_stages:
+        status["export"] = "pending"
+    return status
+
+
 def _portable_assets(
     store: ProjectStore,
-) -> tuple[list[tuple[Path, Path, str]], list[tuple[Path | None, Path]]]:
+) -> tuple[
+    list[tuple[Path, Path, str]],
+    list[tuple[Path | None, Path, str | None]],
+    dict[str, set[str]],
+]:
     with store.session() as session:
         images = list(session.scalars(select(ImageAsset)).all())
     sources: list[tuple[Path, Path, str]] = []
-    generated: list[tuple[Path | None, Path]] = []
+    generated: list[tuple[Path | None, Path, str | None]] = []
+    available_stages: dict[str, set[str]] = {}
     for image in images:
         source_relative = safe_relative_path(image.source_path)
         if not source_relative.parts or source_relative.parts[0] != "source":
@@ -82,15 +156,69 @@ def _portable_assets(
             )
         )
         image_relative = safe_relative_path(image.relative_path).with_suffix(".png")
-        for variant in ("preprocessed", "inpainted", "typeset", "masks"):
+        reviews = stage_reviews(image)
+
+        def accepted_and_current(stage: str) -> bool:
+            review = reviews.get(stage)
+            if image.status.get(stage) != "done" or review is None:
+                return False
+            if review.get("state") != "accepted":
+                return False
+            try:
+                actual = stage_artifact_checksums(store, image, stage)
+            except ProjectError:
+                return False
+            return all(review.get(key) == checksum for key, checksum in actual.items())
+
+        current = {
+            stage
+            for stage in ("preprocess", "inpaint", "typeset")
+            if accepted_and_current(stage)
+        }
+        if "inpaint" not in current:
+            current.discard("typeset")
+        available_stages[image.id] = current
+        variants = (
+            ("preprocessed", "preprocess", "artifactChecksum"),
+            ("inpainted", "inpaint", "artifactChecksum"),
+            ("typeset", "typeset", "artifactChecksum"),
+            ("masks", "inpaint", "maskChecksum"),
+        )
+        for variant, stage, checksum_key in variants:
             relative = Path("generated") / variant / image_relative
             source = resolve_write_target(
                 store.root,
                 relative,
                 protected_roots=(store.source_root,),
             )
-            generated.append((source if source.is_file() else None, relative))
-    return sources, generated
+            included = stage in current and source.is_file()
+            expected = reviews.get(stage, {}).get(checksum_key) if included else None
+            generated.append(
+                (
+                    source if included else None,
+                    relative,
+                    str(expected) if included else None,
+                )
+            )
+    return sources, generated, available_stages
+
+
+def _verify_portable_assets(
+    assets: tuple[
+        list[tuple[Path, Path, str]],
+        list[tuple[Path | None, Path, str | None]],
+        dict[str, set[str]],
+    ],
+) -> None:
+    sources, generated, _available_stages = assets
+    for source, _relative, checksum in sources:
+        if not source.is_file() or _sha256(source) != checksum:
+            raise ProjectError("Immutable source changed during portable bundle finalization")
+    for source, _relative, checksum in generated:
+        if source is None:
+            continue
+        if checksum is None or not source.is_file() or _sha256(source) != checksum:
+            raise ProjectError("Reviewed generated artifact changed during bundle finalization")
 
 
 def _input_protection(store: ProjectStore) -> _InputProtection:
@@ -184,6 +312,12 @@ def _validate_portable_asset_targets(
     *,
     allow_refresh: bool,
     protection: _InputProtection,
+    assets: tuple[
+        list[tuple[Path, Path, str]],
+        list[tuple[Path | None, Path, str | None]],
+        dict[str, set[str]],
+    ]
+    | None = None,
 ) -> None:
     for directory_name in ("source", "generated"):
         directory = export_root / directory_name
@@ -191,7 +325,7 @@ def _validate_portable_asset_targets(
             raise UnsafePathError(f"Export {directory_name} directory must not be a symlink")
         if directory.exists() and not directory.is_dir():
             raise ProjectError(f"Export {directory_name} path exists and is not a directory")
-    sources, generated = _portable_assets(store)
+    sources, generated, _available_stages = assets or _portable_assets(store)
     for _source, relative, checksum in sources:
         entry = export_root.joinpath(relative)
         target = resolve_write_target(
@@ -207,7 +341,7 @@ def _validate_portable_asset_targets(
             raise ProjectError(f"Portable source conflict: {relative.as_posix()}")
         if target.is_file() and _sha256(target) != checksum and not allow_refresh:
             raise ProjectError(f"Portable source conflict: {relative.as_posix()}")
-    for source, relative in generated:
+    for source, relative, expected_checksum in generated:
         entry = export_root.joinpath(relative)
         target = _export_write_target(store, export_root, relative)
         cleanup_stale_atomic_temps(target)
@@ -222,7 +356,7 @@ def _validate_portable_asset_targets(
             source is not None
             and target.is_file()
             and not allow_refresh
-            and _sha256(target) != _sha256(source)
+            and _sha256(target) != expected_checksum
         ):
             raise ProjectError(f"Portable generated conflict: {relative.as_posix()}")
 
@@ -231,8 +365,13 @@ def _copy_portable_assets(
     store: ProjectStore,
     export_root: Path,
     protection: _InputProtection,
+    assets: tuple[
+        list[tuple[Path, Path, str]],
+        list[tuple[Path | None, Path, str | None]],
+        dict[str, set[str]],
+    ],
 ) -> None:
-    sources, generated = _portable_assets(store)
+    sources, generated, _available_stages = assets
     for source, relative, checksum in sources:
         target = resolve_write_target(
             export_root,
@@ -240,21 +379,32 @@ def _copy_portable_assets(
             protected_roots=(store.source_root,),
         )
         _assert_not_original(target, protection)
-        if not target.is_file() or _sha256(target) != checksum:
-            atomic_copy_file(source, target)
-    for source, relative in generated:
+        _atomic_copy_verified(
+            source,
+            target,
+            checksum,
+            label="Portable immutable source",
+        )
+    for source, relative, expected_checksum in generated:
         target = _export_write_target(store, export_root, relative)
         _assert_not_original(target, protection)
         if source is None:
             target.unlink(missing_ok=True)
         else:
-            atomic_write_bytes(target, source.read_bytes())
+            assert expected_checksum is not None
+            _atomic_copy_verified(
+                source,
+                target,
+                expected_checksum,
+                label="Reviewed portable generated artifact",
+            )
 
 
 def _sanitize_portable_database(
     database_path: Path,
     *,
     finalized_job_id: str | None = None,
+    available_stages: dict[str, set[str]] | None = None,
 ) -> None:
     """Remove machine-only paths while keeping the copied database directly reopenable."""
 
@@ -273,6 +423,21 @@ def _sanitize_portable_database(
         database.execute("UPDATE projects SET root_path = '.', input_root = NULL")
         database.execute("DELETE FROM import_boundaries")
         database.execute("UPDATE images SET input_path = NULL")
+        for image_id, encoded_status in database.execute(
+            "SELECT id, status FROM images"
+        ).fetchall():
+            try:
+                status = json.loads(encoded_status) if encoded_status else {}
+            except (TypeError, json.JSONDecodeError):
+                status = {}
+            portable_status = _portable_image_status(
+                status,
+                (available_stages or {}).get(image_id, set()),
+            )
+            database.execute(
+                "UPDATE images SET status = ? WHERE id = ?",
+                (json.dumps(portable_status, ensure_ascii=False), image_id),
+            )
         for project_id, encoded_settings in database.execute(
             "SELECT id, settings FROM projects"
         ).fetchall():
@@ -345,8 +510,29 @@ def _sanitize_portable_database(
         database.execute("VACUUM")
 
 
-def _portable_manifest_bytes(store: ProjectStore, finalized_job_id: str | None) -> bytes:
+def _portable_manifest_bytes(
+    store: ProjectStore,
+    finalized_job_id: str | None,
+    available_stages: dict[str, set[str]],
+) -> bytes:
     payload = json.loads(store.manifest_path.read_text("utf-8"))
+    for image in payload.get("images", []):
+        if not isinstance(image, dict) or not isinstance(image.get("id"), str):
+            continue
+        stages = available_stages.get(image["id"], set())
+        image["status"] = _portable_image_status(
+            image.get("status"),
+            stages,
+            include_provider_keys=False,
+        )
+        providers = image.get("providers")
+        if isinstance(providers, dict):
+            if "preprocess" not in stages:
+                providers["preprocessing"] = None
+            if "inpaint" not in stages:
+                providers["inpainting"] = None
+            if "typeset" not in stages:
+                providers["typesetting"] = None
     if finalized_job_id is not None:
         for job in payload.get("jobs", []):
             if isinstance(job, dict) and job.get("id") == finalized_job_id:
@@ -474,11 +660,13 @@ def choose_export_root(
         recovery_job_id=job_id,
     )
     if root != store.root.resolve() and include_assets:
+        assets = _portable_assets(store)
         _validate_portable_asset_targets(
             store,
             root,
             allow_refresh=allow_refresh,
             protection=protection,
+            assets=assets,
         )
     return root
 
@@ -503,6 +691,8 @@ def ensure_project_bundle(
         recovery_job_id=finalized_job_id,
     )
     protection = _input_protection(store)
+    assets = _portable_assets(store)
+    _sources, _generated, available_stages = assets
     project_root = _export_write_target(store, export_root, "project")
     project_root.mkdir(parents=True, exist_ok=True)
     if finalized_job_id is not None:
@@ -529,8 +719,10 @@ def ensure_project_bundle(
         export_root,
         allow_refresh=allow_refresh,
         protection=protection,
+        assets=assets,
     )
-    _copy_portable_assets(store, export_root, protection)
+    _copy_portable_assets(store, export_root, protection, assets)
+    _verify_portable_assets(assets)
     store.write_snapshot()
     manifest_destination = _export_write_target(store, export_root, "project/project.json")
     database_destination = _export_write_target(store, export_root, "project/project.sqlite3")
@@ -549,7 +741,9 @@ def ensure_project_bundle(
     )
     try:
         with manifest_temporary.open("xb") as manifest_handle:
-            manifest_handle.write(_portable_manifest_bytes(store, finalized_job_id))
+            manifest_handle.write(
+                _portable_manifest_bytes(store, finalized_job_id, available_stages)
+            )
             manifest_handle.flush()
             os.fsync(manifest_handle.fileno())
         with (
@@ -560,6 +754,7 @@ def ensure_project_bundle(
         _sanitize_portable_database(
             database_temporary,
             finalized_job_id=finalized_job_id,
+            available_stages=available_stages,
         )
         database_temporary.replace(database_destination)
         manifest_temporary.replace(manifest_destination)
@@ -609,13 +804,27 @@ def _conflict_path(path: Path, conflict: str) -> tuple[Path | None, str]:
     return candidate, "renamed"
 
 
-def _write_copy(source: Path, target: Path, conflict: str) -> tuple[Path | None, str]:
+def _write_copy(
+    source: Path,
+    target: Path,
+    conflict: str,
+    *,
+    expected_checksum: str | None = None,
+) -> tuple[Path | None, str]:
     cleanup_stale_atomic_temps(target)
     destination, resolution = _conflict_path(target, conflict)
     if destination is None:
         return None, resolution
     cleanup_stale_atomic_temps(destination)
-    atomic_copy_file(source, destination)
+    if expected_checksum is None:
+        atomic_copy_file(source, destination)
+    else:
+        _atomic_copy_verified(
+            source,
+            destination,
+            expected_checksum,
+            label="Reviewed generated artifact",
+        )
     return destination, resolution
 
 
@@ -628,6 +837,91 @@ def _write_json(payload: dict[str, Any], target: Path, conflict: str) -> tuple[P
     data = json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8")
     atomic_write_bytes(destination, data)
     return destination, resolution
+
+
+def validate_image_export_readiness(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    export_format: str,
+    image_variant: str,
+) -> dict[str, dict[str, str | int]]:
+    """Fail a generated-image export before any destination path is created."""
+    if export_format not in {"images", "both"}:
+        return {}
+    with store.session() as session:
+        image = session.get(ImageAsset, image_id)
+        if image is None:
+            raise ProjectError(f"Export image does not exist: {image_id}")
+    source_relative = safe_relative_path(image.relative_path)
+    required_reviews = (
+        ["inpaint", "typeset"]
+        if image_variant == "typeset"
+        else ["inpaint"]
+        if image_variant == "inpainted"
+        else ["inpaint", "typeset"]
+    )
+    for stage in required_reviews:
+        if image.status.get(stage) != "done":
+            label = "Rendered" if stage == "typeset" else "Inpainted"
+            raise ProjectError(
+                f"{label} output is stale for {image.relative_path}; page was not exported"
+            )
+        directory = "typeset" if stage == "typeset" else "inpainted"
+        generated = resolve_write_target(
+            store.root,
+            Path("generated") / directory / source_relative.with_suffix(".png"),
+            protected_roots=(store.source_root,),
+        )
+        if not generated.is_file():
+            label = "Typeset" if stage == "typeset" else "Inpainted"
+            raise ProjectError(
+                f"{label} output is missing for {image.relative_path}; page was not exported"
+            )
+    generated_mask = resolve_write_target(
+        store.root,
+        Path("generated") / "masks" / source_relative.with_suffix(".png"),
+        protected_roots=(store.source_root,),
+    )
+    if not generated_mask.is_file():
+        raise ProjectError(
+            f"Render mask is missing for {image.relative_path}; page was not exported"
+        )
+    if image.status.get("reviewState", "pending") not in {
+        "reviewed",
+        "no-text-reviewed",
+    }:
+        raise ProjectError(
+            f"Page review is pending for {image.relative_path}; page was not exported"
+        )
+    reviews = stage_reviews(image)
+    missing_reviews = [
+        stage
+        for stage in required_reviews
+        if not isinstance(reviews.get(stage), dict)
+        or reviews[stage].get("state") != "accepted"
+    ]
+    if missing_reviews:
+        labels = ", ".join(missing_reviews)
+        raise ProjectError(
+            f"Stage review must be accepted for {labels} before exporting "
+            f"{image.relative_path}; page was not exported"
+        )
+    stale_reviews = [
+        stage
+        for stage in required_reviews
+        if any(
+            reviews[stage].get(key) != value
+            for key, value in stage_artifact_checksums(store, image, stage).items()
+        )
+    ]
+    if stale_reviews:
+        labels = ", ".join(stale_reviews)
+        raise ProjectError(
+            f"Stage review no longer matches the generated artifact for {labels}; "
+            f"review {image.relative_path} again before exporting"
+        )
+    return reviews
 
 
 def write_json_export_summary(
@@ -707,6 +1001,12 @@ def export_image(
         raise ProjectError("Export format must be images, json, or both")
     if image_variant not in {"typeset", "inpainted", "both"}:
         raise ProjectError("Export imageVariant must be typeset, inpainted, or both")
+    reviews = validate_image_export_readiness(
+        store,
+        image_id,
+        export_format=export_format,
+        image_variant=image_variant,
+    )
     with store.session() as session:
         image = session.get(ImageAsset, image_id)
         if image is None:
@@ -722,6 +1022,7 @@ def export_image(
     relative = source_relative if preserve_tree else Path(source_relative.name)
     output: dict[str, Any] = {
         "imageId": image.id,
+        "imageRevision": image.revision,
         "relativePath": source_relative.as_posix(),
         "exportRelativePath": relative.as_posix(),
         "imageVariant": image_variant,
@@ -760,35 +1061,24 @@ def export_image(
                     ),
                 )
             )
-        for output_key, _directory, generated in image_sources:
-            if not generated.is_file():
-                label = "Typeset" if output_key == "translatedImage" else "Inpainted"
-                raise ProjectError(
-                    f"{label} output is missing for {image.relative_path}; page was not exported"
-                )
         generated_mask = resolve_write_target(
             store.root,
             Path("generated") / "masks" / source_relative.with_suffix(".png"),
             protected_roots=(store.source_root,),
         )
-        if not generated_mask.is_file():
-            raise ProjectError(
-                f"Render mask is missing for {image.relative_path}; page was not exported"
-            )
-        if image.status.get("reviewState", "pending") not in {
-            "reviewed",
-            "no-text-reviewed",
-        }:
-            raise ProjectError(
-                f"Page review is pending for {image.relative_path}; page was not exported"
-            )
         for output_key, directory, generated in image_sources:
             image_target = _export_write_target(
                 store,
                 export_root,
                 Path(directory) / relative.with_suffix(".png"),
             )
-            path, resolution = _write_copy(generated, image_target, conflict)
+            review_stage = "typeset" if output_key == "translatedImage" else "inpaint"
+            path, resolution = _write_copy(
+                generated,
+                image_target,
+                conflict,
+                expected_checksum=str(reviews[review_stage]["artifactChecksum"]),
+            )
             output[output_key] = {
                 "artifact": _artifact_path(export_root, path),
                 "conflict": resolution,
@@ -798,7 +1088,12 @@ def export_image(
             export_root,
             Path("masks") / relative.with_suffix(".png"),
         )
-        mask_path, mask_resolution = _write_copy(generated_mask, mask_target, conflict)
+        mask_path, mask_resolution = _write_copy(
+            generated_mask,
+            mask_target,
+            conflict,
+            expected_checksum=str(reviews["inpaint"]["maskChecksum"]),
+        )
         output["mask"] = {
             "artifact": _artifact_path(export_root, mask_path),
             "conflict": mask_resolution,

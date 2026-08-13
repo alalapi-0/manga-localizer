@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Authority and purpose
 
@@ -19,13 +19,15 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Real-data Round 7 — implementation, failure-driven repair, documentation, exact-candidate regression,
-and public-tree cleanup are complete. `TASK_CONTRACT v1` governs exact-candidate closure. Root has
-reproduced the public automated, browser, release, lock, compile, and diff checks; privacy/integrity
-registration and fresh exact-state Judge/Governor decisions remain before delivery. The implementation
-commit `bf8c75e971c0d73243b1394ddc97febc0c14e2a2` and its forward documentation-consistency repairs are
-local-only on non-default branch `agent/manga-round7-governance-20260812`; the exact current tip is
-registered in task evidence. No push, release, deployment, or publication has occurred.
+Real-data Round 9 is the active checkpoint. Round 8 prepared review material for all 130 pages but has
+explicit completed output review for only 18; it is not a full-book visual result. Ignored Round 9
+aggregate evidence confirms that confidence is not a sufficient text-validity gate and that structurally
+safe complex repairs can remain visually unacceptable. The current worktree adds durable visual-stage
+review and checksum-gated export and is not yet committed or pushed. The non-default branch
+`agent/manga-round7-governance-20260812` is already on GitHub at `5624182ef496151881368aaa253211c42676b6ae`;
+draft PR #3 exists and its prior candidate CI succeeded. Current-candidate regression, exact-state
+Judge/Governor review, commit, push, remote-SHA verification, and new CI remain pending. No merge,
+tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -53,7 +55,13 @@ registered in task evidence. No push, release, deployment, or publication has oc
   local, context-cropped, and composites with exact mask-outside preservation.
 - Repair defaults to the `safe` eligibility policy. Canonical repair settings are persisted across API,
   queue, and UI; text/full-region masks support padding, dilation, feathering, editable geometry, and an
-  actual-mask preview. Typesetting requires safe eligibility and intersection with the generated mask.
+  actual-mask preview. Bounded add/erase strokes are persisted per region. Typesetting requires safe
+  eligibility and intersection with the generated mask.
+- Preprocess, inpaint, and typeset results have revision-guarded accept/reject records bound to the
+  exact response bytes decoded in the review canvas; inpaint also binds and visibly reviews its mask.
+  Regeneration, changed bytes, or an upstream change clears or conflicts with affected reviews.
+  Generated-image export and portable generated assets require current accepted results; JSON-only
+  export remains independent.
 - Moving, resizing, merging, or splitting a detector region removes its stale polygon while preserving
   the remaining repair provenance. Generated preview/compare controls are gated by current artifacts.
 - Projects remain portable: each output root contains `project/project.sqlite3` and a sanitized
@@ -91,11 +99,14 @@ registered in task evidence. No push, release, deployment, or publication has oc
   typesetting, profile precedence, repair defaults, zero-effect feedback, and preview/compare guards.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
+- [ ] Round 8: full-book clean-plate visual review is partial at 18/130 explicitly completed pages.
+- [ ] Round 9: ignored aggregate evidence captured and visual-stage review implementation prepared;
+  exact candidate verification, governed review, GitHub delivery, and CI are pending.
 
-## Latest verification evidence
+## Verification evidence
 
-- Unified `npm run check` reproduced on 2026-08-12: 2 launcher tests; backend Ruff lint/format and 130
-  pytest cases; frontend ESLint/TypeScript, 64 Vitest cases, and the production Vite build all passed.
+- Prior Round 7 `npm run check` reproduced on 2026-08-12: 2 launcher tests; backend Ruff lint/format and
+  130 pytest cases; frontend ESLint/TypeScript, 64 Vitest cases, and the production Vite build all passed.
 - End to end: 2 Playwright Chromium journeys passed, covering import, preprocessing, real local
   detection/OCR, review/edit, actual mask preview, repair, typesetting, export, and reopen.
 - Private dataset: all 130 supplied JPEGs were copied into the ignored project boundary before use,
@@ -105,23 +116,27 @@ registered in task evidence. No push, release, deployment, or publication has oc
   / 31 non-empty OCR regions, 13 OCR retries / 5 original selections, 15 eligible / 15 repaired / 20
   skipped regions, zero source checksum or dimension failures, and zero changed pixels outside masks.
   One zero-mask negative remained pixel-identical from source through repair and typesetting.
-- Release/privacy reproduced on 2026-08-12: `npm run audit:release` scanned 108 candidate files and all
-  reachable historical blobs with zero findings. `uv lock --check`, compileall, and `git diff --check` passed;
-  ignored/private/model/DB
-  paths have zero tracked files and the public candidate contains no private sample name or personal
-  absolute path.
+- Prior Round 7 release/privacy reproduced on 2026-08-12: `npm run audit:release` scanned 108 candidate
+  files and all reachable historical blobs with zero findings. `uv lock --check`, compileall, and
+  `git diff --check` passed; ignored/private/model/DB paths have zero tracked files and the public
+  candidate contains no private sample name or personal absolute path.
+- Current Round 9 local checks: 2 launcher tests; frontend ESLint/TypeScript, 75 Vitest cases, and the
+  production build passed. Direct release audit scanned 108 candidate files and 202 historical blobs
+  with zero findings; `uv lock --check`, compileall, E2E spec lint, and `git diff --check` passed.
+  Current backend Ruff/pytest and live Playwright remain pending because the offline local environment
+  lacks the required OpenCV wheel; CI must run the complete gates after delivery.
 
 ## Known limitations and blockers
 
-No known implementation, source-integrity, or privacy blocker remains in the current candidate.
-Independent exact-state review is the acceptance mechanism for delivery, not a product limitation.
+No source-integrity or privacy blocker is currently known, but the full product objective is not yet
+complete and the Round 9 candidate is not yet delivered.
 
 - The private dataset has no annotated boxes/transcriptions, so coverage and confidence are proxies,
   not detection recall or OCR accuracy.
 - The representative export uses deterministic mock translations for structural testing. Real Chinese
   translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
   reconstruction artifacts still prevent unattended publication.
-- MangaOCR/PaddleOCR recognition, a pixel brush/eraser, line-art-aware restoration comparisons, and a
-  real Real-ESRGAN run remain roadmap work.
-- The exact candidate is a local-only commit pending renewed independent review after documentation
-  synchronization. No tag, remote creation, push, release, or deployment has been performed or inferred.
+- MangaOCR/PaddleOCR recognition, an automatic post-OCR trust gate, arbitrary polygon/whole-page mask
+  editing, line-art-aware restoration, and a real Real-ESRGAN run remain roadmap work.
+- The current visual-stage review candidate is uncommitted and requires local checks, exact governed
+  review, non-default-branch push, remote verification, and CI before the next major feature checkpoint.

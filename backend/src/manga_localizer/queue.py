@@ -29,9 +29,11 @@ from manga_localizer.services.exporting import (
     choose_export_root,
     ensure_project_bundle,
     export_image,
+    validate_image_export_readiness,
     write_json_export_summary,
 )
 from manga_localizer.services.images import (
+    clear_stage_reviews,
     image_path,
     invalidate_image_pipeline,
     reset_image_review,
@@ -50,6 +52,10 @@ logger = logging.getLogger(__name__)
 
 class JobConflict(ProjectError):
     pass
+
+
+class StaleJobResult(ProjectError):
+    """A computed result that lost its optimistic-concurrency race."""
 
 
 class PersistentJobQueue:
@@ -165,6 +171,21 @@ class PersistentJobQueue:
                 store.write_snapshot()
 
     @staticmethod
+    def _completed_export_item_is_current(session, item: JobItem) -> bool:
+        if item.image_id is None:
+            return False
+        image = session.get(ImageAsset, item.image_id)
+        exported_revision = (item.output or {}).get("imageRevision")
+        return bool(
+            image is not None
+            and isinstance(exported_revision, int)
+            and not isinstance(exported_revision, bool)
+            # A successful export advances the image exactly once while marking
+            # its export status done. Any later mutation makes this item stale.
+            and image.revision == exported_revision + 1
+        )
+
+    @staticmethod
     def _finalize_export_bundle(
         store: ProjectStore,
         job_id: str,
@@ -184,6 +205,16 @@ class PersistentJobQueue:
                     return
                 if finished_job.options.get("bundleFinalized") is True:
                     return
+                stale_items = [
+                    item
+                    for item in finished_job.items
+                    if not PersistentJobQueue._completed_export_item_is_current(session, item)
+                ]
+                if stale_items:
+                    raise ProjectError(
+                        "One or more pages changed after their export item completed; "
+                        "retry with overwrite or start a new export job"
+                    )
             export_format = str(job_options.get("format", "both"))
             include_assets = export_format == "both"
             export_root = choose_export_root(
@@ -225,12 +256,25 @@ class PersistentJobQueue:
         with store.session() as session:
             job = session.get(Job, job_id)
             kind = job.kind if job is not None else None
+            item = session.get(JobItem, item_id)
+            image = (
+                session.get(ImageAsset, item.image_id)
+                if item is not None and item.image_id is not None
+                else None
+            )
+            expected_image_revision = image.revision if image is not None else None
 
-        def process_and_finish() -> None:
+        def process_and_finish(failure_revision: int | None) -> None:
             try:
                 output = self._process_item(store, job_id, item_id)
             except Exception as error:
-                self._finish_item(store, job_id, item_id, error=error)
+                self._finish_item(
+                    store,
+                    job_id,
+                    item_id,
+                    error=error,
+                    expected_image_revision=failure_revision,
+                )
             else:
                 self._finish_item(store, job_id, item_id, output=output)
             store.write_snapshot()
@@ -239,9 +283,22 @@ class PersistentJobQueue:
             # Keep the metadata read, filesystem copy, and export status transition indivisible
             # relative to editor mutations. Export jobs are serialized by _job_concurrency.
             with store.lock:
-                process_and_finish()
+                # An edit may commit between the initial lookup and this critical section.
+                # Refresh the failure guard so an error against the newer state is not
+                # misclassified as a stale provider failure.
+                with store.session() as session:
+                    current_item = session.get(JobItem, item_id)
+                    current_image = (
+                        session.get(ImageAsset, current_item.image_id)
+                        if current_item is not None and current_item.image_id is not None
+                        else None
+                    )
+                    export_failure_revision = (
+                        current_image.revision if current_image is not None else None
+                    )
+                process_and_finish(export_failure_revision)
             return
-        process_and_finish()
+        process_and_finish(expected_image_revision)
 
     @staticmethod
     def _job_concurrency(kind: str, options: dict[str, Any]) -> int:
@@ -289,6 +346,7 @@ class PersistentJobQueue:
         *,
         output: dict[str, Any] | None = None,
         error: Exception | None = None,
+        expected_image_revision: int | None = None,
     ) -> None:
         with store.session() as session:
             job = session.get(Job, job_id)
@@ -314,10 +372,20 @@ class PersistentJobQueue:
                         ]
                         image.revision += 1
             else:
+                image = session.get(ImageAsset, item.image_id) if item.image_id else None
+                if (
+                    image is not None
+                    and expected_image_revision is not None
+                    and image.revision != expected_image_revision
+                    and not isinstance(error, StaleJobResult)
+                ):
+                    error = StaleJobResult(
+                        f"Image changed while {job.kind} was running; "
+                        "the stale failure was discarded"
+                    )
                 item.status = JobStatus.FAILED.value
                 item.error = safe_error(error).replace(str(store.root), "<project>")
-                image = session.get(ImageAsset, item.image_id) if item.image_id else None
-                if image is not None:
+                if image is not None and not isinstance(error, StaleJobResult):
                     processing_errors = list(image.processing_errors or [])
                     processing_errors.append(
                         {
@@ -585,9 +653,25 @@ class PersistentJobQueue:
                 raise ProjectError("Job was not found")
             if job.status not in {JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
                 raise JobConflict(f"Cannot retry a {job.status} job")
+            stale_completed: list[JobItem] = []
+            if job.kind == "export":
+                stale_completed = [
+                    item
+                    for item in job.items
+                    if item.status == JobStatus.COMPLETED.value
+                    and not self._completed_export_item_is_current(session, item)
+                ]
+                if stale_completed and job.options.get("conflict", "rename") != "overwrite":
+                    raise JobConflict(
+                        "A completed export page changed after it was written; "
+                        "start a new export job or use overwrite so stale files can be replaced"
+                    )
             reset = 0
             for item in job.items:
-                if item.status in {JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
+                if item in stale_completed or item.status in {
+                    JobStatus.FAILED.value,
+                    JobStatus.CANCELLED.value,
+                }:
                     item.status = JobStatus.QUEUED.value
                     item.progress = 0.0
                     item.error = None
@@ -600,6 +684,9 @@ class PersistentJobQueue:
                     raise JobConflict("Job has no failed or cancelled items to retry")
             job.status = JobStatus.QUEUED.value
             job.error = None
+            job.completed = sum(
+                item.status == JobStatus.COMPLETED.value for item in job.items
+            )
             job.progress = job.completed / job.total if job.total else 0.0
         store.write_snapshot()
         return self.get_job(store, job_id)
@@ -628,6 +715,13 @@ class PersistentJobQueue:
             return self._process_render(store, image_id, options, kind)
         if kind == "export":
             export_format = str(options.get("format", "both"))
+            image_variant = str(options.get("imageVariant", "typeset"))
+            validate_image_export_readiness(
+                store,
+                image_id,
+                export_format=export_format,
+                image_variant=image_variant,
+            )
             root = choose_export_root(
                 store,
                 options.get("outputPath"),
@@ -641,7 +735,7 @@ class PersistentJobQueue:
                 export_format=export_format,
                 conflict=str(options.get("conflict", "rename")),
                 preserve_tree=bool(options.get("preserveTree", True)),
-                image_variant=str(options.get("imageVariant", "typeset")),
+                image_variant=image_variant,
             )
         raise ProjectError(f"Unsupported job kind: {kind}")
 
@@ -791,6 +885,7 @@ class PersistentJobQueue:
             status["preprocess"] = "done"
             status["preprocessingProvider"] = provider_name
             image.status = status
+            clear_stage_reviews(image, {"preprocess"})
             image.processing_errors = [
                 error
                 for error in (image.processing_errors or [])
@@ -832,7 +927,7 @@ class PersistentJobQueue:
             and cls._region_versions(session, image_id) != expected_region_versions
         )
         if image.revision != expected_image_revision or region_versions_changed:
-            raise ProjectError(f"Image changed during {operation}; retry the job")
+            raise StaleJobResult(f"Image changed during {operation}; retry the job")
         return image
 
     def _process_detect(
@@ -1626,6 +1721,11 @@ class PersistentJobQueue:
                 status["typeset"] = "done"
                 status["typesettingProvider"] = typesetting_provider_name
             current.status = status
+            clear_stage_reviews(
+                current,
+                ({"inpaint"} if inpainted_bytes is not None else set())
+                | ({"typeset"} if typeset_bytes is not None else set()),
+            )
             cleared_stages = {"render", "inpaint", "typeset"}
             current.processing_errors = [
                 error

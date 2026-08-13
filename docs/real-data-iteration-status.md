@@ -1,10 +1,10 @@
 # Real-data iteration status
 
-This is the detailed private real-data evidence and round log routed from `.agent/STATE.md`, the compact
+This is the sanitized public real-data summary and round log routed from `.agent/STATE.md`, the compact
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 ## Current phase
 
@@ -16,6 +16,9 @@ Last updated: 2026-08-12
 - Round 5 — configurable backend/UI pipeline: complete.
 - Round 6 — real-data regression and failure-driven repair: complete.
 - Round 7 — documentation, public-tree cleanup, and final gates: complete.
+- Round 8 — full-book clean-plate visual review: partial; 18 of 130 pages have explicit output review.
+- Round 9 — ignored aggregate failure evidence and durable visual-stage review checkpoint: candidate
+  implementation complete; current regression/CI verification pending.
 
 ## Private data boundary
 
@@ -167,11 +170,14 @@ before unattended publication would be appropriate.
 - Optional PP-OCRv3 polygon detector and explicit detection/OCR provider separation.
 - Preprocessed-crop OCR retry against original, quality selection, and attempt/input provenance.
 - Text-aware or full-region masks, padding, dilation, real soft feathering, and actual mask overlay.
+- Persisted bounded brush/eraser strokes for manual correction of a selected region's mask.
 - Exact inpainting provider selection; unknown IDs fail instead of silently using OpenCV.
 - Optional real LaMa ONNX restoration plus OpenCV fallback.
 - Safe/recognized/all repair policies, eligible/skipped/repaired metrics, and typesetting gated by both
   safe eligibility and the actual generated repair mask.
 - Preprocess/compare/mask controls in the workbench and corrected task refresh/partial-creation behavior.
+- Persisted preprocess/inpaint/typeset accept/reject decisions bound to artifact and mask checksums;
+  generated-image export and portable generated assets require current accepted review.
 - Generic private evaluator with per-file failures, OCR proxies, immutable-source checks, dimension and
   mask structural metrics.
 
@@ -185,8 +191,8 @@ before unattended publication would be appropriate.
    model are installed, then compare against the exact same annotations.
 3. **Detection/OCR:** add MangaOCR or PaddleOCR recognition behind the existing protocol, region-level
    rerun/history controls, and calibrated confidence. Keep empty detection authoritative.
-4. **Mask editing:** add a real pixel brush/eraser and persist manual raster/vector deltas. Current manual
-   correction is region geometry plus mode/padding/dilation/feather.
+4. **Mask editing:** add arbitrary polygon regions and a whole-page raster workflow. Current brush and
+   eraser strokes are bounded to one selected rectangular region.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
    Preserve the exact mask-outside invariant and never auto-repair uncertain regions.
 6. **Typesetting:** use real Chinese translation in visual acceptance, improve font/vertical punctuation
@@ -213,3 +219,9 @@ before unattended publication would be appropriate.
 - **Round 7:** completed public documentation and cleanup; passed 130 backend tests, 64 frontend tests,
   two Playwright Chromium journeys, production builds, release/privacy scans, and the final three-image
   real-provider regression.
+- **Round 8:** prepared review packs for all 130 pages, but recorded explicit completed output review for
+  only 18 pages. This is a partial clean-plate checkpoint, not a full-book quality result.
+- **Round 9:** recorded ignored aggregate evidence that no-text pages still receive many automatic text
+  candidates and that structurally safe complex repairs can remain visually unacceptable. Added durable
+  visual-stage accept/reject state, checksum binding, invalidation, UI controls, and export gating; exact
+  current-candidate verification is still pending.

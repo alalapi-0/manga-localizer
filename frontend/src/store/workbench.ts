@@ -14,6 +14,9 @@ import type {
   ProjectSummary,
   Region,
   ReviewState,
+  StageReviewState,
+  StageReviewObservation,
+  VisualStage,
   RightPanelTab,
   StageState,
   Theme,
@@ -82,6 +85,7 @@ interface WorkbenchState {
   saveError: string;
   lastSavedAt: string | null;
   revisionConflict: boolean;
+  stageReviewSaving: string | null;
   past: HistoryFrame[];
   future: HistoryFrame[];
 
@@ -113,6 +117,11 @@ interface WorkbenchState {
   flushAutosave: () => Promise<boolean>;
   updateProjectSettings: (patch: Partial<ProjectSettings>) => void;
   reviewActiveImage: (reviewState: ReviewState) => Promise<boolean>;
+  reviewActiveImageStage: (
+    stage: VisualStage,
+    state: StageReviewState,
+    observation?: StageReviewObservation,
+  ) => Promise<boolean>;
   setCanvasMode: (mode: CanvasMode) => void;
   setCanvasTool: (tool: CanvasTool) => void;
   toggleCompareMode: () => void;
@@ -259,6 +268,9 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     confirmedCount: Number(image.confirmedCount ?? 0),
     ignoredCount: Number(image.ignoredCount ?? 0),
     revision: Number(image.revision ?? 0),
+    stageReviews: image.stageReviews && typeof image.stageReviews === 'object'
+      ? image.stageReviews
+      : {},
     status: {
       import: stageState(rawStatus.import ?? 'done'),
       preprocess: stageState(rawStatus.preprocess),
@@ -479,6 +491,10 @@ function invalidateImagesForSettings(
 ): ImageAsset[] {
   if (!stages.size) return images;
   const resetReview = [...stages].some((stage) => stage !== 'preprocess' && stage !== 'export');
+  const invalidatedVisualStages = new Set<VisualStage>();
+  if (stages.has('preprocess')) invalidatedVisualStages.add('preprocess');
+  if (stages.has('inpaint')) invalidatedVisualStages.add('inpaint');
+  if (stages.has('typeset')) invalidatedVisualStages.add('typeset');
   return images.map((image) => {
     const status = { ...image.status };
     for (const stage of stages) status[stage] = 'not_started';
@@ -489,6 +505,11 @@ function invalidateImagesForSettings(
     return {
       ...image,
       status,
+      stageReviews: Object.fromEntries(
+        Object.entries(image.stageReviews).filter(
+          ([stage]) => !invalidatedVisualStages.has(stage as VisualStage),
+        ),
+      ) as ImageAsset['stageReviews'],
       preprocessingProvider: stages.has('preprocess') ? undefined : image.preprocessingProvider,
       detectorProvider: stages.has('detection') ? undefined : image.detectorProvider,
       ocrProvider: stages.has('ocr') ? undefined : image.ocrProvider,
@@ -634,7 +655,12 @@ async function synchronizeImages(projectId: string): Promise<void> {
     const images = response
       .map((image) => hydrateImage(image, state.currentProject?.settings))
       .sort((left, right) => left.relativePath.localeCompare(right.relativePath));
-    return { images: updateAllImageCounts(images, state.regionsByImage) };
+    return {
+      images: updateAllImageCounts(images.map((image) => {
+        const currentImage = state.images.find((entry) => entry.id === image.id);
+        return currentImage && currentImage.revision > image.revision ? currentImage : image;
+      }), state.regionsByImage),
+    };
   });
 }
 
@@ -912,6 +938,7 @@ const initialUiState = {
   saveError: '',
   lastSavedAt: null as string | null,
   revisionConflict: false,
+  stageReviewSaving: null as string | null,
   past: [] as HistoryFrame[],
   future: [] as HistoryFrame[],
 };
@@ -1091,15 +1118,18 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
 
   reloadActiveImage: async () => {
     const imageId = get().activeImageId;
-    if (!imageId) return;
+    const projectId = get().currentProject?.id;
+    if (!imageId || !projectId) return;
     set((state) => ({
       pendingRegionMutations: state.pendingRegionMutations.filter(
         (mutation) => mutation.imageId !== imageId,
       ),
       saveError: '',
+      globalError: '',
       revisionConflict: false,
       selectedRegionIds: [],
     }));
+    await synchronizeImages(projectId);
     await get().loadRegions(imageId, true);
   },
 
@@ -1565,12 +1595,71 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         status: { ...image.status, ...(response.status ?? {}) },
       }, state.currentProject?.settings);
       set((currentState) => ({
-        images: currentState.images.map((entry) => entry.id === merged.id ? merged : entry),
+        images: currentState.images.map((entry) =>
+          entry.id === merged.id && entry.revision <= merged.revision ? merged : entry,
+        ),
       }));
       return true;
     } catch (error) {
       set({ globalError: errorMessage(error) });
       return false;
+    }
+  },
+
+  reviewActiveImageStage: async (stage, nextState, observation) => {
+    if (!(await get().flushAutosave())) return false;
+    const state = get();
+    const image = activeImage(state);
+    if (!image) return false;
+    if (nextState !== 'pending') {
+      const observationMatches = observation
+        && observation.imageId === image.id
+        && observation.stage === stage
+        && observation.revision === image.revision
+        && Boolean(observation.artifactChecksum)
+        && (stage !== 'inpaint' || Boolean(observation.maskChecksum));
+      if (!observationMatches) {
+        set({
+          globalError: '画布中的复核文件已过期或尚未完成校验，请重新加载当前阶段后再复核。',
+        });
+        return false;
+      }
+    }
+    const mutationKey = `${image.id}:${stage}`;
+    if (state.stageReviewSaving !== null) return false;
+    set({ globalError: '', revisionConflict: false, stageReviewSaving: mutationKey });
+    try {
+      const response = await api.reviewImageStage(
+        image.id,
+        stage,
+        nextState,
+        image.revision,
+        nextState === 'pending' ? undefined : observation,
+      );
+      const merged = hydrateImage({
+        ...image,
+        ...response,
+        status: { ...image.status, ...(response.status ?? {}) },
+        stageReviews: response.stageReviews ?? {},
+      }, state.currentProject?.settings);
+      set((currentState) => ({
+        images: currentState.images.map((entry) =>
+          entry.id === merged.id && entry.revision <= merged.revision ? merged : entry,
+        ),
+      }));
+      return true;
+    } catch (error) {
+      set({
+        globalError: errorMessage(error),
+        revisionConflict: error instanceof ApiError && error.status === 409,
+      });
+      return false;
+    } finally {
+      set((currentState) => ({
+        stageReviewSaving: currentState.stageReviewSaving === mutationKey
+          ? null
+          : currentState.stageReviewSaving,
+      }));
     }
   },
 
@@ -1753,6 +1842,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         jobs,
         images: refreshedImages.map((image) => {
           const previous = state.images.find((entry) => entry.id === image.id);
+          if (previous && previous.revision > image.revision) return previous;
           return {
             ...image,
             preprocessingProvider: image.preprocessingProvider ?? previous?.preprocessingProvider,

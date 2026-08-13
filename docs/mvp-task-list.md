@@ -39,10 +39,17 @@ reported separately rather than implied by this list.
 Commit, tag, remote, and CI status are delivery metadata and should be verified from Git and GitHub,
 not inferred from this tracked checklist.
 
+## Unreleased real-data iteration
+
+- [x] Persist bounded per-region mask brush/eraser edits and apply them to generated masks
+- [x] Persist preprocess/inpaint/typeset accept/reject decisions across reopen
+- [x] Bind visual reviews to generated artifact/mask checksums and gate generated-image export
+- [x] Exclude unreviewed or stale generated artifacts from portable project bundles
+
 ## Explicitly deferred
 
 - Deep-learning inpainting, artistic sound-effect redraw, automatic font matching
 - Fully automatic speech-bubble detection, whole-book character reasoning
-- Manual mask brush/eraser editing, arbitrary polygon regions, and JSON-only project import
+- Arbitrary polygon regions, whole-page raster mask editing, and JSON-only project import
 - MangaOCR and PaddleOCR provider adapters
 - PDF/EPUB ingestion, native installers, cloud sync, and collaboration

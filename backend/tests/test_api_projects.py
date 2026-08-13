@@ -8,15 +8,519 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from manga_localizer.database import ImageAsset
+from manga_localizer.database import ImageAsset, Revision
+from manga_localizer.main import create_app
 from manga_localizer.security import (
     UnsafePathError,
     portable_path_key,
     resolve_within,
     safe_relative_path,
 )
+from manga_localizer.services.images import invalidate_image_pipeline, stage_reviews
 
 from .conftest import create_project, png_bytes, upload_image
+
+
+def _checksum(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def test_visual_stage_review_is_normalized_revision_guarded_and_reopenable(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "stage-review-project")
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {**image.status, "inpaint": "done", "stageReviews": {"legacy": "bad"}}
+    generated = tmp_path / "stage-review-project/generated"
+    (generated / "inpainted/第一章").mkdir(parents=True)
+    (generated / "masks/第一章").mkdir(parents=True)
+    artifact_bytes = png_bytes()
+    mask_bytes = png_bytes()
+    (generated / "inpainted/第一章/ページ一.png").write_bytes(artifact_bytes)
+    (generated / "masks/第一章/ページ一.png").write_bytes(mask_bytes)
+
+    initial = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert initial["stageReviews"] == {}
+    accepted = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "accepted",
+            "expectedRevision": initial["revision"],
+            "observedArtifactChecksum": _checksum(artifact_bytes),
+            "observedMaskChecksum": _checksum(mask_bytes),
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    accepted_body = accepted.json()
+    assert accepted_body["status"]["inpaint"] == "done"
+    assert "stageReviews" not in accepted_body["status"]
+    assert accepted_body["stageReviews"]["inpaint"] == {
+        "state": "accepted",
+        "reviewedAt": accepted_body["stageReviews"]["inpaint"]["reviewedAt"],
+        "resultRevision": initial["revision"],
+        "artifactChecksum": accepted_body["stageReviews"]["inpaint"]["artifactChecksum"],
+        "maskChecksum": accepted_body["stageReviews"]["inpaint"]["maskChecksum"],
+    }
+    assert accepted_body["revision"] == initial["revision"] + 1
+    snapshot = json.loads((tmp_path / "stage-review-project/project/project.json").read_text())
+    snapshot_image = next(entry for entry in snapshot["images"] if entry["id"] == imported["id"])
+    assert snapshot_image["status"]["stageReviews"]["inpaint"]["state"] == "accepted"
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "fresh-stage-review-catalog"}
+    )
+    with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+        reopened = fresh.post(
+            "/api/projects/open",
+            json={
+                "manifestPath": str(
+                    tmp_path / "stage-review-project/project/project.json"
+                )
+            },
+        )
+        assert reopened.status_code == 200, reopened.text
+        persisted = fresh.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert persisted["stageReviews"]["inpaint"]["state"] == "accepted"
+
+    conflict = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "rejected",
+            "expectedRevision": initial["revision"],
+            "observedArtifactChecksum": _checksum(artifact_bytes),
+            "observedMaskChecksum": _checksum(mask_bytes),
+        },
+    )
+    assert conflict.status_code == 409
+    withdrawn = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={"state": "pending", "expectedRevision": accepted_body["revision"]},
+    )
+    assert withdrawn.status_code == 200, withdrawn.text
+    assert withdrawn.json()["stageReviews"] == {}
+    assert client.get(f"/api/projects/{project['id']}/images").json()[0]["stageReviews"] == {}
+
+    with store.session() as session:
+        operations = [
+            revision.operation
+            for revision in session.query(Revision).filter(Revision.entity_id == imported["id"])
+        ]
+    assert operations[-2:] == ["stage-review", "stage-review"]
+
+
+@pytest.mark.parametrize("state", ["accepted", "rejected"])
+def test_visual_stage_review_binds_the_exact_served_artifacts(
+    app, client: TestClient, tmp_path: Path, state: str
+) -> None:
+    project_root = tmp_path / f"observed-stage-{state}"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    artifact_path = project_root / "generated/inpainted/第一章/ページ一.png"
+    mask_path = project_root / "generated/masks/第一章/ページ一.png"
+    artifact_path.parent.mkdir(parents=True)
+    mask_path.parent.mkdir(parents=True)
+    artifact_path.write_bytes(png_bytes(color="red"))
+    mask_path.write_bytes(png_bytes(color="black"))
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {**image.status, "inpaint": "done"}
+
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    served_artifact = client.get(f"/api/images/{imported['id']}/generated/inpainted")
+    served_mask = client.get(f"/api/images/{imported['id']}/generated/mask")
+    assert served_artifact.status_code == 200
+    assert served_mask.status_code == 200
+    artifact_checksum = _checksum(served_artifact.content)
+    mask_checksum = _checksum(served_mask.content)
+
+    response = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": state,
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": artifact_checksum,
+            "observedMaskChecksum": mask_checksum,
+        },
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["stageReviews"]["inpaint"] == {
+        "state": state,
+        "reviewedAt": response.json()["stageReviews"]["inpaint"]["reviewedAt"],
+        "resultRevision": current["revision"],
+        "artifactChecksum": artifact_checksum,
+        "maskChecksum": mask_checksum,
+    }
+
+
+@pytest.mark.parametrize(
+    ("mismatch_field", "mismatches"),
+    (
+        ("observedArtifactChecksum", ["artifactChecksum"]),
+        ("observedMaskChecksum", ["maskChecksum"]),
+    ),
+)
+def test_observed_stage_checksum_conflict_has_zero_mutation(
+    app,
+    client: TestClient,
+    tmp_path: Path,
+    mismatch_field: str,
+    mismatches: list[str],
+) -> None:
+    project_root = tmp_path / f"observed-conflict-{mismatch_field}"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    artifact_bytes = png_bytes(color="red")
+    mask_bytes = png_bytes(color="black")
+    typeset_bytes = png_bytes(color="blue")
+    paths = {
+        "inpainted": artifact_bytes,
+        "masks": mask_bytes,
+        "typeset": typeset_bytes,
+    }
+    for directory, data in paths.items():
+        target = project_root / "generated" / directory / "第一章/ページ一.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(data)
+    reviewed_at = "2026-08-13T10:00:00+00:00"
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": reviewed_at,
+                    "resultRevision": image.revision,
+                    "artifactChecksum": _checksum(artifact_bytes),
+                    "maskChecksum": _checksum(mask_bytes),
+                },
+                "typeset": {
+                    "state": "accepted",
+                    "reviewedAt": reviewed_at,
+                    "resultRevision": image.revision,
+                    "artifactChecksum": _checksum(typeset_bytes),
+                },
+            },
+        }
+
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    project_before = client.get(f"/api/projects/{project['id']}").json()["revision"]
+    with store.session() as session:
+        audit_before = session.query(Revision).count()
+    request = {
+        "state": "accepted",
+        "expectedRevision": current["revision"],
+        "observedArtifactChecksum": _checksum(artifact_bytes),
+        "observedMaskChecksum": _checksum(mask_bytes),
+        mismatch_field: "0" * 64,
+    }
+
+    response = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json=request,
+    )
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": {
+            "message": "The reviewed visual no longer matches the current stage output",
+            "resource": f"image:{imported['id']}",
+            "stage": "inpaint",
+            "mismatches": mismatches,
+        }
+    }
+    unchanged = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert unchanged["revision"] == current["revision"]
+    assert unchanged["status"] == current["status"]
+    assert unchanged["stageReviews"] == current["stageReviews"]
+    assert client.get(f"/api/projects/{project['id']}").json()["revision"] == project_before
+    with store.session() as session:
+        assert session.query(Revision).count() == audit_before
+
+
+def test_visual_stage_review_observed_checksum_field_rules(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "observed-field-rules"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    data = png_bytes()
+    for directory in ("preprocessed", "inpainted", "masks", "typeset"):
+        target = project_root / "generated" / directory / "第一章/ページ一.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(data)
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "preprocess": "done",
+            "inpaint": "done",
+            "typeset": "done",
+        }
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    endpoint = f"/api/images/{imported['id']}/stage-reviews"
+    checksum = _checksum(data)
+
+    invalid_requests = (
+        ("inpaint", {"state": "accepted", "expectedRevision": current["revision"]}, 422),
+        ("inpaint", {"state": "rejected", "expectedRevision": current["revision"]}, 422),
+        (
+            "inpaint",
+            {
+                "state": "pending",
+                "expectedRevision": current["revision"],
+                "observedArtifactChecksum": checksum,
+            },
+            422,
+        ),
+        (
+            "inpaint",
+            {
+                "state": "accepted",
+                "expectedRevision": current["revision"],
+                "observedArtifactChecksum": "A" * 64,
+                "observedMaskChecksum": checksum,
+            },
+            422,
+        ),
+        (
+            "inpaint",
+            {
+                "state": "accepted",
+                "expectedRevision": current["revision"],
+                "observedArtifactChecksum": checksum,
+            },
+            400,
+        ),
+        (
+            "preprocess",
+            {
+                "state": "accepted",
+                "expectedRevision": current["revision"],
+                "observedArtifactChecksum": checksum,
+                "observedMaskChecksum": checksum,
+            },
+            400,
+        ),
+        (
+            "typeset",
+            {
+                "state": "rejected",
+                "expectedRevision": current["revision"],
+                "observedArtifactChecksum": checksum,
+                "observedMaskChecksum": checksum,
+            },
+            400,
+        ),
+    )
+    for stage, body, expected_status in invalid_requests:
+        response = client.patch(f"{endpoint}/{stage}", json=body)
+        assert response.status_code == expected_status, response.text
+
+    unchanged = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert unchanged["revision"] == current["revision"]
+    assert unchanged["stageReviews"] == {}
+
+
+def test_visual_stage_review_revision_conflict_precedes_observation_conflict(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "observed-revision-precedence"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    data = png_bytes()
+    for directory in ("inpainted", "masks"):
+        target = project_root / "generated" / directory / "第一章/ページ一.png"
+        target.parent.mkdir(parents=True)
+        target.write_bytes(data)
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {**image.status, "inpaint": "done"}
+        image.revision += 1
+
+    response = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "accepted",
+            "expectedRevision": imported["revision"],
+            "observedArtifactChecksum": "0" * 64,
+            "observedMaskChecksum": "0" * 64,
+        },
+    )
+    assert response.status_code == 409
+    detail = response.json()["detail"]
+    assert detail["expectedRevision"] == imported["revision"]
+    assert detail["actualRevision"] == imported["revision"] + 1
+    assert "mismatches" not in detail
+
+
+def test_rejecting_upstream_visual_stage_clears_dependent_reviews(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "dependent-stage-review")
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    record = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-13T10:00:00+00:00",
+        "resultRevision": imported["revision"],
+        "artifactChecksum": "a" * 64,
+        "maskChecksum": "b" * 64,
+    }
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "preprocess": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "stageReviews": {
+                "preprocess": record,
+                "inpaint": record,
+                "typeset": record,
+            },
+        }
+    generated = tmp_path / "dependent-stage-review/generated"
+    generated_bytes = png_bytes()
+    for directory in ("preprocessed", "inpainted", "masks", "typeset"):
+        target = generated / directory / "第一章/ページ一.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(generated_bytes)
+
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    rejected = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "rejected",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+            "observedMaskChecksum": _checksum(generated_bytes),
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    assert set(rejected.json()["stageReviews"]) == {"preprocess", "inpaint"}
+    assert rejected.json()["stageReviews"]["inpaint"]["state"] == "rejected"
+
+    reopened = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/preprocess",
+        json={"state": "pending", "expectedRevision": rejected.json()["revision"]},
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["stageReviews"] == {}
+
+
+def test_accepting_changed_upstream_artifact_clears_dependent_review(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "changed-upstream-stage-review"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    inpaint = project_root / "generated/inpainted/第一章/ページ一.png"
+    mask = project_root / "generated/masks/第一章/ページ一.png"
+    typeset = project_root / "generated/typeset/第一章/ページ一.png"
+    generated_bytes = png_bytes()
+    for target in (inpaint, mask, typeset):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(generated_bytes)
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {**image.status, "inpaint": "done", "typeset": "done"}
+
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    current = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+            "observedMaskChecksum": _checksum(generated_bytes),
+        },
+    ).json()
+    current = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/typeset",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+        },
+    ).json()
+    assert set(current["stageReviews"]) == {"inpaint", "typeset"}
+
+    changed_bytes = png_bytes(color="red")
+    inpaint.write_bytes(changed_bytes)
+    changed = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(changed_bytes),
+            "observedMaskChecksum": _checksum(generated_bytes),
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    assert set(changed.json()["stageReviews"]) == {"inpaint"}
+
+
+def test_visual_stage_review_requires_completed_stage(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "unfinished-stage-review")
+    image = upload_image(client, project["id"])
+    response = client.patch(
+        f"/api/images/{image['id']}/stage-reviews/typeset",
+        json={
+            "state": "accepted",
+            "expectedRevision": image["revision"],
+            "observedArtifactChecksum": "a" * 64,
+        },
+    )
+    assert response.status_code == 400
+    assert "until that stage is done" in response.text
+
+
+def test_pipeline_invalidation_clears_only_dependent_visual_reviews(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "stage-invalidation-project")
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    record = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-13T10:00:00+00:00",
+        "resultRevision": imported["revision"],
+        "artifactChecksum": "a" * 64,
+        "maskChecksum": "b" * 64,
+    }
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "stageReviews": {
+                "preprocess": record,
+                "inpaint": record,
+                "typeset": record,
+            },
+        }
+        invalidate_image_pipeline(store, image, {"typeset", "export"})
+        assert set(stage_reviews(image)) == {"preprocess", "inpaint"}
+        invalidate_image_pipeline(store, image, {"inpaint", "typeset", "export"})
+        assert set(stage_reviews(image)) == {"preprocess"}
 
 
 def test_openai_session_key_enables_provider_without_persisting_or_returning_secret(
@@ -28,8 +532,6 @@ def test_openai_session_key_enables_provider_without_persisting_or_returning_sec
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
 
     from manga_localizer.config import Settings
-    from manga_localizer.main import create_app
-
     data_dir = tmp_path / "session-catalog"
     app = create_app(Settings(data_dir=data_dir), start_worker=False)
     secret = "sk-session-test-value"
@@ -189,8 +691,6 @@ def test_open_portable_project_with_a_fresh_catalog(
     manifest = root / "project/project.json"
 
     from manga_localizer.config import Settings
-    from manga_localizer.main import create_app
-
     fresh_settings = Settings(data_dir=tmp_path / "other-catalog")
     with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
         opened = fresh.post("/api/projects/open", json={"manifestPath": str(manifest)})
@@ -201,8 +701,6 @@ def test_open_portable_project_with_a_fresh_catalog(
 
 def test_open_scrubs_legacy_secrets_from_response_history_and_database(tmp_path: Path) -> None:
     from manga_localizer.config import Settings
-    from manga_localizer.main import create_app
-
     root = tmp_path / "legacy"
     setup_app = create_app(Settings(data_dir=tmp_path / "setup-catalog"), start_worker=False)
     with TestClient(setup_app) as setup_client:
@@ -520,8 +1018,6 @@ def test_open_rejects_database_symlink_without_mutating_the_other_project(
     tmp_path: Path,
 ) -> None:
     from manga_localizer.config import Settings
-    from manga_localizer.main import create_app
-
     first_root = tmp_path / "first"
     second_root = tmp_path / "second"
     app = create_app(Settings(data_dir=tmp_path / "catalog"), start_worker=False)

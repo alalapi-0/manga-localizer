@@ -155,6 +155,32 @@ describe('api client contract', () => {
     });
   });
 
+  it('sends a durable visual-stage review with its image revision', async () => {
+    const reviewed = {
+      ...regionFixture(),
+      id: 'image-1',
+      stageReviews: {
+        inpaint: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+      },
+      revision: 8,
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(reviewed));
+
+    await api.reviewImageStage('image-1', 'inpaint', 'accepted', 7, {
+      artifactChecksum: 'a'.repeat(64),
+      maskChecksum: 'b'.repeat(64),
+    });
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/images/image-1/stage-reviews/inpaint');
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('PATCH');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      state: 'accepted',
+      expectedRevision: 7,
+      observedArtifactChecksum: 'a'.repeat(64),
+      observedMaskChecksum: 'b'.repeat(64),
+    });
+  });
+
   it('keeps the delete revision guard in the expectedRevision query', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
 

@@ -248,6 +248,7 @@ class ProjectStore:
                         | {
                             "reviewState": image.status.get("reviewState", "pending"),
                             "reviewedAt": image.status.get("reviewedAt") or "",
+                            "stageReviews": image.status.get("stageReviews", {}),
                         },
                         "providers": {
                             "preprocessing": image.status.get("preprocessingProvider") or None,

@@ -28,8 +28,17 @@ does not download or bundle copyrighted font files.
 ## OpenCV leaves visible artifacts
 
 Adjust the text box, mask padding, dilation, repair radius, or fill method. Preserve/ignore the region or
-use an external image editor when the result needs manual retouching. The MVP has no mask brush or
-eraser, and the baseline interpolator cannot reconstruct detailed line art semantically.
+select one region and refine its actual mask with the brush/eraser. Rerun inpaint and typeset, inspect
+both results, and explicitly accept only usable output. The baseline interpolator still cannot
+reconstruct detailed line art semantically, so difficult repairs may need an external editor.
+
+## Export says a visual-stage review is missing or stale
+
+Finish the page-level text review, switch the canvas to **擦除** and accept the inpaint result, then
+display and inspect **复核蒙版**, accept the inpaint result, then accept **成品** when exporting a
+typeset image. The decision is bound to the exact bytes loaded by the canvas. A changed artifact or mask
+no longer matches the saved review and must be reloaded, rerun, or accepted again. Upstream changes clear
+dependent review state. JSON-only export intentionally does not require visual-stage acceptance.
 
 ## Port already in use
 

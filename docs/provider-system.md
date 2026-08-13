@@ -97,13 +97,18 @@ get_capabilities()
 
 Masks can use detector polygons/current region geometry or text-aware local segmentation, followed by
 padding, dilation, and feathering. Moving/resizing/rotating a detector-created region discards its stale
-polygon so the visible edited box becomes the manual boundary. The UI can overlay the actual persisted
-mask, but pixel-level brush/eraser editing is not implemented.
+polygon so the visible edited box becomes the manual boundary. The UI overlays the actual persisted
+mask and stores bounded add/erase brush strokes for one selected region; the composed mask is the input
+to the inpainting provider.
 
 The `safe` repair policy is the default. It accepts confirmed regions, manual regions with source text,
 and detector-created source text above the configured confidence threshold. `recognized` accepts every
 non-empty source region; `all` is an explicit high-risk override. Skipped/repaired counts and the actual
 provider are recorded in each job result.
+
+Provider completion is not visual approval. Preprocessed, inpainted, and typeset artifacts have
+separate persisted accept/reject records. Generated-image export requires accepted checksums for the
+current artifacts (and the inpaint mask), while JSON-only export remains independent.
 
 ## Optional model setup
 

@@ -3,6 +3,24 @@ export type CanvasMode = 'original' | 'preprocessed' | 'erased' | 'typeset';
 export type CanvasTool = 'select' | 'region' | 'hand' | 'mask-brush' | 'mask-eraser';
 export type RightPanelTab = 'text' | 'typesetting' | 'repair' | 'project';
 export type ReviewState = 'pending' | 'reviewed' | 'no-text-reviewed';
+export type VisualStage = 'preprocess' | 'inpaint' | 'typeset';
+export type StageReviewState = 'pending' | 'accepted' | 'rejected';
+
+export interface StageReview {
+  state: Exclude<StageReviewState, 'pending'>;
+  reviewedAt: string;
+  resultRevision: number;
+  artifactChecksum: string;
+  maskChecksum?: string;
+}
+
+export interface StageReviewObservation {
+  imageId: string;
+  stage: VisualStage;
+  revision: number;
+  artifactChecksum: string;
+  maskChecksum?: string;
+}
 
 export type StageState =
   | 'not_started'
@@ -113,6 +131,7 @@ export interface ImageAsset {
   confirmedCount: number;
   ignoredCount: number;
   status: PipelineStatus;
+  stageReviews: Partial<Record<VisualStage, StageReview>>;
   preprocessingProvider?: string;
   detectorProvider?: string;
   ocrProvider?: string;

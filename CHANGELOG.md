@@ -16,7 +16,9 @@ Semantic Versioning.
 - Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact
   mask-outside preservation, and an explicit checksum-verifying model installer.
 - Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
-  editable region boundaries for manual mask correction.
+  editable region boundaries plus persisted bounded brush/eraser strokes for manual mask correction.
+- Durable accept/reject review for preprocessing, inpainting, and typesetting artifacts, with
+  revision history and application-restart recovery.
 - Private path-parameterized real-data evaluator with a non-sensitive run-configuration snapshot,
   aggregate/per-image OCR coverage, stage failures, source checksum, dimensions, mask coverage, and
   mask-outside change metrics; OCR text and model paths are omitted.
@@ -42,6 +44,9 @@ Semantic Versioning.
 - Generated preview and comparison controls, including keyboard shortcuts and cross-page state, stay
   disabled or return to the original until a real enhanced, repaired, or typeset artifact exists.
 - OCR-friendly edge enhancement is opt-in after real line-art testing showed severe false positives.
+- Generated-image export requires accepted, checksum-current inpaint and typeset results; inpaint
+  acceptance also binds the mask, upstream changes clear dependent reviews, and unreviewed generated
+  artifacts are excluded from portable bundles. JSON-only export remains available without image review.
 
 ### Verification
 
@@ -54,7 +59,7 @@ Semantic Versioning.
 - Added focused backend/frontend regression coverage for preprocessing, coordinate mapping, OCR retry,
   empty-detection semantics, provider routing, LaMa contracts, text masks, safe editing, partial batch
   creation, and pending-edit refresh behavior.
-- The final candidate passed 130 backend tests, 64 frontend tests, two Playwright Chromium journeys,
+- The prior Round 7 candidate passed 130 backend tests, 64 frontend tests, two Playwright Chromium journeys,
   production builds, release/privacy checks, and a repeated three-image real PP-OCRv3/LaMa pipeline with
   zero stage failures or mask-outside pixel changes.
 
@@ -64,8 +69,8 @@ Semantic Versioning.
   counts are proxies rather than detection recall or OCR accuracy.
 - AI preprocessing via Real-ESRGAN still requires a separately installed executable/model, and LaMa
   remains CPU-expensive and imperfect on line art fully hidden by lettering.
-- Mask correction uses editable region geometry and mode/settings; a pixel-level brush/eraser is still
-  roadmap work.
+- Mask correction strokes are scoped to one selected rectangular region; arbitrary whole-page raster
+  editing and arbitrary persisted region polygons remain roadmap work.
 
 ## [0.2.0] - 2026-08-06
 

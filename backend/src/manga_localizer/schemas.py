@@ -70,6 +70,9 @@ class ImageOut(APIModel):
     height: int
     media_type: str
     status: dict[str, str]
+    stage_reviews: dict[
+        Literal["preprocess", "inpaint", "typeset"], dict[str, str | int]
+    ] = Field(default_factory=dict)
     region_count: int
     confirmed_count: int
     ignored_count: int
@@ -91,6 +94,33 @@ class ImageOut(APIModel):
 class ImageReviewRequest(APIModel):
     review_state: Literal["pending", "reviewed", "no-text-reviewed"]
     expected_revision: int = Field(ge=0)
+
+
+class StageReviewRequest(APIModel):
+    state: Literal["pending", "accepted", "rejected"]
+    expected_revision: int = Field(ge=0)
+    observed_artifact_checksum: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    observed_mask_checksum: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+    )
+
+    @model_validator(mode="after")
+    def validate_observed_checksums(self) -> StageReviewRequest:
+        if self.state == "pending":
+            if (
+                self.observed_artifact_checksum is not None
+                or self.observed_mask_checksum is not None
+            ):
+                raise ValueError("Pending visual reviews cannot include observed checksums")
+        elif self.observed_artifact_checksum is None:
+            raise ValueError(
+                "Accepted and rejected reviews require an observed artifact checksum"
+            )
+        return self
 
 
 class LocalImportRequest(APIModel):

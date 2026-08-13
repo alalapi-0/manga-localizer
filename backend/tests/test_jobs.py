@@ -17,11 +17,14 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
+import manga_localizer.queue as queue_module
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, Job, JobStatus
 from manga_localizer.imaging import create_mask
 from manga_localizer.main import create_app
 from manga_localizer.providers.ocr import OCRRegion
+from manga_localizer.services.images import review_image_stage, stage_reviews
+from manga_localizer.services.projects import RevisionConflict
 
 from .conftest import create_project, png_bytes, upload_image
 
@@ -36,6 +39,33 @@ def _wait_job(client: TestClient, job_id: str, timeout: float = 8.0) -> dict[str
             return job
         time.sleep(0.02)
     raise AssertionError(f"Job {job_id} did not finish")
+
+
+def _stage_review_json(
+    client: TestClient,
+    image: dict[str, Any],
+    stage: str,
+    state: str,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "state": state,
+        "expectedRevision": image["revision"],
+    }
+    if state == "pending":
+        return body
+    generated_stage = {
+        "preprocess": "preprocessed",
+        "inpaint": "inpainted",
+        "typeset": "typeset",
+    }[stage]
+    artifact = client.get(f"/api/images/{image['id']}/generated/{generated_stage}")
+    assert artifact.status_code == 200, artifact.text
+    body["observedArtifactChecksum"] = hashlib.sha256(artifact.content).hexdigest()
+    if stage == "inpaint":
+        mask = client.get(f"/api/images/{image['id']}/generated/mask")
+        assert mask.status_code == 200, mask.text
+        body["observedMaskChecksum"] = hashlib.sha256(mask.content).hexdigest()
+    return body
 
 
 def _add_region(
@@ -79,6 +109,30 @@ def _review_image(
     response = client.patch(
         f"/api/images/{image_id}/review",
         json={"reviewState": review_state, "expectedRevision": image["revision"]},
+    )
+    assert response.status_code == 200, response.text
+    reviewed = response.json()
+    for stage in ("preprocess", "inpaint", "typeset"):
+        if reviewed["status"].get(stage) != "done":
+            continue
+        stage_response = client.patch(
+            f"/api/images/{image_id}/stage-reviews/{stage}",
+            json=_stage_review_json(client, reviewed, stage, "accepted"),
+        )
+        assert stage_response.status_code == 200, stage_response.text
+        reviewed = stage_response.json()
+    return reviewed
+
+
+def _set_stage_review(
+    client: TestClient,
+    image: dict[str, Any],
+    stage: str,
+    state: str,
+) -> dict[str, Any]:
+    response = client.patch(
+        f"/api/images/{image['id']}/stage-reviews/{stage}",
+        json=_stage_review_json(client, image, stage, state),
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -206,6 +260,70 @@ def test_job_item_concurrency_is_bounded_and_export_is_serialized(
     assert completed.options["concurrency"] == 2
     assert peak == 2
     assert app.state.queue._job_concurrency("export", {"concurrency": 8}) == 1
+
+
+def test_export_failure_guard_refreshes_after_acquiring_the_export_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        submitted = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={"imageIds": [image["id"]], "options": {"format": "images"}},
+        ).json()
+        claimed = app.state.queue._claim_next()
+        assert claimed is not None
+        store, job_id = claimed
+        assert job_id == submitted["id"]
+        running = app.state.queue.get_job(store, job_id)
+        item_id = running.items[0].id
+        assert app.state.queue._begin_item(store, job_id, item_id) is True
+
+        original_lock = store.lock
+        edited_revision: list[int] = []
+
+        class EditBeforeSecondAcquisition:
+            def __init__(self) -> None:
+                self.acquisitions = 0
+
+            def __enter__(self):
+                self.acquisitions += 1
+                if self.acquisitions == 2:
+                    with store.sessions() as session:
+                        current = session.get(ImageAsset, image["id"])
+                        assert current is not None
+                        current.status = {**dict(current.status), "manualMarker": "edited"}
+                        current.revision += 1
+                        edited_revision.append(current.revision)
+                        session.commit()
+                original_lock.acquire()
+                return self
+
+            def __exit__(self, *_args) -> None:
+                original_lock.release()
+
+        def fail_current_export(*_args, **_kwargs):
+            raise RuntimeError("current export failure")
+
+        monkeypatch.setattr(app.state.queue, "_process_item", fail_current_export)
+        store.lock = EditBeforeSecondAcquisition()
+        try:
+            app.state.queue._execute_item_sync(store, job_id, item_id)
+        finally:
+            store.lock = original_lock
+
+        failed = app.state.queue.get_job(store, job_id)
+        assert failed.items[0].status == JobStatus.FAILED.value
+        assert failed.items[0].error == "current export failure"
+        current_image = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert current_image["status"]["manualMarker"] == "edited"
+        assert current_image["status"]["export"] == "failed"
+        assert current_image["revision"] == edited_revision[0] + 1
+        assert current_image["processingErrors"][-1]["error"] == "current export failure"
 
 
 def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path) -> None:
@@ -950,13 +1068,153 @@ def test_background_render_discards_results_when_region_changes(
             json={"rotation": 12, "expectedRevision": region["revision"]},
         )
         assert edited.status_code == 200, edited.text
+        state_after_edit = client.get(f"/api/projects/{project['id']}/images").json()[0]
         release.set()
         failed = _wait_job(client, render.json()["id"])
         assert failed["status"] == "failed"
         assert "changed during rendering" in failed["items"][0]["error"]
+        final_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert final_state["revision"] == state_after_edit["revision"]
+        assert final_state["status"] == state_after_edit["status"]
+        assert final_state["processingErrors"] == state_after_edit["processingErrors"]
         assert client.get(f"/api/images/{image['id']}/content?variant=erased").status_code == 404
         assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 404
         assert not list((project_root / "generated").rglob("*.png"))
+
+
+def test_provider_failure_after_edit_does_not_pollute_new_image_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def failing_inpaint(*_args, **_kwargs):
+        entered.set()
+        assert release.wait(3)
+        raise RuntimeError("obsolete provider failure")
+
+    monkeypatch.setattr(app.state.providers.inpainting, "inpaint", failing_inpaint)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"])
+        render = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert entered.wait(3)
+        edited = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"rotation": 12, "expectedRevision": region["revision"]},
+        )
+        assert edited.status_code == 200, edited.text
+        state_after_edit = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        release.set()
+
+        failed = _wait_job(client, render.json()["id"])
+        assert failed["status"] == "failed"
+        assert "stale failure was discarded" in failed["items"][0]["error"]
+        assert "obsolete provider failure" not in failed["items"][0]["error"]
+        final_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert final_state["revision"] == state_after_edit["revision"]
+        assert final_state["status"] == state_after_edit["status"]
+        assert final_state["processingErrors"] == state_after_edit["processingErrors"]
+
+
+@pytest.mark.parametrize(
+    ("job_kind", "review_stage", "blocked_directory"),
+    (
+        ("preprocess", "preprocess", "preprocessed"),
+        ("inpaint", "inpaint", "masks"),
+        ("typeset", "typeset", "typeset"),
+    ),
+)
+def test_artifact_publication_and_revision_commit_are_atomic_with_stage_review(
+    client: TestClient,
+    app,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    job_kind: str,
+    review_stage: str,
+    blocked_directory: str,
+) -> None:
+    project = create_project(client, tmp_path / "project")
+    image = upload_image(client, project["id"])
+    store = app.state.registry.get(project["id"])
+    if job_kind == "preprocess":
+        app.state.queue._process_preprocess(store, image["id"], {})
+    else:
+        _add_region(client, image["id"], confirmed=True)
+        app.state.queue._process_render(store, image["id"], {}, "render")
+
+    with store.session() as session:
+        current = session.get(ImageAsset, image["id"])
+        assert current is not None
+        expected_revision = current.revision
+
+    artifact_published = threading.Event()
+    release_publication = threading.Event()
+    review_started = threading.Event()
+    review_finished = threading.Event()
+    producer_errors: list[Exception] = []
+    review_errors: list[Exception] = []
+    original_atomic_write = queue_module.atomic_write_bytes
+
+    def blocking_atomic_write(path: Path, data: bytes) -> None:
+        original_atomic_write(path, data)
+        if path.parent.name == blocked_directory and not artifact_published.is_set():
+            artifact_published.set()
+            assert release_publication.wait(3)
+
+    monkeypatch.setattr(queue_module, "atomic_write_bytes", blocking_atomic_write)
+
+    def publish() -> None:
+        try:
+            if job_kind == "preprocess":
+                app.state.queue._process_preprocess(store, image["id"], {})
+            else:
+                app.state.queue._process_render(store, image["id"], {}, job_kind)
+        except Exception as error:  # pragma: no cover - asserted below
+            producer_errors.append(error)
+
+    def review() -> None:
+        review_started.set()
+        try:
+            review_image_stage(
+                store,
+                image["id"],
+                stage=review_stage,
+                state="accepted",
+                expected_revision=expected_revision,
+            )
+        except Exception as error:  # pragma: no cover - asserted below
+            review_errors.append(error)
+        finally:
+            review_finished.set()
+
+    producer = threading.Thread(target=publish)
+    reviewer = threading.Thread(target=review)
+    producer.start()
+    assert artifact_published.wait(3)
+    reviewer.start()
+    assert review_started.wait(3)
+    assert not review_finished.wait(0.1)
+    release_publication.set()
+    producer.join(3)
+    reviewer.join(3)
+
+    assert not producer.is_alive()
+    assert not reviewer.is_alive()
+    assert producer_errors == []
+    assert len(review_errors) == 1
+    assert isinstance(review_errors[0], RevisionConflict)
+    with store.session() as session:
+        current = session.get(ImageAsset, image["id"])
+        assert current is not None
+        assert review_stage not in stage_reviews(current)
 
 
 def test_detection_is_independent_from_ocr_and_creates_unknown_empty_regions(
@@ -1191,7 +1449,33 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert gated_job["status"] == "failed"
         assert "review is pending" in gated_job["items"][0]["error"]
 
-        _review_image(client, project["id"], image["id"])
+        page_reviewed = _review_image(client, project["id"], image["id"])
+        rejected_clean = _set_stage_review(client, page_reviewed, "inpaint", "rejected")
+        rejected_root = tmp_path / "rejected-clean-export"
+        rejected_export = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "format": "images",
+                    "imageVariant": "inpainted",
+                    "outputPath": str(rejected_root),
+                },
+            },
+        )
+        rejected_job = _wait_job(client, rejected_export.json()["id"])
+        assert rejected_job["status"] == "failed"
+        assert "Stage review must be accepted for inpaint" in rejected_job["items"][0]["error"]
+        assert not rejected_root.exists()
+        current_after_rejection = client.get(
+            f"/api/projects/{project['id']}/images"
+        ).json()[0]
+        page_reviewed = _set_stage_review(
+            client,
+            current_after_rejection,
+            "inpaint",
+            "accepted",
+        )
         clean_root = tmp_path / "clean-export"
         clean = client.post(
             f"/api/projects/{project['id']}/export",
@@ -1215,6 +1499,24 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert not (clean_root / "source").exists()
         assert not (clean_root / "generated").exists()
 
+        reviewed_generated = generated.read_bytes()
+        generated.write_bytes(png_bytes((240, 320), color="red"))
+        tampered = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "format": "images",
+                    "imageVariant": "inpainted",
+                    "outputPath": str(tmp_path / "tampered-export"),
+                },
+            },
+        )
+        tampered_job = _wait_job(client, tampered.json()["id"])
+        assert tampered_job["status"] == "failed"
+        assert "no longer matches the generated artifact" in tampered_job["items"][0]["error"]
+        generated.write_bytes(reviewed_generated)
+
         typeset = client.post(
             f"/api/projects/{project['id']}/typeset",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1223,6 +1525,7 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         after_typeset = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert after_typeset["status"]["reviewState"] == "pending"
         assert after_typeset["status"]["reviewedAt"] == ""
+        assert set(after_typeset["stageReviews"]) == {"inpaint"}
         default_export = client.post(
             f"/api/projects/{project['id']}/export",
             json={"imageIds": [image["id"]], "options": {"format": "images"}},
@@ -1268,7 +1571,8 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
             }
         ]
 
-        _review_image(client, project["id"], image["id"])
+        page_and_stage_reviewed = _review_image(client, project["id"], image["id"])
+        assert set(page_and_stage_reviewed["stageReviews"]) == {"inpaint", "typeset"}
         both_root = tmp_path / "both-export"
         both = client.post(
             f"/api/projects/{project['id']}/export",
@@ -1290,6 +1594,127 @@ def test_clean_plate_export_review_gate_variants_and_byte_identity(tmp_path: Pat
         assert (both_root / "project/project.sqlite3").is_file()
         assert (both_root / "source/chapter/page.png").is_file()
         assert (both_root / "generated/inpainted/chapter/page.png").is_file()
+
+
+def test_portable_bundle_excludes_unreviewed_generated_artifacts(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        accepted = upload_image(client, project["id"], relative_path="a/accepted.png")
+        unreviewed = upload_image(client, project["id"], relative_path="b/unreviewed.png")
+        _add_region(client, accepted["id"], confirmed=True)
+        _add_region(client, unreviewed["id"], confirmed=True)
+        rendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [accepted["id"], unreviewed["id"]], "options": {}},
+        )
+        assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
+        _review_image(client, project["id"], accepted["id"])
+
+        output_root = tmp_path / "portable-reviewed-only"
+        exported = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [accepted["id"]],
+                "options": {
+                    "format": "both",
+                    "imageVariant": "typeset",
+                    "outputPath": str(output_root),
+                    "conflict": "overwrite",
+                },
+            },
+        )
+        completed = _wait_job(client, exported.json()["id"])
+        assert completed["status"] == "completed", completed
+        assert (output_root / "generated/inpainted/a/accepted.png").is_file()
+        assert (output_root / "generated/typeset/a/accepted.png").is_file()
+        assert (output_root / "generated/masks/a/accepted.png").is_file()
+        assert not (output_root / "generated/inpainted/b/unreviewed.png").exists()
+        assert not (output_root / "generated/typeset/b/unreviewed.png").exists()
+        assert not (output_root / "generated/masks/b/unreviewed.png").exists()
+        assert (output_root / "source/a/accepted.png").is_file()
+        assert (output_root / "source/b/unreviewed.png").is_file()
+
+        bundle = json.loads((output_root / "project/project.json").read_text("utf-8"))
+        bundled_unreviewed = next(
+            image for image in bundle["images"] if image["id"] == unreviewed["id"]
+        )
+        assert bundled_unreviewed["status"]["inpaint"] == "pending"
+        assert bundled_unreviewed["status"]["typeset"] == "pending"
+        assert bundled_unreviewed["status"].get("stageReviews", {}) == {}
+        assert "inpaintingProvider" not in bundled_unreviewed["status"]
+        assert "typesettingProvider" not in bundled_unreviewed["status"]
+
+        with sqlite3.connect(output_root / "project/project.sqlite3") as database:
+            encoded_status = database.execute(
+                "SELECT status FROM images WHERE id = ?", (unreviewed["id"],)
+            ).fetchone()[0]
+        database_status = json.loads(encoded_status)
+        assert database_status["inpaint"] == "pending"
+        assert database_status["typeset"] == "pending"
+        assert database_status.get("stageReviews", {}) == {}
+
+
+def test_verified_export_copy_never_publishes_changed_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import manga_localizer.services.exporting as exporting_module
+
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"], relative_path="chapter/page.png")
+        _add_region(client, image["id"], confirmed=True)
+        rendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
+        _review_image(client, project["id"], image["id"])
+        generated = project_root / "generated/typeset/chapter/page.png"
+        reviewed_bytes = generated.read_bytes()
+        replacement = png_bytes((240, 320), color="red")
+        original_copy = exporting_module._atomic_copy_verified
+        changed_once = False
+
+        def change_before_copy(source, destination, expected_checksum, *, label):
+            nonlocal changed_once
+            if source == generated and not changed_once:
+                changed_once = True
+                generated.write_bytes(replacement)
+            return original_copy(
+                source,
+                destination,
+                expected_checksum,
+                label=label,
+            )
+
+        monkeypatch.setattr(exporting_module, "_atomic_copy_verified", change_before_copy)
+        output_root = tmp_path / "verified-copy"
+        existing = output_root / "translated/chapter/page.png"
+        existing.parent.mkdir(parents=True)
+        existing.write_bytes(reviewed_bytes)
+        exported = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "format": "images",
+                    "imageVariant": "typeset",
+                    "outputPath": str(output_root),
+                    "conflict": "overwrite",
+                },
+            },
+        )
+        failed = _wait_job(client, exported.json()["id"])
+        assert failed["status"] == "failed"
+        assert "changed after review" in failed["items"][0]["error"]
+        assert existing.read_bytes() == reviewed_bytes
+        assert not list(existing.parent.glob(".page.png.*.tmp"))
 
 
 def test_reading_order_changes_invalidate_clean_output_and_review(tmp_path: Path) -> None:
@@ -1843,6 +2268,67 @@ def test_export_reports_every_missing_typeset_page_as_failure(tmp_path: Path) ->
         images = client.get(f"/api/projects/{project['id']}/images").json()
         assert all(image["processingErrors"] for image in images)
         assert all(image["revision"] >= 2 for image in images)
+
+
+def test_export_retry_requeues_a_completed_page_that_changed_after_partial_failure(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    output_root = tmp_path / "export"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        first = upload_image(client, project["id"], relative_path="a/one.png")
+        second = upload_image(client, project["id"], relative_path="b/two.png")
+        first_region = _add_region(client, first["id"], confirmed=True)
+        _add_region(client, second["id"], confirmed=True)
+        rendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [first["id"], second["id"]], "options": {}},
+        )
+        assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
+        _review_image(client, project["id"], first["id"])
+
+        response = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [first["id"], second["id"]],
+                "options": {
+                    "format": "images",
+                    "outputPath": str(output_root),
+                    "conflict": "overwrite",
+                },
+            },
+        )
+        failed = _wait_job(client, response.json()["id"])
+        assert [item["status"] for item in failed["items"]] == ["completed", "failed"]
+        first_export = output_root / "translated/a/one.png"
+        before = first_export.read_bytes()
+
+        changed = client.patch(
+            f"/api/regions/{first_region['id']}",
+            json={
+                "translationText": "修改后的译文",
+                "expectedRevision": first_region["revision"],
+            },
+        )
+        assert changed.status_code == 200, changed.text
+        rerendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [first["id"]], "options": {}},
+        )
+        assert _wait_job(client, rerendered.json()["id"])["status"] == "completed"
+        _review_image(client, project["id"], first["id"])
+        _review_image(client, project["id"], second["id"])
+
+        retried = client.post(f"/api/jobs/{response.json()['id']}/retry")
+        assert retried.status_code == 200, retried.text
+        assert [item["status"] for item in retried.json()["items"]] == ["queued", "queued"]
+        assert retried.json()["completed"] == 0
+        assert retried.json()["progress"] == 0
+        completed = _wait_job(client, response.json()["id"])
+        assert completed["status"] == "completed"
+        assert first_export.read_bytes() != before
+        assert all(item["status"] == "completed" for item in completed["items"])
 
 
 def test_running_jobs_and_items_recover_to_queued(client: TestClient, tmp_path: Path, app) -> None:

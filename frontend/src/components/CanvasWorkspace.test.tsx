@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { api } from '../api/client';
 import { resetWorkbenchStore, useWorkbenchStore } from '../store/workbench';
 import { imageFixture, regionFixture, seedWorkbench } from '../test/fixtures';
 import {
@@ -17,6 +18,26 @@ import { loadCanonicalCanvasImage } from './canvasImage';
 import { CanvasWorkspace } from './CanvasWorkspace';
 
 describe('canvas generated-image refresh', () => {
+  beforeEach(() => {
+    vi.stubGlobal('crypto', {
+      randomUUID: () => '00000000-0000-4000-8000-000000000000',
+      subtle: {
+        digest: vi.fn(async () => new Uint8Array(32).fill(0xaa).buffer),
+      },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'image/png' }),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    } as unknown as Response)));
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
+      width: 1200,
+      height: 1800,
+      close: vi.fn(),
+    } as unknown as ImageBitmap)));
+  });
+
   afterEach(() => {
     resetWorkbenchStore();
     vi.unstubAllGlobals();
@@ -25,10 +46,10 @@ describe('canvas generated-image refresh', () => {
 
   it('decodes the raw pixel grid without EXIF orientation and retries by image revision', async () => {
     const requested: string[] = [];
-    const decode = vi.fn(async (blob: Blob, options?: ImageBitmapOptions) => {
+    let requestedSource = '';
+    const decode = vi.fn(async (_blob: Blob, options?: ImageBitmapOptions) => {
       if (options?.imageOrientation !== 'none') throw new Error('EXIF orientation was not disabled');
-      const source = (blob as Blob & { source: string }).source;
-      if (source.includes('v=4')) throw new Error('preview missing');
+      if (requestedSource.includes('v=4')) throw new Error('preview missing');
       return {
         width: 1200,
         height: 1800,
@@ -37,11 +58,13 @@ describe('canvas generated-image refresh', () => {
     });
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
       const source = String(input);
+      requestedSource = source;
       requested.push(source);
       return {
         ok: true,
         status: 200,
-        blob: async () => Object.assign(new Blob(), { source }),
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => new TextEncoder().encode(source).buffer,
       } as unknown as Response;
     }));
     vi.stubGlobal('createImageBitmap', decode);
@@ -74,7 +97,8 @@ describe('canvas generated-image refresh', () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
       status: 200,
-      blob: async () => new Blob(),
+      headers: new Headers({ 'content-type': 'image/jpeg' }),
+      arrayBuffer: async () => new Uint8Array([1]).buffer,
     } as unknown as Response)));
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
       width: 1800,
@@ -84,6 +108,42 @@ describe('canvas generated-image refresh', () => {
 
     await expect(loadCanonicalCanvasImage('/oriented.jpg', { width: 1200, height: 1800 }))
       .rejects.toThrow('does not match canonical grid');
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('accepts only supported integer upscale grids for preprocessing previews', async () => {
+    const close = vi.fn();
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
+      width: 2400,
+      height: 3600,
+      close,
+    } as unknown as ImageBitmap)));
+
+    const loaded = await loadCanonicalCanvasImage(
+      '/preprocessed.png',
+      { width: 1200, height: 1800 },
+      undefined,
+      true,
+    );
+
+    expect(loaded).toMatchObject({
+      checksum: 'aa'.repeat(32),
+      pixelWidth: 2400,
+      pixelHeight: 3600,
+    });
+    expect(close).not.toHaveBeenCalled();
+
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
+      width: 2400,
+      height: 3500,
+      close,
+    } as unknown as ImageBitmap)));
+    await expect(loadCanonicalCanvasImage(
+      '/bad-preprocessed.png',
+      { width: 1200, height: 1800 },
+      undefined,
+      true,
+    )).rejects.toThrow('does not match canonical grid');
     expect(close).toHaveBeenCalledOnce();
   });
 
@@ -211,5 +271,165 @@ describe('canvas generated-image refresh', () => {
       maskBrushRadius: 24,
     });
     expect(screen.getByRole('button', { name: '蒙版橡皮擦' })).toBeEnabled();
+  });
+
+  it('reviews only the explicitly selected visual stage and hydrates the returned state', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, preprocess: 'done' },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'preprocessed' });
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
+      width: 2400,
+      height: 3600,
+      close: vi.fn(),
+    } as unknown as ImageBitmap)));
+    const review = vi.spyOn(api, 'reviewImageStage').mockResolvedValue({
+      ...image,
+      revision: 8,
+      stageReviews: {
+        preprocess: {
+          state: 'accepted',
+          reviewedAt: '2026-08-13T10:00:00Z',
+          resultRevision: 7,
+          artifactChecksum: 'a'.repeat(64),
+        },
+      },
+    });
+    render(<CanvasWorkspace />);
+
+    expect(screen.getByRole('button', { name: '接受' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('待复核'));
+    expect(screen.getByRole('button', { name: '接受' })).toBeEnabled();
+    fireEvent.click(screen.getByRole('button', { name: '接受' }));
+
+    await waitFor(() => expect(review).toHaveBeenCalledWith(
+      'image-1',
+      'preprocess',
+      'accepted',
+      7,
+      {
+        imageId: 'image-1',
+        stage: 'preprocess',
+        revision: 7,
+        artifactChecksum: 'aa'.repeat(32),
+      },
+    ));
+    await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('已接受'));
+  });
+
+  it('loads and visibly presents the current inpaint mask before review', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'erased', showMask: false });
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => new Uint8Array([requested.length]).buffer,
+      } as unknown as Response;
+    }));
+    const review = vi.spyOn(api, 'reviewImageStage').mockResolvedValue({
+      ...image,
+      revision: 8,
+      stageReviews: {
+        inpaint: {
+          state: 'accepted',
+          reviewedAt: '2026-08-13T10:00:00Z',
+          resultRevision: 7,
+          artifactChecksum: 'aa'.repeat(32),
+          maskChecksum: 'aa'.repeat(32),
+        },
+      },
+    });
+
+    render(<CanvasWorkspace />);
+
+    await waitFor(() => {
+      expect(requested.some((url) => url.includes('/generated/inpainted'))).toBe(true);
+      expect(requested.some((url) => url.includes('/generated/mask'))).toBe(true);
+    });
+    await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('请显示蒙版复核'));
+    expect(screen.getByRole('button', { name: '接受' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: '复核蒙版' }));
+    await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('待复核'));
+    fireEvent.click(screen.getByRole('button', { name: '接受' }));
+
+    await waitFor(() => expect(review).toHaveBeenCalledWith(
+      'image-1',
+      'inpaint',
+      'accepted',
+      7,
+      expect.objectContaining({
+        artifactChecksum: 'aa'.repeat(32),
+        maskChecksum: 'aa'.repeat(32),
+      }),
+    ));
+  });
+
+  it('removes the mask overlay before presenting a typeset result for review', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: {
+        ...imageFixture('image-1').status,
+        inpaint: 'done',
+        typeset: 'done',
+      },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'erased', showMask: true });
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => new Uint8Array([requested.length]).buffer,
+      } as unknown as Response;
+    }));
+
+    const { container } = render(<CanvasWorkspace />);
+
+    await waitFor(() => expect(
+      container.querySelectorAll('[data-konva="Image"]'),
+    ).toHaveLength(2));
+    const maskRequests = () => requested.filter((url) => url.includes('/generated/mask'));
+    expect(maskRequests()).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole('button', { name: '成品' }));
+
+    await waitFor(() => expect(
+      requested.some((url) => url.includes('/generated/typeset')),
+    ).toBe(true));
+    await waitFor(() => expect(
+      container.querySelectorAll('[data-konva="Image"]'),
+    ).toHaveLength(1));
+    expect(maskRequests()).toHaveLength(1);
+    expect(useWorkbenchStore.getState().showMask).toBe(true);
+  });
+
+  it('does not infer a review stage from original compare mode', () => {
+    const image = imageFixture('image-1', {
+      status: {
+        ...imageFixture('image-1').status,
+        inpaint: 'done',
+        typeset: 'done',
+      },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'original', compareMode: true });
+
+    render(<CanvasWorkspace />);
+
+    expect(screen.queryByLabelText('当前视觉阶段复核')).not.toBeInTheDocument();
   });
 });

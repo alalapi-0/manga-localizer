@@ -241,6 +241,11 @@ h1, h2, h3, p { margin: 0; }
 .canvas-panel { display: flex; flex-direction: column; overflow: hidden; background: #0a0c0e; }
 :root[data-theme="light"] .canvas-panel { background: #cfd4da; }
 .canvas-toolbar { display: flex; align-items: center; flex: 0 0 43px; gap: 5px; padding: 6px 8px; background: var(--surface-1); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.stage-review-controls { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.stage-review-controls button { min-height: 28px; padding: 3px 7px; }
+.stage-review-state { min-width: 3.5em; color: var(--text-muted); font-size: 12px; text-align: center; }
+.stage-review-state--accepted { color: var(--success); }
+.stage-review-state--rejected { color: var(--danger); }
 .segmented { display: flex; padding: 2px; background: var(--surface-0); border: 1px solid var(--border); border-radius: 6px; }
 .segmented button { min-height: 25px; padding: 2px 9px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; font-size: 10px; font-weight: 650; cursor: pointer; }
 .segmented button[aria-pressed="true"] { color: var(--text); background: var(--surface-3); box-shadow: 0 1px 3px rgba(0,0,0,.18); }

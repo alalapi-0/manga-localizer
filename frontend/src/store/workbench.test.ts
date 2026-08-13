@@ -18,6 +18,19 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+function stageObservation(
+  stage: 'preprocess' | 'inpaint' | 'typeset',
+  revision = 7,
+) {
+  return {
+    imageId: 'image-1',
+    stage,
+    revision,
+    artifactChecksum: 'a'.repeat(64),
+    ...(stage === 'inpaint' ? { maskChecksum: 'b'.repeat(64) } : {}),
+  };
+}
+
 describe('workbench store', () => {
   beforeEach(() => {
     vi.spyOn(api, 'getProject').mockImplementation(async () =>
@@ -343,6 +356,155 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().globalError).toBe('还有 1 个活动文本框尚未确认。');
     expect(await useWorkbenchStore.getState().reviewActiveImage('no-text-reviewed')).toBe(false);
     expect(review).not.toHaveBeenCalled();
+  });
+
+  it('refuses a viewed artifact after autosave advances the image revision', async () => {
+    const initial = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+    });
+    seedWorkbench({ images: [initial], selectedRegionIds: ['region-1'] });
+    const calls: string[] = [];
+    vi.spyOn(api, 'updateRegion').mockImplementation(async (_id, patch) => {
+      calls.push('save');
+      return { ...regionFixture('region-1'), ...patch, revision: 5 };
+    });
+    const afterSave = imageFixture('image-1', {
+      revision: 8,
+      status: { ...initial.status, inpaint: 'not_started' },
+    });
+    vi.mocked(api.listImages).mockResolvedValue([afterSave]);
+    const review = vi.spyOn(api, 'reviewImageStage').mockImplementation(async () => {
+      calls.push('review');
+      return {
+        ...afterSave,
+        revision: 9,
+        stageReviews: {
+          inpaint: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 8, artifactChecksum: 'a'.repeat(64), maskChecksum: 'b'.repeat(64) },
+        },
+      };
+    });
+    useWorkbenchStore.getState().updateRegion('region-1', { translationText: '复核前保存' });
+
+    expect(await useWorkbenchStore.getState().reviewActiveImageStage(
+      'inpaint',
+      'accepted',
+      stageObservation('inpaint'),
+    )).toBe(false);
+    expect(calls).toEqual(['save']);
+    expect(review).not.toHaveBeenCalled();
+    expect(useWorkbenchStore.getState().images[0]).toMatchObject({
+      revision: 8,
+      status: { inpaint: 'not_started' },
+    });
+    expect(useWorkbenchStore.getState().globalError).toContain('已过期');
+  });
+
+  it('reloads authoritative stage-review state after a revision conflict', async () => {
+    const initial = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, typeset: 'done' },
+    });
+    const authoritative = imageFixture('image-1', {
+      revision: 8,
+      status: { ...initial.status, typeset: 'done' },
+      stageReviews: {
+        typeset: { state: 'rejected', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+      },
+    });
+    seedWorkbench({ images: [initial] });
+    vi.spyOn(api, 'reviewImageStage').mockRejectedValueOnce(new ApiError('revision mismatch', 409));
+
+    expect(await useWorkbenchStore.getState().reviewActiveImageStage(
+      'typeset',
+      'accepted',
+      stageObservation('typeset'),
+    )).toBe(false);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      revisionConflict: true,
+      globalError: 'revision mismatch',
+    });
+
+    vi.mocked(api.listImages).mockResolvedValue([authoritative]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([]);
+    await useWorkbenchStore.getState().reloadActiveImage();
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      revisionConflict: false,
+      globalError: '',
+    });
+    expect(useWorkbenchStore.getState().images[0]).toMatchObject({
+      revision: 8,
+      stageReviews: { typeset: { state: 'rejected' } },
+    });
+  });
+
+  it('serializes visual-stage review mutations across stages', async () => {
+    const initial = imageFixture('image-1', {
+      revision: 7,
+      status: {
+        ...imageFixture('image-1').status,
+        inpaint: 'done',
+        typeset: 'done',
+      },
+    });
+    seedWorkbench({ images: [initial] });
+    let resolveReview: ((value: typeof initial) => void) | undefined;
+    const firstReview = new Promise<typeof initial>((resolve) => {
+      resolveReview = resolve;
+    });
+    const review = vi.spyOn(api, 'reviewImageStage').mockReturnValue(firstReview);
+
+    const inpaintReview = useWorkbenchStore
+      .getState()
+      .reviewActiveImageStage('inpaint', 'accepted', stageObservation('inpaint'));
+    await vi.waitFor(() => expect(review).toHaveBeenCalledTimes(1));
+    expect(
+      await useWorkbenchStore.getState().reviewActiveImageStage(
+        'typeset',
+        'accepted',
+        stageObservation('typeset'),
+      ),
+    ).toBe(false);
+    expect(review).toHaveBeenCalledTimes(1);
+
+    resolveReview?.({
+      ...initial,
+      revision: 8,
+      stageReviews: {
+        inpaint: {
+          state: 'accepted',
+          reviewedAt: '2026-08-13T10:00:00Z',
+          resultRevision: 7,
+          artifactChecksum: 'a'.repeat(64),
+          maskChecksum: 'b'.repeat(64),
+        },
+      },
+    });
+    expect(await inpaintReview).toBe(true);
+    expect(useWorkbenchStore.getState().stageReviewSaving).toBeNull();
+  });
+
+  it('clears optimistic visual reviews when project settings invalidate their artifacts', () => {
+    const initial = imageFixture('image-1', {
+      stageReviews: {
+        preprocess: {
+          state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64),
+        },
+        inpaint: {
+          state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'b'.repeat(64), maskChecksum: 'c'.repeat(64),
+        },
+        typeset: {
+          state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'd'.repeat(64),
+        },
+      },
+    });
+    seedWorkbench({ images: [initial] });
+
+    useWorkbenchStore.getState().updateProjectSettings({ inpainterProvider: 'lama-onnx' });
+
+    expect(useWorkbenchStore.getState().images[0]?.stageReviews).toEqual({
+      preprocess: initial.stageReviews.preprocess,
+    });
   });
 
   it('reconciles image revision and invalidated render status after a region save', async () => {

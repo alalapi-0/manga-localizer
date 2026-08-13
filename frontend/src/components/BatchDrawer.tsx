@@ -189,12 +189,23 @@ export function BatchDrawer() {
   ).length;
   const requiresTypeset = exportOptions.imageVariant === 'typeset'
     || exportOptions.imageVariant === 'both';
-  // Typeset output is composited from the clean background, so every image variant needs it.
+  // Typeset output is composited from the clean background, so it also requires
+  // an accepted inpaint review even when the clean plate is not exported separately.
   const requiresInpaint = exportOptions.format !== 'json';
+  const unacceptedTypesetCount = imageIds.filter((imageId) =>
+    images.find((image) => image.id === imageId)?.stageReviews?.typeset?.state !== 'accepted'
+  ).length;
+  const unacceptedInpaintCount = imageIds.filter((imageId) =>
+    images.find((image) => image.id === imageId)?.stageReviews?.inpaint?.state !== 'accepted'
+  ).length;
   const generatedImageExportBlocked = steps.export
     && exportOptions.format !== 'json'
     && ((requiresTypeset && missingTypesetCount > 0)
       || (requiresInpaint && missingInpaintCount > 0));
+  const stageReviewExportBlocked = steps.export
+    && exportOptions.format !== 'json'
+    && ((requiresTypeset && unacceptedTypesetCount > 0)
+      || (requiresInpaint && unacceptedInpaintCount > 0));
   const pipelineExportBlocked = steps.export
     && (Object.keys(steps) as JobKind[]).some((kind) => kind !== 'export' && steps[kind]);
   const outputPathHint = exportOptions.format === 'json'
@@ -207,7 +218,7 @@ export function BatchDrawer() {
   const selectedKinds = (Object.keys(steps) as JobKind[]).filter((kind) => steps[kind]);
 
   async function run() {
-    if (imageExportBlocked || generatedImageExportBlocked || pipelineExportBlocked) return;
+    if (imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked) return;
     setStarting(true);
     const success = await startBatch(selectedKinds, imageIds, exportOptions, concurrency);
     setStarting(false);
@@ -322,6 +333,16 @@ export function BatchDrawer() {
                   </span>
                 </div>
               ) : null}
+              {stageReviewExportBlocked ? (
+                <div className="notice notice--warning" role="status">
+                  <b>所选图像版本尚未全部通过视觉复核</b>
+                  <span>
+                    {requiresTypeset && unacceptedTypesetCount > 0 ? `${unacceptedTypesetCount} 页排版图未接受。` : ''}
+                    {requiresInpaint && unacceptedInpaintCount > 0 ? `${unacceptedInpaintCount} 页无字底图未接受。` : ''}
+                    请在画布切换到对应生成版本，逐页接受后再导出。
+                  </span>
+                </div>
+              ) : null}
               {exportOptions.format === 'json' ? (
                 <div className="notice notice--local"><b>仅文本 JSON 不受页面复核门禁</b><span>此导出不会写入排版图或无字底图。</span></div>
               ) : null}
@@ -334,7 +355,7 @@ export function BatchDrawer() {
           </section>
         </div>
         <footer className="batch-drawer__footer">
-          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length || imageExportBlocked || generatedImageExportBlocked || pipelineExportBlocked} onClick={() => void run()} type="button">
+          <button className="button button--accent button--block" disabled={starting || !imageIds.length || !selectedKinds.length || imageExportBlocked || generatedImageExportBlocked || stageReviewExportBlocked || pipelineExportBlocked} onClick={() => void run()} type="button">
             {starting ? '正在创建队列…' : `加入队列 · ${imageIds.length} 张 · ${selectedKinds.length} 步`}
           </button>
         </footer>

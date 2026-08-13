@@ -224,6 +224,10 @@ describe('desktop workbench interactions', () => {
         typeset: 'done',
         reviewState: 'reviewed',
       },
+      stageReviews: {
+        inpaint: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+        typeset: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+      },
     });
     seedWorkbench({ images: [reviewed] });
     vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture({ revision: 4 }));
@@ -263,6 +267,9 @@ describe('desktop workbench interactions', () => {
           typeset: 'not_started',
           reviewState: 'reviewed',
         },
+        stageReviews: {
+          inpaint: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+        },
       })],
     });
     render(<App />);
@@ -282,6 +289,38 @@ describe('desktop workbench interactions', () => {
 
     await user.selectOptions(screen.getByRole('combobox', { name: '导出图像版本' }), 'both');
     expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  });
+
+  it('requires explicit visual-stage acceptance before queuing image export', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [imageFixture('image-1', {
+        status: {
+          ...imageFixture('image-1').status,
+          inpaint: 'done',
+          typeset: 'done',
+          reviewState: 'reviewed',
+        },
+        stageReviews: {
+          inpaint: { state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+          typeset: { state: 'rejected', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'a'.repeat(64) },
+        },
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByRole('checkbox', { name: /文字检测/ }));
+    await user.click(screen.getByRole('checkbox', { name: /日文 OCR/ }));
+    await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
+
+    expect(screen.getByText('所选图像版本尚未全部通过视觉复核')).toBeInTheDocument();
+    expect(screen.getByText(/1 页排版图未接受/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '导出内容' }), 'json');
+    expect(screen.queryByText('所选图像版本尚未全部通过视觉复核')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /加入队列/ })).toBeEnabled();
   });
 
   it('blocks combining processing and export until the user processes, reviews, then exports', async () => {

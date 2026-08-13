@@ -11,15 +11,23 @@ It is an inspectable companion manifest, not a JSON-only project import format; 
 adjacent SQLite database.
 
 Custom export roots contain a complete reopenable snapshot, including project-owned `source/` and
-state-consistent `generated/` trees. Its SQLite copy clears original input paths, the prior project
-root, cumulative import boundaries, and job `outputPath` options. It enables secure deletion and runs
-`VACUUM` before atomic publication; the working project database may retain those local paths for normal
-use.
+only accepted, checksum-current `generated/` artifacts. Omitted visual stages are marked pending in
+the portable snapshot so reopen never advertises a missing generated file as current. Its SQLite copy
+clears original input paths, the prior project root, cumulative import boundaries, and job `outputPath`
+options. It enables secure deletion and runs `VACUUM` before atomic publication; the working project
+database may retain those local paths for normal use.
 
 ## Image
 
 Stores `image_id`, `source_path`, normalized `relative_path`, dimensions, checksum, processing/status
 fields, timestamps, and structured errors. The unique key is project plus relative path.
+
+`status.stageReviews` is keyed by `preprocess`, `inpaint`, and `typeset`. Pending is represented by an
+absent entry. Accepted/rejected records contain `reviewedAt`, `resultRevision`, and the exact
+`artifactChecksum`; inpaint also contains `maskChecksum`. The client computes these values from the
+same response bytes it decodes in the review canvas, and the server recomputes and compares both before
+persisting the decision. Rejecting or withdrawing an upstream result, regenerating it, or accepting
+different upstream bytes clears dependent reviews.
 
 ## Import boundary
 
@@ -34,7 +42,8 @@ common path, notably for selections spanning Windows drives.
 Stores region/image IDs, a rotatable rectangular bounding box, direction, reading order, source and
 translated text, OCR confidence, text type, ignored/confirmed flags, provider provenance, typography,
 mask settings, and timestamps. Region numbers shown in the UI derive from editable reading order.
-Arbitrary polygon regions are not persisted by the MVP schema.
+`repair.maskEdits` stores a bounded versioned sequence of add/erase strokes, each with a radius and
+canonical image-coordinate points. Arbitrary polygon regions are not persisted by the MVP schema.
 
 ## Revision
 
@@ -43,6 +52,7 @@ recovery; the frontend also keeps a bounded immediate undo/redo stack for fast c
 Mutable projects and regions expose monotonically increasing revisions. Update/delete requests carry
 the expected revision, and a mismatch fails with a conflict instead of applying a stale write. Autosave
 rebases newer queued local mutations onto the acknowledged revision before sending the next mutation.
+Stage-review mutations use the image revision guard and append a `stage-review` revision record.
 
 ## Job
 
@@ -57,6 +67,11 @@ is available to explicit retry.
 Export jobs persist `bundleFinalized=false` when created and do not become terminally completed until the
 portable bundle is atomically finalized. Job-scoped owner markers distinguish recoverable partial output
 from unrelated content and permit cleanup of recognized temporary database files and SQLite sidecars.
+Generated-image export additionally requires explicit page review and accepted, checksum-current visual
+stages. A typeset export depends on both inpaint and typeset acceptance. JSON-only export is not gated by
+visual review. Each completed export item records the image revision used for its files. A retry requeues
+an already completed page if that revision has since changed; replacing such stale output requires the
+explicit `overwrite` conflict policy, otherwise the user starts a new export job.
 
 ## Path rules
 

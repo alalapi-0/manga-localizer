@@ -37,6 +37,7 @@ export function imageFixture(id = 'image-1', overrides: Partial<ImageAsset> = {}
     confirmedCount: 0,
     ignoredCount: 0,
     status: { ...EMPTY_PIPELINE_STATUS, ocr: id === 'image-1' ? 'done' : 'not_started' },
+    stageReviews: {},
     detectorProvider: id === 'image-1' ? 'tesseract' : undefined,
     ocrProvider: id === 'image-1' ? 'tesseract' : undefined,
     revision: 1,

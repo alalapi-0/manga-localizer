@@ -36,6 +36,7 @@ from manga_localizer.schemas import (
     RegionCreate,
     RegionOut,
     RegionPatch,
+    StageReviewRequest,
 )
 from manga_localizer.security import (
     UnsafePathError,
@@ -44,12 +45,15 @@ from manga_localizer.security import (
     safe_relative_path,
 )
 from manga_localizer.services.images import (
+    StageReviewObservationConflict,
     image_path,
     import_local,
     ingest_bytes,
     invalidate_image_pipeline,
     list_images,
     review_image,
+    review_image_stage,
+    stage_reviews,
     thumbnail_path,
     validate_image_bytes,
 )
@@ -154,6 +158,7 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "height": image.height,
         "mediaType": image.media_type,
         "status": pipeline_status,
+        "stageReviews": stage_reviews(image),
         "regionCount": len(regions),
         "confirmedCount": sum(region.confirmed for region in regions),
         "ignoredCount": sum(region.ignored for region in regions),
@@ -315,8 +320,21 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         return JSONResponse(status_code=404, content={"detail": str(error)})
 
     @app.exception_handler(RevisionConflict)
+    @app.exception_handler(StageReviewObservationConflict)
     @app.exception_handler(JobConflict)
     async def conflict_handler(_request: Request, error: Exception) -> JSONResponse:
+        if isinstance(error, StageReviewObservationConflict):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": {
+                        "message": str(error),
+                        "resource": error.resource,
+                        "stage": error.stage,
+                        "mismatches": error.mismatches,
+                    }
+                },
+            )
         if isinstance(error, RevisionConflict):
             return JSONResponse(
                 status_code=409,
@@ -501,6 +519,24 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             image.id,
             review_state=body.review_state,
             expected_revision=body.expected_revision,
+        )
+        return _image_dict(reviewed)
+
+    @router.patch(
+        "/images/{image_id}/stage-reviews/{stage}", response_model=ImageOut
+    )
+    async def image_stage_review(
+        image_id: str, stage: str, body: StageReviewRequest
+    ) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        reviewed = review_image_stage(
+            store,
+            image.id,
+            stage=stage,
+            state=body.state,
+            expected_revision=body.expected_revision,
+            observed_artifact_checksum=body.observed_artifact_checksum,
+            observed_mask_checksum=body.observed_mask_checksum,
         )
         return _image_dict(reviewed)
 

@@ -71,7 +71,7 @@ class ImageAsset(Base):
     height: Mapped[int] = mapped_column(Integer)
     media_type: Mapped[str] = mapped_column(String(100), default="image/png")
     checksum: Mapped[str] = mapped_column(String(64))
-    status: Mapped[dict[str, str]] = mapped_column(
+    status: Mapped[dict[str, Any]] = mapped_column(
         JSON,
         default=lambda: {
             "preprocess": "pending",

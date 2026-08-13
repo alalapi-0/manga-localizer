@@ -7,7 +7,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 function checksum(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
@@ -33,17 +33,14 @@ async function runOnlyStage(
   endpoint: string,
 ): Promise<Record<string, unknown>> {
   const dialog = page.getByRole('dialog', { name: '批处理与导出' });
-  const checkboxes = dialog.locator('.pipeline-steps input[type="checkbox"]');
-  for (let index = 0; index < await checkboxes.count(); index += 1) {
-    const checkbox = checkboxes.nth(index);
-    if (await checkbox.isChecked()) await checkbox.uncheck();
-  }
-  await dialog.locator('.pipeline-steps label').filter({ hasText: label }).getByRole('checkbox').check();
+  await selectOnlyStage(dialog, label);
+  const queueButton = dialog.getByRole('button', { name: /加入队列/ });
+  await expect(queueButton).toBeEnabled();
   const queuedResponse = page.waitForResponse(
     (response) => response.request().method() === 'POST'
       && response.url().endsWith(`/api/projects/${projectId}/${endpoint}`),
   );
-  await dialog.getByRole('button', { name: /加入队列/ }).click();
+  await queueButton.click();
   const response = await queuedResponse;
   expect(response.status()).toBe(202);
   const queued = await response.json() as { id: string };
@@ -58,6 +55,56 @@ async function runOnlyStage(
     dialog.locator('.job-card').filter({ hasText: label }).first(),
   ).toContainText('已完成');
   return completed;
+}
+
+async function selectOnlyStage(
+  dialog: Locator,
+  label: string,
+): Promise<void> {
+  const checkboxes = dialog.locator('.pipeline-steps input[type="checkbox"]');
+  for (let index = 0; index < await checkboxes.count(); index += 1) {
+    const checkbox = checkboxes.nth(index);
+    if (await checkbox.isChecked()) await checkbox.uncheck();
+  }
+  await dialog.locator('.pipeline-steps label').filter({ hasText: label }).getByRole('checkbox').check();
+}
+
+async function reviewVisualStage(
+  page: Page,
+  modeLabel: '增强' | '擦除' | '成品',
+  stage: 'preprocess' | 'inpaint' | 'typeset',
+  action: '接受' | '拒绝' | '撤回复核',
+  expectedState: '已接受' | '已拒绝' | '待复核',
+): Promise<void> {
+  await page.getByRole('button', { name: modeLabel, exact: true }).click();
+  const controls = page.getByRole('group', { name: '当前视觉阶段复核' });
+  if (stage === 'inpaint' && action !== '撤回复核') {
+    const maskReview = controls.getByRole('checkbox', { name: '复核蒙版' });
+    if (!(await maskReview.isChecked())) await maskReview.check();
+  }
+  const actionButton = controls.getByRole('button', { name: action, exact: true });
+  await expect(actionButton).toBeEnabled();
+  const reviewed = page.waitForResponse(
+    (response) => response.request().method() === 'PATCH'
+      && response.url().includes('/api/images/')
+      && response.url().endsWith(`/stage-reviews/${stage}`),
+  );
+  await actionButton.click();
+  const response = await reviewed;
+  expect(response.status()).toBe(200);
+  const body = response.request().postDataJSON() as Record<string, unknown>;
+  if (action === '撤回复核') {
+    expect(body).not.toHaveProperty('observedArtifactChecksum');
+    expect(body).not.toHaveProperty('observedMaskChecksum');
+  } else {
+    expect(body.observedArtifactChecksum).toMatch(/^[0-9a-f]{64}$/);
+    if (stage === 'inpaint') {
+      expect(body.observedMaskChecksum).toMatch(/^[0-9a-f]{64}$/);
+    } else {
+      expect(body).not.toHaveProperty('observedMaskChecksum');
+    }
+  }
+  await expect(controls.getByRole('status')).toHaveText(expectedState);
 }
 
 test('creates, edits, renders, exports, and reopens a local project', async ({ page }) => {
@@ -123,6 +170,32 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   );
   await page.getByRole('button', { name: '标记本页已检查' }).click();
   expect((await reviewResponse).status()).toBe(200);
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+  await selectOnlyStage(batchDialog, '安全导出');
+  await expect(batchDialog.getByText('所选图像版本尚未全部通过视觉复核')).toBeVisible();
+  await expect(batchDialog.getByText(/1 页排版图未接受/)).toBeVisible();
+  await expect(batchDialog.getByText(/1 页无字底图未接受/)).toBeVisible();
+  await expect(batchDialog.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  await batchDialog.getByLabel('导出内容').selectOption('json');
+  await expect(batchDialog.getByText('仅文本 JSON 不受页面复核门禁')).toBeVisible();
+  await expect(batchDialog.getByRole('button', { name: /加入队列/ })).toBeEnabled();
+  await batchDialog.getByLabel('导出内容').selectOption('both');
+  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
+  await reviewVisualStage(page, '成品', 'typeset', '拒绝', '已拒绝');
+  await page.getByRole('button', { name: '批处理与导出' }).click();
+  await selectOnlyStage(batchDialog, '安全导出');
+  await expect(batchDialog.getByText(/1 页排版图未接受/)).toBeVisible();
+  await expect(batchDialog.getByText(/无字底图未接受/)).toBeHidden();
+  await expect(batchDialog.getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await reviewVisualStage(page, '成品', 'typeset', '接受', '已接受');
+  await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
+  await page.getByRole('button', { name: '擦除', exact: true }).click();
+  await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');
+  await page.getByRole('button', { name: '成品', exact: true }).click();
+  await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');
   await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '安全导出', 'export');
 
@@ -232,6 +305,7 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await page.getByRole('button', { name: '增强', exact: true }).click();
   await expect(page.getByRole('application', { name: '增强画布' })).toBeVisible();
+  await reviewVisualStage(page, '增强', 'preprocess', '接受', '已接受');
   await page.getByRole('button', { name: '批处理与导出' }).click();
 
   const detected = await runOnlyStage(page, project.id, '文字检测', 'detect');
@@ -303,9 +377,11 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   );
   await inspector.getByLabel('显示实际蒙版').check();
   expect((await maskResponsePromise).status()).toBe(200);
+  await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
   await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '嵌字排版', 'typeset');
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await reviewVisualStage(page, '成品', 'typeset', '接受', '已接受');
   const reviewResponse = page.waitForResponse(
     (response) => response.request().method() === 'PATCH'
       && response.url().includes('/api/images/')
@@ -332,6 +408,7 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   const imagesResponse = await page.request.get(`/api/projects/${project.id}/images`);
   const images = await imagesResponse.json() as Array<{
     status: Record<string, string>;
+    stageReviews: Record<string, { state: string }>;
     preprocessingProvider?: string;
     ocrProvider?: string;
   }>;
@@ -346,10 +423,19 @@ test('runs real local detection and Japanese OCR before review and export', asyn
     typeset: 'done',
     export: 'done',
   });
+  expect(images[0]?.stageReviews).toMatchObject({
+    preprocess: { state: 'accepted' },
+    inpaint: { state: 'accepted' },
+    typeset: { state: 'accepted' },
+  });
 
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await page.reload();
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
+  for (const mode of ['增强', '擦除', '成品'] as const) {
+    await page.getByRole('button', { name: mode, exact: true }).click();
+    await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');
+  }
   await inspector.getByRole('tab', { name: '文本' }).click();
   await inspector
     .locator('.region-index button')

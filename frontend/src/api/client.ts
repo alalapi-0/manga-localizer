@@ -9,6 +9,9 @@ import type {
   ProjectSummary,
   Region,
   ReviewState,
+  StageReviewState,
+  StageReviewObservation,
+  VisualStage,
   RevisionConflict,
 } from '../types';
 
@@ -394,6 +397,34 @@ export const api = {
         headers: { 'If-Match': String(expectedRevision) },
         body: { reviewState, expectedRevision },
       }),
+    );
+  },
+
+  async reviewImageStage(
+    imageId: string,
+    stage: VisualStage,
+    state: StageReviewState,
+    expectedRevision: number,
+    observation?: Pick<StageReviewObservation, 'artifactChecksum' | 'maskChecksum'>,
+  ): Promise<ImageAsset> {
+    return unwrap(
+      await request(
+        `/images/${encodeURIComponent(imageId)}/stage-reviews/${encodeURIComponent(stage)}`,
+        {
+          method: 'PATCH',
+          headers: { 'If-Match': String(expectedRevision) },
+          body: {
+            state,
+            expectedRevision,
+            ...(observation ? {
+              observedArtifactChecksum: observation.artifactChecksum,
+              ...(observation.maskChecksum
+                ? { observedMaskChecksum: observation.maskChecksum }
+                : {}),
+            } : {}),
+          },
+        },
+      ),
     );
   },
 

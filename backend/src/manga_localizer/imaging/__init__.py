@@ -20,6 +20,7 @@ from manga_localizer.imaging.preprocessing import (
     RealESRGANNCNNProvider,
     preprocess_image,
 )
+from manga_localizer.imaging.realesrgan_onnx import RealESRGANONNXPreprocessProvider
 from manga_localizer.imaging.typesetting import (
     TypesetResult,
     discover_system_fonts,
@@ -42,6 +43,7 @@ __all__ = [
     "PreprocessedImage",
     "RealESRGANNCNNPreprocessProvider",
     "RealESRGANNCNNProvider",
+    "RealESRGANONNXPreprocessProvider",
     "TypesetResult",
     "create_mask",
     "discover_system_fonts",

@@ -87,8 +87,11 @@ Optional local providers add these requirements:
 
 - PP-OCRv3 detection: the OpenCV Zoo ONNX model; no additional Python runtime.
 - LaMa restoration: `onnxruntime` from the backend `ai` extra plus the OpenCV Zoo LaMa model.
-- Real-ESRGAN enhancement: a separately installed `realesrgan-ncnn-vulkan` executable and its model
-  files. The adapter reports unavailable when the executable is absent and never blocks startup.
+- Real-ESRGAN enhancement: install the optional `ai` extra and the checksum-verified
+  `RealESRGAN_x4plus_anime_6B` ONNX model, or a separately installed
+  `realesrgan-ncnn-vulkan` executable and its model files. Both adapters report unavailable when
+  their runtime or model is absent and never download at startup. Classic Lanczos remains a
+  compatibility preprocessor, not an AI upscaler.
 
 ### Current verification coverage
 
@@ -115,18 +118,19 @@ network by default. Configuration is optional: copy `.env.example` to `.env` bef
 want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` loads
 that root `.env` file and passes the values to both development processes. The file is Git-ignored.
 
-To opt into both checked local ONNX models, run this explicitly before startup:
+To opt into the checked local ONNX models, run this explicitly before startup:
 
 ```bash
 npm run setup:ai
 ```
 
-This installs the backend AI extra and downloads PP-OCRv3 plus LaMa into
-`~/.manga-localizer/models/`, verifying fixed SHA-256 checksums. If your `.env` changes
-`MANGA_LOCALIZER_DATA_DIR`, point the model setup at the same directory instead:
+This installs the backend AI extra and downloads PP-OCRv3, LaMa, and Real-ESRGAN anime ONNX
+weights into `~/.manga-localizer/models/`, verifying fixed SHA-256 checksums and printing each
+model's license. If your `.env` changes `MANGA_LOCALIZER_DATA_DIR`, point the model setup at the
+same directory instead:
 
 ```bash
-npm run setup:models -- --data-dir .manga-localizer ppocr lama
+npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
 uv sync --project backend --extra ai --group dev
 ```
 
@@ -234,9 +238,16 @@ The OCR-friendly profile upscales, denoises, sharpens, and raises contrast. Edge
 deliberately opt-in: on the private real-data set it amplified line-art false positives. Every switch
 can be overridden per project, and detection/OCR coordinates are mapped back to the original image.
 
-`realesrgan-ncnn` is an optional adapter around a local Real-ESRGAN NCNN executable. It uses temporary
-files, preserves alpha, can chain the local post-processing switches, and reports a clear unavailable
-health state when the executable is not installed. It does not download an executable or weights.
+`realesrgan-onnx` is the runnable local AI upscaler. It uses ONNX Runtime and the BSD-3-Clause
+`RealESRGAN_x4plus_anime_6B` graph, tiled on large pages. The model is native 4×; 2×/3× requests
+downscale that AI result with Lanczos and are labeled as such. Effectively grayscale sources stay
+grayscale so the RGB model cannot introduce chroma. Classic `opencv-pillow` Lanczos remains
+available and is never reported as AI upscaling.
+
+`realesrgan-ncnn` remains an optional adapter around a local Real-ESRGAN NCNN executable. It searches
+`PATH` and the application data directory, passes a sibling `models/` folder to the CLI, preserves
+alpha, can chain local post-processing, and reports unavailable when the executable is absent. Neither
+adapter downloads weights at startup.
 
 ## Background restoration
 

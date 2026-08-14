@@ -45,8 +45,10 @@ not inferred from this tracked checklist.
 - [x] Persist preprocess/inpaint/typeset accept/reject decisions across reopen
 - [x] Bind visual reviews to generated artifact/mask checksums and gate generated-image export
 - [x] Exclude unreviewed or stale generated artifacts from portable project bundles
-- [ ] Verify and deliver the post-OCR trust/disposition candidate: versioned detector/OCR evidence,
+- [x] Verify and deliver the post-OCR trust/disposition candidate: versioned detector/OCR evidence,
   fail-closed automatic proposals, relevant-input invalidation, and trusted-only translation/safe rendering
+- [x] Deliver a runnable local Real-ESRGAN AI upscaler with explicit checksummed install, honest
+  classic-vs-AI labeling, and a private comparison script
 
 ## Explicitly deferred
 

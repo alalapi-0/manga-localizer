@@ -47,6 +47,8 @@ class Settings(BaseSettings):
     )
     ppocr_detection_model: Path | None = None
     realesrgan_ncnn_command: str = "realesrgan-ncnn-vulkan"
+    realesrgan_ncnn_models: Path | None = None
+    realesrgan_onnx_model: Path | None = None
     lama_inpainting_model: Path | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     thumbnail_size: int = 384
@@ -76,6 +78,20 @@ class Settings(BaseSettings):
         return self.lama_inpainting_model or (
             self.data_dir / "models" / "inpainting_lama_2025jan.onnx"
         )
+
+    @property
+    def realesrgan_onnx_model_path(self) -> Path:
+        return self.realesrgan_onnx_model or (
+            self.data_dir / "models" / "RealESRGAN_x4plus_anime_6B.onnx"
+        )
+
+    @property
+    def realesrgan_ncnn_models_path(self) -> Path:
+        return self.realesrgan_ncnn_models or (self.data_dir / "realesrgan-ncnn-vulkan" / "models")
+
+    @property
+    def realesrgan_ncnn_search_paths(self) -> tuple[Path, ...]:
+        return (self.data_dir / "realesrgan-ncnn-vulkan",)
 
     @field_validator("ocr_languages")
     @classmethod

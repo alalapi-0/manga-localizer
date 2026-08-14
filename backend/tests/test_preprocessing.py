@@ -275,3 +275,37 @@ def test_realesrgan_nonzero_exit_and_missing_output_are_errors(
     )
     with pytest.raises(PreprocessProviderError, match="without creating"):
         provider.preprocess(Image.new("RGB", (3, 3)), enable_upscale=True)
+
+
+def test_realesrgan_ncnn_discovers_search_paths_and_passes_models_directory(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    install_root = tmp_path / "realesrgan-ncnn-vulkan"
+    models = install_root / "models"
+    models.mkdir(parents=True)
+    executable = install_root / "realesrgan-ncnn-vulkan"
+    executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    executable.chmod(0o755)
+    captured: dict[str, list[str]] = {}
+
+    def fake_run(command, **options):
+        captured["command"] = [str(item) for item in command]
+        output = command[command.index("-o") + 1]
+        Image.new("RGB", (6, 4), "white").save(output, format="PNG")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr("manga_localizer.imaging.preprocessing.subprocess.run", fake_run)
+    provider = RealESRGANNCNNPreprocessProvider(
+        command="realesrgan-ncnn-vulkan",
+        search_paths=(install_root,),
+        profile="off",
+    )
+    health = provider.health_check()
+    assert health["available"] is True
+    assert health["executable"] == str(executable.resolve())
+    assert health["modelsDirectory"] == str(models.resolve())
+    result = provider.preprocess(Image.new("RGB", (3, 2)), enable_upscale=True, upscale_factor=2)
+    assert result.processed_size == (6, 4)
+    assert "-m" in captured["command"]
+    assert captured["command"][captured["command"].index("-m") + 1] == str(models.resolve())

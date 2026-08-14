@@ -8,6 +8,7 @@ from manga_localizer.imaging import (
     OpenCVPillowPreprocessProvider,
     PreprocessProvider,
     RealESRGANNCNNPreprocessProvider,
+    RealESRGANONNXPreprocessProvider,
 )
 from manga_localizer.providers.detection import PPOCRTextDetectionProvider, TextDetectionProvider
 from manga_localizer.providers.inpainting_lama import LaMaONNXInpaintingProvider
@@ -30,6 +31,12 @@ class ProviderRegistry:
         self.preprocessing = OpenCVPillowPreprocessProvider(profile="off")
         self.realesrgan = RealESRGANNCNNPreprocessProvider(
             command=settings.realesrgan_ncnn_command,
+            models_dir=settings.realesrgan_ncnn_models_path,
+            search_paths=settings.realesrgan_ncnn_search_paths,
+            profile="off",
+        )
+        self.realesrgan_onnx = RealESRGANONNXPreprocessProvider(
+            settings.realesrgan_onnx_model_path,
             profile="off",
         )
         self.inpainting = OpenCVInpaintingProvider()
@@ -56,8 +63,10 @@ class ProviderRegistry:
     def preprocessor(self, name: str) -> PreprocessProvider:
         if name in {"opencv", "opencv-pillow", "local"}:
             return self.preprocessing
-        if name in {"realesrgan", "realesrgan-ncnn", "realesrgan-ncnn-vulkan"}:
+        if name in {"realesrgan-ncnn", "realesrgan-ncnn-vulkan"}:
             return self.realesrgan
+        if name in {"realesrgan", "realesrgan-onnx", "realesrgan-onnx-anime"}:
+            return self.realesrgan_onnx
         raise ValueError(f"Unknown image preprocessing provider: {name}")
 
     def inpainter(self, name: str):
@@ -108,6 +117,7 @@ class ProviderRegistry:
         return {
             "preprocessing": {
                 "opencv-pillow": self.preprocessing.get_capabilities(),
+                "realesrgan-onnx": self.realesrgan_onnx.get_capabilities(),
                 "realesrgan-ncnn": self.realesrgan.get_capabilities(),
             },
             "detection": {

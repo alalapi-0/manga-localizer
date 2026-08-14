@@ -4,9 +4,11 @@ import argparse
 import importlib.util
 import json
 import sqlite3
+import sys
 from pathlib import Path
 from types import ModuleType
 
+import numpy as np
 from PIL import Image
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +19,7 @@ def load_script(name: str) -> ModuleType:
     specification = importlib.util.spec_from_file_location(path.stem, path)
     assert specification is not None and specification.loader is not None
     module = importlib.util.module_from_spec(specification)
+    sys.modules[path.stem] = module
     specification.loader.exec_module(module)
     return module
 
@@ -200,3 +203,96 @@ def test_review_pack_writes_anonymous_full_resolution_overlays(tmp_path: Path) -
         with Image.open(output / relative) as image:
             image.load()
             assert image.size == (120, 80)
+
+
+def test_setup_optional_models_prints_license_and_checksum_without_download(
+    monkeypatch,
+    capsys,
+) -> None:
+    script = load_script("setup_optional_models.py")
+    realesrgan = script.MODELS["realesrgan"]
+    assert realesrgan.license == "BSD-3-Clause"
+    assert len(realesrgan.sha256) == 64
+    assert realesrgan.filename.endswith(".onnx")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["setup_optional_models.py", "--print-specs", "realesrgan"],
+    )
+    assert script.main() == 0
+    output = capsys.readouterr().out
+    assert "BSD-3-Clause" in output
+    assert realesrgan.sha256 in output
+    assert "RealESRGAN_x4plus_anime_6B.onnx" in output
+
+
+def test_compare_upscale_writes_relative_metrics_without_source_mutation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    script = load_script("compare_upscale.py")
+    source_dir = tmp_path / "input"
+    output = tmp_path / "run"
+    source_dir.mkdir()
+    pixels = np.zeros((24, 32, 3), dtype=np.uint8)
+    pixels[6:18, 8:24] = (12, 34, 200)
+    pixels[10:14, 12:20] = (240, 240, 240)
+    source = source_dir / "page.png"
+    Image.fromarray(pixels, mode="RGB").save(source)
+    original = source.read_bytes()
+
+    from manga_localizer.imaging.preprocessing import PreprocessedImage
+
+    class FakeAIProvider:
+        def __init__(self, *args, **kwargs) -> None:
+            del args, kwargs
+
+        def health_check(self) -> dict[str, object]:
+            return {
+                "available": True,
+                "error": None,
+                "model": "RealESRGAN_x4plus_anime_6B",
+                "license": "BSD-3-Clause",
+                "nativeScale": 4,
+                "modelExists": True,
+            }
+
+        def preprocess(self, image, **options):
+            factor = int(options["upscale_factor"])
+            working = image if isinstance(image, Image.Image) else Image.open(image)
+            resized = working.convert("RGB").resize(
+                (working.width * factor, working.height * factor),
+                Image.Resampling.NEAREST,
+            )
+            return PreprocessedImage(image=resized, original_size=working.size)
+
+    def allow_test_output(path: Path) -> Path:
+        resolved = path.resolve()
+        resolved.mkdir()
+        return resolved
+
+    monkeypatch.setattr(script, "require_ignored_empty_output", allow_test_output)
+    monkeypatch.setattr(script, "RealESRGANONNXPreprocessProvider", FakeAIProvider)
+    result = script.run(
+        argparse.Namespace(
+            input=[source],
+            output=output,
+            data_dir=tmp_path / "data",
+            model=None,
+            factor=2,
+            tile_size=64,
+            label="test-upscale",
+        )
+    )
+    assert result == 0
+    assert source.read_bytes() == original
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    assert report["privacy"]["absolutePathsStored"] is False
+    assert report["images"][0]["name"] == "page.png"
+    assert report["images"][0]["sourceChecksumUnchanged"] is True
+    assert report["images"][0]["aiDiffersFromClassic"] is True
+    assert report["aggregate"]["sourceChecksumFailures"] == 0
+    markdown = (output / "report.md").read_text(encoding="utf-8")
+    assert "/" + "Users" + "/" not in markdown
+    assert (output / "classic/page.png").is_file()
+    assert (output / "ai/page.png").is_file()

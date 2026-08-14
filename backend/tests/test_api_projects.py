@@ -629,6 +629,11 @@ def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_pa
     assert tesseract["directions"]["horizontal"] == ("jpn" in tesseract["languages"])
     assert tesseract["directions"]["vertical"] == ("jpn_vert" in tesseract["languages"])
     assert isinstance(capabilities["fonts"]["available"], bool)
+    providers = config.json()["providers"]
+    assert providers["preprocessing"]["opencv-pillow"]["classicInterpolation"] is True
+    assert providers["preprocessing"]["realesrgan-onnx"]["aiUpscale"] is True
+    assert providers["preprocessing"]["realesrgan-onnx"]["downloadsModelsAtStartup"] is False
+    assert providers["preprocessing"]["realesrgan-ncnn"]["aiUpscale"] is True
 
     root = tmp_path / "portable"
     response = client.post(

@@ -75,3 +75,17 @@ redirect an existing job.
 Enter the full path to `output/project/project.json`. Confirm the adjacent `project.sqlite3` still exists
 and is writable: the manifest is inspectable but cannot reconstruct a project by itself. Do not hand-edit
 schema versions; make a copy and report the sanitized error if migration fails.
+
+## Real-ESRGAN is unavailable
+
+Install the backend `ai` extra and the checksum-verified anime ONNX model, then restart
+`npm run dev`:
+
+```bash
+npm run setup:models -- realesrgan
+uv sync --project backend --extra ai --group dev
+```
+
+`realesrgan-onnx` is the local AI provider. `opencv-pillow` Lanczos is classic interpolation and will
+not appear as AI upscaling. The NCNN adapter still needs a separately installed
+`realesrgan-ncnn-vulkan` executable; it is optional once the ONNX provider is installed.

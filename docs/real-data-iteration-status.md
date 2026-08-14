@@ -4,7 +4,7 @@ This is the sanitized public real-data summary and round log routed from `.agent
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 
-Last updated: 2026-08-14
+Last updated: 2026-08-15
 
 ## Current phase
 
@@ -22,6 +22,9 @@ Last updated: 2026-08-14
 - Round 10 — post-OCR evidence and human trust gate: delivered to the non-default draft PR branch and
   verified by complete backend, frontend, privacy, and Playwright CI. Private real-data calibration is
   the next checkpoint; no new private quality result is claimed here.
+- Round 11 — local Real-ESRGAN ONNX upscaling: delivered as a runnable optional provider with explicit
+  checksum/license install. Three representative private pages were compared against classic Lanczos
+  into an ignored run directory; visual contact sheets were not published.
 
 ## Private data boundary
 
@@ -168,8 +171,10 @@ before unattended publication would be appropriate.
 
 - Unified preprocessing protocols and result/coordinate contract.
 - Always-available OpenCV/Pillow profiles with per-switch single/batch jobs and enhanced preview.
-- Optional Real-ESRGAN NCNN adapter with honest unavailable state; not exercised here because the local
-  executable/model was absent.
+- Optional Real-ESRGAN NCNN adapter with honest unavailable state; sibling `models/` is now passed to
+  the CLI. A local NCNN executable was not run in this environment.
+- Optional Real-ESRGAN ONNX anime 4× provider with checksum-verified install, tiling, grayscale
+  preservation, and a private classic-vs-AI comparison script.
 - Optional PP-OCRv3 polygon detector and explicit detection/OCR provider separation.
 - Preprocessed-crop OCR retry against original, quality selection, and attempt/input provenance.
 - Versioned separate detector/OCR evidence, retained automatic proposals, stable trust reasons, and
@@ -192,8 +197,9 @@ before unattended publication would be appropriate.
    Current proxies cannot decide whether the safe profile's 25 empty pages are missed text or true
    negatives.
 2. **Preprocessing policy:** support per-page profile suggestions and paired preview, not a book-wide
-   assumption. Run the already integrated Real-ESRGAN adapter only after a licensed local executable and
-   model are installed, then compare against the exact same annotations.
+   assumption. Round 11 made `realesrgan-onnx` runnable with an explicit checksummed install; continue
+   comparing it against annotated pages once ground truth exists. Classic Lanczos remains available and
+   is not labeled as AI.
 3. **Detection/OCR:** add MangaOCR or PaddleOCR recognition behind the existing protocol, region-level
    rerun/history controls, and calibrated confidence. Evaluate the delivered human trust gate against
    annotated/private-safe evidence; keep empty detection authoritative.
@@ -236,3 +242,10 @@ before unattended publication would be appropriate.
   GitHub CI run `31729184780` passed Ruff lint/format, 184 backend tests, the release/privacy audit,
   frontend lint/typecheck/build with 92 tests, and both Playwright journeys at
   `29305788cfbb8f4d1f36354ba89c40e18d15400e`. No new private quality result was generated or published.
+- **Round 11:** added a runnable local Real-ESRGAN ONNX anime 4× preprocessor, explicit checksum and
+  license recording, grayscale preservation after RGB inference, NCNN model-directory discovery, and a
+  private classic-vs-AI comparison script. Three representative pages completed with unchanged source
+  checksums, correct 2× sizes, and AI output distinct from Lanczos. Mean Laplacian variance rose from
+  47.3 (classic) to 2428.0 (AI) in 65 seconds on Apple Silicon CPU. Unique colors stayed at 8-bit
+  grayscale after the chroma fix. Contact sheets remain ignored for local visual review and were not
+  sent to a remote model. GitHub CI for this checkpoint is recorded after the non-default-branch push.

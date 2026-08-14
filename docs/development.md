@@ -34,14 +34,25 @@ No model is downloaded by bootstrap or startup. To install the PP-OCR and LaMa m
 fixed SHA-256 verification, target the same data directory used by the application:
 
 ```bash
-npm run setup:models -- --data-dir .manga-localizer ppocr lama
+npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
 uv sync --project backend --extra ai --group dev
 ```
 
 Without a repository `.env`, omit `--data-dir .manga-localizer` to use the normal
-`~/.manga-localizer` default, or run `npm run setup:ai`. Real-ESRGAN is a CLI adapter; install
-`realesrgan-ncnn-vulkan` and its model files separately and configure its executable when it is not on
-`PATH`.
+`~/.manga-localizer` default, or run `npm run setup:ai`. `realesrgan-onnx` is the local AI
+upscaler once that model and the `ai` extra are installed. `realesrgan-ncnn` still wraps a separately
+installed `realesrgan-ncnn-vulkan` executable; place the binary under the data directory or set
+`MANGA_LOCALIZER_REALESRGAN_NCNN_COMMAND`.
+
+Compare classic Lanczos against AI upscaling into an ignored output directory:
+
+```bash
+uv run --project backend --extra ai python scripts/compare_upscale.py \
+  --input tests/real-data/<dataset>/input \
+  --output tests/real-data/<dataset>/runs/<new-run> \
+  --data-dir .manga-localizer \
+  --factor 2
+```
 
 The 0.2.0 launcher was exercised through `npm run dev`: the root Web page, direct FastAPI
 health endpoint, and the Vite `/api` proxy all responded successfully. Launcher platform logic also has

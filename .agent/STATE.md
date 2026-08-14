@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-14
+Updated: 2026-08-15
 
 ## Authority and purpose
 
@@ -19,37 +19,40 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Real-data Round 9's durable visual-stage signoff checkpoint and the subsequent Round 10 OCR trust gate
-are delivered to the non-default branch `agent/manga-round7-governance-20260812` through draft PR #3.
-The Round 10 feature checkpoint is at `29305788cfbb8f4d1f36354ba89c40e18d15400e`; fresh
-Judge/Governor review approved the implementation and each CI repair, and GitHub CI run `31729184780`
-passed the complete backend, frontend, privacy, and Playwright gates for that exact remote commit. It
-persists versioned detection/OCR evidence, leaves automatic proposals in review regardless of
-confidence, requires explicit human trust before translation or default safe rendering, and invalidates
-trust when recognition inputs or policy change. Legacy/policy migration also discards repair/typeset
-caches created under the earlier confidence policy. Round 8 prepared review material for all 130 pages
-but has explicit completed output review for only 18; it remains a partial result, not a full-book visual
-acceptance. No new private real-data quality result was produced by Round 10, so privacy-safe evaluation
-and calibration of the delivered gate remain the next checkpoint. The full product goal remains active.
-No merge, tag, release, or deployment has occurred.
+Round 11 delivers a runnable local Real-ESRGAN AI upscaler on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 10 trust-gate head is
+`0d6ff98387447c176ef5addeeaa21d007df05db3` with GitHub CI run `31730263494` green. Round 11 adds
+`realesrgan-onnx` (BSD-3-Clause `RealESRGAN_x4plus_anime_6B`, checksum-verified explicit install, native
+4× with honest 2×/3× downscale, tiling, grayscale preservation) and keeps `realesrgan-ncnn` as an
+optional CLI adapter that now discovers a data-dir binary and passes a sibling `models/` folder. Classic
+Lanczos remains `opencv-pillow` and is labeled `aiUpscale: false`. A third-party NCNN executable was not
+run in this environment; the ONNX provider is the exercised equivalent local AI path. Three
+representative private pages were compared against Lanczos in an ignored directory: source checksums
+unchanged, output sizes exact, AI distinct from classic, Laplacian variance 47.3 → 2428.0, unique colors
+kept at 8-bit grayscale, 65 s on M4 CPU. Contact sheets were not published or sent to a remote vision
+model. Round 8 remains 18/130 explicit visual reviews. The full product goal remains active. No merge,
+tag, release, or deployment has occurred.
 
 ## Environment evidence
 
 - macOS on Apple Silicon (M4, Metal available), Node.js 26, npm 11, uv, and CPython 3.12.
 - Tesseract 5.5 is installed with `jpn`, `jpn_vert`, `chi_sim`, and `chi_tra` data.
 - OpenCV/Pillow are the dependency-light image baseline; ONNX Runtime is available through the optional
-  `ai` extra for the exercised LaMa provider.
-- The private PP-OCRv3 and LaMa ONNX weights are checksum-verified and live only in ignored local model
-  directories. Real-ESRGAN NCNN is implemented and fake-CLI tested but no local executable/model was
-  available for a real run.
+  `ai` extra for LaMa and Real-ESRGAN ONNX.
+- The private PP-OCRv3, LaMa, and Real-ESRGAN anime ONNX weights are checksum-verified and live only in
+  ignored local model directories. Real-ESRGAN NCNN remains a CLI adapter; no NCNN executable was run
+  here.
 
 ## Decisions
 
 - Repository/distribution name: `manga-localizer`; Python import package: `manga_localizer`.
 - Frontend: React, TypeScript, Vite, Zustand, React Konva, and dense custom CSS tokens.
 - Backend: FastAPI, Pydantic, SQLAlchemy/SQLite, Pillow, OpenCV, and background asyncio workers.
-- Preprocessing has one provider/result/coordinate contract. `opencv-pillow` is always available;
-  `realesrgan-ncnn` is optional, local, explicit, and never downloaded at application startup.
+- Preprocessing has one provider/result/coordinate contract. `opencv-pillow` is always available and
+  uses classic Lanczos (`aiUpscale: false`). `realesrgan-onnx` is the runnable local AI upscaler:
+  explicit checksum/license install, no startup download, native 4×, 2×/3× downscale from that AI
+  result, tile size 256 on this 16 GB M4, and grayscale preservation. `realesrgan-ncnn` remains optional
+  and never downloaded at application startup.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
   baseline; optional PP-OCRv3 supplies bounded detector polygons. A completed zero-detection result is
   authoritative and is not silently replaced during OCR.
@@ -116,8 +119,10 @@ No merge, tag, release, or deployment has occurred.
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
   delivery, and complete backend/frontend/privacy/browser CI verification.
-- [ ] Next real-data checkpoint: evaluate and calibrate the delivered trust gate against privacy-safe
-  aggregate evidence without publishing private images, text, paths, or identifiers.
+- [x] Round 11: runnable local Real-ESRGAN ONNX upscaler, explicit model install, NCNN model-dir fix,
+  private classic-vs-AI comparison, and public regression. Remote CI is recorded after the branch push.
+- [ ] Next real-data checkpoint: privacy-safe annotated detection/OCR evaluation and local visual review
+  of the ignored Real-ESRGAN contact sheets; then line-art-aware restoration and real translation.
 
 ## Verification evidence
 
@@ -150,24 +155,34 @@ No merge, tag, release, or deployment has occurred.
   `uv lock --check --offline`; compileall; `git diff --check`; and a direct release audit over 110
   candidate files plus 202 historical entries. The task-created incomplete backend virtual environment
   was moved out of the repository.
-- Round 10 authoritative remote verification: GitHub CI run `31729184780` passed at
-  `29305788cfbb8f4d1f36354ba89c40e18d15400e`. Backend Ruff lint/format, all 184 pytest cases, and the
-  release audit over 110 candidate files plus 272 historical blobs passed. Frontend ESLint, TypeScript,
-  all 92 Vitest cases, and production build passed. Both Playwright Chromium journeys passed.
+- Round 10 authoritative remote verification: GitHub CI run `31730263494` passed at
+  `0d6ff98387447c176ef5addeeaa21d007df05db3`. Backend Ruff lint/format, all 184 pytest cases, and the
+  release audit passed. Frontend ESLint, TypeScript, all 92 Vitest cases, and production build passed.
+  Both Playwright Chromium journeys passed.
+- Round 11 local verification passed 2 launcher tests; backend Ruff lint/format and 192 pytest cases;
+  frontend ESLint, TypeScript, 92 Vitest cases, and production build; release audit over 113 candidate
+  files plus 305 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
+  discovered both Chromium journeys; this environment lacked Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push.
+- Round 11 private upscale comparison: three representative pages, requested 2× from native 4× AI,
+  tile 256, BSD-3-Clause RealESRGAN_x4plus_anime_6B, ONNX Runtime 1.28.0 on M4 CPU. Zero source checksum
+  failures, exact output sizes, AI distinct from Lanczos on every page, mean Laplacian variance
+  47.324 → 2427.957, unique colors remained 8-bit grayscale after chroma suppression, 64.9 s total.
+  Contact sheets stay under the ignored real-data run directory and were not opened by a remote model.
 
 ## Known limitations and blockers
 
 No source-integrity or privacy blocker is currently known, but the full product objective is not yet
-complete. Round 9 is delivered and verified; it is a safety/review checkpoint rather than a claim of
-unattended full-book output quality.
+complete. Round 11 is an AI-upscale checkpoint rather than a claim of unattended full-book output
+quality.
 
 - The private dataset has no annotated boxes/transcriptions, so coverage and confidence are proxies,
   not detection recall or OCR accuracy.
 - The representative export uses deterministic mock translations for structural testing. Real Chinese
   translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
   reconstruction artifacts still prevent unattended publication.
-- MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, line-art-aware restoration,
-  and a real Real-ESRGAN run remain roadmap work.
-- The post-OCR trust gate is delivered and fully CI-verified, but its precision/recall and calibration
-  still require privacy-safe annotated or aggregate real-data evaluation; the current evidence proves
-  safety and workflow behavior, not unattended recognition quality.
+- MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and line-art-aware
+  restoration remain roadmap work. Local visual review of Real-ESRGAN contact sheets is still required
+  before treating AI upscaling as publication-quality.
+- The post-OCR trust gate is delivered and CI-verified, but its precision/recall and calibration still
+  require privacy-safe annotated or aggregate real-data evaluation.

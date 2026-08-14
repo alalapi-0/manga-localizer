@@ -12,6 +12,9 @@ Semantic Versioning.
   coordinate mapping.
 - Optional Real-ESRGAN NCNN preprocessing adapter with an honest unavailable state and no implicit
   downloads.
+- Optional Real-ESRGAN ONNX anime 4× preprocessor using checksum-verified local weights, tiled
+  inference, and explicit 2×/3× downscale from the native 4× result. Classic Lanczos remains a
+  separate compatibility upscaler.
 - Optional PP-OCRv3 OpenCV-DNN polygon detector, separated from Tesseract recognition.
 - Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact
   mask-outside preservation, and an explicit checksum-verifying model installer.
@@ -78,13 +81,19 @@ Semantic Versioning.
 - The Round 10 trust-gate checkpoint passed Ruff lint/format, 184 backend tests, the release/privacy
   audit, frontend lint/typecheck/build with 92 tests, and both Playwright Chromium journeys on the exact
   non-default-branch commit. No new private real-data quality result is claimed by this verification.
+- Round 11 installed and checksum-verified the BSD-3-Clause Real-ESRGAN anime ONNX model locally, ran
+  it on three representative private pages against classic Lanczos, and recorded only aggregate
+  structural metrics: zero source-checksum failures, correct 2× output sizes, AI output distinct from
+  Lanczos on every page, and substantially higher Laplacian variance after grayscale preservation.
+  Contact sheets remain in the ignored private run directory for local visual review.
 
 ### Known limitations
 
 - The private set has no box/transcription ground truth, so region coverage, confidence, and character
   counts are proxies rather than detection recall or OCR accuracy.
-- AI preprocessing via Real-ESRGAN still requires a separately installed executable/model, and LaMa
-  remains CPU-expensive and imperfect on line art fully hidden by lettering.
+- AI preprocessing via Real-ESRGAN ONNX is local, optional, and native 4×; 2×/3× requests downscale
+  that AI output. The NCNN CLI adapter remains available when a licensed local executable is
+  installed. LaMa remains CPU-expensive and imperfect on line art fully hidden by lettering.
 - Mask correction strokes are scoped to one selected rectangular region; arbitrary whole-page raster
   editing and arbitrary persisted region polygons remain roadmap work.
 

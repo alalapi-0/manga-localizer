@@ -152,6 +152,7 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
   const labels: Record<string, string> = {
     tesseract: 'Tesseract',
     'opencv-pillow': 'OpenCV / Pillow 基础增强',
+    'realesrgan-onnx': 'Real-ESRGAN ONNX 动漫超分',
     'realesrgan-ncnn': 'Real-ESRGAN NCNN',
     'ppocr-v3': 'PP-OCRv3',
     'lama-onnx': 'LaMa ONNX',

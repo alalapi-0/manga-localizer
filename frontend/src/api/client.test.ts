@@ -16,6 +16,10 @@ describe('api client contract', () => {
   it('flattens backend provider capabilities without claiming unavailable providers', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
       providers: {
+        preprocessing: {
+          'opencv-pillow': { provider: 'opencv-pillow', available: true },
+          'realesrgan-onnx': { provider: 'realesrgan-onnx', available: false, error: 'model missing' },
+        },
         ocr: {
           tesseract: {
             provider: 'tesseract',
@@ -41,6 +45,12 @@ describe('api client contract', () => {
     const result = await api.getCapabilities();
 
     expect(result.providers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'realesrgan-onnx',
+        kind: 'preprocessor',
+        available: false,
+        label: 'Real-ESRGAN ONNX 动漫超分',
+      }),
       expect.objectContaining({ id: 'tesseract', kind: 'detector', available: true }),
       expect.objectContaining({ id: 'tesseract', kind: 'ocr', available: true }),
       expect.objectContaining({ id: 'mock', kind: 'translator', isMock: true }),

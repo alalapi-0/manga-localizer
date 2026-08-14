@@ -20,12 +20,18 @@ original/processed coordinate mapping helpers. The queue persists preprocessing 
 
 - `opencv-pillow` is the dependency-light default. It supports profiles `off`, `ocr-friendly`,
   `balanced`, and `visual-quality`, plus independent upscale (2×/3×/4×), denoise, sharpen, contrast,
-  edge, and binarize/threshold switches.
+  edge, and binarize/threshold switches. Its upscaler is classic Lanczos interpolation and is reported
+  with `aiUpscale: false`.
+- `realesrgan-onnx` is the local AI upscaler. It runs the BSD-3-Clause
+  `RealESRGAN_x4plus_anime_6B` ONNX graph through the optional ONNX Runtime extra. The graph is native
+  4×; requested 2×/3× results downscale that AI output with Lanczos. Tiling, alpha preservation, grayscale
+  preservation, and local post-processing switches match the other preprocessors. A missing model or
+  runtime produces an unavailable health result. Nothing is downloaded at startup.
 - `realesrgan-ncnn` wraps a separately installed local
   [Real-ESRGAN NCNN Vulkan](https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan) executable and can chain
-  local post-processing. A missing executable produces an unavailable health result; model files are
-  owned and validated at execution time by the external CLI, whose failures are surfaced by the job.
-  Nothing is downloaded implicitly.
+  local post-processing. It searches `PATH` and the application data directory, and passes a sibling
+  `models/` folder to the CLI so temporary working directories cannot hide the weights. A missing
+  executable produces an unavailable health result. Nothing is downloaded implicitly.
 
 Real-data evaluation found edge enhancement unsafe as a default on detailed manga line art, so it is
 available but opt-in. A low/empty OCR candidate from a preprocessed crop is retried against the original
@@ -132,13 +138,19 @@ data directory used by the application:
 ```bash
 npm run setup:models -- ppocr
 npm run setup:models -- lama
-uv sync --project backend --extra ai --group dev  # required by LaMa
+npm run setup:models -- realesrgan
+uv sync --project backend --extra ai --group dev  # required by LaMa and Real-ESRGAN ONNX
 ```
 
-Or install both plus the runtime with `npm run setup:ai`. Configuration can override the standard model
-locations with `MANGA_LOCALIZER_PPOCR_DETECTION_MODEL` and
-`MANGA_LOCALIZER_LAMA_INPAINTING_MODEL`. Real-ESRGAN uses
-`MANGA_LOCALIZER_REALESRGAN_NCNN_COMMAND`.
+Or install the listed models plus the runtime with `npm run setup:ai`. Configuration can override the
+standard model locations with `MANGA_LOCALIZER_PPOCR_DETECTION_MODEL`,
+`MANGA_LOCALIZER_LAMA_INPAINTING_MODEL`, and `MANGA_LOCALIZER_REALESRGAN_ONNX_MODEL`. The NCNN adapter
+uses `MANGA_LOCALIZER_REALESRGAN_NCNN_COMMAND` and optional
+`MANGA_LOCALIZER_REALESRGAN_NCNN_MODELS`. Inspect licenses and checksums without downloading:
+
+```bash
+npm run setup:models -- --print-specs
+```
 
 ## Adding a provider
 

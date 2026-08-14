@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import shutil
 import subprocess
 import tempfile
@@ -422,6 +423,7 @@ class OpenCVPillowPreprocessProvider:
             "available": True,
             "local": True,
             "aiUpscale": False,
+            "classicInterpolation": True,
             "profiles": list(PREPROCESS_PROFILES),
             "operations": {
                 "upscale": True,
@@ -454,6 +456,8 @@ class RealESRGANNCNNPreprocessProvider:
         model_name: str | None = None,
         tile_size: int | None = None,
         gpu_id: int | None = None,
+        models_dir: str | Path | None = None,
+        search_paths: Sequence[str | Path] = (),
         config: PreprocessConfig | None = None,
         **options: Any,
     ) -> None:
@@ -470,6 +474,18 @@ class RealESRGANNCNNPreprocessProvider:
             raise ValueError("tile_size must be a non-negative integer")
         if gpu_id is not None and (type(gpu_id) is not int or gpu_id < -1):
             raise ValueError("gpu_id must be an integer greater than or equal to -1")
+        if models_dir is not None:
+            models_text = str(models_dir)
+            if not models_text.strip() or "\x00" in models_text:
+                raise ValueError("models_dir must be a non-empty local path")
+        if isinstance(search_paths, str | bytes):
+            raise TypeError("search_paths must be a sequence of paths")
+        normalized_search_paths: tuple[Path, ...] = ()
+        for item in search_paths:
+            text = str(item)
+            if not text.strip() or "\x00" in text:
+                raise ValueError("search_paths must contain non-empty local paths")
+            normalized_search_paths += (Path(text).expanduser(),)
         unknown = sorted(set(options) - _CONFIG_OPTION_NAMES)
         if unknown:
             raise TypeError(f"Unknown preprocessing option(s): {', '.join(unknown)}")
@@ -483,14 +499,51 @@ class RealESRGANNCNNPreprocessProvider:
         self.model_name = model_name
         self.tile_size = tile_size
         self.gpu_id = gpu_id
+        self.models_dir = None if models_dir is None else Path(str(models_dir)).expanduser()
+        self.search_paths = normalized_search_paths
         self._local = OpenCVPillowPreprocessProvider(profile="off")
 
     def _executable(self) -> Path | None:
+        command_path = Path(self.command).expanduser()
+        candidates: list[Path] = []
+        if command_path.is_file():
+            candidates.append(command_path)
         located = shutil.which(self.command)
-        return Path(located).resolve() if located else None
+        if located:
+            candidates.append(Path(located))
+        command_name = command_path.name
+        for directory in self.search_paths:
+            candidates.append(Path(directory) / command_name)
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.expanduser().resolve(strict=False)
+            except OSError:
+                continue
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if resolved.is_file() and os.access(resolved, os.X_OK):
+                return resolved
+        return None
+
+    def _models_directory(self, executable: Path | None = None) -> Path | None:
+        if self.models_dir is not None and self.models_dir.is_dir():
+            return self.models_dir
+        if executable is None:
+            executable = self._executable()
+        if executable is None:
+            return None
+        sibling = executable.parent / "models"
+        return sibling if sibling.is_dir() else None
 
     def health_check(self) -> dict[str, Any]:
         executable = self._executable()
+        models_directory = self._models_directory(executable)
+        if executable is None:
+            error = f"Executable was not found: {self.command}"
+        else:
+            error = None
         return {
             "available": executable is not None,
             "provider": self.name,
@@ -498,7 +551,8 @@ class RealESRGANNCNNPreprocessProvider:
             "executable": str(executable) if executable else None,
             "configured": True,
             "modelName": self.model_name,
-            "error": None if executable else f"Executable was not found: {self.command}",
+            "modelsDirectory": str(models_directory) if models_directory else None,
+            "error": error,
         }
 
     def get_capabilities(self) -> dict[str, Any]:
@@ -508,6 +562,7 @@ class RealESRGANNCNNPreprocessProvider:
             "available": health["available"],
             "local": True,
             "aiUpscale": True,
+            "classicInterpolation": False,
             "downloadsModelsAtStartup": False,
             "profiles": list(PREPROCESS_PROFILES),
             "operations": {
@@ -553,6 +608,9 @@ class RealESRGANNCNNPreprocessProvider:
                 "-f",
                 "png",
             ]
+            models_directory = self._models_directory(executable)
+            if models_directory is not None:
+                command.extend(["-m", str(models_directory)])
             if self.model_name is not None:
                 command.extend(["-n", self.model_name])
             if self.tile_size is not None:

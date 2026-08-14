@@ -20,8 +20,9 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 11 delivers a runnable local Real-ESRGAN AI upscaler on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 10 trust-gate head is
-`0d6ff98387447c176ef5addeeaa21d007df05db3` with GitHub CI run `31730263494` green. Round 11 adds
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 11 feature commit is
+`866ad13728a029f468e447aa6c39bebe42121d92` with GitHub CI run `31851316610` green. The previous
+Round 10 trust-gate head is `0d6ff98387447c176ef5addeeaa21d007df05db3`. Round 11 adds
 `realesrgan-onnx` (BSD-3-Clause `RealESRGAN_x4plus_anime_6B`, checksum-verified explicit install, native
 4× with honest 2×/3× downscale, tiling, grayscale preservation) and keeps `realesrgan-ncnn` as an
 optional CLI adapter that now discovers a data-dir binary and passes a sibling `models/` folder. Classic
@@ -120,7 +121,7 @@ tag, release, or deployment has occurred.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
   delivery, and complete backend/frontend/privacy/browser CI verification.
 - [x] Round 11: runnable local Real-ESRGAN ONNX upscaler, explicit model install, NCNN model-dir fix,
-  private classic-vs-AI comparison, and public regression. Remote CI is recorded after the branch push.
+  private classic-vs-AI comparison, public regression, and complete CI on the non-default branch.
 - [ ] Next real-data checkpoint: privacy-safe annotated detection/OCR evaluation and local visual review
   of the ignored Real-ESRGAN contact sheets; then line-art-aware restoration and real translation.
 
@@ -164,6 +165,9 @@ tag, release, or deployment has occurred.
   files plus 305 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
   discovered both Chromium journeys; this environment lacked Playwright Chromium revision 1234, so live
   browser evidence remains the GitHub e2e job after push.
+- Round 11 authoritative remote verification: GitHub CI run `31851316610` passed at
+  `866ad13728a029f468e447aa6c39bebe42121d92`. Backend Ruff lint/format, pytest, and the release audit
+  passed. Frontend lint/typecheck/92 tests/build passed. Both Playwright Chromium journeys passed.
 - Round 11 private upscale comparison: three representative pages, requested 2× from native 4× AI,
   tile 256, BSD-3-Clause RealESRGAN_x4plus_anime_6B, ONNX Runtime 1.28.0 on M4 CPU. Zero source checksum
   failures, exact output sizes, AI distinct from Lanczos on every page, mean Laplacian variance

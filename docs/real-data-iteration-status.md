@@ -248,4 +248,5 @@ before unattended publication would be appropriate.
   checksums, correct 2× sizes, and AI output distinct from Lanczos. Mean Laplacian variance rose from
   47.3 (classic) to 2428.0 (AI) in 65 seconds on Apple Silicon CPU. Unique colors stayed at 8-bit
   grayscale after the chroma fix. Contact sheets remain ignored for local visual review and were not
-  sent to a remote model. GitHub CI for this checkpoint is recorded after the non-default-branch push.
+  sent to a remote model. GitHub CI run `31851316610` passed at
+  `866ad13728a029f468e447aa6c39bebe42121d92`.

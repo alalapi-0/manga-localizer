@@ -85,7 +85,8 @@ Semantic Versioning.
   it on three representative private pages against classic Lanczos, and recorded only aggregate
   structural metrics: zero source-checksum failures, correct 2× output sizes, AI output distinct from
   Lanczos on every page, and substantially higher Laplacian variance after grayscale preservation.
-  Contact sheets remain in the ignored private run directory for local visual review.
+  Contact sheets remain in the ignored private run directory for local visual review. GitHub CI run
+  `31851316610` passed on `866ad13728a029f468e447aa6c39bebe42121d92`.
 
 ### Known limitations
 

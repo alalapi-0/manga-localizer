@@ -64,6 +64,7 @@ describe('desktop workbench interactions', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: '按状态筛选' }), 'overflow');
     expect(screen.getByText('image-1.png')).toBeInTheDocument();
     expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '下一张排版溢出' })).toBeEnabled();
 
     await user.click(screen.getByRole('button', { name: '批处理与导出' }));
     await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));

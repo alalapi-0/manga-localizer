@@ -77,6 +77,7 @@ not inferred from this tracked checklist.
 - [x] Keep overlay boxes selected when a partial typeset job for the current page completes
 - [x] Frame selected typeset boxes in the canvas after the current page's typeset job completes
 - [x] Frame overflow boxes from the inspector overflow actions
+- [x] Jump to overflowing pages and frame their overflow boxes
 
 ## Explicitly deferred
 

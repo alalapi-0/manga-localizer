@@ -285,7 +285,9 @@ export function Sidebar() {
       <footer className="sidebar__footer">
         <IconButton aria-label="上一张图" disabled={!images.length} onClick={() => void navigateImage(-1)}>←</IconButton>
         <IconButton aria-label="上一张未检查" disabled={!images.length} onClick={() => void navigateImage(-1, 'unreviewed')} title="上一张未检查">⇤</IconButton>
+        <IconButton aria-label="上一张排版溢出" disabled={!images.length} onClick={() => void navigateImage(-1, 'overflow')} title="上一张排版溢出">⇐</IconButton>
         <span>{images.length ? `${images.findIndex((image) => image.id === useWorkbenchStore.getState().activeImageId) + 1} / ${images.length}` : '0 / 0'}</span>
+        <IconButton aria-label="下一张排版溢出" disabled={!images.length} onClick={() => void navigateImage(1, 'overflow')} title="下一张排版溢出">⇒</IconButton>
         <IconButton aria-label="下一张未检查" disabled={!images.length} onClick={() => void navigateImage(1, 'unreviewed')} title="下一张未检查">⇥</IconButton>
         <IconButton aria-label="下一张图" disabled={!images.length} onClick={() => void navigateImage(1)}>→</IconButton>
       </footer>

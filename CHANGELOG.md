@@ -237,6 +237,10 @@ Semantic Versioning.
   the production build. The release audit scanned 128 candidate files and 686 historical blobs.
   Backend was unchanged from Round 31. GitHub CI run `31884339883` passed on
   `b637b97d9a56a8ec73170adb6abb0c3a2811eb46`.
+- Round 35 jumps to overflowing pages from the sidebar and **⌥⇧← / ⌥⇧→**, then selects and frames
+  those overflow boxes. Local gates passed 2 launcher tests and frontend lint/typecheck/121 tests plus
+  the production build. The release audit scanned 128 candidate files and 698 historical blobs.
+  Backend was unchanged from Round 31. Remote CI is pending.
 
 ### Known limitations
 

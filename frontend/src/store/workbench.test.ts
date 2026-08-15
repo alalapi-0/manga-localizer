@@ -1026,6 +1026,35 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-3');
   });
 
+  it('frames overflow boxes when jumping to an overflowing page', async () => {
+    const overflowRegion = regionFixture('region-9', { imageId: 'image-2' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-9'],
+        }),
+      ],
+      regions: [regionFixture('region-1')],
+    });
+    useWorkbenchStore.setState((state) => ({
+      regionsByImage: { ...state.regionsByImage, 'image-2': undefined as unknown as never },
+    }));
+    vi.spyOn(api, 'listRegions').mockResolvedValue([overflowRegion]);
+
+    expect(await useWorkbenchStore.getState().navigateImage(1, 'overflow')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      selectedRegionIds: ['region-9'],
+      rightTab: 'typesetting',
+      canvasMode: 'typeset',
+      focusRegionIds: ['region-9'],
+    });
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+
   it('lists overflowing region ids that still exist on the page', () => {
     const image = imageFixture('image-1', {
       status: { ...imageFixture('image-1').status, typeset: 'done' },

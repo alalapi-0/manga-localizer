@@ -113,7 +113,7 @@ interface WorkbenchState {
   importFiles: (files: File[]) => Promise<boolean>;
   loadRegions: (imageId: string, force?: boolean) => Promise<boolean>;
   reloadActiveImage: () => Promise<void>;
-  selectImage: (imageId: string) => Promise<boolean>;
+  selectImage: (imageId: string, options?: { focusOverflow?: boolean }) => Promise<boolean>;
   navigateImage: (direction: -1 | 1, target?: ImageNavigationTarget) => Promise<boolean>;
   toggleImageSelection: (imageId: string, additive?: boolean) => void;
   selectAllVisibleImages: (imageIds: string[]) => void;
@@ -149,6 +149,7 @@ interface WorkbenchState {
   setMaskBrushRadius: (value: number) => void;
   requestFit: () => void;
   focusRegions: (regionIds: string[]) => void;
+  focusActiveOverflow: () => void;
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
   setDrawerOpen: (value: boolean) => void;
@@ -1363,11 +1364,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     await get().loadRegions(imageId, true);
   },
 
-  selectImage: async (imageId) => {
-    if (imageId === get().activeImageId) return true;
-    if (!(await get().flushAutosave())) return false;
-    set({ activeImageId: imageId, selectedRegionIds: [] });
-    await get().loadRegions(imageId);
+  selectImage: async (imageId, options) => {
+    if (imageId !== get().activeImageId) {
+      if (!(await get().flushAutosave())) return false;
+      set({ activeImageId: imageId, selectedRegionIds: [] });
+      await get().loadRegions(imageId);
+    }
+    if (options?.focusOverflow) get().focusActiveOverflow();
     return true;
   },
 
@@ -1386,7 +1389,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     for (let seen = 0; seen < images.length - 1; seen += 1) {
       const index = (currentIndex + step * (seen + 1) + images.length * (seen + 1)) % images.length;
       const nextImage = images[index];
-      if (nextImage && matches(nextImage)) return get().selectImage(nextImage.id);
+      if (nextImage && matches(nextImage)) {
+        return get().selectImage(nextImage.id, {
+          focusOverflow: target === 'overflow',
+        });
+      }
     }
     return false;
   },
@@ -2008,6 +2015,22 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       focusRegionIds: ids,
       focusRequest: state.focusRequest + 1,
     }));
+  },
+  focusActiveOverflow: () => {
+    const state = get();
+    const image = activeImage(state);
+    const overflowIds = overflowingRegionIds(
+      image,
+      image ? state.regionsByImage[image.id] ?? [] : [],
+    );
+    if (!overflowIds.length) return;
+    set({
+      selectedRegionIds: overflowIds,
+      rightTab: 'typesetting',
+      canvasMode: image?.status.typeset === 'done' ? 'typeset' : state.canvasMode,
+      focusRegionIds: overflowIds,
+      focusRequest: state.focusRequest + 1,
+    });
   },
   setRightTab: (rightTab) => set({ rightTab }),
   setTheme: (theme) => {

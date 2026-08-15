@@ -240,7 +240,8 @@ Semantic Versioning.
 - Round 35 jumps to overflowing pages from the sidebar and **⌥⇧← / ⌥⇧→**, then selects and frames
   those overflow boxes. Local gates passed 2 launcher tests and frontend lint/typecheck/121 tests plus
   the production build. The release audit scanned 128 candidate files and 698 historical blobs.
-  Backend was unchanged from Round 31. Remote CI is pending.
+  Backend was unchanged from Round 31. GitHub CI run `31884703654` passed on
+  `9005872fd41028d4c1f6eab81d9e80b8c25e267d`.
 
 ### Known limitations
 

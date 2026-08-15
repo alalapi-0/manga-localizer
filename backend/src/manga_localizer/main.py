@@ -95,6 +95,12 @@ from manga_localizer.services.trust import (
     region_disposition,
 )
 
+_GENERATED_IMAGE_CACHE_HEADERS = {"Cache-Control": "private, no-store"}
+
+
+def _generated_image_response(path: Path, media_type: str = "image/png") -> FileResponse:
+    return FileResponse(path, media_type=media_type, headers=_GENERATED_IMAGE_CACHE_HEADERS)
+
 
 def _project_dict(project: Project, root: Path) -> dict[str, Any]:
     return {
@@ -755,7 +761,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                     status_code=404,
                     detail=f"Generated {variant} image is not available",
                 )
-            return FileResponse(target, media_type="image/png")
+            return _generated_image_response(target)
         if variant != "original":
             raise HTTPException(status_code=400, detail="Unknown image content variant")
         return FileResponse(
@@ -791,7 +797,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                 status_code=404,
                 detail="Generated inpainting candidate is not available",
             )
-        return FileResponse(target, media_type="image/png")
+        return _generated_image_response(target)
 
     @router.get("/images/{image_id}/generated/{stage}")
     async def image_generated(image_id: str, stage: str) -> FileResponse:
@@ -824,7 +830,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         )
         if not target.is_file():
             raise HTTPException(status_code=404, detail="Generated image is not available")
-        return FileResponse(target, media_type="image/png")
+        return _generated_image_response(target)
 
     @router.get("/images/{image_id}/regions", response_model=list[RegionOut])
     async def regions_list(image_id: str) -> list[dict[str, Any]]:

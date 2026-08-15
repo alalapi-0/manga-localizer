@@ -19,13 +19,13 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 30 opens original-vs-result compare when a preprocess, inpaint, or typeset job for the current
-page completes. The work is on `agent/manga-round7-governance-20260812` through draft PR #3. The
-Round 30 candidate is `ca7bc89134a1f98a8f7536cad7539d18136bf6b0` with GitHub CI run `31882096845`
-green. Round 29 (`e97fe14ba1492ee85fdea884e73aab10a9753470`, CI `31880896973`) remains the
-preprocess enhanced-preview switch. Round 8 remains 18/130 explicit visual reviews; detector drafts
-remain 130/0 reviewed. The full product goal remains active. No merge, tag, release, or deployment
-has occurred.
+Round 31 serves generated preprocess, inpaint, typeset, and mask images with
+`Cache-Control: private, no-store`, and the canvas fetch uses `cache: 'no-store'` so an overlay
+typeset does not keep showing the previous plate. The work is on
+`agent/manga-round7-governance-20260812` through draft PR #3. Round 30
+(`ca7bc89134a1f98a8f7536cad7539d18136bf6b0`, CI `31882096845`) remains the visual-stage compare
+switch. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
+full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -169,6 +169,8 @@ has occurred.
   public regression, and complete CI.
 - [x] Round 30: open original-vs-result compare when a visual-stage job for the current page completes,
   with public regression, and complete CI.
+- [x] Round 31: forbid HTTP caching of generated preview images, with public regression. Remote CI
+  for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -390,6 +392,11 @@ has occurred.
   `ca7bc89134a1f98a8f7536cad7539d18136bf6b0`. Backend Ruff lint/format, 230 pytest cases, and the
   release audit passed. Frontend lint/typecheck/115 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 31 local verification passed 2 launcher tests; backend Ruff lint/format and 231 pytest cases;
+  frontend ESLint, TypeScript, 116 Vitest cases, and the production build; release audit over 128
+  candidate files plus 650 historical blobs; and `git diff --check`. Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push. Remote CI for Round 31 is pending.
 
 ## Known limitations and blockers
 
@@ -409,6 +416,8 @@ full-book output quality.
   selected. When an inpaint job for the current page completes, the canvas switches to the erased
   preview and shows the review mask. When a preprocess job for the current page completes, the canvas
   switches to the enhanced preview. Those visual-stage completions also open original-vs-result compare.
+  Generated preprocess, inpaint, typeset, and mask responses are not stored in the browser HTTP cache,
+  so an overlay typeset reloads the rewritten plate instead of the previous image.
   Widely separated or misaligned boxes still overflow independently.
   Geometry, mask, or trust edits still rebuild inpainting.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended

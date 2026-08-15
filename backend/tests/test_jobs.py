@@ -692,6 +692,7 @@ def test_inpaint_stores_comparison_candidates_and_selection_keeps_mask_outside(
         assert ids == ["primary", "opencv-ns", "opencv-telea", "lineart-guided"]
         primary = client.get(f"/api/images/{image['id']}/generated/inpaint-candidates/primary")
         assert primary.status_code == 200, primary.text
+        assert primary.headers.get("cache-control") == "private, no-store"
         selected = client.patch(
             f"/api/images/{image['id']}/inpaint-candidate",
             json={

@@ -42,7 +42,7 @@ export async function loadCanonicalCanvasImage(
   if (typeof globalThis.createImageBitmap !== 'function') {
     throw new Error('当前浏览器不支持原始像素方向解码');
   }
-  const response = await fetch(src, { signal });
+  const response = await fetch(src, { signal, cache: 'no-store' });
   if (!response.ok) throw new Error(`Image request failed (${response.status})`);
   const bytes = await response.arrayBuffer();
   const blob = new Blob([bytes], {

@@ -132,6 +132,8 @@ def test_visual_stage_review_binds_the_exact_served_artifacts(
     served_mask = client.get(f"/api/images/{imported['id']}/generated/mask")
     assert served_artifact.status_code == 200
     assert served_mask.status_code == 200
+    assert served_artifact.headers.get("cache-control") == "private, no-store"
+    assert served_mask.headers.get("cache-control") == "private, no-store"
     artifact_checksum = _checksum(served_artifact.content)
     mask_checksum = _checksum(served_mask.content)
 
@@ -152,6 +154,47 @@ def test_visual_stage_review_binds_the_exact_served_artifacts(
         "artifactChecksum": artifact_checksum,
         "maskChecksum": mask_checksum,
     }
+
+
+def test_generated_images_forbid_http_caching(app, client: TestClient, tmp_path: Path) -> None:
+    project_root = tmp_path / "generated-no-cache"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    store, _ = app.state.registry.find_image(imported["id"])
+    for directory in ("preprocessed", "inpainted", "typeset", "masks"):
+        target = project_root / "generated" / directory / "第一章/ページ一.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(png_bytes(color="red"))
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "preprocess": "done",
+            "inpaint": "done",
+            "typeset": "done",
+        }
+
+    original = client.get(f"/api/images/{imported['id']}/content")
+    thumbnail = client.get(f"/api/images/{imported['id']}/thumbnail")
+    assert original.status_code == 200
+    assert thumbnail.status_code == 200
+    assert original.headers.get("cache-control") != "private, no-store"
+    assert thumbnail.headers.get("cache-control") != "private, no-store"
+
+    generated_paths = (
+        f"/api/images/{imported['id']}/generated/preprocessed",
+        f"/api/images/{imported['id']}/generated/inpainted",
+        f"/api/images/{imported['id']}/generated/typeset",
+        f"/api/images/{imported['id']}/generated/mask",
+        f"/api/images/{imported['id']}/content?variant=preprocessed",
+        f"/api/images/{imported['id']}/content?variant=erased",
+        f"/api/images/{imported['id']}/content?variant=typeset",
+    )
+    for path in generated_paths:
+        response = client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers.get("cache-control") == "private, no-store", path
 
 
 @pytest.mark.parametrize(

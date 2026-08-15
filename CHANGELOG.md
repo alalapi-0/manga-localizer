@@ -216,6 +216,11 @@ Semantic Versioning.
   build. The release audit scanned 128 candidate files and 640 historical blobs. Backend was
   unchanged from Round 23. GitHub CI run `31882096845` passed on
   `ca7bc89134a1f98a8f7536cad7539d18136bf6b0`.
+- Round 31 serves generated preprocess, inpaint, typeset, and mask images with
+  `Cache-Control: private, no-store`. The canvas fetch uses `cache: 'no-store'` so overlay typesetting
+  does not keep a cached previous plate. Local gates passed 2 launcher tests, backend lint/format/231
+  pytest, frontend lint/typecheck/116 tests plus the production build. The release audit scanned 128
+  candidate files and 650 historical blobs. Remote CI is pending.
 
 ### Known limitations
 

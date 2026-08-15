@@ -92,6 +92,23 @@ describe('canvas generated-image refresh', () => {
     expect(decode).toHaveBeenCalledWith(expect.any(Blob), { imageOrientation: 'none' });
   });
 
+  it('bypasses HTTP cache when loading a generated preview', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'image/png' }),
+      arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer,
+    } as unknown as Response));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await loadCanonicalCanvasImage('/generated/typeset?v=5', { width: 1200, height: 1800 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/generated/typeset?v=5',
+      expect.objectContaining({ cache: 'no-store' }),
+    );
+  });
+
   it('rejects a decoded image whose dimensions do not match the canonical backend grid', async () => {
     const close = vi.fn();
     vi.stubGlobal('fetch', vi.fn(async () => ({

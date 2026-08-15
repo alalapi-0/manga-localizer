@@ -73,6 +73,7 @@ not inferred from this tracked checklist.
 - [x] Switch the canvas to the erased preview and review mask when an inpaint job for the current page completes
 - [x] Switch the canvas to the enhanced preview when a preprocess job for the current page completes
 - [x] Open original-vs-result compare when a visual-stage job for the current page completes
+- [x] Serve generated preview images without HTTP caching so overlay typesetting reloads the new plate
 
 ## Explicitly deferred
 

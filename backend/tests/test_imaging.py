@@ -9,6 +9,7 @@ from manga_localizer.imaging.typesetting import (
     font_capabilities,
     overflow_region_ids,
     typeset_overflow_from_status,
+    verticalize_punctuation,
 )
 
 
@@ -243,3 +244,41 @@ def test_typesetting_horizontal_vertical_rotation_stroke_and_overflow() -> None:
     assert np.any(np.asarray(result.image.convert("RGB")) != 255)
     pixels = np.asarray(result.image.convert("RGB"))
     assert np.any((pixels[..., 0] > 150) & (pixels[..., 1] < 80) & (pixels[..., 2] < 80))
+
+
+def test_vertical_typesetting_uses_vertical_punctuation_forms() -> None:
+    assert verticalize_punctuation("\u300c你好\u300d\u2014\u2014啊\u2026") == (
+        "\ufe41你好\ufe42\ufe31\ufe31啊\ufe19"
+    )
+    assert verticalize_punctuation("横向\u300c引号\u300d") == "横向\ufe41引号\ufe42"
+    assert verticalize_punctuation("你好\u3002") == "你好\u3002"
+
+    capabilities = font_capabilities()
+    if not capabilities["available"]:
+        pytest.skip("No usable system CJK font")
+    source = Image.new("RGB", (220, 260), "white")
+    vertical = {
+        "id": "quoted",
+        "x": 20,
+        "y": 10,
+        "width": 80,
+        "height": 230,
+        "direction": "vertical",
+        "translationText": "\u300c你好\u3002\u300d",
+        "style": {"fontSize": 28, "minFontSize": 12, "strokeWidth": 0, "autoFit": False},
+    }
+    horizontal = {
+        **vertical,
+        "id": "horizontal-quoted",
+        "x": 120,
+        "direction": "horizontal",
+        "width": 80,
+        "height": 80,
+    }
+    result = typeset_image(source, [vertical, horizontal])
+    by_id = {layout["regionId"]: layout for layout in result.layouts}
+    assert "\ufe41" in "".join(by_id["quoted"]["lines"])
+    assert "\ufe42" in "".join(by_id["quoted"]["lines"])
+    assert "\u300c" not in "".join(by_id["quoted"]["lines"])
+    assert "\u300c" in "".join(by_id["horizontal-quoted"]["lines"])
+    assert "\u300d" in "".join(by_id["horizontal-quoted"]["lines"])

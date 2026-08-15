@@ -59,6 +59,7 @@ not inferred from this tracked checklist.
   during keyboard review
 - [x] Suggest a per-page preprocessing profile from local image stats, with an explicit apply-to-page
   action that does not change the book-wide default
+- [x] Map CJK punctuation to vertical presentation forms during vertical typesetting
 
 ## Explicitly deferred
 

@@ -42,6 +42,9 @@ Last updated: 2026-08-15
 - Round 17 — per-page preprocessing profile suggestions from local image stats, with explicit apply-to-
   page and adopt-as-default actions. This does not complete the remaining 112/130 clean-plate visual
   reviews.
+- Round 18 — vertical CJK punctuation presentation forms and hanging comma/period glyphs during
+  typesetting. Horizontal layouts keep authored punctuation. This does not complete the remaining
+  112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -244,8 +247,9 @@ pages. Those files remain `detector-draft` until human review.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
    Preserve the exact mask-outside invariant and never auto-repair uncertain regions.
 6. **Typesetting:** local Argos Simplified Chinese is now selectable for visual acceptance, but it is
-   English-pivot general MT. Overflowing boxes are persisted and filterable after a typeset run; continue
-   improving font/vertical punctuation matching and fragmented small-box layouts before export.
+   English-pivot general MT. Overflowing boxes are persisted and filterable after a typeset run. Vertical
+   layouts now use CJK vertical punctuation forms and hang comma/period glyphs; continue improving font
+   matching and fragmented small-box layouts before export.
 7. **Performance:** reuse batched model tensors where supported. CPU LaMa is practical for selected
    regions, not an unreviewed book-wide `all` policy.
 
@@ -320,3 +324,9 @@ pages. Those files remain `detector-draft` until human review.
   112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 221 backend tests, and 99
   frontend tests. The release audit scanned 128 candidate files and 467 historical blobs.
   GitHub CI run `31861476315` passed at `302837fa3403e79a2eb51ab5274ecc85eb56741e`.
+- **Round 18:** vertical Pillow layouts map CJK quotes, brackets, dashes, ellipses, and fullwidth
+  colon/semicolon/exclamation/question marks to presentation forms, and hang comma/period glyphs in
+  the cell. Horizontal layouts keep authored punctuation. Stored translation text is not rewritten.
+  This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2
+  launcher tests and 222 backend tests. The release audit scanned 128 candidate files and 492
+  historical blobs. Frontend was unchanged from Round 17. Remote CI is pending.

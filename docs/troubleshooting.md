@@ -25,7 +25,9 @@ unchanged.
 Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Shrink the
 font, enlarge the box, or enable auto-fit, then rerun typesetting. Overflow is recorded from the last
 successful typeset and is a review hint, not an export hard gate. Shift+Left/Right skips pages already
-marked reviewed so you can keep moving through a book.
+marked reviewed so you can keep moving through a book. Vertical balloons keep ordinary CJK quotes and
+punctuation in the translation; the renderer maps them to vertical presentation forms and hangs
+comma/period glyphs. Horizontal balloons leave that text unchanged.
 
 ## Chinese text renders as boxes
 

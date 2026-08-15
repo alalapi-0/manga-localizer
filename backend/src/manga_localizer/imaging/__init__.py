@@ -35,6 +35,7 @@ from manga_localizer.imaging.typesetting import (
     overflow_region_ids,
     typeset_image,
     typeset_overflow_from_status,
+    verticalize_punctuation,
 )
 
 __all__ = [
@@ -68,4 +69,5 @@ __all__ = [
     "typeset_image",
     "typeset_overflow_from_status",
     "validate_mask_edits",
+    "verticalize_punctuation",
 ]

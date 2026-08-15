@@ -19,14 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 17 delivers per-page preprocessing profile suggestions on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 17 feature commit is
-`302837fa3403e79a2eb51ab5274ecc85eb56741e` with GitHub CI run `31861476315` green. Import samples
-source-image size, contrast, and sharpness, stores a non-binding profile hint, and the workbench can
-process the current page with that profile or adopt it as the project default. It never auto-applies a
-book-wide assumption. `visual-quality` remains a manual choice. Round 16 overflow review remains in
-place. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 18 maps CJK punctuation to vertical presentation forms during vertical Pillow typesetting on the
+non-default branch `agent/manga-round7-governance-20260812` through draft PR #3. Vertical layouts also
+hang comma/period glyphs in the cell; horizontal layouts keep authored punctuation. Stored translation
+text is not rewritten. Round 17 per-page preprocessing suggestions remain in place (`302837f`, CI
+`31861476315`). Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed.
+The full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -144,6 +142,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   and complete CI.
 - [x] Round 17: per-page preprocessing profile suggestions, apply-to-page and adopt-as-default actions,
   public regression, and complete CI.
+- [x] Round 18: vertical CJK punctuation presentation forms and hanging comma/period glyphs, with
+  public regression. Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -257,6 +257,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `302837fa3403e79a2eb51ab5274ecc85eb56741e`. Backend Ruff lint/format, 221 pytest cases, and the
   release audit passed. Frontend lint/typecheck/99 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 18 local verification passed 2 launcher tests; backend Ruff lint/format and 222 pytest cases;
+  release audit over 128 candidate files plus 492 historical blobs; `uv lock --check --project backend`;
+  compileall; and `git diff --check`. Frontend was unchanged from Round 17 (99 Vitest). Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push. Remote CI for Round 18 is pending.
 
 ## Known limitations and blockers
 
@@ -267,8 +272,8 @@ full-book output quality.
 - Private pages still lack human-reviewed boxes/transcriptions. Detector-draft JSON is a starting
   proposal set, not precision/recall evidence.
 - The representative export can use mock or local Argos translations for structural testing. Argos is
-  general English-pivot MT, not manga-tuned, and currently Simplified Chinese only. Fragmented boxes,
-  vertical layout, font fit, and restoration artifacts still prevent unattended publication.
+  general English-pivot MT, not manga-tuned, and currently Simplified Chinese only. Fragmented small
+  boxes, remaining font-fit issues, and restoration artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
   sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.

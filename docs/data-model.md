@@ -36,7 +36,8 @@ canonical `generated/inpainted/` artifact.
 
 When typesetting completes, `status.typesetOverflowCount` and `status.typesetOverflowRegionIds` record
 which current boxes could not fit. Invalidating typesetting clears those fields. The API projects them
-only while `status.typeset` is `done`. They are review hints, not an export hard gate.
+only while `status.typeset` is `done`. They are review hints, not an export hard gate. Vertical layout
+maps CJK punctuation to presentation forms at render time and does not rewrite stored translation text.
 
 `status.preprocessSuggestion` records a local, non-binding profile hint from source-image size and a
 native-resolution sample of contrast/sharpness. Import writes the sampled suggestion; listing an older

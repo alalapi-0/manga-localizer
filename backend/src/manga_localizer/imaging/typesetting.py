@@ -147,6 +147,43 @@ def typeset_overflow_from_status(status: object) -> tuple[int, list[str]]:
     return len(ids), ids
 
 
+_VERTICAL_PUNCTUATION = str.maketrans(
+    {
+        "\u300c": "\ufe41",
+        "\u300d": "\ufe42",
+        "\u300e": "\ufe43",
+        "\u300f": "\ufe44",
+        "\uff08": "\ufe35",
+        "\uff09": "\ufe36",
+        "(": "\ufe35",
+        ")": "\ufe36",
+        "\u3014": "\ufe39",
+        "\u3015": "\ufe3a",
+        "\u3010": "\ufe3b",
+        "\u3011": "\ufe3c",
+        "\u300a": "\ufe3d",
+        "\u300b": "\ufe3e",
+        "\u3008": "\ufe3f",
+        "\u3009": "\ufe40",
+        "\u2014": "\ufe31",
+        "\u2013": "\ufe31",
+        "\u30fc": "\ufe31",
+        "\u2026": "\ufe19",
+        "\u22ef": "\ufe19",
+        "\uff1a": "\ufe13",
+        "\uff1b": "\ufe14",
+        "\uff01": "\ufe15",
+        "\uff1f": "\ufe16",
+    }
+)
+_HANGING_PUNCTUATION = frozenset("\u3001\u3002\uff0c\uff0e,.")
+
+
+def verticalize_punctuation(text: str) -> str:
+    """Map horizontal CJK punctuation to vertical presentation forms."""
+    return text.translate(_VERTICAL_PUNCTUATION)
+
+
 def _style_value(style: Mapping[str, Any], camel: str, snake: str, default: Any) -> Any:
     return style.get(camel, style.get(snake, default))
 
@@ -277,7 +314,7 @@ def _vertical_fit(
     max_size: int,
     line_spacing: float,
 ) -> tuple[ImageFont.ImageFont, list[list[str]], bool, int]:
-    characters = list(text.replace("\n", ""))
+    characters = list(verticalize_punctuation(text).replace("\n", ""))
     chosen: tuple[ImageFont.ImageFont, list[list[str]], bool, int] | None = None
     for size in range(max_size, min_size - 1, -1):
         font = _load_font(font_path, size, font_family)
@@ -407,8 +444,12 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
             for character in column:
                 box = draw.textbbox((0, 0), character, font=font, stroke_width=stroke_width)
                 glyph_width = box[2] - box[0]
+                if character in _HANGING_PUNCTUATION:
+                    glyph_x = x + max(0, cell - glyph_width)
+                else:
+                    glyph_x = x + max(0, (cell - glyph_width) / 2)
                 draw.text(
-                    (x + max(0, (cell - glyph_width) / 2), y),
+                    (glyph_x, y),
                     character,
                     font=font,
                     fill=fill,

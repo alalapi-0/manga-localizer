@@ -131,7 +131,8 @@ Semantic Versioning.
 - Round 16 persists typesetting overflow IDs for workbench review, highlights overflowing boxes, and
   adds Shift+arrow skip of already-checked pages. Overflow is not an export hard gate. Local gates
   passed 2 launcher tests, 219 backend tests, and 97 frontend tests plus the production build. The
-  release audit scanned 128 candidate files and 435 historical blobs.
+  release audit scanned 128 candidate files and 435 historical blobs. GitHub CI run
+  `31860160644` passed on `20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b`.
 
 ### Known limitations
 

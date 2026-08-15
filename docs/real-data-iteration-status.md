@@ -310,3 +310,4 @@ pages. Those files remain `detector-draft` until human review.
   reviewed pages. Overflow remains a review hint, not an export hard gate. This does not complete the
   remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 219 backend tests,
   and 97 frontend tests. The release audit scanned 128 candidate files and 435 historical blobs.
+  GitHub CI run `31860160644` passed at `20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b`.

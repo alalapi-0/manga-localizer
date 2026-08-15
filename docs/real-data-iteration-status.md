@@ -527,5 +527,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 44:** under **失败 / 不可用**, **← / →** open the matching inspector for that page's failed
   stage. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed
   2 launcher tests and frontend lint/typecheck/139 tests/build. The release audit scanned 128
-  candidate files and 806 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
-  after push.
+  candidate files and 806 historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31889225201` passed at `17e21f25e73a76d6b421993b60476218c92557b7`.

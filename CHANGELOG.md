@@ -295,7 +295,7 @@ Semantic Versioning.
 - Round 44 opens the matching inspector when **← / →** move through the **失败 / 不可用** list. Local
   gates passed 2 launcher tests and frontend lint/typecheck/139 tests plus the production build. The
   release audit scanned 128 candidate files and 806 historical blobs. Backend was unchanged from
-  Round 31. GitHub CI is pending after push.
+  Round 31. GitHub CI run `31889225201` passed on `17e21f25e73a76d6b421993b60476218c92557b7`.
 
 ### Known limitations
 

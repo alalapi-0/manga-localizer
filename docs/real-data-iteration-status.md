@@ -52,6 +52,8 @@ Last updated: 2026-08-15
   does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 21 — typesetting inspector can rerun Pillow typesetting for the selected box only. This does
   not complete the remaining 112/130 clean-plate visual reviews.
+- Round 22 — typeset jobs overlay requested region IDs onto the last typeset plate. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -361,5 +363,6 @@ pages. Those files remain `detector-draft` until human review.
   fragment-cluster mates) then redrawing only that overlay. Translation and typography edits keep the
   current inpaint plate. Geometry, mask, or trust edits still rebuild repair. This does not complete
   the remaining 112/130 clean-plate visual reviews. Local gates passed backend Ruff lint/format and
-  228 pytest cases. The release audit scanned 128 candidate files and 544 historical blobs. Frontend
-  was unchanged from Round 21. Remote CI is pending.
+  229 pytest cases. The release audit scanned 128 candidate files and 544 historical blobs. Frontend
+  was unchanged from Round 21.
+  GitHub CI run `31878242652` passed at `df15d7c6d0ae86d1189b3a3de081a1777046b739`.

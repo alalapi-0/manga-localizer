@@ -22,9 +22,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 Round 22 honors typeset `regionIds` on the worker so inspector actions actually overlay selected
 boxes on the last typeset plate. Translation and typography edits keep a current inpaint plate;
 geometry/mask/trust edits still rebuild repair. The work is on `agent/manga-round7-governance-20260812`
-through draft PR #3. Round 21 (`59a821b`, CI `31876680453`) remains the per-region inspector control.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+through draft PR #3. The Round 22 candidate is `df15d7c6d0ae86d1189b3a3de081a1777046b739` with GitHub
+CI run `31878242652` green. Round 21 remains the per-region inspector control. Round 8 remains 18/130
+explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains active.
+No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -151,7 +152,7 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
 - [x] Round 21: per-region typeset rerun from the typesetting inspector, with public regression,
   and complete CI.
 - [x] Round 22: worker overlay of selected typeset region IDs, keeping untouched boxes and overflow
-  IDs, with public regression. Remote CI for this round is still pending.
+  IDs, with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -301,11 +302,14 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `59a821b7707f19b8a8d2109c150b8e941981c895`. Backend Ruff lint/format, 224 pytest cases, and the
   release audit passed. Frontend lint/typecheck/102 tests/build passed. Both Playwright Chromium
   journeys passed.
-- Round 22 local verification passed backend Ruff lint/format and 228 pytest cases, plus the release
+- Round 22 local verification passed backend Ruff lint/format and 229 pytest cases, plus the release
   audit over 128 candidate files and 544 historical blobs. Frontend was unchanged from Round 21.
   Playwright discovers both Chromium journeys; this environment lacks Playwright Chromium revision
-  1234, so live browser evidence remains the GitHub e2e job after push. Remote CI for Round 22 is
-  pending.
+  1234, so live browser evidence remains the GitHub e2e job after push.
+- Round 22 authoritative remote verification: GitHub CI run `31878242652` passed at
+  `df15d7c6d0ae86d1189b3a3de081a1777046b739`. Backend Ruff lint/format, 229 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/102 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

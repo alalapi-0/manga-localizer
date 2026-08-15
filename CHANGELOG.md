@@ -169,9 +169,10 @@ Semantic Versioning.
   `59a821b7707f19b8a8d2109c150b8e941981c895`.
 - Round 22 overlays Pillow typesetting for requested region IDs onto the last typeset plate, expands
   fragment-cluster mates, and keeps overflow IDs for untouched boxes. Translation and typography edits
-  no longer discard a current inpaint plate. Local gates passed backend Ruff lint/format and 228
+  no longer discard a current inpaint plate. Local gates passed backend Ruff lint/format and 229
   pytest cases. The release audit scanned 128 candidate files and 544 historical blobs. Frontend was
-  unchanged from Round 21.
+  unchanged from Round 21. GitHub CI run `31878242652` passed on
+  `df15d7c6d0ae86d1189b3a3de081a1777046b739`.
 
 ### Known limitations
 

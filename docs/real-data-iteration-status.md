@@ -82,6 +82,8 @@ Last updated: 2026-08-15
   not complete the remaining 112/130 clean-plate visual reviews.
 - Round 35 — sidebar overflow skip and **⌥⇧← / ⌥⇧→** jump to overflowing pages and frame their
   overflow boxes. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 36 — clicking a job-queue item opens that page and frames overlay or leftover overflow boxes.
+  This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -463,3 +465,8 @@ pages. Those files remain `detector-draft` until human review.
   gates passed 2 launcher tests and frontend lint/typecheck/121 tests/build. The release audit
   scanned 128 candidate files and 698 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31884703654` passed at `9005872fd41028d4c1f6eab81d9e80b8c25e267d`.
+- **Round 36:** clicking a job-queue item opens that page, frames overlay or leftover overflow boxes,
+  and switches completed inpaint or preprocess items to the matching preview. This does not complete
+  the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/125 tests/build. The release audit scanned 128 candidate files and 712 historical
+  blobs. Backend was unchanged from Round 31. Remote CI is pending.

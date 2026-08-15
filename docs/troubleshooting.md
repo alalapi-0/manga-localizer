@@ -35,7 +35,8 @@ press **T** again. **选中溢出框** and **打开** a numbered overflow box al
 open the typesetting inspector. The canvas also frames those boxes after compare splits the view. **适窗** or
 **F** returns to the whole page. A full-page typeset still selects remaining overflowing boxes. The job queue then
 shows whether that run overlaid selected boxes or
-redrew the whole page. When a typeset job for the current page finishes, the canvas switches to
+redrew the whole page. Click a queue item to open that page; overlay items select and frame the boxes
+just redrawn, and leftover overflow is framed after a full-page typeset. When a typeset job for the current page finishes, the canvas switches to
 **成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can
 resize, refit, or press **⇧T** without hunting for them. The canvas also opens **对比** so the original
 and result sit side by side; press **B** to close it. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded

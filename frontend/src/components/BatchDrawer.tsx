@@ -81,6 +81,7 @@ function capabilityForKind(
 
 function JobCard({ job }: { job: Job }) {
   const runJobAction = useWorkbenchStore((state) => state.runJobAction);
+  const openJobItem = useWorkbenchStore((state) => state.openJobItem);
   const images = useWorkbenchStore((state) => state.images);
   const value = Math.max(0, Math.min(100, percent(job)));
   const repaired = job.kind === 'inpaint'
@@ -131,9 +132,22 @@ function JobCard({ job }: { job: Job }) {
         <details>
           <summary>查看 {job.items.length} 个队列项{displayedItems.length < job.items.length ? `（显示 ${displayedItems.length}）` : ''}</summary>
           <div className="job-items">
-            {displayedItems.map((item) => (
-              <div key={item.id}><span>{images.find((image) => image.id === item.imageId)?.relativePath ?? item.label}</span><em>{statusLabels[item.status]}</em>{item.error ? <small>{item.error}</small> : null}</div>
-            ))}
+            {displayedItems.map((item) => {
+              const path = images.find((image) => image.id === item.imageId)?.relativePath ?? item.label;
+              return (
+                <button
+                  aria-label={`打开队列项 ${path}`}
+                  disabled={!item.imageId}
+                  key={item.id}
+                  onClick={() => void openJobItem(job.id, item.id)}
+                  type="button"
+                >
+                  <span>{path}</span>
+                  <em>{statusLabels[item.status]}</em>
+                  {item.error ? <small>{item.error}</small> : null}
+                </button>
+              );
+            })}
           </div>
         </details>
       ) : null}

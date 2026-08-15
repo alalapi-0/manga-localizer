@@ -1055,6 +1055,128 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('opens a typeset queue item and frames overlay boxes', async () => {
+    const overlay = regionFixture('region-9', { imageId: 'image-2' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-8'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      canvasMode: 'original',
+      rightTab: 'text',
+      regionsByImage: { ...state.regionsByImage, 'image-2': [overlay] },
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: {
+            partialTypeset: true,
+            overlayRegionCount: 1,
+            overlayRegionIds: ['region-9'],
+          },
+        }],
+      })],
+    }));
+
+    expect(await useWorkbenchStore.getState().openJobItem('job-typeset', 'item-typeset')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      selectedRegionIds: ['region-9'],
+      rightTab: 'typesetting',
+      canvasMode: 'typeset',
+      focusRegionIds: ['region-9'],
+    });
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+
+  it('opens a full-page typeset queue item and frames leftover overflow', async () => {
+    const overflow = regionFixture('region-8', { imageId: 'image-2' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-8'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      canvasMode: 'original',
+      regionsByImage: { ...state.regionsByImage, 'image-2': [overflow] },
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: { partialTypeset: false, overlayRegionCount: 0, overlayRegionIds: [] },
+        }],
+      })],
+    }));
+
+    expect(await useWorkbenchStore.getState().openJobItem('job-typeset', 'item-typeset')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      selectedRegionIds: ['region-8'],
+      rightTab: 'typesetting',
+      canvasMode: 'typeset',
+      focusRegionIds: ['region-8'],
+    });
+  });
+
+  it('opens an inpaint queue item on the erased preview', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, inpaint: 'done' },
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'text',
+      showMask: false,
+      jobs: [jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'completed',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+        }],
+      })],
+    });
+
+    expect(await useWorkbenchStore.getState().openJobItem('job-inpaint', 'item-inpaint')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      canvasMode: 'erased',
+      showMask: true,
+      rightTab: 'repair',
+    });
+  });
+
   it('lists overflowing region ids that still exist on the page', () => {
     const image = imageFixture('image-1', {
       status: { ...imageFixture('image-1').status, typeset: 'done' },

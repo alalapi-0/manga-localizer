@@ -165,6 +165,7 @@ interface WorkbenchState {
   ) => Promise<boolean>;
   refreshJobs: () => Promise<void>;
   runJobAction: (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'retry') => Promise<void>;
+  openJobItem: (jobId: string, itemId: string) => Promise<boolean>;
   dismissError: () => void;
 }
 
@@ -2342,6 +2343,43 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }
   },
 
+  openJobItem: async (jobId, itemId) => {
+    const job = get().jobs.find((entry) => entry.id === jobId);
+    const item = job?.items.find((entry) => entry.id === itemId);
+    const imageId = item?.imageId;
+    if (!job || !item || !imageId) return false;
+    if (!(await get().selectImage(imageId))) return false;
+    const image = get().images.find((entry) => entry.id === imageId);
+    if (!image) return false;
+    const regions = get().regionsByImage[imageId] ?? [];
+    if (job.kind === 'typeset') {
+      const overlayIds = overlayRegionIdsFromJobItem(item, regions);
+      const overflowIds = overflowingRegionIds(image, regions);
+      const focusIds = overlayIds.length ? overlayIds : overflowIds;
+      set((state) => ({
+        canvasMode: image.status.typeset === 'done' ? 'typeset' : state.canvasMode,
+        rightTab: 'typesetting',
+        ...(focusIds.length
+          ? {
+            selectedRegionIds: focusIds,
+            focusRegionIds: focusIds,
+            focusRequest: state.focusRequest + 1,
+          }
+          : {}),
+      }));
+      return true;
+    }
+    if (job.kind === 'inpaint' && image.status.inpaint === 'done') {
+      set({ canvasMode: 'erased', showMask: true, rightTab: 'repair' });
+      return true;
+    }
+    if (job.kind === 'preprocess' && image.status.preprocess === 'done') {
+      set({ canvasMode: 'preprocessed' });
+      return true;
+    }
+    return true;
+  },
+
   dismissError: () => set({ globalError: '' }),
 }));
 
@@ -2391,25 +2429,32 @@ export function overflowingRegionIds(
   return image.typesetOverflowRegionIds.filter((regionId) => present.has(regionId));
 }
 
+function overlayRegionIdsFromJobItem(item: Job['items'][number], regions: Region[]): string[] {
+  if (item.output?.partialTypeset !== true) return [];
+  const overlayIds = item.output.overlayRegionIds;
+  if (!Array.isArray(overlayIds)) return [];
+  const present = new Set(regions.map((region) => region.id));
+  return [...new Set(
+    overlayIds.filter((regionId): regionId is string =>
+      typeof regionId === 'string' && present.has(regionId)
+    ),
+  )];
+}
+
 function overlayRegionIdsFromCompletedTypeset(
   jobs: Job[],
   previousJobs: Job[],
   imageId: string,
   regions: Region[],
 ): string[] {
-  const present = new Set(regions.map((region) => region.id));
   const selected: string[] = [];
   for (const job of jobs) {
     if (job.kind !== 'typeset' || job.status !== 'completed') continue;
     const previous = previousJobs.find((entry) => entry.id === job.id);
     if (!previous || previous.status === 'completed') continue;
     for (const item of job.items) {
-      if (item.imageId !== imageId || item.output?.partialTypeset !== true) continue;
-      const overlayIds = item.output.overlayRegionIds;
-      if (!Array.isArray(overlayIds)) continue;
-      for (const regionId of overlayIds) {
-        if (typeof regionId === 'string' && present.has(regionId)) selected.push(regionId);
-      }
+      if (item.imageId !== imageId) continue;
+      selected.push(...overlayRegionIdsFromJobItem(item, regions));
     }
   }
   return [...new Set(selected)];

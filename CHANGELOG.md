@@ -51,6 +51,9 @@ Semantic Versioning.
   shows the review mask, opens compare, and opens the repair inspector.
 - After a preprocess job for the current page completes, the canvas switches to the enhanced preview
   and opens original-vs-result compare.
+- Clicking a job-queue item opens that page. Overlay typeset items select and frame the redrawn boxes;
+  full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and
+  review mask; completed preprocess items open the enhanced preview.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -242,6 +245,11 @@ Semantic Versioning.
   the production build. The release audit scanned 128 candidate files and 698 historical blobs.
   Backend was unchanged from Round 31. GitHub CI run `31884703654` passed on
   `9005872fd41028d4c1f6eab81d9e80b8c25e267d`.
+- Round 36 opens a job-queue item onto its page, frames overlay or leftover overflow boxes, and
+  switches completed inpaint or preprocess items to the matching preview. Local gates passed 2
+  launcher tests and frontend lint/typecheck/125 tests plus the production build. The release audit
+  scanned 128 candidate files and 712 historical blobs. Backend was unchanged from Round 31. Remote
+  CI is pending.
 
 ### Known limitations
 

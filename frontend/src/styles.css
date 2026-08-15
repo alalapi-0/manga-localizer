@@ -422,7 +422,30 @@ h1, h2, h3, p { margin: 0; }
 .job-card details { color: var(--muted); font-size: 8px; }
 .job-card summary { cursor: pointer; }
 .job-items { display: flex; flex-direction: column; gap: 3px; padding-top: 6px; }
-.job-items > div { display: grid; grid-template-columns: 1fr auto; gap: 5px; }
+.job-items > button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px;
+  width: 100%;
+  margin: 0;
+  padding: 4px 6px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.job-items > button:hover:not(:disabled),
+.job-items > button:focus-visible {
+  background: var(--surface-3);
+  border-color: var(--border);
+}
+.job-items > button:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
 .job-items em { font-style: normal; }
 .job-items small { grid-column: 1 / -1; color: var(--red); }
 .job-card footer { display: flex; gap: 9px; }

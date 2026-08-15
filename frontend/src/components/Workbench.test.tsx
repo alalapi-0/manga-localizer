@@ -993,6 +993,53 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('整页重排 1 页')).toBeInTheDocument();
   });
 
+  it('opens a queue item page from the job card', async () => {
+    const user = userEvent.setup();
+    const overlay = regionFixture('region-9', { imageId: 'image-2' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      regionsByImage: { ...state.regionsByImage, 'image-2': [overlay] },
+      jobs: [jobFixture({
+        id: 'job-typeset-overlay',
+        kind: 'typeset',
+        status: 'completed',
+        total: 1,
+        completed: 1,
+        progress: 1,
+        items: [{
+          id: 'item-typeset-page2',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: { partialTypeset: true, overlayRegionCount: 1, overlayRegionIds: ['region-9'] },
+        }],
+      })],
+    }));
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByText('查看 1 个队列项'));
+    await user.click(screen.getByRole('button', { name: '打开队列项 第二话/image-2.png' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-2',
+        selectedRegionIds: ['region-9'],
+        rightTab: 'typesetting',
+        canvasMode: 'typeset',
+        focusRegionIds: ['region-9'],
+      });
+    });
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+
   it('keeps unavailable generated previews disabled and falls back to the original', () => {
     seedWorkbench();
     useWorkbenchStore.setState({ canvasMode: 'typeset' });

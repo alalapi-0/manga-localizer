@@ -57,7 +57,13 @@ function ImageRow({ image }: { image: ImageAsset }) {
         />
       </label>
       <div className="image-row__body">
-        <button className="image-row__main" onClick={() => void selectImage(image.id)} type="button">
+        <button
+          className="image-row__main"
+          onClick={() => void selectImage(image.id, {
+            focusFailure: reviewState === 'failed' || reviewState === 'unavailable',
+          })}
+          type="button"
+        >
           <span className="thumbnail-wrap">
             <img alt="" loading="lazy" src={api.thumbnailUrl(image.id)} />
             <span>{image.regionCount}</span>

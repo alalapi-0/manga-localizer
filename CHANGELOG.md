@@ -61,7 +61,7 @@ Semantic Versioning.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
   disable at its ends. Under **失败 / 不可用**, **← / →** open the matching inspector for that page's
-  failed stage.
+  failed stage. Clicking a failed or unavailable sidebar page does the same.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
@@ -296,6 +296,10 @@ Semantic Versioning.
   gates passed 2 launcher tests and frontend lint/typecheck/139 tests plus the production build. The
   release audit scanned 128 candidate files and 806 historical blobs. Backend was unchanged from
   Round 31. GitHub CI run `31889225201` passed on `17e21f25e73a76d6b421993b60476218c92557b7`.
+- Round 45 opens the matching inspector when clicking a failed or unavailable sidebar page. Local
+  gates passed 2 launcher tests and frontend lint/typecheck/141 tests plus the production build. The
+  release audit scanned 128 candidate files and 817 historical blobs. Backend was unchanged from
+  Round 31. GitHub CI is pending after push.
 
 ### Known limitations
 

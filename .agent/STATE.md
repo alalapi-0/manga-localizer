@@ -19,12 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 44 opens the matching inspector when **← / →** move through the **失败 / 不可用** sidebar list.
+Round 45 opens the matching inspector when clicking a failed or unavailable sidebar page.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
 Remote CI for Round 44 passed as run `31889225201` on `17e21f25e73a76d6b421993b60476218c92557b7`.
-Round 43 (`4c7511695ba896bfe5834620b862ac669b4e74d9`, CI `31888824260`) remains inspector retry.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 45 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -195,6 +195,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   with public regression, and complete CI.
 - [x] Round 44: open the matching inspector from failed-filter adjacent navigation, with public
   regression, and complete CI.
+- [x] Round 45: open the matching inspector when clicking a failed sidebar page, with public
+  regression. Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -542,6 +544,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `17e21f25e73a76d6b421993b60476218c92557b7`. Backend Ruff lint/format, 231 pytest cases, and the
   release audit passed. Frontend lint/typecheck/139 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 45 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 141 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 817 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 
@@ -566,6 +573,7 @@ full-book output quality.
   **← / →** follow the sidebar filter and search; under **排版溢出** they skip hidden pages and frame
   overflowing boxes. The footer counter is that visible list, and **← / →** disable at its ends.
   Under **失败 / 不可用**, **← / →** also open the matching inspector for that page's failed stage.
+  Clicking a failed or unavailable sidebar page does the same.
   **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
   **G** and the canvas **框住** control frame the current selection.
   Clicking a job-queue item opens that page and the matching inspector, then closes the batch drawer.

@@ -1079,6 +1079,24 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('opens the matching inspector when selecting a failed page', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ rightTab: 'text' });
+    expect(await useWorkbenchStore.getState().selectImage('image-2', { focusFailure: true })).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      rightTab: 'repair',
+    });
+  });
+
   it('steps through visible overflowing pages with adjacent navigation', async () => {
     const overflow = regionFixture('region-9', { imageId: 'image-3' });
     seedWorkbench({

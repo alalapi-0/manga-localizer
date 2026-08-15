@@ -42,6 +42,31 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-2');
   });
 
+  it('opens the matching inspector when clicking a failed sidebar page', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ rightTab: 'text' });
+    render(<App />);
+
+    await user.click(screen.getByText('image-2.png'));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-2',
+        rightTab: 'repair',
+      });
+    });
+    expect(screen.getByRole('tab', { name: '修复' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('擦字修复失败')).toBeInTheDocument();
+  });
+
   it('filters overflowing pages and shows a page-level overflow warning', async () => {
     const user = userEvent.setup();
     seedWorkbench({

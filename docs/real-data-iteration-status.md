@@ -329,4 +329,5 @@ pages. Those files remain `detector-draft` until human review.
   the cell. Horizontal layouts keep authored punctuation. Stored translation text is not rewritten.
   This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2
   launcher tests and 222 backend tests. The release audit scanned 128 candidate files and 492
-  historical blobs. Frontend was unchanged from Round 17. Remote CI is pending.
+  historical blobs. Frontend was unchanged from Round 17.
+  GitHub CI run `31874726926` passed at `41545b8e453aaebab9325ab253f9754168712acc`.

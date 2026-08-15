@@ -144,6 +144,10 @@ Semantic Versioning.
   and 99 frontend tests plus the production build. The release audit scanned 128 candidate files and
   467 historical blobs. GitHub CI run `31861476315` passed on
   `302837fa3403e79a2eb51ab5274ecc85eb56741e`.
+- Round 18 maps CJK punctuation to vertical presentation forms and hangs comma/period glyphs. Horizontal
+  layouts keep authored punctuation. Local gates passed 2 launcher tests and 222 backend tests; frontend
+  was unchanged from Round 17. The release audit scanned 128 candidate files and 492 historical blobs.
+  GitHub CI run `31874726926` passed on `41545b8e453aaebab9325ab253f9754168712acc`.
 
 ### Known limitations
 

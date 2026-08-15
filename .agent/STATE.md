@@ -20,11 +20,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 20 adds overflow-only typesetting from the workbench inspector on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. Editors can select overflowing boxes or
-rerun Pillow typesetting for those region IDs without touching the rest of the page. Round 19 fragment
-clustering remains in place (`7dfccd3`, CI `31875271369`). Round 8 remains 18/130 explicit visual
-reviews; detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag,
-release, or deployment has occurred.
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 20 feature commit is
+`d02e873fd3860290ebf15bbb98586079ab40b1be` with GitHub CI run `31876251138` green. Editors can select
+overflowing boxes or rerun Pillow typesetting for those region IDs without touching the rest of the
+page. Round 19 fragment clustering remains in place. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -147,7 +148,7 @@ release, or deployment has occurred.
 - [x] Round 19: adjacent small-box fragment clustering for typesetting, with public regression,
   and complete CI.
 - [x] Round 20: overflow-only typesetting and overflow-box selection in the inspector, with public
-  regression. Remote CI for this round is still pending.
+  regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -283,7 +284,11 @@ release, or deployment has occurred.
   and the production build; release audit over 128 candidate files plus 518 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 19 (224 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser evidence
-  remains the GitHub e2e job after push. Remote CI for Round 20 is pending.
+  remains the GitHub e2e job after push.
+- Round 20 authoritative remote verification: GitHub CI run `31876251138` passed at
+  `d02e873fd3860290ebf15bbb98586079ab40b1be`. Backend Ruff lint/format, 224 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/101 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

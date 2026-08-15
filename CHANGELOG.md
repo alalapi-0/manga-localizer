@@ -157,6 +157,10 @@ Semantic Versioning.
   tests and 224 backend tests; frontend was unchanged from Round 17. The release audit scanned 128
   candidate files and 505 historical blobs. GitHub CI run `31875271369` passed on
   `7dfccd324d29ab7c33055c70d7140e318c2b7cc7`.
+- Round 20 adds inspector actions to select overflowing boxes or rerun Pillow typesetting for those
+  region IDs only. Local gates passed 2 launcher tests and frontend lint/typecheck/101 tests plus the
+  production build. The release audit scanned 128 candidate files and 518 historical blobs. GitHub CI
+  run `31876251138` passed on `d02e873fd3860290ebf15bbb98586079ab40b1be`.
 
 ### Known limitations
 

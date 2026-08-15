@@ -149,6 +149,7 @@ function useGlobalShortcuts() {
         case 'm': state.setCanvasTool('mask-brush'); break;
         case 'e': state.setCanvasTool('mask-eraser'); break;
         case 'f': state.requestFit(); break;
+        case 'g': state.focusSelectedRegions(); break;
         case 'b': state.toggleCompareMode(); break;
         case '1': state.setCanvasMode('original'); break;
         case '2': state.setCanvasMode('preprocessed'); break;

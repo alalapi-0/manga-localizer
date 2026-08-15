@@ -58,6 +58,8 @@ Semantic Versioning.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
+- **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
+  whole page.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -267,6 +269,10 @@ Semantic Versioning.
   2 launcher tests and frontend lint/typecheck/130 tests plus the production build. The release audit
   scanned 128 candidate files and 747 historical blobs. Backend was unchanged from Round 31. GitHub
   CI run `31886262454` passed on `d8e7c05467ebf9359f61defd534c526c9e02fc21`.
+- Round 40 frames the current selection from **G** and the canvas **框住** control. Local gates passed
+  2 launcher tests and frontend lint/typecheck/132 tests plus the production build. The release audit
+  scanned 128 candidate files and 758 historical blobs. Backend was unchanged from Round 31. Remote
+  CI is pending.
 
 ### Known limitations
 

@@ -149,6 +149,7 @@ interface WorkbenchState {
   setMaskBrushRadius: (value: number) => void;
   requestFit: () => void;
   focusRegions: (regionIds: string[]) => void;
+  focusSelectedRegions: () => void;
   focusActiveOverflow: () => void;
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
@@ -2018,6 +2019,9 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       focusRegionIds: ids,
       focusRequest: state.focusRequest + 1,
     }));
+  },
+  focusSelectedRegions: () => {
+    get().focusRegions(get().selectedRegionIds);
   },
   focusActiveOverflow: () => {
     const state = get();

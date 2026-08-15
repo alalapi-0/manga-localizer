@@ -111,6 +111,24 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('frames the selection from G and the canvas toolbar', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ selectedRegionIds: ['region-2'] });
+    render(<App />);
+
+    fireEvent.keyDown(window, { key: 'g' });
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    const firstFocus = useWorkbenchStore.getState().focusRequest;
+    expect(firstFocus).toBeGreaterThan(0);
+
+    fireEvent.keyDown(window, { key: 'f' });
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
+
+    await user.click(screen.getByRole('button', { name: '框住所选' }));
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(firstFocus);
+  });
+
   it('skips hidden pages when using next-image under the overflow filter', async () => {
     const user = userEvent.setup();
     const overflow = regionFixture('region-9', { imageId: 'image-3' });

@@ -722,6 +722,7 @@ function CanvasToolbar({
   const setShowMask = useWorkbenchStore((state) => state.setShowMask);
   const setMaskBrushRadius = useWorkbenchStore((state) => state.setMaskBrushRadius);
   const requestFit = useWorkbenchStore((state) => state.requestFit);
+  const focusSelectedRegions = useWorkbenchStore((state) => state.focusSelectedRegions);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
   const reviewActiveImageStage = useWorkbenchStore((state) => state.reviewActiveImageStage);
   const selectInpaintCandidate = useWorkbenchStore((state) => state.selectInpaintCandidate);
@@ -867,6 +868,14 @@ function CanvasToolbar({
       <div className="tool-buttons" aria-label="缩放">
         <IconButton aria-label="缩小" onClick={() => onZoom(-1)}>−</IconButton>
         <IconButton aria-label="适合窗口" onClick={requestFit}>适窗</IconButton>
+        <IconButton
+          aria-label="框住所选"
+          disabled={!selectedRegionIds.length}
+          onClick={focusSelectedRegions}
+          title="框住所选文本框 G"
+        >
+          框住
+        </IconButton>
         <IconButton aria-label="放大" onClick={() => onZoom(1)}>＋</IconButton>
       </div>
       <span className="toolbar-spacer" />

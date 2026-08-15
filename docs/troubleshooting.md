@@ -47,7 +47,7 @@ skips pages already marked reviewed so you can keep moving through a book. Filte
 The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame
 them in the typesetting inspector. **⌥↓ / ⌥↑** and the inspector region list also frame the selected
-box. Vertical balloons keep
+box. Press **G** or **框住** to frame the current selection; **适窗** or **F** returns to the whole page. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical
 presentation forms and hangs comma/period glyphs. Horizontal balloons leave that text unchanged.
 Adjacent small OCR fragments that share direction and sit close together can share one typeset run;

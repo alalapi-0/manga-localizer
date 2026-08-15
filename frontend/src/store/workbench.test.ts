@@ -1259,6 +1259,15 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
   });
 
+  it('frames the current selection', () => {
+    seedWorkbench({ selectedRegionIds: ['region-2'] });
+    useWorkbenchStore.getState().focusSelectedRegions();
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+    useWorkbenchStore.getState().focusSelectedRegions();
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(1);
+  });
+
   it('merges selected regions, then undo restores the original boxes', () => {
     const polygon = [[100, 120], [320, 120], [320, 240], [100, 240]] as Array<[number, number]>;
     seedWorkbench({

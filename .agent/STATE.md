@@ -22,7 +22,8 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 Round 31 serves generated preprocess, inpaint, typeset, and mask images with
 `Cache-Control: private, no-store`, and the canvas fetch uses `cache: 'no-store'` so an overlay
 typeset does not keep showing the previous plate. The work is on
-`agent/manga-round7-governance-20260812` through draft PR #3. Round 30
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 31 candidate is
+`656e3650b1fc45fc9c68febd3fcc6bc077854f55` with GitHub CI run `31882562724` green. Round 30
 (`ca7bc89134a1f98a8f7536cad7539d18136bf6b0`, CI `31882096845`) remains the visual-stage compare
 switch. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
 full product goal remains active. No merge, tag, release, or deployment has occurred.
@@ -169,8 +170,7 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   public regression, and complete CI.
 - [x] Round 30: open original-vs-result compare when a visual-stage job for the current page completes,
   with public regression, and complete CI.
-- [x] Round 31: forbid HTTP caching of generated preview images, with public regression. Remote CI
-  for this round is still pending.
+- [x] Round 31: forbid HTTP caching of generated preview images, with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -396,7 +396,11 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   frontend ESLint, TypeScript, 116 Vitest cases, and the production build; release audit over 128
   candidate files plus 650 historical blobs; and `git diff --check`. Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
-  evidence remains the GitHub e2e job after push. Remote CI for Round 31 is pending.
+  evidence remains the GitHub e2e job after push.
+- Round 31 authoritative remote verification: GitHub CI run `31882562724` passed at
+  `656e3650b1fc45fc9c68febd3fcc6bc077854f55`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/116 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

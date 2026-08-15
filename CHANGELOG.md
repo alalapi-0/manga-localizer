@@ -220,7 +220,8 @@ Semantic Versioning.
   `Cache-Control: private, no-store`. The canvas fetch uses `cache: 'no-store'` so overlay typesetting
   does not keep a cached previous plate. Local gates passed 2 launcher tests, backend lint/format/231
   pytest, frontend lint/typecheck/116 tests plus the production build. The release audit scanned 128
-  candidate files and 650 historical blobs. Remote CI is pending.
+  candidate files and 650 historical blobs. GitHub CI run `31882562724` passed on
+  `656e3650b1fc45fc9c68febd3fcc6bc077854f55`.
 
 ### Known limitations
 

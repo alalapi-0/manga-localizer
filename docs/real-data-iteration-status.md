@@ -431,4 +431,5 @@ pages. Those files remain `detector-draft` until human review.
   `Cache-Control: private, no-store`, and the canvas fetch uses `cache: 'no-store'`. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests,
   backend lint/format/231 pytest, and frontend lint/typecheck/116 tests/build. The release audit
-  scanned 128 candidate files and 650 historical blobs. Remote CI is pending.
+  scanned 128 candidate files and 650 historical blobs.
+  GitHub CI run `31882562724` passed at `656e3650b1fc45fc9c68febd3fcc6bc077854f55`.

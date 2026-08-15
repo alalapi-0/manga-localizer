@@ -319,3 +319,4 @@ pages. Those files remain `detector-draft` until human review.
   project default; it never auto-applies a book-wide assumption. This does not complete the remaining
   112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 221 backend tests, and 99
   frontend tests. The release audit scanned 128 candidate files and 467 historical blobs.
+  GitHub CI run `31861476315` passed at `302837fa3403e79a2eb51ab5274ecc85eb56741e`.

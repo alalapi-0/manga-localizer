@@ -20,12 +20,13 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 17 delivers per-page preprocessing profile suggestions on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. Import samples source-image size, contrast,
-and sharpness, stores a non-binding profile hint, and the workbench can process the current page with
-that profile or adopt it as the project default. It never auto-applies a book-wide assumption.
-`visual-quality` remains a manual choice. Round 16 overflow review remains in place. Round 8 remains
-18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains
-active. No merge, tag, release, or deployment has occurred.
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 17 feature commit is
+`302837fa3403e79a2eb51ab5274ecc85eb56741e` with GitHub CI run `31861476315` green. Import samples
+source-image size, contrast, and sharpness, stores a non-binding profile hint, and the workbench can
+process the current page with that profile or adopt it as the project default. It never auto-applies a
+book-wide assumption. `visual-quality` remains a manual choice. Round 16 overflow review remains in
+place. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -142,7 +143,7 @@ active. No merge, tag, release, or deployment has occurred.
 - [x] Round 16: persisted typesetting overflow review, unreviewed-page keyboard skip, public regression,
   and complete CI.
 - [x] Round 17: per-page preprocessing profile suggestions, apply-to-page and adopt-as-default actions,
-  public regression, and local gates. Remote CI is pending after push.
+  public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -252,6 +253,10 @@ active. No merge, tag, release, or deployment has occurred.
   files plus 467 historical blobs; `uv lock --check --project backend`; compileall; and `git diff --check`.
   Playwright discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234,
   so live browser evidence remains the GitHub e2e job after push.
+- Round 17 authoritative remote verification: GitHub CI run `31861476315` passed at
+  `302837fa3403e79a2eb51ab5274ecc85eb56741e`. Backend Ruff lint/format, 221 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/99 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

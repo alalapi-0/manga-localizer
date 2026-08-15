@@ -136,6 +136,12 @@ Semantic Versioning.
   passed 2 launcher tests, 219 backend tests, and 97 frontend tests plus the production build. The
   release audit scanned 128 candidate files and 435 historical blobs. GitHub CI run
   `31860160644` passed on `20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b`.
+- Round 17 adds per-page preprocessing profile suggestions from local size, contrast, and sharpness.
+  The workbench can process the current page with that profile or adopt it as the project default; it
+  never auto-applies a book-wide assumption. Local gates passed 2 launcher tests, 221 backend tests,
+  and 99 frontend tests plus the production build. The release audit scanned 128 candidate files and
+  467 historical blobs. GitHub CI run `31861476315` passed on
+  `302837fa3403e79a2eb51ab5274ecc85eb56741e`.
 
 ### Known limitations
 

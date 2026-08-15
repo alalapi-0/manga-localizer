@@ -113,7 +113,7 @@ interface WorkbenchState {
   importFiles: (files: File[]) => Promise<boolean>;
   loadRegions: (imageId: string, force?: boolean) => Promise<boolean>;
   reloadActiveImage: () => Promise<void>;
-  selectImage: (imageId: string, options?: { focusOverflow?: boolean }) => Promise<boolean>;
+  selectImage: (imageId: string, options?: { focusOverflow?: boolean; focusFailure?: boolean }) => Promise<boolean>;
   navigateImage: (direction: -1 | 1, target?: ImageNavigationTarget) => Promise<boolean>;
   toggleImageSelection: (imageId: string, additive?: boolean) => void;
   selectAllVisibleImages: (imageIds: string[]) => void;
@@ -151,6 +151,7 @@ interface WorkbenchState {
   focusRegions: (regionIds: string[]) => void;
   focusSelectedRegions: () => void;
   focusActiveOverflow: () => void;
+  focusActiveFailure: () => void;
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
   setDrawerOpen: (value: boolean) => void;
@@ -1389,6 +1390,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       await get().loadRegions(imageId);
     }
     if (options?.focusOverflow) get().focusActiveOverflow();
+    if (options?.focusFailure) get().focusActiveFailure();
     return true;
   },
 
@@ -1403,6 +1405,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       if (!nextImage || nextImage.id === activeImageId) return false;
       return get().selectImage(nextImage.id, {
         focusOverflow: state.imageFilter === 'overflow',
+        focusFailure: state.imageFilter === 'failed',
       });
     }
     const matches = target === 'overflow' ? imageHasTypesetOverflow : imagePageReviewPending;
@@ -2053,6 +2056,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       canvasMode: image?.status.typeset === 'done' ? 'typeset' : state.canvasMode,
       focusRegionIds: overflowIds,
       focusRequest: state.focusRequest + 1,
+    });
+  },
+  focusActiveFailure: () => {
+    const failure = latestPageProcessingError(activeImage(get()));
+    if (!failure) return;
+    set({
+      rightTab: failure.kind ? inspectorTabForJobKind(failure.kind) : 'text',
     });
   },
   setRightTab: (rightTab) => set({ rightTab }),

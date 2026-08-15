@@ -201,6 +201,39 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByRole('button', { name: '下一张图' })).toBeDisabled();
   });
 
+  it('opens the matching inspector when using next-image under the failed filter', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-3').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ imageFilter: 'failed', rightTab: 'text' });
+    render(<App />);
+
+    expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+    expect(screen.getByText('日文 OCR 失败')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '下一张图' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-3',
+        rightTab: 'repair',
+      });
+    });
+    expect(screen.getByRole('tab', { name: '修复' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('擦字修复失败')).toBeInTheDocument();
+  });
+
   it('selects overflowing boxes and queues typesetting for those region ids only', async () => {
     const user = userEvent.setup();
     const overflowing = regionFixture('region-1', {

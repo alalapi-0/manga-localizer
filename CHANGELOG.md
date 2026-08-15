@@ -60,7 +60,8 @@ Semantic Versioning.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
-  disable at its ends.
+  disable at its ends. Under **失败 / 不可用**, **← / →** open the matching inspector for that page's
+  failed stage.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
@@ -291,6 +292,10 @@ Semantic Versioning.
   Local gates passed 2 launcher tests and frontend lint/typecheck/137 tests plus the production build.
   The release audit scanned 128 candidate files and 792 historical blobs. Backend was unchanged from
   Round 31. GitHub CI run `31888824260` passed on `4c7511695ba896bfe5834620b862ac669b4e74d9`.
+- Round 44 opens the matching inspector when **← / →** move through the **失败 / 不可用** list. Local
+  gates passed 2 launcher tests and frontend lint/typecheck/139 tests plus the production build. The
+  release audit scanned 128 candidate files and 806 historical blobs. Backend was unchanged from
+  Round 31. GitHub CI is pending after push.
 
 ### Known limitations
 

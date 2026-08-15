@@ -49,6 +49,8 @@ skips pages already marked reviewed so you can keep moving through a book. Filte
 **排版溢出**, then **← / →** stay on those visible overflowing pages and frame their overflow boxes.
 The footer **可见列表** counter is that filtered list, and **← / →** disable at its first and last
 pages. Overflow-skip and unreviewed-skip still wrap the full library.
+Filter the sidebar to **失败 / 不可用**, then **← / →** stay on those pages and open the matching
+inspector for the failed stage.
 The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame
 them in the typesetting inspector. **⌥↓ / ⌥↑** and the inspector region list also frame the selected

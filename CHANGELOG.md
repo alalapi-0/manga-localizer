@@ -49,6 +49,7 @@ Semantic Versioning.
   Remaining overflowing boxes are selected and the typesetting inspector opens.
 - After an inpaint job for the current page completes, the canvas switches to the erased preview,
   shows the review mask, and opens the repair inspector.
+- After a preprocess job for the current page completes, the canvas switches to the enhanced preview.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -205,6 +206,10 @@ Semantic Versioning.
   production build. The release audit scanned 128 candidate files and 619 historical blobs. Backend
   was unchanged from Round 23. GitHub CI run `31880607541` passed on
   `48c52e1a4c24ceb9051cd3a9354e325d7ded7cb2`.
+- Round 29 switches the canvas to the enhanced preview when a preprocess job for the current page
+  completes. Local gates passed frontend lint/typecheck/115 tests plus the production build. The
+  release audit scanned 128 candidate files and 629 historical blobs. Backend was unchanged from
+  Round 23.
 
 ### Known limitations
 

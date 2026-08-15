@@ -19,13 +19,11 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 28 switches the canvas to the erased preview and shows the review mask when an inpaint job
-for the current page completes. The work is on `agent/manga-round7-governance-20260812` through draft
-PR #3. The Round 28 candidate is `48c52e1a4c24ceb9051cd3a9354e325d7ded7cb2` with GitHub CI run
-`31880607541` green. Round 27 (`ebdaae7e14c5a7359faf14ac546549250a985960`, CI `31880310109`) remains
-overflowing-box selection after typeset. Round 8 remains 18/130 explicit visual reviews; detector
-drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release, or
-deployment has occurred.
+Round 29 switches the canvas to the enhanced preview when a preprocess job for the current page
+completes. The work is on `agent/manga-round7-governance-20260812` through draft PR #3. Round 28
+(`48c52e1a4c24ceb9051cd3a9354e325d7ded7cb2`, CI `31880607541`) remains the inpaint erased-preview
+switch. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
+full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -165,6 +163,8 @@ deployment has occurred.
   regression, and complete CI.
 - [x] Round 28: switch to the erased preview and review mask when the current page's inpaint job
   completes, with public regression, and complete CI.
+- [x] Round 29: switch to the enhanced preview when the current page's preprocess job completes, with
+  public regression. Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -370,6 +370,11 @@ deployment has occurred.
   `48c52e1a4c24ceb9051cd3a9354e325d7ded7cb2`. Backend Ruff lint/format, 230 pytest cases, and the
   release audit passed. Frontend lint/typecheck/113 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 29 local verification passed frontend ESLint, TypeScript, 115 Vitest cases, and the production
+  build; release audit over 128 candidate files plus 629 historical blobs. Backend was unchanged from
+  Round 23 (230 pytest). Playwright discovers both Chromium journeys; this environment lacks Playwright
+  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push. Remote CI
+  for Round 29 is pending.
 
 ## Known limitations and blockers
 
@@ -387,7 +392,8 @@ full-book output quality.
   box on the current inpaint plate instead of dropping untouched text. When a typeset job for the
   current page completes, the canvas switches to the typeset preview. Remaining overflowing boxes are
   selected. When an inpaint job for the current page completes, the canvas switches to the erased
-  preview and shows the review mask. Widely separated or misaligned boxes still overflow independently.
+  preview and shows the review mask. When a preprocess job for the current page completes, the canvas
+  switches to the enhanced preview. Widely separated or misaligned boxes still overflow independently.
   Geometry, mask, or trust edits still rebuild inpainting.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact

@@ -1624,6 +1624,91 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().showMask).toBe(false);
   });
 
+  it('switches to the enhanced preview when a preprocess job for the active page completes', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-preprocess',
+        kind: 'preprocess',
+        status: 'running',
+        items: [{
+          id: 'item-preprocess',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-preprocess',
+        kind: 'preprocess',
+        status: 'completed',
+        items: [{
+          id: 'item-preprocess',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, preprocess: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('preprocessed');
+  });
+
+  it('does not change the canvas when a preprocess job was already complete', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-preprocess',
+        kind: 'preprocess',
+        status: 'completed',
+        items: [{
+          id: 'item-preprocess',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-preprocess',
+        kind: 'preprocess',
+        status: 'completed',
+        items: [{
+          id: 'item-preprocess',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, preprocess: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+  });
+
   it('does not change the canvas when a typeset job was already complete', async () => {
     seedWorkbench();
     useWorkbenchStore.setState({

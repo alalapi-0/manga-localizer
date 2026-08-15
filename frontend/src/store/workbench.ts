@@ -2214,6 +2214,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       );
       const completedTypesetImageIds = newlyCompletedImageIds('typeset');
       const completedInpaintImageIds = newlyCompletedImageIds('inpaint');
+      const completedPreprocessImageIds = newlyCompletedImageIds('preprocess');
       const refreshedImages = imageResponse.map((image) =>
         hydrateImage(image, project.settings),
       );
@@ -2266,6 +2267,12 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         && get().images.find((entry) => entry.id === activeImageId)?.status.inpaint === 'done'
       ) {
         set({ canvasMode: 'erased', showMask: true, rightTab: 'repair' });
+      } else if (
+        activeImageId
+        && completedPreprocessImageIds.has(activeImageId)
+        && get().images.find((entry) => entry.id === activeImageId)?.status.preprocess === 'done'
+      ) {
+        set({ canvasMode: 'preprocessed' });
       }
     } catch (error) {
       set({ globalError: errorMessage(error) });

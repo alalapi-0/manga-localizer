@@ -71,6 +71,7 @@ not inferred from this tracked checklist.
 - [x] Switch the canvas to the typeset preview when a typeset job for the current page completes
 - [x] Select overflowing boxes when a typeset job for the current page completes
 - [x] Switch the canvas to the erased preview and review mask when an inpaint job for the current page completes
+- [x] Switch the canvas to the enhanced preview when a preprocess job for the current page completes
 
 ## Explicitly deferred
 

@@ -67,6 +67,8 @@ Last updated: 2026-08-15
 - Round 28 — the canvas switches to the erased preview and shows the review mask when an inpaint job
   for the current page completes. This does not complete the remaining 112/130 clean-plate visual
   reviews.
+- Round 29 — the canvas switches to the enhanced preview when a preprocess job for the current page
+  completes. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -410,3 +412,7 @@ pages. Those files remain `detector-draft` until human review.
   reviews. Local gates passed frontend lint/typecheck/113 tests/build. The release audit scanned 128
   candidate files and 619 historical blobs. Backend was unchanged from Round 23.
   GitHub CI run `31880607541` passed at `48c52e1a4c24ceb9051cd3a9354e325d7ded7cb2`.
+- **Round 29:** the canvas switches to the enhanced preview when a preprocess job for the current
+  page completes. This does not complete the remaining 112/130 clean-plate visual reviews. Local
+  gates passed frontend lint/typecheck/115 tests/build. The release audit scanned 128 candidate files
+  and 629 historical blobs. Backend was unchanged from Round 23. Remote CI is pending.

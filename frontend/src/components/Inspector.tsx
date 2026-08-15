@@ -712,7 +712,7 @@ function PreprocessSuggestionNotice() {
       <span>
         {reasons || '按本页尺寸和采样统计给出，不会自动套用到整本。'}
         {suggestion.metrics.sampled ? '' : ' 完整对比度/锐度统计会在导入时写入。'}
-        {' '}处理后可在画布对比原图与增强结果。
+        {' '}处理完成后画布会切到增强预览，便于对比原图。
       </span>
       <div className="notice__actions">
         <button className="button button--compact" onClick={applyToPage} type="button">

@@ -8,6 +8,7 @@ import {
   activeImage,
   activeRegions,
   hasGeneratedPreview,
+  regionHasTypesetOverflow,
   useWorkbenchStore,
 } from '../store/workbench';
 import type {
@@ -175,9 +176,12 @@ function RegionShape({
     }
   }, [editable, selected]);
 
+  const overflowing = regionHasTypesetOverflow(image, region.id);
   const stroke = selected
     ? '#5f9dff'
-    : regionStatusStroke(region);
+    : overflowing
+      ? '#ff6b6b'
+      : regionStatusStroke(region);
   const confidence = region.confidence === null
     ? '—'
     : `${Math.round((region.confidence <= 1 ? region.confidence * 100 : region.confidence))}%`;
@@ -205,7 +209,7 @@ function RegionShape({
         fill={selected ? 'rgba(95, 157, 255, 0.14)' : 'rgba(244, 185, 87, 0.06)'}
         stroke={stroke}
         strokeWidth={Math.max(1, 1.5 / viewportScale)}
-        dash={region.ignored ? [8 / viewportScale, 5 / viewportScale] : undefined}
+        dash={region.ignored ? [8 / viewportScale, 5 / viewportScale] : overflowing ? [6 / viewportScale, 4 / viewportScale] : undefined}
         draggable={editable}
         onClick={select}
         onTap={select}
@@ -241,7 +245,7 @@ function RegionShape({
           updateRegion(region.id, geometry);
         }}
       />
-      {(showOrder || showConfidence) ? (
+      {(showOrder || showConfidence || overflowing) ? (
         <Label
           x={region.x}
           y={region.y}
@@ -256,7 +260,7 @@ function RegionShape({
             fontSize={11}
             fontStyle="bold"
             padding={4}
-            text={`${showOrder ? `#${region.order}` : ''}${showOrder && showConfidence ? ' · ' : ''}${showConfidence ? confidence : ''}`}
+            text={`${showOrder ? `#${region.order}` : ''}${overflowing ? ' 溢出' : ''}${showOrder && showConfidence ? ' · ' : ''}${showConfidence ? confidence : ''}`}
           />
         </Label>
       ) : null}

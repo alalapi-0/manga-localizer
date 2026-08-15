@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 
-import { activeImage, useWorkbenchStore } from '../store/workbench';
+import { activeImage, imageHasTypesetOverflow, useWorkbenchStore } from '../store/workbench';
 import type { ExportOptions, Job, JobKind, ProviderCapability } from '../types';
 import { Field, IconButton } from './Primitives';
 
@@ -199,6 +199,9 @@ export function BatchDrawer() {
   const unacceptedInpaintCount = imageIds.filter((imageId) =>
     images.find((image) => image.id === imageId)?.stageReviews?.inpaint?.state !== 'accepted'
   ).length;
+  const overflowImageCount = imageIds.filter((imageId) =>
+    imageHasTypesetOverflow(images.find((image) => image.id === imageId)),
+  ).length;
   const generatedImageExportBlocked = steps.export
     && exportOptions.format !== 'json'
     && ((requiresTypeset && missingTypesetCount > 0)
@@ -362,6 +365,12 @@ export function BatchDrawer() {
                     {requiresInpaint && unacceptedInpaintCount > 0 ? `${unacceptedInpaintCount} 页无字底图未接受。` : ''}
                     请在画布切换到对应生成版本，逐页接受后再导出。
                   </span>
+                </div>
+              ) : null}
+              {steps.export && exportOptions.format !== 'json' && requiresTypeset && overflowImageCount > 0 ? (
+                <div className="notice notice--warning" role="status">
+                  <b>还有 {overflowImageCount} 页排版溢出</b>
+                  <span>这不是导出硬门禁。用侧栏“排版溢出”筛选或 Shift+方向键跳到未检查页后，调整字号或文本框并重新排版。</span>
                 </div>
               ) : null}
               {exportOptions.format === 'json' ? (

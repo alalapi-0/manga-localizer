@@ -119,6 +119,34 @@ class TypesetResult:
     layouts: list[dict[str, Any]]
 
 
+def overflow_region_ids(layouts: Sequence[Mapping[str, Any]]) -> list[str]:
+    """Return unique overflowing region IDs in layout order."""
+    ids: list[str] = []
+    seen: set[str] = set()
+    for layout in layouts:
+        if not layout.get("overflow"):
+            continue
+        region_id = layout.get("regionId")
+        if not isinstance(region_id, str) or not region_id or region_id in seen:
+            continue
+        seen.add(region_id)
+        ids.append(region_id)
+    return ids
+
+
+def typeset_overflow_from_status(status: object) -> tuple[int, list[str]]:
+    """Project persisted overflow IDs only while typesetting is current."""
+    if not isinstance(status, dict) or status.get("typeset") != "done":
+        return 0, []
+    raw_ids = status.get("typesetOverflowRegionIds")
+    if not isinstance(raw_ids, list):
+        return 0, []
+    ids = overflow_region_ids(
+        [{"regionId": item, "overflow": True} for item in raw_ids if isinstance(item, str)],
+    )
+    return len(ids), ids
+
+
 def _style_value(style: Mapping[str, Any], camel: str, snake: str, default: Any) -> Any:
     return style.get(camel, style.get(snake, default))
 

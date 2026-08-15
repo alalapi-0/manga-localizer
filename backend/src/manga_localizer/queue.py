@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, Job, JobItem, JobStatus, TextRegion
-from manga_localizer.imaging import DEFAULT_REPAIR_SETTINGS, typeset_image
+from manga_localizer.imaging import DEFAULT_REPAIR_SETTINGS, overflow_region_ids, typeset_image
 from manga_localizer.logging_utils import without_secrets
 from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
@@ -1864,6 +1864,7 @@ class PersistentJobQueue:
         else:
             renderable_typesetting_data = []
             layouts = []
+        overflow_ids: list[str] = []
         with store.session() as session:
             current = self._assert_image_unchanged(
                 session,
@@ -1905,9 +1906,12 @@ class PersistentJobQueue:
                 else:
                     status.pop("inpaintCandidate", None)
                     status.pop("inpaintCandidates", None)
+            overflow_ids = overflow_region_ids(layouts)
             if kind != "inpaint":
                 status["typeset"] = "done"
                 status["typesettingProvider"] = typesetting_provider_name
+                status["typesetOverflowCount"] = len(overflow_ids)
+                status["typesetOverflowRegionIds"] = overflow_ids
             current.status = status
             clear_stage_reviews(
                 current,
@@ -1946,5 +1950,6 @@ class PersistentJobQueue:
                 if kind != "inpaint"
                 else None
             ),
-            "overflowCount": sum(bool(layout["overflow"]) for layout in layouts),
+            "overflowCount": len(overflow_ids),
+            "overflowRegionIds": overflow_ids,
         }

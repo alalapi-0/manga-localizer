@@ -722,6 +722,77 @@ def test_typeset_provider_is_not_misrouted_to_inpainting(tmp_path: Path) -> None
         assert output["typesettingProvider"] == "pillow"
 
 
+def test_typeset_persists_overflow_review_fields(tmp_path: Path) -> None:
+    from manga_localizer.imaging.typesetting import font_capabilities
+
+    if not font_capabilities()["available"]:
+        pytest.skip("No usable system CJK font")
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(
+            client,
+            image["id"],
+            translation="非常非常非常长的文本",
+            confirmed=True,
+        )
+        updated = client.patch(
+            f"/api/regions/{region['id']}",
+            json={
+                "x": 10,
+                "y": 10,
+                "width": 48,
+                "height": 24,
+                "direction": "horizontal",
+                "style": {
+                    "fontSize": 18,
+                    "minFontSize": 18,
+                    "autoFit": False,
+                    "autoWrap": False,
+                    "strokeWidth": 0,
+                },
+                "expectedRevision": region["revision"],
+            },
+        )
+        assert updated.status_code == 200, updated.text
+        confirmed = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"confirmed": True, "expectedRevision": updated.json()["revision"]},
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["trustDisposition"] == "trusted"
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"provider": "pillow"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["typesetEligibleRegionCount"] == 1, output
+        assert output["overflowCount"] == 1, output
+        assert output["overflowRegionIds"] == [region["id"]]
+
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert current["status"]["typeset"] == "done"
+        assert current["typesetOverflowCount"] == 1
+        assert current["typesetOverflowRegionIds"] == [region["id"]]
+
+        stale = client.patch(
+            f"/api/regions/{region['id']}",
+            json={
+                "translationText": "短",
+                "expectedRevision": confirmed.json()["revision"],
+            },
+        )
+        assert stale.status_code == 200, stale.text
+        after_edit = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert after_edit["status"]["typeset"] == "pending"
+        assert after_edit["typesetOverflowCount"] == 0
+        assert after_edit["typesetOverflowRegionIds"] == []
+
+
 def test_safe_typesetting_does_not_overlay_an_unrepaired_detection(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:

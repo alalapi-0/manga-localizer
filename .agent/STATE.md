@@ -19,16 +19,13 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 15 delivers a privacy-safe detector-draft review CLI on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 15 feature commit is
-`8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219` with GitHub CI run `31858177141` green. The previous
-Round 14 feature commit is `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`. Round 15 copies ignored
-annotation JSON into a new ignored directory when a local human lists page IDs to accept or reject.
-Progress output is aggregate counts only: no OCR text, page IDs, or relative names. The tool does not
-open images and does not auto-promote empty pages. A local progress run on the private draft set
-reported 130 draft pages, 727 regions, 18 empty pages, and 0 reviewed. Round 8 remains 18/130 explicit
-visual reviews. The full product goal remains active. No merge, tag, release, or deployment has
-occurred.
+Round 16 delivers persisted typesetting overflow review on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. Overflowing region IDs are stored on the
+image while typesetting is current, shown in the sidebar/inspector/canvas, and filterable. Shift+arrow
+skips pages already marked reviewed. Overflow is a review hint, not an export hard gate. Round 15
+feature commit `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219` remains CI-green at run `31858177141`. Round 8
+remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal
+remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -80,7 +77,8 @@ occurred.
   queue, and UI; text/full-region masks support padding, dilation, feathering, editable geometry, and an
   actual-mask preview. Bounded add/erase strokes are persisted per region. Typesetting requires safe
   eligibility and intersection with the generated mask, and cannot reuse an inpaint cache made under a
-  different repair policy.
+  different repair policy. Completed typesetting persists overflowing region IDs as review hints; they
+  are cleared when typesetting is invalidated and are not an export hard gate.
 - Preprocess, inpaint, and typeset results have revision-guarded accept/reject records bound to the
   exact response bytes decoded in the review canvas; inpaint also binds and visibly reviews its mask.
   Regeneration, changed bytes, or an upstream change clears or conflicts with affected reviews.
@@ -139,6 +137,7 @@ occurred.
 - [x] Round 14: local Argos Japanese-to-Chinese translation, checksummed packages, public synthetic
   comparison script, public regression, and complete CI.
 - [x] Round 15: privacy-safe detector-draft accept/reject promotion, public regression, and complete CI.
+- [x] Round 16: persisted typesetting overflow review, unreviewed-page keyboard skip, public regression.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -234,6 +233,11 @@ occurred.
   `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`. Backend Ruff lint/format, 218 pytest cases, and the
   release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 16 local verification passed 2 launcher tests; backend Ruff lint/format and 219 pytest cases;
+  frontend ESLint, TypeScript, 97 Vitest cases, and production build; release audit over 128 candidate
+  files plus 435 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 

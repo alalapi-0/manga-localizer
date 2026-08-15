@@ -36,6 +36,9 @@ Last updated: 2026-08-15
 - Round 15 — detector-draft review promotion: local accept/reject copies into an ignored directory.
   Progress is aggregate-only. Empty pages and remaining 112/130 clean-plate visual reviews still need
   a local human.
+- Round 16 — typesetting overflow review: overflowing region IDs persist after a typeset run and are
+  filterable in the workbench. Shift+arrow skips reviewed pages. This does not complete the remaining
+  112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -238,8 +241,8 @@ pages. Those files remain `detector-draft` until human review.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
    Preserve the exact mask-outside invariant and never auto-repair uncertain regions.
 6. **Typesetting:** local Argos Simplified Chinese is now selectable for visual acceptance, but it is
-   English-pivot general MT. Continue improving font/vertical punctuation matching, fragmented small-box
-   layouts, and collision/overflow review before export.
+   English-pivot general MT. Overflowing boxes are persisted and filterable after a typeset run; continue
+   improving font/vertical punctuation matching and fragmented small-box layouts before export.
 7. **Performance:** reuse batched model tensors where supported. CPU LaMa is practical for selected
    regions, not an unreviewed book-wide `all` policy.
 
@@ -303,3 +306,7 @@ pages. Those files remain `detector-draft` until human review.
   tests, and 95 frontend tests. The release audit scanned 128 candidate files and 420 historical blobs.
   GitHub CI run `31858177141` passed at `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`. A local progress
   run on the private draft set reported 130 draft pages, 727 regions, 18 empty pages, and 0 reviewed.
+- **Round 16:** persisted typesetting overflow IDs, workbench filter/highlight, and Shift+arrow skip of
+  reviewed pages. Overflow remains a review hint, not an export hard gate. This does not complete the
+  remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 219 backend tests,
+  and 97 frontend tests. The release audit scanned 128 candidate files and 435 historical blobs.

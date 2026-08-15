@@ -15,7 +15,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from manga_localizer import __version__
 from manga_localizer.config import Settings, get_settings
 from manga_localizer.database import ImageAsset, Job, Project, Revision, TextRegion
-from manga_localizer.imaging import font_capabilities
+from manga_localizer.imaging import font_capabilities, typeset_overflow_from_status
 from manga_localizer.logging_utils import configure_logging, redact, without_secrets
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.queue import JobConflict, PersistentJobQueue
@@ -200,6 +200,7 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
     selected_inpaint_candidate, inpaint_candidate_records = public_candidates_from_status(
         image.status
     )
+    overflow_count, overflow_ids = typeset_overflow_from_status(image.status)
     return {
         "id": image.id,
         "projectId": image.project_id,
@@ -229,6 +230,8 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "typesettingProvider": image.status.get("typesettingProvider") or None,
         "inpaintCandidate": selected_inpaint_candidate,
         "inpaintCandidates": inpaint_candidate_records,
+        "typesetOverflowCount": overflow_count,
+        "typesetOverflowRegionIds": overflow_ids,
         "thumbnailUrl": f"/api/images/{image.id}/thumbnail",
         "contentUrl": f"/api/images/{image.id}/content",
         "createdAt": image.created_at,
@@ -287,6 +290,7 @@ _PUBLIC_JOB_OUTPUT_FIELDS = {
         "typesetEligibleRegionCount",
         "typesetSkippedRegionCount",
         "overflowCount",
+        "overflowRegionIds",
     },
 }
 

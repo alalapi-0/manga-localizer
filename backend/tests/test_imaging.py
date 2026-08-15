@@ -5,7 +5,11 @@ import pytest
 from PIL import Image
 
 from manga_localizer.imaging import OpenCVInpaintingProvider, create_mask, inpaint, typeset_image
-from manga_localizer.imaging.typesetting import font_capabilities
+from manga_localizer.imaging.typesetting import (
+    font_capabilities,
+    overflow_region_ids,
+    typeset_overflow_from_status,
+)
 
 
 def test_opencv_mask_inpaint_and_exact_provider_interface() -> None:
@@ -226,6 +230,16 @@ def test_typesetting_horizontal_vertical_rotation_stroke_and_overflow() -> None:
     assert by_id["horizontal"]["fill"] == (204, 0, 0, 255)
     assert by_id["vertical"]["direction"] == "vertical"
     assert by_id["overflow"]["overflow"] is True
+    assert overflow_region_ids(result.layouts) == ["overflow"]
+    assert typeset_overflow_from_status(
+        {
+            "typeset": "done",
+            "typesetOverflowRegionIds": ["overflow", "overflow", 12, ""],
+        },
+    ) == (1, ["overflow"])
+    assert typeset_overflow_from_status(
+        {"typeset": "pending", "typesetOverflowRegionIds": ["overflow"]},
+    ) == (0, [])
     assert np.any(np.asarray(result.image.convert("RGB")) != 255)
     pixels = np.asarray(result.image.convert("RGB"))
     assert np.any((pixels[..., 0] > 150) & (pixels[..., 1] < 80) & (pixels[..., 2] < 80))

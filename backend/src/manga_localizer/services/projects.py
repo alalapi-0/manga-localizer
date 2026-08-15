@@ -25,6 +25,7 @@ from manga_localizer.database import (
     TextRegion,
     create_project_engine,
 )
+from manga_localizer.imaging import typeset_overflow_from_status
 from manga_localizer.logging_utils import redact, without_secrets
 from manga_localizer.security import (
     UnsafePathError,
@@ -239,23 +240,7 @@ class ProjectStore:
                         "height": image.height,
                         "mediaType": image.media_type,
                         "checksum": image.checksum,
-                        "status": {
-                            key: image.status.get(key, "pending")
-                            for key in (
-                                "preprocess",
-                                "detection",
-                                "ocr",
-                                "translation",
-                                "inpaint",
-                                "typeset",
-                                "export",
-                            )
-                        }
-                        | {
-                            "reviewState": image.status.get("reviewState", "pending"),
-                            "reviewedAt": image.status.get("reviewedAt") or "",
-                            "stageReviews": image.status.get("stageReviews", {}),
-                        },
+                        "status": _image_snapshot_status(image),
                         "providers": {
                             "preprocessing": image.status.get("preprocessingProvider") or None,
                             "detector": image.status.get("detectorProvider") or None,
@@ -352,6 +337,28 @@ class ProjectStore:
         if recovered:
             self.write_snapshot()
         return recovered
+
+
+def _image_snapshot_status(image: ImageAsset) -> dict[str, Any]:
+    overflow_count, overflow_ids = typeset_overflow_from_status(image.status)
+    return {
+        key: image.status.get(key, "pending")
+        for key in (
+            "preprocess",
+            "detection",
+            "ocr",
+            "translation",
+            "inpaint",
+            "typeset",
+            "export",
+        )
+    } | {
+        "reviewState": image.status.get("reviewState", "pending"),
+        "reviewedAt": image.status.get("reviewedAt") or "",
+        "stageReviews": image.status.get("stageReviews", {}),
+        "typesetOverflowCount": overflow_count,
+        "typesetOverflowRegionIds": overflow_ids,
+    }
 
 
 def region_payload(region: TextRegion) -> dict[str, Any]:

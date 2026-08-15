@@ -34,6 +34,10 @@ When inpainting produces a nonempty mask, `status.inpaintCandidate` names the se
 `generated/inpaint-candidates/` and are local working files; portable bundles keep only the selected
 canonical `generated/inpainted/` artifact.
 
+When typesetting completes, `status.typesetOverflowCount` and `status.typesetOverflowRegionIds` record
+which current boxes could not fit. Invalidating typesetting clears those fields. The API projects them
+only while `status.typeset` is `done`. They are review hints, not an export hard gate.
+
 ## Import boundary
 
 Each trusted local import selection stores an exact file or directory `ImportBoundary` before any

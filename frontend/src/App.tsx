@@ -84,14 +84,14 @@ function useGlobalShortcuts() {
         }
         return;
       }
-      if (!event.altKey && (event.key === 'ArrowLeft' || event.key === '[')) {
+      if (!event.altKey && (event.key === 'ArrowLeft' || (!event.shiftKey && event.key === '['))) {
         event.preventDefault();
-        void state.navigateImage(-1);
+        void state.navigateImage(-1, event.shiftKey ? 'unreviewed' : 'adjacent');
         return;
       }
-      if (!event.altKey && (event.key === 'ArrowRight' || event.key === ']')) {
+      if (!event.altKey && (event.key === 'ArrowRight' || (!event.shiftKey && event.key === ']'))) {
         event.preventDefault();
-        void state.navigateImage(1);
+        void state.navigateImage(1, event.shiftKey ? 'unreviewed' : 'adjacent');
         return;
       }
       if (event.key === 'Escape') {

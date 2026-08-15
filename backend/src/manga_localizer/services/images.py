@@ -240,6 +240,9 @@ def invalidate_image_pipeline(
     if "inpaint" in stages:
         status.pop("inpaintCandidate", None)
         status.pop("inpaintCandidates", None)
+    if "typeset" in stages:
+        status.pop("typesetOverflowCount", None)
+        status.pop("typesetOverflowRegionIds", None)
     image.status = status
     invalid_error_stages = set().union(*(_ERROR_STAGE_KEYS[stage] for stage in stages))
     image.processing_errors = [

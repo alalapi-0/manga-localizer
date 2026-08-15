@@ -3,6 +3,7 @@ export type CanvasMode = 'original' | 'preprocessed' | 'erased' | 'typeset';
 export type CanvasTool = 'select' | 'region' | 'hand' | 'mask-brush' | 'mask-eraser';
 export type RightPanelTab = 'text' | 'typesetting' | 'repair' | 'project';
 export type ReviewState = 'pending' | 'reviewed' | 'no-text-reviewed';
+export type ImageNavigationTarget = 'adjacent' | 'unreviewed' | 'overflow';
 export type VisualStage = 'preprocess' | 'inpaint' | 'typeset';
 export type StageReviewState = 'pending' | 'accepted' | 'rejected';
 export type RegionDisposition = 'review' | 'trusted' | 'ignored';
@@ -149,6 +150,8 @@ export interface ImageAsset {
   typesettingProvider?: string;
   inpaintCandidate?: string;
   inpaintCandidates?: InpaintCandidate[];
+  typesetOverflowCount: number;
+  typesetOverflowRegionIds: string[];
   revision: number;
   error?: string;
 }

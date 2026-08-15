@@ -30,6 +30,9 @@ Semantic Versioning.
 - Optional local Argos Japanese-to-Chinese translator using checksum-verified CTranslate2 packages and
   an English pivot. It stays unavailable without the `mt` extra and both packages, never downloads at
   startup, and never sends text off-machine. Traditional Chinese still needs a remote translator.
+- Typesetting overflow review: completed Pillow layouts persist overflowing region IDs, the workbench
+  filters and highlights those boxes, and Shift+arrow skips already-checked pages. Overflow is a review
+  hint, not an export hard gate.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -125,6 +128,10 @@ Semantic Versioning.
   backend tests, and 95 frontend tests plus the production build. The release audit scanned 128
   candidate files and 420 historical blobs. GitHub CI run
   `31858177141` passed on `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`.
+- Round 16 persists typesetting overflow IDs for workbench review, highlights overflowing boxes, and
+  adds Shift+arrow skip of already-checked pages. Overflow is not an export hard gate. Local gates
+  passed 2 launcher tests, 219 backend tests, and 97 frontend tests plus the production build. The
+  release audit scanned 128 candidate files and 435 historical blobs.
 
 ### Known limitations
 

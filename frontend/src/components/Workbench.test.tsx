@@ -42,6 +42,34 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-2');
   });
 
+  it('filters overflowing pages and shows a page-level overflow warning', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+        }),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, ocr: 'done', typeset: 'done' },
+        }),
+      ],
+    });
+    render(<App />);
+
+    expect(screen.getByText('1 个文本框排版溢出')).toBeInTheDocument();
+    expect(screen.getByText('排版溢出 1')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: '按状态筛选' }), 'overflow');
+    expect(screen.getByText('image-1.png')).toBeInTheDocument();
+    expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByRole('checkbox', { name: /安全导出/ }));
+    expect(screen.getByText('还有 1 页排版溢出')).toBeInTheDocument();
+  });
+
   it('requires an explicit confirmation before a zero-region page is treated as reviewed', async () => {
     const user = userEvent.setup();
     const zeroText = imageFixture('image-1', {

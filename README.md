@@ -28,7 +28,8 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 - Bounded same-page reading-order context, glossary controls, and remote privacy warnings
 - Text-aware or region masks with padding, dilation, feathering, a visible mask overlay, editable
   region boundaries, persisted per-region brush/eraser strokes, safe repair gating, OpenCV fallback,
-  optional local LaMa ONNX restoration, and Pillow horizontal or vertical Chinese typesetting
+  optional local LaMa ONNX restoration, and Pillow horizontal or vertical Chinese typesetting with
+  persisted overflow review in the workbench
 - Persisted accept/reject review for enhanced, repaired, and typeset images; generated-image export
   requires accepted reviews that still match the exact image and repair-mask bytes
 - Persistent non-blocking batch jobs with a 1–8 item limit, progress, cooperative controls, failure

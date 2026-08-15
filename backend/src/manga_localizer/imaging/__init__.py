@@ -30,7 +30,9 @@ from manga_localizer.imaging.typesetting import (
     TypesetResult,
     discover_system_fonts,
     font_capabilities,
+    overflow_region_ids,
     typeset_image,
+    typeset_overflow_from_status,
 )
 
 __all__ = [
@@ -57,7 +59,9 @@ __all__ = [
     "font_capabilities",
     "inpaint",
     "lineart_guided_inpaint",
+    "overflow_region_ids",
     "preprocess_image",
     "typeset_image",
+    "typeset_overflow_from_status",
     "validate_mask_edits",
 ]

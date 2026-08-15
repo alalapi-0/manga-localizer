@@ -15,7 +15,8 @@ exports. A future desktop wrapper may launch both without changing their API.
   implemented. Generated artifacts live under fixed output categories and retain source-relative paths.
 - **Provider registry:** exact runtime selection of preprocessing, text detection, OCR, translation,
   and inpainting implementations. Optional model/runtime failures remain isolated health states.
-- **Typesetting engine:** deterministic Pillow renderer with font discovery and overflow reporting.
+- **Typesetting engine:** deterministic Pillow renderer with font discovery, overflow reporting, and
+  persisted per-page overflow IDs for workbench review.
 - **Job runner:** persisted job records and one process-local runner. It executes one job at a time,
   with a user-selected one-to-eight-item concurrency bound inside detection/OCR/translation/render
   jobs; filesystem export remains serialized. It converts interrupted `running` work back to

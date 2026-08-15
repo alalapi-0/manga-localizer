@@ -43,6 +43,8 @@ export function imageFixture(id = 'image-1', overrides: Partial<ImageAsset> = {}
     detectorProvider: id === 'image-1' ? 'tesseract' : undefined,
     ocrProvider: id === 'image-1' ? 'tesseract' : undefined,
     revision: 1,
+    typesetOverflowCount: 0,
+    typesetOverflowRegionIds: [],
     ...overrides,
   };
 }

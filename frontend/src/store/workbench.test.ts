@@ -986,6 +986,46 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-2');
   });
 
+  it('skips reviewed pages and jumps to overflowing pages', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, reviewState: 'pending' },
+        }),
+        imageFixture('image-2', {
+          status: {
+            ...imageFixture('image-2').status,
+            ocr: 'done',
+            typeset: 'done',
+            reviewState: 'reviewed',
+          },
+        }),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: {
+            ...imageFixture('image-1').status,
+            typeset: 'done',
+            reviewState: 'pending',
+          },
+          typesetOverflowCount: 2,
+          typesetOverflowRegionIds: ['region-9'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      regionsByImage: { ...state.regionsByImage, 'image-3': [] },
+    }));
+    vi.spyOn(api, 'listRegions').mockResolvedValue([]);
+
+    expect(await useWorkbenchStore.getState().navigateImage(1, 'unreviewed')).toBe(true);
+    expect(useWorkbenchStore.getState().activeImageId).toBe('image-3');
+
+    useWorkbenchStore.setState({ activeImageId: 'image-1' });
+    expect(await useWorkbenchStore.getState().navigateImage(1, 'overflow')).toBe(true);
+    expect(useWorkbenchStore.getState().activeImageId).toBe('image-3');
+  });
+
   it('merges selected regions, then undo restores the original boxes', () => {
     const polygon = [[100, 120], [320, 120], [320, 240], [100, 240]] as Array<[number, number]>;
     seedWorkbench({

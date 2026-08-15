@@ -20,6 +20,13 @@ parent, especially across Windows drives. Exact file/directory import boundaries
 cumulatively, including selections that failed image validation, so original-overwrite protection is
 unchanged.
 
+## Chinese text overflows a balloon
+
+Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Shrink the
+font, enlarge the box, or enable auto-fit, then rerun typesetting. Overflow is recorded from the last
+successful typeset and is a review hint, not an export hard gate. Shift+Left/Right skips pages already
+marked reviewed so you can keep moving through a book.
+
 ## Chinese text renders as boxes
 
 Choose a locally installed CJK font in Project Settings. The renderer searches common system fonts but

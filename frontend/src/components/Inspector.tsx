@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { api } from '../api/client';
 import {
   activeImage,
+  imageHasTypesetOverflow,
+  regionHasTypesetOverflow,
   useWorkbenchStore,
 } from '../store/workbench';
 import type {
@@ -220,7 +222,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           <button key={region.id} onClick={() => selectRegion(region.id)} type="button">
             <b>#{region.order}</b>
             <span>{region.sourceText || '（空文本）'}</span>
-            <em>{dispositionLabels[region.trustDisposition]}</em>
+            <em>{regionHasTypesetOverflow(image, region.id) ? '排版溢出' : dispositionLabels[region.trustDisposition]}</em>
           </button>
         ))}
       </div>
@@ -361,12 +363,20 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
 }
 
 function TypesettingInspector({ region }: { region: Region | undefined }) {
+  const image = useWorkbenchStore(activeImage);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
   if (!region) return <EmptyState icon="字" title="选择一个文本框" description="排版参数会按文本框单独保存。" />;
   const style = region.style;
+  const overflowing = regionHasTypesetOverflow(image, region.id);
   const updateStyle = (patch: Partial<Region['style']>) => updateRegion(region.id, { style: { ...style, ...patch } });
   return (
     <div className="form-stack">
+      {overflowing ? (
+        <div className="notice notice--warning" role="status">
+          <b>当前文本框排版溢出</b>
+          <span>缩小字号、加大文本框，或打开自动适配后再重新排版。</span>
+        </div>
+      ) : null}
       <Toggle checked={style.autoFit} description="缩小字号直到译文放入区域" label="自动适配字号" onChange={(event) => updateStyle({ autoFit: event.target.checked })} />
       <Field label="字体族" hint="使用本机已安装字体；字体文件不会被上传。">
         <input onChange={(event) => updateStyle({ fontFamily: event.target.value })} value={style.fontFamily} />
@@ -668,6 +678,32 @@ function ProjectInspector() {
   );
 }
 
+function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
+  const image = useWorkbenchStore(activeImage);
+  const selectRegion = useWorkbenchStore((state) => state.selectRegion);
+  const setRightTab = useWorkbenchStore((state) => state.setRightTab);
+  if (!imageHasTypesetOverflow(image) || !image) return null;
+  const overflowing = regions.find((region) => regionHasTypesetOverflow(image, region.id));
+  return (
+    <div className="notice notice--warning" role="status">
+      <b>{image.typesetOverflowCount} 个文本框排版溢出</b>
+      <span>溢出页仍可目视接受，但导出前应复核字号和框大小。</span>
+      {overflowing ? (
+        <button
+          className="text-button"
+          onClick={() => {
+            selectRegion(overflowing.id);
+            setRightTab('typesetting');
+          }}
+          type="button"
+        >
+          打开 #{overflowing.order}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function Inspector() {
   const tab = useWorkbenchStore((state) => state.rightTab);
   const setRightTab = useWorkbenchStore((state) => state.setRightTab);
@@ -694,6 +730,7 @@ export function Inspector() {
       </nav>
       <div className="inspector__content" role="tabpanel">
         <PageReviewControl regions={regions} />
+        <TypesetOverflowNotice regions={regions} />
         {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}
         {tab === 'typesetting' ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}
         {tab === 'repair' ? <RepairInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}

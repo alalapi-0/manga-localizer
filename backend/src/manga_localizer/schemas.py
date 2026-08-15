@@ -100,6 +100,8 @@ class ImageOut(APIModel):
     typesetting_provider: str | None
     inpaint_candidate: str | None = None
     inpaint_candidates: list[InpaintCandidateOut] = Field(default_factory=list)
+    typeset_overflow_count: int = 0
+    typeset_overflow_region_ids: list[str] = Field(default_factory=list)
     thumbnail_url: str
     content_url: str
     created_at: datetime

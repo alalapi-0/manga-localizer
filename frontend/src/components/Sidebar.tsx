@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api/client';
-import { useWorkbenchStore } from '../store/workbench';
+import {
+  imageHasTypesetOverflow,
+  useWorkbenchStore,
+} from '../store/workbench';
 import type { ImageAsset, ProviderCapability, StageState } from '../types';
 import { EmptyState, IconButton, ProviderBadge, StatusPill } from './Primitives';
 import { ProjectDialog } from './ProjectDialog';
@@ -37,6 +40,7 @@ function matchesFilter(image: ImageAsset, filter: string): boolean {
   if (filter === 'failed') return state === 'failed' || state === 'unavailable';
   if (filter === 'complete') return state === 'done';
   if (filter === 'no_text') return state === 'no_text_reviewed';
+  if (filter === 'overflow') return imageHasTypesetOverflow(image);
   return state === 'needs_review'
     || state === 'no_text_pending'
     || state === 'not_started'
@@ -104,6 +108,9 @@ function ImageRow({ image }: { image: ImageAsset }) {
           ) : (
             <StatusPill state={reviewState} label={reviewState === 'done' ? '已检查' : undefined} />
           )}
+          {imageHasTypesetOverflow(image) ? (
+            <span className="status-pill status-pill--overflow"><span />排版溢出 {image.typesetOverflowCount}</span>
+          ) : null}
           <span className="image-row__stages" aria-label="页面处理阶段">
             <span className={`stage-mini stage-mini--${image.status.detection}`}>检测</span>
             <span className={`stage-mini stage-mini--${image.status.ocr}`}>OCR</span>
@@ -242,6 +249,7 @@ export function Sidebar() {
           <option value="failed">失败 / 不可用</option>
           <option value="complete">已检查</option>
           <option value="no_text">已确认无文字</option>
+          <option value="overflow">排版溢出</option>
         </select>
       </section>
 
@@ -276,7 +284,9 @@ export function Sidebar() {
 
       <footer className="sidebar__footer">
         <IconButton aria-label="上一张图" disabled={!images.length} onClick={() => void navigateImage(-1)}>←</IconButton>
+        <IconButton aria-label="上一张未检查" disabled={!images.length} onClick={() => void navigateImage(-1, 'unreviewed')} title="上一张未检查">⇤</IconButton>
         <span>{images.length ? `${images.findIndex((image) => image.id === useWorkbenchStore.getState().activeImageId) + 1} / ${images.length}` : '0 / 0'}</span>
+        <IconButton aria-label="下一张未检查" disabled={!images.length} onClick={() => void navigateImage(1, 'unreviewed')} title="下一张未检查">⇥</IconButton>
         <IconButton aria-label="下一张图" disabled={!images.length} onClick={() => void navigateImage(1)}>→</IconButton>
       </footer>
 

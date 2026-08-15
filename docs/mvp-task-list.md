@@ -55,6 +55,8 @@ not inferred from this tracked checklist.
   download, and a public synthetic comparison script
 - [x] Deliver a privacy-safe detector-draft accept/reject promotion CLI that does not auto-review
   pages or print OCR text
+- [x] Persist typesetting overflow on each page, surface it in the workbench, and skip reviewed pages
+  during keyboard review
 
 ## Explicitly deferred
 

@@ -9,6 +9,7 @@ import type {
   ImageAsset,
   Job,
   JobKind,
+  ImageNavigationTarget,
   Project,
   ProjectSettings,
   ProjectSummary,
@@ -74,7 +75,7 @@ interface WorkbenchState {
   selectedImageIds: string[];
   selectedRegionIds: string[];
   imageSearch: string;
-  imageFilter: 'all' | 'needs_review' | 'failed' | 'complete' | 'no_text';
+  imageFilter: 'all' | 'needs_review' | 'failed' | 'complete' | 'no_text' | 'overflow';
   canvasMode: CanvasMode;
   canvasTool: CanvasTool;
   compareMode: boolean;
@@ -109,7 +110,7 @@ interface WorkbenchState {
   loadRegions: (imageId: string, force?: boolean) => Promise<boolean>;
   reloadActiveImage: () => Promise<void>;
   selectImage: (imageId: string) => Promise<boolean>;
-  navigateImage: (direction: -1 | 1) => Promise<boolean>;
+  navigateImage: (direction: -1 | 1, target?: ImageNavigationTarget) => Promise<boolean>;
   toggleImageSelection: (imageId: string, additive?: boolean) => void;
   selectAllVisibleImages: (imageIds: string[]) => void;
   clearImageSelection: () => void;
@@ -270,6 +271,11 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
   };
   const ocrState = stageState(rawStatus.ocr);
   const translationState = stageState(rawStatus.translation);
+  const typesetState = stageState(rawStatus.typeset);
+  const overflowRegionIds = typesetState === 'done' && Array.isArray(image.typesetOverflowRegionIds)
+    ? [...new Set(image.typesetOverflowRegionIds.filter((regionId): regionId is string =>
+      typeof regionId === 'string' && regionId.length > 0))]
+    : [];
   return {
     ...image,
     name: image.name || image.relativePath?.split('/').at(-1) || '未命名图像',
@@ -292,6 +298,8 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
       : {},
     inpaintCandidate: typeof image.inpaintCandidate === 'string' ? image.inpaintCandidate : undefined,
     inpaintCandidates: Array.isArray(image.inpaintCandidates) ? image.inpaintCandidates : [],
+    typesetOverflowCount: overflowRegionIds.length,
+    typesetOverflowRegionIds: overflowRegionIds,
     status: {
       import: stageState(rawStatus.import ?? 'done'),
       preprocess: stageState(rawStatus.preprocess),
@@ -299,7 +307,7 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
       ocr: ocrState,
       translation: translationState,
       inpaint: stageState(rawStatus.inpaint),
-      typeset: stageState(rawStatus.typeset),
+      typeset: typesetState,
       export: stageState(rawStatus.export),
       reviewState: reviewState(rawStatus.reviewState ?? legacyImage.reviewState),
       reviewedAt: typeof (rawStatus.reviewedAt ?? legacyImage.reviewedAt) === 'string'
@@ -1251,14 +1259,24 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     return true;
   },
 
-  navigateImage: async (direction) => {
+  navigateImage: async (direction, target = 'adjacent') => {
     const { images, activeImageId } = get();
     if (!images.length) return false;
     const currentIndex = Math.max(0, images.findIndex((image) => image.id === activeImageId));
-    const nextIndex = Math.min(images.length - 1, Math.max(0, currentIndex + direction));
-    const nextImage = images[nextIndex];
-    if (!nextImage || nextImage.id === activeImageId) return false;
-    return get().selectImage(nextImage.id);
+    const step = direction < 0 ? -1 : 1;
+    if (target === 'adjacent') {
+      const nextIndex = Math.min(images.length - 1, Math.max(0, currentIndex + step));
+      const nextImage = images[nextIndex];
+      if (!nextImage || nextImage.id === activeImageId) return false;
+      return get().selectImage(nextImage.id);
+    }
+    const matches = target === 'overflow' ? imageHasTypesetOverflow : imagePageReviewPending;
+    for (let seen = 0; seen < images.length - 1; seen += 1) {
+      const index = (currentIndex + step * (seen + 1) + images.length * (seen + 1)) % images.length;
+      const nextImage = images[index];
+      if (nextImage && matches(nextImage)) return get().selectImage(nextImage.id);
+    }
+    return false;
   },
 
   toggleImageSelection: (imageId, additive = true) => {
@@ -2142,6 +2160,29 @@ export function resetWorkbenchStore(): void {
 
 export function activeImage(state: WorkbenchState): ImageAsset | null {
   return state.images.find((image) => image.id === state.activeImageId) ?? null;
+}
+
+export function imageHasTypesetOverflow(image: ImageAsset | null | undefined): boolean {
+  return Boolean(
+    image
+    && image.status.typeset === 'done'
+    && (image.typesetOverflowCount ?? 0) > 0,
+  );
+}
+
+export function imagePageReviewPending(image: ImageAsset | null | undefined): boolean {
+  const state = image?.status.reviewState;
+  return Boolean(image) && state !== 'reviewed' && state !== 'no-text-reviewed';
+}
+
+export function regionHasTypesetOverflow(
+  image: ImageAsset | null | undefined,
+  regionId: string,
+): boolean {
+  return Boolean(
+    imageHasTypesetOverflow(image)
+    && image?.typesetOverflowRegionIds?.includes(regionId),
+  );
 }
 
 export function hasGeneratedPreview(image: ImageAsset | null | undefined): boolean {

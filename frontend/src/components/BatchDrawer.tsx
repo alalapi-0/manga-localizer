@@ -370,7 +370,7 @@ export function BatchDrawer() {
               {steps.export && exportOptions.format !== 'json' && requiresTypeset && overflowImageCount > 0 ? (
                 <div className="notice notice--warning" role="status">
                   <b>还有 {overflowImageCount} 页排版溢出</b>
-                  <span>这不是导出硬门禁。用侧栏“排版溢出”筛选或 Shift+方向键跳到未检查页后，调整字号或文本框并重新排版。</span>
+                  <span>这不是导出硬门禁。用侧栏“排版溢出”筛选，或在检查器里只重排溢出框。</span>
                 </div>
               ) : null}
               {exportOptions.format === 'json' ? (

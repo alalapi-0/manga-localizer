@@ -48,6 +48,8 @@ Last updated: 2026-08-15
 - Round 19 — adjacent small typesetting boxes pack as fragment clusters. Identical translations share
   the cluster; distinct fragment texts concatenate in reading order. This does not complete the
   remaining 112/130 clean-plate visual reviews.
+- Round 20 — inspector actions to select overflowing boxes or retypeset only those region IDs. This
+  does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -252,7 +254,8 @@ pages. Those files remain `detector-draft` until human review.
 6. **Typesetting:** local Argos Simplified Chinese is now selectable for visual acceptance, but it is
    English-pivot general MT. Overflowing boxes are persisted and filterable after a typeset run. Vertical
    layouts now use CJK vertical punctuation forms and hang comma/period glyphs. Adjacent small boxes can
-   share a typeset run; continue improving font matching before export.
+   share a typeset run, and overflowing boxes can be retypeset without rerunning the whole page;
+   continue improving font matching before export.
 7. **Performance:** reuse batched model tensors where supported. CPU LaMa is practical for selected
    regions, not an unreviewed book-wide `all` policy.
 
@@ -341,3 +344,8 @@ pages. Those files remain `detector-draft` until human review.
   passed 2 launcher tests and 224 backend tests. The release audit scanned 128 candidate files and
   505 historical blobs. Frontend was unchanged from Round 17.
   GitHub CI run `31875271369` passed at `7dfccd324d29ab7c33055c70d7140e318c2b7cc7`.
+- **Round 20:** the inspector can select overflowing boxes or rerun Pillow typesetting for those
+  region IDs only. Other boxes on the page stay untouched. This does not complete the remaining
+  112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/101 tests/build. The release audit scanned 128 candidate files and 518 historical
+  blobs. Backend was unchanged from Round 19. Remote CI is pending.

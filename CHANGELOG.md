@@ -40,6 +40,8 @@ Semantic Versioning.
   Horizontal layouts keep the authored punctuation; stored translation text is not rewritten.
 - Adjacent small typesetting boxes can share one layout run: identical translations pack across the
   cluster, and distinct fragment texts concatenate in reading order. Large balloons stay independent.
+- Overflow-only typesetting: the inspector can select overflowing boxes or rerun Pillow typesetting for
+  those region IDs without touching the rest of the page.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.

@@ -62,6 +62,7 @@ not inferred from this tracked checklist.
 - [x] Map CJK punctuation to vertical presentation forms during vertical typesetting
 - [x] Pack adjacent small typesetting boxes as fragment clusters without rewriting stored translation
   text
+- [x] Retypeset overflowing boxes only, and select those boxes from the inspector overflow notice
 
 ## Explicitly deferred
 

@@ -22,14 +22,15 @@ unchanged.
 
 ## Chinese text overflows a balloon
 
-Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Shrink the
-font, enlarge the box, or enable auto-fit, then rerun typesetting. Overflow is recorded from the last
-successful typeset and is a review hint, not an export hard gate. Shift+Left/Right skips pages already
-marked reviewed so you can keep moving through a book. Vertical balloons keep ordinary CJK quotes and
-punctuation in the translation; the renderer maps them to vertical presentation forms and hangs
-comma/period glyphs. Horizontal balloons leave that text unchanged. Adjacent small OCR fragments that
-share direction and sit close together can share one typeset run; merge boxes only when you want a
-single editable region.
+Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Use
+**只重排溢出框** to rerun typesetting for those boxes only, or **选中溢出框** then merge/resize.
+Shrink the font, enlarge the box, or enable auto-fit, then rerun typesetting. Overflow is recorded
+from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
+skips pages already marked reviewed so you can keep moving through a book. Vertical balloons keep
+ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical
+presentation forms and hangs comma/period glyphs. Horizontal balloons leave that text unchanged.
+Adjacent small OCR fragments that share direction and sit close together can share one typeset run;
+merge boxes only when you want a single editable region.
 
 ## Chinese text renders as boxes
 

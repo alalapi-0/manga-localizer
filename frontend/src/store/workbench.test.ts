@@ -8,7 +8,7 @@ import {
   regionFixture,
   seedWorkbench,
 } from '../test/fixtures';
-import { activeRegions, resetWorkbenchStore, useWorkbenchStore } from './workbench';
+import { activeRegions, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore } from './workbench';
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -1024,6 +1024,16 @@ describe('workbench store', () => {
     useWorkbenchStore.setState({ activeImageId: 'image-1' });
     expect(await useWorkbenchStore.getState().navigateImage(1, 'overflow')).toBe(true);
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-3');
+  });
+
+  it('lists overflowing region ids that still exist on the page', () => {
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, typeset: 'done' },
+      typesetOverflowCount: 2,
+      typesetOverflowRegionIds: ['region-1', 'gone'],
+    });
+    expect(overflowingRegionIds(image, [regionFixture('region-1')])).toEqual(['region-1']);
+    expect(overflowingRegionIds(image, [])).toEqual([]);
   });
 
   it('merges selected regions, then undo restores the original boxes', () => {

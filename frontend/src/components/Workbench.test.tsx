@@ -70,6 +70,54 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('还有 1 页排版溢出')).toBeInTheDocument();
   });
 
+  it('selects overflowing boxes and queues typesetting for those region ids only', async () => {
+    const user = userEvent.setup();
+    const overflowing = regionFixture('region-1', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    const other = regionFixture('region-2', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+          trustReviewCount: 0,
+          trustedCount: 2,
+        }),
+      ],
+      regions: [overflowing, other],
+    });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listRegions').mockResolvedValue([overflowing, other]);
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-overflow-typeset',
+      kind: 'typeset',
+    }));
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '选中溢出框' }));
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
+
+    await user.click(screen.getByRole('button', { name: '只重排溢出框' }));
+    expect(startJob).toHaveBeenCalledWith('project-1', 'typeset', {
+      imageIds: ['image-1'],
+      regionIds: ['region-1'],
+      options: expect.objectContaining({ provider: 'pillow', concurrency: 1 }),
+    });
+  });
+
   it('requires an explicit confirmation before a zero-region page is treated as reviewed', async () => {
     const user = userEvent.setup();
     const zeroText = imageFixture('image-1', {

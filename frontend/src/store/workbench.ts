@@ -2292,6 +2292,15 @@ export function regionHasTypesetOverflow(
   );
 }
 
+export function overflowingRegionIds(
+  image: ImageAsset | null | undefined,
+  regions: Region[],
+): string[] {
+  if (!imageHasTypesetOverflow(image) || !image) return [];
+  const present = new Set(regions.map((region) => region.id));
+  return image.typesetOverflowRegionIds.filter((regionId) => present.has(regionId));
+}
+
 export function hasGeneratedPreview(image: ImageAsset | null | undefined): boolean {
   return Boolean(
     image

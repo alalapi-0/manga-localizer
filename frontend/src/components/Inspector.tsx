@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import {
   activeImage,
   imageHasTypesetOverflow,
+  overflowingRegionIds,
   preprocessingSettingsForProfile,
   regionHasTypesetOverflow,
   useWorkbenchStore,
@@ -716,24 +717,53 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
   const image = useWorkbenchStore(activeImage);
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const setRightTab = useWorkbenchStore((state) => state.setRightTab);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
   if (!imageHasTypesetOverflow(image) || !image) return null;
-  const overflowing = regions.find((region) => regionHasTypesetOverflow(image, region.id));
+  const overflowIds = overflowingRegionIds(image, regions);
+  const overflowing = regions.find((region) => overflowIds.includes(region.id));
   return (
     <div className="notice notice--warning" role="status">
       <b>{image.typesetOverflowCount} 个文本框排版溢出</b>
-      <span>溢出页仍可目视接受，但导出前应复核字号和框大小。</span>
-      {overflowing ? (
-        <button
-          className="text-button"
-          onClick={() => {
-            selectRegion(overflowing.id);
-            setRightTab('typesetting');
-          }}
-          type="button"
-        >
-          打开 #{overflowing.order}
-        </button>
-      ) : null}
+      <span>溢出页仍可目视接受，但导出前应复核字号和框大小。只重排溢出框不会改动其他文本框。</span>
+      <div className="notice__actions">
+        {overflowing ? (
+          <button
+            className="text-button"
+            onClick={() => {
+              selectRegion(overflowing.id);
+              setRightTab('typesetting');
+            }}
+            type="button"
+          >
+            打开 #{overflowing.order}
+          </button>
+        ) : null}
+        {overflowIds.length ? (
+          <button
+            className="button button--compact"
+            onClick={() => {
+              overflowIds.forEach((regionId, index) => selectRegion(regionId, index > 0));
+              setRightTab('text');
+            }}
+            type="button"
+          >
+            选中溢出框
+          </button>
+        ) : null}
+        {overflowIds.length ? (
+          <button
+            className="button button--compact"
+            onClick={() => {
+              setDrawerOpen(true);
+              void startBatch(['typeset'], [image.id], defaultExportOptions, 1, overflowIds);
+            }}
+            type="button"
+          >
+            只重排溢出框
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }

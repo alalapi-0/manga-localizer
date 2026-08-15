@@ -19,13 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 19 packs adjacent small typesetting boxes as fragment clusters on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 19 feature commit is
-`7dfccd324d29ab7c33055c70d7140e318c2b7cc7` with GitHub CI run `31875271369` green. Shared translation
-text is laid out across aligned nearby fragments; distinct fragment texts are concatenated in reading
-order. Large balloons stay independent. Round 18 vertical punctuation remains in place. Round 8 remains
-18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains
-active. No merge, tag, release, or deployment has occurred.
+Round 20 adds overflow-only typesetting from the workbench inspector on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. Editors can select overflowing boxes or
+rerun Pillow typesetting for those region IDs without touching the rest of the page. Round 19 fragment
+clustering remains in place (`7dfccd3`, CI `31875271369`). Round 8 remains 18/130 explicit visual
+reviews; detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag,
+release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -147,6 +146,8 @@ active. No merge, tag, release, or deployment has occurred.
   public regression, and complete CI.
 - [x] Round 19: adjacent small-box fragment clustering for typesetting, with public regression,
   and complete CI.
+- [x] Round 20: overflow-only typesetting and overflow-box selection in the inspector, with public
+  regression. Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -278,6 +279,11 @@ active. No merge, tag, release, or deployment has occurred.
   `7dfccd324d29ab7c33055c70d7140e318c2b7cc7`. Backend Ruff lint/format, 224 pytest cases, and the
   release audit passed. Frontend lint/typecheck/99 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 20 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 101 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 518 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 19 (224 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser evidence
+  remains the GitHub e2e job after push. Remote CI for Round 20 is pending.
 
 ## Known limitations and blockers
 

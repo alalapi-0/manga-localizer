@@ -45,6 +45,9 @@ Last updated: 2026-08-15
 - Round 18 — vertical CJK punctuation presentation forms and hanging comma/period glyphs during
   typesetting. Horizontal layouts keep authored punctuation. This does not complete the remaining
   112/130 clean-plate visual reviews.
+- Round 19 — adjacent small typesetting boxes pack as fragment clusters. Identical translations share
+  the cluster; distinct fragment texts concatenate in reading order. This does not complete the
+  remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -248,8 +251,8 @@ pages. Those files remain `detector-draft` until human review.
    Preserve the exact mask-outside invariant and never auto-repair uncertain regions.
 6. **Typesetting:** local Argos Simplified Chinese is now selectable for visual acceptance, but it is
    English-pivot general MT. Overflowing boxes are persisted and filterable after a typeset run. Vertical
-   layouts now use CJK vertical punctuation forms and hang comma/period glyphs; continue improving font
-   matching and fragmented small-box layouts before export.
+   layouts now use CJK vertical punctuation forms and hang comma/period glyphs. Adjacent small boxes can
+   share a typeset run; continue improving font matching before export.
 7. **Performance:** reuse batched model tensors where supported. CPU LaMa is practical for selected
    regions, not an unreviewed book-wide `all` policy.
 
@@ -331,3 +334,9 @@ pages. Those files remain `detector-draft` until human review.
   launcher tests and 222 backend tests. The release audit scanned 128 candidate files and 492
   historical blobs. Frontend was unchanged from Round 17.
   GitHub CI run `31874726926` passed at `41545b8e453aaebab9325ab253f9754168712acc`.
+- **Round 19:** adjacent small Pillow boxes pack as fragment clusters when they share direction and
+  sit close and aligned. Identical translations are typeset once across the cluster; distinct fragment
+  texts concatenate in reading order. Large balloons stay independent. Stored translation text is not
+  rewritten. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
+  passed 2 launcher tests and 224 backend tests. The release audit scanned 128 candidate files and
+  505 historical blobs. Frontend was unchanged from Round 17. Remote CI is pending.

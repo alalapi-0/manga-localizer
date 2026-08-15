@@ -6,6 +6,7 @@ from PIL import Image
 
 from manga_localizer.imaging import OpenCVInpaintingProvider, create_mask, inpaint, typeset_image
 from manga_localizer.imaging.typesetting import (
+    cluster_fragment_regions,
     font_capabilities,
     overflow_region_ids,
     typeset_overflow_from_status,
@@ -282,3 +283,74 @@ def test_vertical_typesetting_uses_vertical_punctuation_forms() -> None:
     assert "\u300c" not in "".join(by_id["quoted"]["lines"])
     assert "\u300c" in "".join(by_id["horizontal-quoted"]["lines"])
     assert "\u300d" in "".join(by_id["horizontal-quoted"]["lines"])
+
+
+def test_fragment_clusters_pack_shared_text_across_adjacent_boxes() -> None:
+    first = {
+        "id": "frag-a",
+        "x": 40,
+        "y": 10,
+        "width": 22,
+        "height": 80,
+        "direction": "vertical",
+        "order": 0,
+        "translationText": "这段译文需要两个碎框一起排",
+        "style": {"fontSize": 16, "minFontSize": 8, "strokeWidth": 0},
+    }
+    second = {
+        **first,
+        "id": "frag-b",
+        "y": 94,
+        "order": 1,
+    }
+    distant = {
+        **first,
+        "id": "lonely",
+        "x": 200,
+        "y": 10,
+        "translationText": "单独",
+    }
+    clustered = cluster_fragment_regions([first, second, distant])
+    assert [tuple(item["id"] for item in group) for group in clustered] == [
+        ("frag-a", "frag-b"),
+        ("lonely",),
+    ]
+
+    capabilities = font_capabilities()
+    if not capabilities["available"]:
+        pytest.skip("No usable system CJK font")
+    source = Image.new("RGB", (260, 200), "white")
+    independent = typeset_image(source, [first])
+    packed = typeset_image(source, [first, second])
+    independent_by_id = {layout["regionId"]: layout for layout in independent.layouts}
+    packed_by_id = {layout["regionId"]: layout for layout in packed.layouts}
+    assert independent_by_id["frag-a"]["overflow"] is True
+    assert packed_by_id["frag-a"]["overflow"] is False
+    assert packed_by_id["frag-b"]["overflow"] is False
+    packed_chars = "".join("".join(layout["lines"]) for layout in packed.layouts)
+    assert "这" in packed_chars
+    assert "排" in packed_chars
+
+
+def test_fragment_clusters_concatenate_distinct_fragment_text() -> None:
+    first = {
+        "id": "part-a",
+        "x": 20,
+        "y": 8,
+        "width": 24,
+        "height": 70,
+        "direction": "vertical",
+        "order": 0,
+        "translationText": "上段",
+        "style": {"fontSize": 18, "minFontSize": 10, "strokeWidth": 0},
+    }
+    second = {**first, "id": "part-b", "y": 82, "order": 1, "translationText": "下段"}
+    groups = cluster_fragment_regions([first, second])
+    assert [tuple(item["id"] for item in group) for group in groups] == [("part-a", "part-b")]
+    capabilities = font_capabilities()
+    if not capabilities["available"]:
+        pytest.skip("No usable system CJK font")
+    result = typeset_image(Image.new("RGB", (80, 180), "white"), [first, second])
+    packed = "".join("".join(layout["lines"]) for layout in result.layouts)
+    assert "上" in packed
+    assert "下" in packed

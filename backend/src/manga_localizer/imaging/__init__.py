@@ -30,6 +30,7 @@ from manga_localizer.imaging.preprocessing import (
 from manga_localizer.imaging.realesrgan_onnx import RealESRGANONNXPreprocessProvider
 from manga_localizer.imaging.typesetting import (
     TypesetResult,
+    cluster_fragment_regions,
     discover_system_fonts,
     font_capabilities,
     overflow_region_ids,
@@ -57,6 +58,7 @@ __all__ = [
     "RealESRGANNCNNProvider",
     "RealESRGANONNXPreprocessProvider",
     "TypesetResult",
+    "cluster_fragment_regions",
     "create_mask",
     "discover_system_fonts",
     "font_capabilities",

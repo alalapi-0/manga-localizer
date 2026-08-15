@@ -27,7 +27,9 @@ font, enlarge the box, or enable auto-fit, then rerun typesetting. Overflow is r
 successful typeset and is a review hint, not an export hard gate. Shift+Left/Right skips pages already
 marked reviewed so you can keep moving through a book. Vertical balloons keep ordinary CJK quotes and
 punctuation in the translation; the renderer maps them to vertical presentation forms and hangs
-comma/period glyphs. Horizontal balloons leave that text unchanged.
+comma/period glyphs. Horizontal balloons leave that text unchanged. Adjacent small OCR fragments that
+share direction and sit close together can share one typeset run; merge boxes only when you want a
+single editable region.
 
 ## Chinese text renders as boxes
 

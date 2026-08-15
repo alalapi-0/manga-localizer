@@ -177,6 +177,10 @@ _VERTICAL_PUNCTUATION = str.maketrans(
     }
 )
 _HANGING_PUNCTUATION = frozenset("\u3001\u3002\uff0c\uff0e,.")
+_FRAGMENT_MAX_SHORT_SIDE = 56.0
+_FRAGMENT_MAX_AREA = 2800.0
+_FRAGMENT_GAP = 10.0
+_FRAGMENT_ALIGN = 0.3
 
 
 def verticalize_punctuation(text: str) -> str:
@@ -186,6 +190,247 @@ def verticalize_punctuation(text: str) -> str:
 
 def _style_value(style: Mapping[str, Any], camel: str, snake: str, default: Any) -> Any:
     return style.get(camel, style.get(snake, default))
+
+
+def _region_box(region: Mapping[str, Any]) -> tuple[float, float, float, float]:
+    x = float(region.get("x", 0))
+    y = float(region.get("y", 0))
+    width = max(0.0, float(region.get("width", 0)))
+    height = max(0.0, float(region.get("height", 0)))
+    return x, y, x + width, y + height
+
+
+def _region_direction(region: Mapping[str, Any]) -> str:
+    direction = str(region.get("direction", "vertical"))
+    if direction in {"horizontal", "vertical"}:
+        return direction
+    x1, y1, x2, y2 = _region_box(region)
+    return "vertical" if (y2 - y1) >= (x2 - x1) else "horizontal"
+
+
+def _is_fragment_region(region: Mapping[str, Any]) -> bool:
+    x1, y1, x2, y2 = _region_box(region)
+    width = x2 - x1
+    height = y2 - y1
+    return min(width, height) <= _FRAGMENT_MAX_SHORT_SIDE or width * height <= _FRAGMENT_MAX_AREA
+
+
+def _box_gap(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+) -> float:
+    ax1, ay1, ax2, ay2 = left
+    bx1, by1, bx2, by2 = right
+    dx = max(0.0, ax1 - bx2, bx1 - ax2)
+    dy = max(0.0, ay1 - by2, by1 - ay2)
+    if dx == 0.0 and dy == 0.0:
+        return 0.0
+    return math.hypot(dx, dy)
+
+
+def _boxes_aligned(
+    left: tuple[float, float, float, float],
+    right: tuple[float, float, float, float],
+    direction: str,
+) -> bool:
+    ax1, ay1, ax2, ay2 = left
+    bx1, by1, bx2, by2 = right
+    if direction == "vertical":
+        overlap = min(ax2, bx2) - max(ax1, bx1)
+        span = min(ax2 - ax1, bx2 - bx1)
+    else:
+        overlap = min(ay2, by2) - max(ay1, by1)
+        span = min(ay2 - ay1, by2 - by1)
+    return span > 0 and overlap >= span * _FRAGMENT_ALIGN
+
+
+def _region_sort_key(region: Mapping[str, Any]) -> tuple[int, float, float]:
+    raw_order = region.get("order", region.get("reading_order", 0))
+    try:
+        order = int(raw_order)
+    except (TypeError, ValueError):
+        order = 0
+    x1, y1, _, _ = _region_box(region)
+    if _region_direction(region) == "vertical":
+        return order, -x1, y1
+    return order, y1, x1
+
+
+def cluster_fragment_regions(
+    regions: Sequence[Mapping[str, Any]],
+) -> list[list[Mapping[str, Any]]]:
+    """Group adjacent small boxes that can share one typeset run."""
+    parent = list(range(len(regions)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for left, region in enumerate(regions):
+        if region.get("ignored") or not _is_fragment_region(region):
+            continue
+        left_box = _region_box(region)
+        left_direction = _region_direction(region)
+        for right in range(left + 1, len(regions)):
+            other = regions[right]
+            if other.get("ignored") or not _is_fragment_region(other):
+                continue
+            if _region_direction(other) != left_direction:
+                continue
+            other_box = _region_box(other)
+            if _box_gap(left_box, other_box) <= _FRAGMENT_GAP and _boxes_aligned(
+                left_box, other_box, left_direction
+            ):
+                union(left, right)
+
+    grouped: dict[int, list[Mapping[str, Any]]] = {}
+    order: list[int] = []
+    for index, region in enumerate(regions):
+        root = find(index)
+        if root not in grouped:
+            grouped[root] = []
+            order.append(root)
+        grouped[root].append(region)
+    clusters: list[list[Mapping[str, Any]]] = []
+    for root in order:
+        members = grouped[root]
+        if len(members) > 1:
+            members = sorted(members, key=_region_sort_key)
+        clusters.append(members)
+    return clusters
+
+
+def _cluster_text(regions: Sequence[Mapping[str, Any]]) -> str:
+    texts = [
+        str(region.get("translationText", region.get("translation_text", ""))).replace("\n", "")
+        for region in regions
+    ]
+    texts = [item for item in texts if item]
+    unique = list(dict.fromkeys(texts))
+    if len(unique) == 1:
+        return unique[0]
+    return "".join(texts)
+
+
+def _effective_padding(width: int, height: int, padding: int) -> int:
+    if padding <= 0:
+        return 0
+    budget = max(0, min(width, height) // 6)
+    return min(padding, budget)
+
+
+def _vertical_capacity(
+    width: int,
+    height: int,
+    size: int,
+    line_spacing: float,
+    padding: int,
+) -> int:
+    pad = _effective_padding(width, height, padding)
+    content_width = max(1, width - pad * 2)
+    content_height = max(1, height - pad * 2)
+    cell = max(1, math.ceil(size * (1 + line_spacing)))
+    rows = max(1, content_height // cell)
+    columns = max(1, content_width // cell)
+    return rows * columns
+
+
+def _horizontal_capacity(
+    width: int,
+    height: int,
+    size: int,
+    line_spacing: float,
+    letter_spacing: float,
+    padding: int,
+) -> int:
+    pad = _effective_padding(width, height, padding)
+    content_width = max(1, width - pad * 2)
+    content_height = max(1, height - pad * 2)
+    line_height = max(1, math.ceil(size * (1 + line_spacing)))
+    lines = max(1, content_height // line_height)
+    glyph = max(1, math.ceil(size + max(0.0, letter_spacing)))
+    per_line = max(1, content_width // glyph)
+    return lines * per_line
+
+
+def _assign_cluster_slices(text: str, capacities: Sequence[int]) -> tuple[list[str], list[bool]]:
+    characters = list(text)
+    slices: list[str] = []
+    overflow = [False] * len(capacities)
+    cursor = 0
+    last_index = len(capacities) - 1
+    for index, capacity in enumerate(capacities):
+        if index == last_index:
+            take = characters[cursor:]
+            cursor = len(characters)
+            slices.append("".join(take))
+            overflow[index] = len(take) > capacity
+            continue
+        take = characters[cursor : cursor + max(0, capacity)]
+        cursor += len(take)
+        slices.append("".join(take))
+    return slices, overflow
+
+
+def _region_style_metrics(region: Mapping[str, Any]) -> tuple[int, int, float, float, int, bool]:
+    width = max(1, round(float(region["width"])))
+    height = max(1, round(float(region["height"])))
+    style = region.get("style") or {}
+    padding = _effective_padding(width, height, max(0, int(style.get("padding", 4))))
+    min_size = max(4, int(_style_value(style, "minFontSize", "min_font_size", 8)))
+    max_size = max(
+        min_size, int(_style_value(style, "fontSize", "font_size", min(width, height) // 3 or 12))
+    )
+    max_size = max(max_size, int(_style_value(style, "maxFontSize", "max_font_size", max_size)))
+    auto_fit = bool(_style_value(style, "autoFit", "auto_fit", True))
+    if not auto_fit:
+        min_size = max_size
+    if "lineHeight" in style or "line_height" in style:
+        line_spacing = max(0.0, float(_style_value(style, "lineHeight", "line_height", 1.15)) - 1.0)
+    else:
+        line_spacing = max(0.0, float(_style_value(style, "lineSpacing", "line_spacing", 0.15)))
+    letter_spacing = float(_style_value(style, "letterSpacing", "letter_spacing", 0.0))
+    return min_size, max_size, line_spacing, letter_spacing, padding, auto_fit
+
+
+def _cluster_slices(
+    regions: Sequence[Mapping[str, Any]],
+    text: str,
+) -> tuple[int, list[str], list[bool]]:
+    direction = _region_direction(regions[0])
+    prepared = (
+        verticalize_punctuation(text).replace("\n", "")
+        if direction == "vertical"
+        else text.replace("\n", "")
+    )
+    min_size, max_size, line_spacing, letter_spacing, _, _ = _region_style_metrics(regions[0])
+    chosen_size = min_size
+    chosen_slices = [""] * len(regions)
+    chosen_overflow = [True] * len(regions)
+    for size in range(max_size, min_size - 1, -1):
+        capacities: list[int] = []
+        for region in regions:
+            width = max(1, round(float(region["width"])))
+            height = max(1, round(float(region["height"])))
+            padding = _region_style_metrics(region)[4]
+            if direction == "vertical":
+                capacities.append(_vertical_capacity(width, height, size, line_spacing, padding))
+            else:
+                capacities.append(
+                    _horizontal_capacity(width, height, size, line_spacing, letter_spacing, padding)
+                )
+        slices, overflow = _assign_cluster_slices(prepared, capacities)
+        chosen_size, chosen_slices, chosen_overflow = size, slices, overflow
+        if not any(overflow):
+            return chosen_size, chosen_slices, chosen_overflow
+    return chosen_size, chosen_slices, chosen_overflow
 
 
 def _horizontal_lines(
@@ -333,7 +578,7 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
     width = max(1, round(float(region["width"])))
     height = max(1, round(float(region["height"])))
     style = region.get("style") or {}
-    padding = max(0, int(style.get("padding", 4)))
+    padding = _effective_padding(width, height, max(0, int(style.get("padding", 4))))
     content_width = max(1, width - padding * 2)
     content_height = max(1, height - padding * 2)
     min_size = max(4, int(_style_value(style, "minFontSize", "min_font_size", 8)))
@@ -478,6 +723,20 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
     }
 
 
+def _composite_region(
+    canvas: Image.Image,
+    region: Mapping[str, Any],
+    layer: Image.Image,
+) -> None:
+    rotation = float(region.get("rotation", 0))
+    if rotation:
+        layer = layer.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
+    center_x = float(region["x"]) + float(region["width"]) / 2
+    center_y = float(region["y"]) + float(region["height"]) / 2
+    position = (round(center_x - layer.width / 2), round(center_y - layer.height / 2))
+    canvas.alpha_composite(layer, position)
+
+
 def typeset_image(
     image: Path | Image.Image,
     regions: Sequence[Mapping[str, Any]],
@@ -488,19 +747,37 @@ def typeset_image(
     else:
         canvas = image.convert("RGBA")
     layouts: list[dict[str, Any]] = []
+    drawable = []
     for region in regions:
         if region.get("ignored"):
             continue
         text = str(region.get("translationText", region.get("translation_text", "")))
         if not text:
             continue
-        layer, layout = _draw_region(text, region)
-        rotation = float(region.get("rotation", 0))
-        if rotation:
-            layer = layer.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
-        center_x = float(region["x"]) + float(region["width"]) / 2
-        center_y = float(region["y"]) + float(region["height"]) / 2
-        position = (round(center_x - layer.width / 2), round(center_y - layer.height / 2))
-        canvas.alpha_composite(layer, position)
-        layouts.append(layout)
+        drawable.append(region)
+    for group in cluster_fragment_regions(drawable):
+        if len(group) == 1:
+            region = group[0]
+            text = str(region.get("translationText", region.get("translation_text", "")))
+            layer, layout = _draw_region(text, region)
+            _composite_region(canvas, region, layer)
+            layouts.append(layout)
+            continue
+        shared = _cluster_text(group)
+        font_size, slices, overflow_flags = _cluster_slices(group, shared)
+        for region, slice_text, overflow in zip(group, slices, overflow_flags, strict=True):
+            if not slice_text:
+                continue
+            style = dict(region.get("style") or {})
+            style.update(
+                {
+                    "autoFit": False,
+                    "fontSize": font_size,
+                    "minFontSize": font_size,
+                }
+            )
+            layer, layout = _draw_region(slice_text, {**dict(region), "style": style})
+            layout["overflow"] = overflow
+            _composite_region(canvas, region, layer)
+            layouts.append(layout)
     return TypesetResult(image=canvas, layouts=layouts)

@@ -38,6 +38,8 @@ Semantic Versioning.
   auto-applies a book-wide assumption.
 - Vertical typesetting maps CJK punctuation to presentation forms and hangs comma/period glyphs.
   Horizontal layouts keep the authored punctuation; stored translation text is not rewritten.
+- Adjacent small typesetting boxes can share one layout run: identical translations pack across the
+  cluster, and distinct fragment texts concatenate in reading order. Large balloons stay independent.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.

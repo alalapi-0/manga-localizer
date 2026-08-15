@@ -60,6 +60,8 @@ not inferred from this tracked checklist.
 - [x] Suggest a per-page preprocessing profile from local image stats, with an explicit apply-to-page
   action that does not change the book-wide default
 - [x] Map CJK punctuation to vertical presentation forms during vertical typesetting
+- [x] Pack adjacent small typesetting boxes as fragment clusters without rewriting stored translation
+  text
 
 ## Explicitly deferred
 

@@ -20,11 +20,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 12 delivers a privacy-safe annotated detection/OCR evaluation path on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 11 feature commit is
-`866ad13728a029f468e447aa6c39bebe42121d92` with GitHub CI run `31851316610` green; the Round 11 docs
-commit `963def1f3b0699083f5b264962d65125e6dd99be` hit a pre-existing preprocess-snapshot race in CI
-run `31851555065`, which was hardened and verified by run `31852347022` at
-`99d9fefd9953f3a9c1a914bf3ff85d855c5fb895`. Round 12 adds IoU matching, separate detector/OCR
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 12 feature commit is
+`761c30d319455f11af82fc2358bc830797ebdac8` with GitHub CI run `31852816928` green. The previous
+Round 11 feature commit is `866ad13728a029f468e447aa6c39bebe42121d92`. Round 12 adds IoU matching,
+separate detector/OCR
 confidence, character-error-rate, negative-page false-positive metrics, a public synthetic stress set
 covering bubble, non-bubble, SFX/art, horizontal, vertical, single-character, complex line-art, and
 no-text negatives, plus ignored private draft-annotation bootstrap. Automatic proposals are still not
@@ -131,7 +130,7 @@ active. No merge, tag, release, or deployment has occurred.
 - [x] Round 11: runnable local Real-ESRGAN ONNX upscaler, explicit model install, NCNN model-dir fix,
   private classic-vs-AI comparison, public regression, and complete CI on the non-default branch.
 - [x] Round 12: privacy-safe detection/OCR evaluation, public synthetic ground truth, union detector
-  that keeps all proposals, ignored private draft annotations, and public regression.
+  that keeps all proposals, ignored private draft annotations, public regression, and complete CI.
 - [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
   truth; line-art-aware restoration; real Japanese-to-Chinese translation; remaining 112/130 visual
   reviews.
@@ -193,6 +192,10 @@ active. No merge, tag, release, or deployment has occurred.
 - Round 12 local verification passed 2 launcher tests; backend Ruff lint/format and 203 pytest cases;
   frontend ESLint, TypeScript, 92 Vitest cases, and production build; release audit over 119 candidate
   files plus 334 historical blobs; `uv lock --check`; compileall; and `git diff --check`.
+- Round 12 authoritative remote verification: GitHub CI run `31852816928` passed at
+  `761c30d319455f11af82fc2358bc830797ebdac8`. Backend Ruff lint/format, 203 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/92 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

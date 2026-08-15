@@ -275,4 +275,4 @@ pages. Those files remain `detector-draft` until human review.
   private draft annotations, and a union detector that keeps all PP-OCR and Tesseract proposals.
   PP-OCRv3 scored precision/recall 1.0 on the synthetic ground truth with zero negative-page false
   positives; Tesseract OCR CER on matched boxes was 0.42. Private drafts are not independent ground
-  truth. GitHub CI for this checkpoint is recorded after the non-default-branch push.
+  truth. GitHub CI run `31852816928` passed at `761c30d319455f11af82fc2358bc830797ebdac8`.

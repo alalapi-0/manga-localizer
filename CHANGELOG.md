@@ -95,7 +95,8 @@ Semantic Versioning.
   SFX/art, vertical, single-character, complex line-art, and a no-text hatch negative). PP-OCRv3
   reached precision/recall 1.0 with zero negative-page false positives; matched Tesseract OCR CER was
   0.42. Tesseract-alone produced 80 false positives on the negative page. Private ignored drafts cover
-  all 130 pages (727 PP-OCR boxes, 18 empty pages) and are not independent ground truth.
+  all 130 pages (727 PP-OCR boxes, 18 empty pages) and are not independent ground truth. GitHub CI run
+  `31852816928` passed on `761c30d319455f11af82fc2358bc830797ebdac8`.
 
 ### Known limitations
 

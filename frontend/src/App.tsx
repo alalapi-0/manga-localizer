@@ -73,6 +73,11 @@ function useGlobalShortcuts() {
         void state.navigateImage(event.key === 'ArrowLeft' ? -1 : 1, 'overflow');
         return;
       }
+      if (event.altKey && (event.key === 'ArrowLeft' || event.key === 'ArrowRight')) {
+        event.preventDefault();
+        void state.navigateImage(event.key === 'ArrowLeft' ? -1 : 1, 'failed');
+        return;
+      }
       if (event.altKey && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
         const regions = state.activeImageId
           ? [...(state.regionsByImage[state.activeImageId] ?? [])].sort((a, b) => a.order - b.order)

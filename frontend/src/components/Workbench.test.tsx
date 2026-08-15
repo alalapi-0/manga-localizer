@@ -67,6 +67,47 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('擦字修复失败')).toBeInTheDocument();
   });
 
+  it('jumps to the next failed page with Option+ArrowRight', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-3').status, ocr: 'failed' },
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ rightTab: 'project' });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([]);
+    render(<App />);
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-2',
+        rightTab: 'repair',
+      });
+    });
+    expect(screen.getByRole('tab', { name: '修复' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('擦字修复失败')).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowRight', altKey: true });
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-3',
+        rightTab: 'text',
+      });
+    });
+    expect(screen.getByRole('tab', { name: '文本' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('日文 OCR 失败')).toBeInTheDocument();
+  });
+
   it('filters overflowing pages and shows a page-level overflow warning', async () => {
     const user = userEvent.setup();
     seedWorkbench({

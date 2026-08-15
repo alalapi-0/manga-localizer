@@ -1408,13 +1408,18 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         focusFailure: state.imageFilter === 'failed',
       });
     }
-    const matches = target === 'overflow' ? imageHasTypesetOverflow : imagePageReviewPending;
+    const matches = target === 'overflow'
+      ? imageHasTypesetOverflow
+      : target === 'failed'
+        ? imageHasProcessingFailure
+        : imagePageReviewPending;
     for (let seen = 0; seen < images.length - 1; seen += 1) {
       const index = (currentIndex + step * (seen + 1) + images.length * (seen + 1)) % images.length;
       const nextImage = images[index];
       if (nextImage && matches(nextImage)) {
         return get().selectImage(nextImage.id, {
           focusOverflow: target === 'overflow',
+          focusFailure: target === 'failed',
         });
       }
     }
@@ -2440,6 +2445,12 @@ export function imageHasTypesetOverflow(image: ImageAsset | null | undefined): b
   );
 }
 
+export function imageHasProcessingFailure(image: ImageAsset | null | undefined): boolean {
+  if (!image) return false;
+  const state = imageReviewState(image);
+  return state === 'failed' || state === 'unavailable';
+}
+
 export function imagePageReviewPending(image: ImageAsset | null | undefined): boolean {
   const state = image?.status.reviewState;
   return Boolean(image) && state !== 'reviewed' && state !== 'no-text-reviewed';
@@ -2550,7 +2561,7 @@ export function imageMatchesFilter(
 ): boolean {
   const state = imageReviewState(image);
   if (filter === 'all') return true;
-  if (filter === 'failed') return state === 'failed' || state === 'unavailable';
+  if (filter === 'failed') return imageHasProcessingFailure(image);
   if (filter === 'complete') return state === 'done';
   if (filter === 'no_text') return state === 'no_text_reviewed';
   if (filter === 'overflow') return imageHasTypesetOverflow(image);

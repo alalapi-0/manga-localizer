@@ -102,6 +102,8 @@ Last updated: 2026-08-15
   stage. This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 45 — clicking a failed or unavailable sidebar page opens the matching inspector. This does
   not complete the remaining 112/130 clean-plate visual reviews.
+- Round 46 — **⌥← / ⌥→** jump to the previous / next failed or unavailable page and open the matching
+  inspector. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -536,3 +538,8 @@ pages. Those files remain `detector-draft` until human review.
   and frontend lint/typecheck/141 tests/build. The release audit scanned 128 candidate files and 817
   historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31889559133` passed at `fc58b181d3a647fb7b9feb4c89341fd1f820966f`.
+- **Round 46:** **⌥← / ⌥→** jump to the previous / next failed or unavailable page and open the matching
+  inspector. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
+  passed 2 launcher tests and frontend lint/typecheck/143 tests/build. The release audit scanned 128
+  candidate files and 827 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
+  after push.

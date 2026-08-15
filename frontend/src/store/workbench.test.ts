@@ -1097,6 +1097,42 @@ describe('workbench store', () => {
     });
   });
 
+  it('jumps to failed pages and opens the matching inspector', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-3').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ rightTab: 'project' });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([]);
+
+    expect(await useWorkbenchStore.getState().navigateImage(1, 'failed')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-3',
+      rightTab: 'repair',
+    });
+    expect(await useWorkbenchStore.getState().navigateImage(1, 'failed')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-1',
+      rightTab: 'text',
+    });
+    expect(await useWorkbenchStore.getState().navigateImage(-1, 'failed')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-3',
+      rightTab: 'repair',
+    });
+  });
+
   it('steps through visible overflowing pages with adjacent navigation', async () => {
     const overflow = regionFixture('region-9', { imageId: 'image-3' });
     seedWorkbench({

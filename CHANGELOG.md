@@ -284,7 +284,8 @@ Semantic Versioning.
 - Round 42 opens a failed queue item onto that page and the matching inspector, then closes the batch
   drawer. Local gates passed 2 launcher tests and frontend lint/typecheck/135 tests plus the
   production build. The release audit scanned 128 candidate files and 782 historical blobs. Backend
-  was unchanged from Round 31. GitHub CI is pending after push.
+  was unchanged from Round 31. GitHub CI run `31888156798` passed on
+  `ce2395e71f2029dc09c98d937a6ce7901672c1ae`.
 
 ### Known limitations
 

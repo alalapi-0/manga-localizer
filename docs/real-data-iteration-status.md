@@ -415,4 +415,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 29:** the canvas switches to the enhanced preview when a preprocess job for the current
   page completes. This does not complete the remaining 112/130 clean-plate visual reviews. Local
   gates passed frontend lint/typecheck/115 tests/build. The release audit scanned 128 candidate files
-  and 629 historical blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  and 629 historical blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31880896973` passed at `e97fe14ba1492ee85fdea884e73aab10a9753470`.

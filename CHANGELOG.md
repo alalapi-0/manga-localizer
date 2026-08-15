@@ -209,7 +209,7 @@ Semantic Versioning.
 - Round 29 switches the canvas to the enhanced preview when a preprocess job for the current page
   completes. Local gates passed frontend lint/typecheck/115 tests plus the production build. The
   release audit scanned 128 candidate files and 629 historical blobs. Backend was unchanged from
-  Round 23.
+  Round 23. GitHub CI run `31880896973` passed on `e97fe14ba1492ee85fdea884e73aab10a9753470`.
 
 ### Known limitations
 

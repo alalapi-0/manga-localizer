@@ -534,4 +534,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 45:** clicking a failed or unavailable sidebar page opens the matching inspector. This does
   not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests
   and frontend lint/typecheck/141 tests/build. The release audit scanned 128 candidate files and 817
-  historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31889559133` passed at `fc58b181d3a647fb7b9feb4c89341fd1f820966f`.

@@ -299,7 +299,7 @@ Semantic Versioning.
 - Round 45 opens the matching inspector when clicking a failed or unavailable sidebar page. Local
   gates passed 2 launcher tests and frontend lint/typecheck/141 tests plus the production build. The
   release audit scanned 128 candidate files and 817 historical blobs. Backend was unchanged from
-  Round 31. GitHub CI is pending after push.
+  Round 31. GitHub CI run `31889559133` passed on `fc58b181d3a647fb7b9feb4c89341fd1f820966f`.
 
 ### Known limitations
 

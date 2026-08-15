@@ -21,10 +21,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 45 opens the matching inspector when clicking a failed or unavailable sidebar page.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 44 passed as run `31889225201` on `17e21f25e73a76d6b421993b60476218c92557b7`.
-Round 45 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Remote CI for Round 45 passed as run `31889559133` on `fc58b181d3a647fb7b9feb4c89341fd1f820966f`.
+Round 44 (`17e21f25e73a76d6b421993b60476218c92557b7`, CI `31889225201`) remains failed-filter arrows.
+Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -196,7 +196,7 @@ or deployment has occurred.
 - [x] Round 44: open the matching inspector from failed-filter adjacent navigation, with public
   regression, and complete CI.
 - [x] Round 45: open the matching inspector when clicking a failed sidebar page, with public
-  regression. Remote CI pending.
+  regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -549,6 +549,10 @@ or deployment has occurred.
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 45 authoritative remote verification: GitHub CI run `31889559133` passed at
+  `fc58b181d3a647fb7b9feb4c89341fd1f820966f`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/141 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

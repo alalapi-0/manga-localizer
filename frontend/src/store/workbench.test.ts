@@ -1036,6 +1036,15 @@ describe('workbench store', () => {
     expect(overflowingRegionIds(image, [])).toEqual([]);
   });
 
+  it('frames requested region ids until fit-to-window clears them', () => {
+    seedWorkbench();
+    useWorkbenchStore.getState().focusRegions(['region-2', 'region-2', '']);
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+    useWorkbenchStore.getState().requestFit();
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
+  });
+
   it('merges selected regions, then undo restores the original boxes', () => {
     const polygon = [[100, 120], [320, 120], [320, 240], [100, 240]] as Array<[number, number]>;
     seedWorkbench({

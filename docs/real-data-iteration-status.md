@@ -78,6 +78,8 @@ Last updated: 2026-08-15
   the remaining 112/130 clean-plate visual reviews.
 - Round 33 — the canvas frames those selected typeset boxes after the job completes. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Round 34 — inspector overflow actions frame those boxes and open the typesetting tab. This does
+  not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -449,3 +451,7 @@ pages. Those files remain `detector-draft` until human review.
   and frontend lint/typecheck/119 tests/build. The release audit scanned 128 candidate files and 673
   historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31883910085` passed at `e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`.
+- **Round 34:** inspector overflow actions frame those boxes and open the typesetting tab. This does
+  not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests
+  and frontend lint/typecheck/120 tests/build. The release audit scanned 128 candidate files and 686
+  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.

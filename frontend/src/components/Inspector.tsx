@@ -734,6 +734,7 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
   const setRightTab = useWorkbenchStore((state) => state.setRightTab);
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
+  const focusRegions = useWorkbenchStore((state) => state.focusRegions);
   if (!imageHasTypesetOverflow(image) || !image) return null;
   const overflowIds = overflowingRegionIds(image, regions);
   const overflowing = regions.find((region) => overflowIds.includes(region.id));
@@ -748,6 +749,7 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
             onClick={() => {
               selectRegion(overflowing.id);
               setRightTab('typesetting');
+              focusRegions([overflowing.id]);
             }}
             type="button"
           >
@@ -759,7 +761,8 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
             className="button button--compact"
             onClick={() => {
               overflowIds.forEach((regionId, index) => selectRegion(regionId, index > 0));
-              setRightTab('text');
+              setRightTab('typesetting');
+              focusRegions(overflowIds);
             }}
             type="button"
           >

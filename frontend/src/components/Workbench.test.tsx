@@ -109,6 +109,9 @@ describe('desktop workbench interactions', () => {
 
     await user.click(screen.getByRole('button', { name: '选中溢出框' }));
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
+    expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-1']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
 
     await user.click(screen.getByRole('button', { name: '只重排溢出框' }));
     expect(startJob).toHaveBeenCalledWith('project-1', 'typeset', {

@@ -148,6 +148,7 @@ interface WorkbenchState {
   setShowMask: (value: boolean) => void;
   setMaskBrushRadius: (value: number) => void;
   requestFit: () => void;
+  focusRegions: (regionIds: string[]) => void;
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
   setDrawerOpen: (value: boolean) => void;
@@ -2000,6 +2001,14 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     fitRequest: state.fitRequest + 1,
     focusRegionIds: [],
   })),
+  focusRegions: (regionIds) => {
+    const ids = [...new Set(regionIds.filter((regionId) => regionId.length > 0))];
+    if (!ids.length) return;
+    set((state) => ({
+      focusRegionIds: ids,
+      focusRequest: state.focusRequest + 1,
+    }));
+  },
   setRightTab: (rightTab) => set({ rightTab }),
   setTheme: (theme) => {
     try {

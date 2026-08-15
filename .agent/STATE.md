@@ -19,13 +19,11 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 33 frames the just-selected typeset boxes in the canvas after a typeset job for the current
-page completes, so compare-split does not leave them as a tiny rectangle on the full page. The work
-is on `agent/manga-round7-governance-20260812` through draft PR #3. The Round 33 candidate is
-`e41261ab2e37aa974cde07b0d79aba9d7a22ae9b` with GitHub CI run `31883910085` green. Round 32
-(`b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`, CI `31883446023`) remains overlay-box selection.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 34 frames overflow boxes when the inspector selects them (**选中溢出框** / **打开**), and opens
+the typesetting tab. The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
+Round 33 (`e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`, CI `31883910085`) remains post-typeset
+framing. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
+full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -174,6 +172,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   with public regression, and complete CI.
 - [x] Round 33: frame selected typeset boxes in the canvas after the current page's typeset job
   completes, with public regression, and complete CI.
+- [x] Round 34: frame overflow boxes from the inspector overflow actions, with public regression.
+  Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -422,6 +422,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`. Backend Ruff lint/format, 231 pytest cases, and the
   release audit passed. Frontend lint/typecheck/119 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 34 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 120 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 686 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push. Remote CI for Round 34 is pending.
 
 ## Known limitations and blockers
 
@@ -440,6 +445,7 @@ full-book output quality.
   current page completes, the canvas switches to the typeset preview. A partial overlay keeps the
   boxes just redrawn selected; a full-page typeset still selects remaining overflowing boxes.
   The canvas then frames those selected boxes, including after compare splits the view.
+  Inspector overflow actions (**选中溢出框** / **打开**) also frame those boxes and open typesetting.
   When an inpaint job for the current page completes, the canvas switches to the erased
   preview and shows the review mask. When a preprocess job for the current page completes, the canvas
   switches to the enhanced preview. Those visual-stage completions also open original-vs-result compare.

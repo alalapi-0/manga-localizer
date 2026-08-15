@@ -2250,15 +2250,20 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       if (activeImageId && completedTypesetImageIds.has(activeImageId)) {
         const image = get().images.find((entry) => entry.id === activeImageId);
         if (image?.status.typeset === 'done') {
-          const overflowIds = overflowingRegionIds(
-            image,
-            get().regionsByImage[activeImageId] ?? [],
+          const regions = get().regionsByImage[activeImageId] ?? [];
+          const overlayIds = overlayRegionIdsFromCompletedTypeset(
+            jobs,
+            previousJobs,
+            activeImageId,
+            regions,
           );
+          const overflowIds = overflowingRegionIds(image, regions);
+          const focusIds = overlayIds.length ? overlayIds : overflowIds;
           set({
             canvasMode: 'typeset',
             compareMode: true,
-            ...(overflowIds.length
-              ? { selectedRegionIds: overflowIds, rightTab: 'typesetting' as const }
+            ...(focusIds.length
+              ? { selectedRegionIds: focusIds, rightTab: 'typesetting' as const }
               : {}),
           });
         }
@@ -2340,6 +2345,30 @@ export function overflowingRegionIds(
   if (!imageHasTypesetOverflow(image) || !image) return [];
   const present = new Set(regions.map((region) => region.id));
   return image.typesetOverflowRegionIds.filter((regionId) => present.has(regionId));
+}
+
+function overlayRegionIdsFromCompletedTypeset(
+  jobs: Job[],
+  previousJobs: Job[],
+  imageId: string,
+  regions: Region[],
+): string[] {
+  const present = new Set(regions.map((region) => region.id));
+  const selected: string[] = [];
+  for (const job of jobs) {
+    if (job.kind !== 'typeset' || job.status !== 'completed') continue;
+    const previous = previousJobs.find((entry) => entry.id === job.id);
+    if (!previous || previous.status === 'completed') continue;
+    for (const item of job.items) {
+      if (item.imageId !== imageId || item.output?.partialTypeset !== true) continue;
+      const overlayIds = item.output.overlayRegionIds;
+      if (!Array.isArray(overlayIds)) continue;
+      for (const regionId of overlayIds) {
+        if (typeof regionId === 'string' && present.has(regionId)) selected.push(regionId);
+      }
+    }
+  }
+  return [...new Set(selected)];
 }
 
 export function hasGeneratedPreview(image: ImageAsset | null | undefined): boolean {

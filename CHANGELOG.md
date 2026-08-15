@@ -222,6 +222,11 @@ Semantic Versioning.
   pytest, frontend lint/typecheck/116 tests plus the production build. The release audit scanned 128
   candidate files and 650 historical blobs. GitHub CI run `31882562724` passed on
   `656e3650b1fc45fc9c68febd3fcc6bc077854f55`.
+- Round 32 keeps the just-overlaid boxes selected when a partial typeset job for the current page
+  completes. A full-page typeset still selects remaining overflowing boxes. Local gates passed 2
+  launcher tests and frontend lint/typecheck/118 tests plus the production build. The release audit
+  scanned 128 candidate files and 663 historical blobs. Backend was unchanged from Round 31.
+  Remote CI is pending.
 
 ### Known limitations
 

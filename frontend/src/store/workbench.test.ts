@@ -1535,6 +1535,118 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
   });
 
+  it('selects overlay boxes instead of leftover overflow when a partial typeset completes', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-2'] });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'text',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'running',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+          output: {
+            partialTypeset: true,
+            overlayRegionCount: 1,
+            overlayRegionIds: ['region-2'],
+          },
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, typeset: 'done' },
+        typesetOverflowCount: 1,
+        typesetOverflowRegionIds: ['region-1'],
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('region-1'),
+      regionFixture('region-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+  });
+
+  it('selects overlay boxes when a partial typeset completes without leftover overflow', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-2'] });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'text',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'running',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+          output: {
+            partialTypeset: true,
+            overlayRegionCount: 1,
+            overlayRegionIds: ['region-2'],
+          },
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, typeset: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('region-1'),
+      regionFixture('region-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+  });
+
   it('switches to the erased preview and mask when an inpaint job for the active page completes', async () => {
     seedWorkbench();
     useWorkbenchStore.setState({

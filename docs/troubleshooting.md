@@ -29,8 +29,10 @@ Shrink the font or enable auto-fit, then click **重排当前框** or press **T*
 overlay those boxes onto the last typeset plate when the clean plate is still current; other boxes
 keep their pixels. If the previous typeset file is missing, that action redraws the whole page so
 other boxes are not dropped. Generated plates are not kept in the browser HTTP cache, so the canvas
-reloads the rewritten file instead of an old overlay. The job queue then shows whether that run
-overlaid selected boxes or
+reloads the rewritten file instead of an old overlay. When an overlay typeset for the current page
+finishes, the boxes just redrawn stay selected in the typesetting inspector so you can adjust and
+press **T** again. A full-page typeset still selects remaining overflowing boxes. The job queue then
+shows whether that run overlaid selected boxes or
 redrew the whole page. When a typeset job for the current page finishes, the canvas switches to
 **成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can
 resize, refit, or press **⇧T** without hunting for them. The canvas also opens **对比** so the original

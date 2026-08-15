@@ -74,6 +74,8 @@ Last updated: 2026-08-15
 - Round 31 — generated preprocess, inpaint, typeset, and mask images are served without HTTP caching,
   and the canvas fetch bypasses the browser cache. This does not complete the remaining 112/130
   clean-plate visual reviews.
+- Round 32 — a partial overlay typeset keeps the boxes just redrawn selected. This does not complete
+  the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -433,3 +435,8 @@ pages. Those files remain `detector-draft` until human review.
   backend lint/format/231 pytest, and frontend lint/typecheck/116 tests/build. The release audit
   scanned 128 candidate files and 650 historical blobs.
   GitHub CI run `31882562724` passed at `656e3650b1fc45fc9c68febd3fcc6bc077854f55`.
+- **Round 32:** a partial overlay typeset keeps the boxes just redrawn selected instead of jumping to
+  leftover overflow. A full-page typeset still selects remaining overflowing boxes. This does not
+  complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
+  frontend lint/typecheck/118 tests/build. The release audit scanned 128 candidate files and 663
+  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.

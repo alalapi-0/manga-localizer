@@ -56,6 +56,8 @@ Last updated: 2026-08-15
   complete the remaining 112/130 clean-plate visual reviews.
 - Round 23 — region-scoped typesetting redraws the page when the last typeset plate is missing. This
   does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 24 — the job queue shows whether a typeset run overlaid selected boxes or redrew the page.
+  This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -374,3 +376,7 @@ pages. Those files remain `detector-draft` until human review.
   Ruff lint/format and 230 pytest cases. The release audit scanned 128 candidate files and 563
   historical blobs. Frontend was unchanged from Round 22.
   GitHub CI run `31878760451` passed at `c8fb20beca736452f702121ad64b7a16ac52b1c3`.
+- **Round 24:** the job queue summarizes overlay vs full-page typeset runs from public job output.
+  This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed frontend
+  lint/typecheck/104 tests/build. The release audit scanned 128 candidate files and 576 historical
+  blobs. Backend was unchanged from Round 23. Remote CI is pending.

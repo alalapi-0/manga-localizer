@@ -859,6 +859,60 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('修复 0 · 跳过 3（未改动图像）')).toBeInTheDocument();
   });
 
+  it('surfaces an overlay typeset job in the queue card', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      jobs: [jobFixture({
+        id: 'job-typeset-overlay',
+        kind: 'typeset',
+        status: 'completed',
+        total: 1,
+        completed: 1,
+        progress: 1,
+        items: [{
+          id: 'item-typeset-overlay',
+          imageId: 'image-1',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: { partialTypeset: true, overlayRegionCount: 1, overlayRegionIds: ['region-1'] },
+        }],
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    expect(screen.getByText('叠绘 1 框')).toBeInTheDocument();
+  });
+
+  it('surfaces a full-page typeset fallback in the queue card', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      jobs: [jobFixture({
+        id: 'job-typeset-full',
+        kind: 'typeset',
+        status: 'completed',
+        total: 1,
+        completed: 1,
+        progress: 1,
+        items: [{
+          id: 'item-typeset-full',
+          imageId: 'image-1',
+          label: 'opaque-id',
+          status: 'completed',
+          progress: 1,
+          output: { partialTypeset: false, overlayRegionCount: 0, overlayRegionIds: [] },
+        }],
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    expect(screen.getByText('整页重排 1 页')).toBeInTheDocument();
+  });
+
   it('keeps unavailable generated previews disabled and falls back to the original', () => {
     seedWorkbench();
     useWorkbenchStore.setState({ canvasMode: 'typeset' });

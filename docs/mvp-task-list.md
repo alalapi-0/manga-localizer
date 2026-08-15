@@ -66,6 +66,7 @@ not inferred from this tracked checklist.
 - [x] Retypeset the currently selected box from the typesetting inspector
 - [x] Overlay selected typeset boxes onto the last plate without redrawing untouched boxes
 - [x] Redraw the whole page when a region-scoped typeset has no last typeset plate
+- [x] Show overlay vs full-page typeset counts on the job queue card
 
 ## Explicitly deferred
 

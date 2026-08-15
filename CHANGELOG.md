@@ -178,6 +178,9 @@ Semantic Versioning.
   lint/format and 230 pytest cases. The release audit scanned 128 candidate files and 563 historical
   blobs. Frontend was unchanged from Round 22. GitHub CI run `31878760451` passed on
   `c8fb20beca736452f702121ad64b7a16ac52b1c3`.
+- Round 24 shows overlay vs full-page typeset counts on the job queue card. Local gates passed
+  frontend lint/typecheck/104 tests plus the production build. The release audit scanned 128
+  candidate files and 576 historical blobs. Backend was unchanged from Round 23.
 
 ### Known limitations
 

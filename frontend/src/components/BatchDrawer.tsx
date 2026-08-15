@@ -91,6 +91,21 @@ function JobCard({ job }: { job: Job }) {
     : null;
   const hasRepairMetrics = job.kind === 'inpaint'
     && job.items.some((item) => item.output?.repairedRegionCount !== undefined);
+  const overlayBoxes = job.kind === 'typeset'
+    ? job.items.reduce((total, item) => total + Number(item.output?.overlayRegionCount ?? 0), 0)
+    : 0;
+  const overlayPages = job.kind === 'typeset'
+    ? job.items.filter((item) => item.output?.partialTypeset === true).length
+    : 0;
+  const fullPages = job.kind === 'typeset'
+    ? job.items.filter((item) => item.output?.partialTypeset === false).length
+    : 0;
+  const hasTypesetMetrics = job.kind === 'typeset'
+    && job.items.some((item) => item.output?.partialTypeset !== undefined);
+  const typesetSummary = [
+    overlayPages ? `叠绘 ${overlayBoxes} 框` : '',
+    fullPages ? `整页重排 ${fullPages} 页` : '',
+  ].filter(Boolean).join(' · ');
   const displayedItems = [
     ...job.items.slice(0, 20),
     ...job.items.slice(20).filter((item) => item.status === 'failed'),
@@ -109,6 +124,7 @@ function JobCard({ job }: { job: Job }) {
             修复 {repaired} · 跳过 {skipped}{repaired === 0 ? '（未改动图像）' : ''}
           </span>
         ) : null}
+        {hasTypesetMetrics && typesetSummary ? <span>{typesetSummary}</span> : null}
         {job.error ? <span className="job-error">{job.error}</span> : null}
       </div>
       {job.items.length ? (

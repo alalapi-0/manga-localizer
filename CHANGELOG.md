@@ -253,8 +253,8 @@ Semantic Versioning.
   CI run `31885226463` passed on `1184c07e1cabeb8257fe60601584910536d4ef2a`.
 - Round 37 frames overflow boxes from the sidebar **排版溢出** pill. Local gates passed 2 launcher
   tests and frontend lint/typecheck/127 tests plus the production build. The release audit scanned
-  128 candidate files and 724 historical blobs. Backend was unchanged from Round 31. Remote CI is
-  pending.
+  128 candidate files and 724 historical blobs. Backend was unchanged from Round 31. GitHub CI run
+  `31885552346` passed on `ee182935b4916bd810ca38fd5b48b738e7e9258b`.
 
 ### Known limitations
 

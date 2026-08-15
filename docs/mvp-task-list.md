@@ -69,6 +69,7 @@ not inferred from this tracked checklist.
 - [x] Show overlay vs full-page typeset counts on the job queue card
 - [x] Keyboard shortcuts to retypeset the selected box (T) or overflowing boxes (Shift+T)
 - [x] Switch the canvas to the typeset preview when a typeset job for the current page completes
+- [x] Select overflowing boxes when a typeset job for the current page completes
 
 ## Explicitly deferred
 

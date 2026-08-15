@@ -1478,6 +1478,59 @@ describe('workbench store', () => {
 
     await useWorkbenchStore.getState().refreshJobs();
     expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual([]);
+    expect(useWorkbenchStore.getState().rightTab).toBe('text');
+  });
+
+  it('selects overflowing boxes when a typeset job for the active page completes', async () => {
+    seedWorkbench({ selectedRegionIds: ['region-2'] });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'text',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'running',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, typeset: 'done' },
+        typesetOverflowCount: 1,
+        typesetOverflowRegionIds: ['region-1'],
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      regionFixture('region-1'),
+      regionFixture('region-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
+    expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
   });
 
   it('does not change the canvas when a typeset job was already complete', async () => {

@@ -30,7 +30,8 @@ overlay those boxes onto the last typeset plate when the clean plate is still cu
 keep their pixels. If the previous typeset file is missing, that action redraws the whole page so
 other boxes are not dropped. The job queue then shows whether that run overlaid selected boxes or
 redrew the whole page. When a typeset job for the current page finishes, the canvas switches to
-**成品** so the new overlay is visible without changing the preview mode by hand. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
+**成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can
+resize, refit, or press **⇧T** without hunting for them. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
 from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
 skips pages already marked reviewed so you can keep moving through a book. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical

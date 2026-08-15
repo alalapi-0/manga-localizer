@@ -2244,12 +2244,20 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       ) {
         await get().loadRegions(activeImageId, true);
       }
-      if (
-        activeImageId
-        && completedTypesetImageIds.has(activeImageId)
-        && get().images.find((image) => image.id === activeImageId)?.status.typeset === 'done'
-      ) {
-        set({ canvasMode: 'typeset' });
+      if (activeImageId && completedTypesetImageIds.has(activeImageId)) {
+        const image = get().images.find((entry) => entry.id === activeImageId);
+        if (image?.status.typeset === 'done') {
+          const overflowIds = overflowingRegionIds(
+            image,
+            get().regionsByImage[activeImageId] ?? [],
+          );
+          set({
+            canvasMode: 'typeset',
+            ...(overflowIds.length
+              ? { selectedRegionIds: overflowIds, rightTab: 'typesetting' as const }
+              : {}),
+          });
+        }
       }
     } catch (error) {
       set({ globalError: errorMessage(error) });

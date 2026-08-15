@@ -46,6 +46,7 @@ Semantic Versioning.
   geometry edits.
 - T retypesets the selected box and Shift+T retypesets overflowing boxes when the canvas is focused.
 - After a typeset job for the current page completes, the canvas switches to the typeset preview.
+  Remaining overflowing boxes are selected and the typesetting inspector opens.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -192,6 +193,10 @@ Semantic Versioning.
   completes. Local gates passed frontend lint/typecheck/110 tests plus the production build. The
   release audit scanned 128 candidate files and 599 historical blobs. Backend was unchanged from
   Round 23. GitHub CI run `31879945945` passed on `906c898bd664a9a2ffdc33d5ef3bb1a783c84e0c`.
+- Round 27 selects overflowing boxes and opens the typesetting inspector when a typeset job for the
+  current page completes. Local gates passed frontend lint/typecheck/111 tests plus the production
+  build. The release audit scanned 128 candidate files and 609 historical blobs. Backend was
+  unchanged from Round 23.
 
 ### Known limitations
 

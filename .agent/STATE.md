@@ -20,8 +20,9 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 14 delivers a local Japanese-to-Chinese translator on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 13 feature commit is
-`751d3a985bf9e320f2bf11b1f2c2c6681b620e45` with GitHub CI run `31854780188` green. Round 14 adds
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 14 feature commit is
+`a0bd72cc03b1d29b33a5a92ada2b82613f28d581` with GitHub CI run `31856326624` green. The previous
+Round 13 feature commit is `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`. Round 14 adds
 `argos-ja-zh`: CTranslate2 Argos packages Japanese→English→Simplified Chinese, explicit checksummed
 install, no startup download, and no outbound text. Glossary and character names are protected as exact
 terms. Traditional Chinese still needs a remote translator. Automatic translation is not visual approval.
@@ -135,7 +136,7 @@ release, or deployment has occurred.
 - [x] Round 13: line-art-aware inpainting candidates, LaMa grayscale preservation, local
   compare/select/accept, public synthetic comparison script, public regression, and complete CI.
 - [x] Round 14: local Argos Japanese-to-Chinese translation, checksummed packages, public synthetic
-  comparison script, and public regression. Remote CI is pending after the task-branch push.
+  comparison script, public regression, and complete CI.
 - [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
   truth; remaining 112/130 visual reviews.
 
@@ -217,7 +218,11 @@ release, or deployment has occurred.
   frontend ESLint, TypeScript, 95 Vitest cases, and production build; release audit over 126 candidate
   files plus 390 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
   discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
-  browser evidence remains the GitHub e2e job after push. Remote CI is pending.
+  browser evidence remains the GitHub e2e job after push.
+- Round 14 authoritative remote verification: GitHub CI run `31856326624` passed at
+  `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`. Backend Ruff lint/format, 214 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

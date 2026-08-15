@@ -291,5 +291,5 @@ pages. Those files remain `detector-draft` until human review.
   CTranslate2 packages, an English pivot, glossary/name protection, and a public synthetic comparison
   script. Text stays on-machine. This is not a manga-tuned or Traditional-Chinese result. Local gates
   passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production build. The
-  release audit scanned 126 candidate files and 390 historical blobs. Remote CI is pending after the
-  task-branch push.
+  release audit scanned 126 candidate files and 390 historical blobs. GitHub CI run `31856326624`
+  passed at `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`.

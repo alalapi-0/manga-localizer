@@ -115,8 +115,8 @@ Semantic Versioning.
   an English pivot, glossary/name protection, and a public synthetic comparison script. It does not send
   text off-machine. Traditional Chinese and manga-tuned quality remain out of scope for this provider.
   Local gates passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production
-  build. The release audit scanned 126 candidate files and 390 historical blobs. Remote CI is pending
-  after the task-branch push.
+  build. The release audit scanned 126 candidate files and 390 historical blobs. GitHub CI run
+  `31856326624` passed on `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`.
 
 ### Known limitations
 

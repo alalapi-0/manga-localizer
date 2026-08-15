@@ -44,6 +44,8 @@ Semantic Versioning.
   those region IDs without touching the rest of the page.
 - The typesetting inspector can rerun Pillow typesetting for the currently selected box after style or
   geometry edits.
+- T retypesets the selected box and Shift+T retypesets overflowing boxes when the canvas is focused.
+- After a typeset job for the current page completes, the canvas switches to the typeset preview.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -186,6 +188,10 @@ Semantic Versioning.
   gates passed frontend lint/typecheck/106 tests plus the production build. The release audit scanned
   128 candidate files and 587 historical blobs. Backend was unchanged from Round 23. GitHub CI run
   `31879412533` passed on `d674775ba742aa0103669ce9f1f912b856737728`.
+- Round 26 switches the canvas to the typeset preview when a typeset job for the current page
+  completes. Local gates passed frontend lint/typecheck/110 tests plus the production build. The
+  release audit scanned 128 candidate files and 599 historical blobs. Backend was unchanged from
+  Round 23.
 
 ### Known limitations
 

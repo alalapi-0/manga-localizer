@@ -2202,6 +2202,16 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         (job) => job.status === 'completed'
           && previousJobs.find((previous) => previous.id === job.id)?.status !== 'completed',
       );
+      const completedTypesetImageIds = new Set(
+        jobs.flatMap((job) => {
+          if (job.kind !== 'typeset' || job.status !== 'completed') return [];
+          const previous = previousJobs.find((entry) => entry.id === job.id);
+          if (!previous || previous.status === 'completed') return [];
+          return job.items
+            .map((item) => item.imageId)
+            .filter((imageId): imageId is string => Boolean(imageId));
+        }),
+      );
       const refreshedImages = imageResponse.map((image) =>
         hydrateImage(image, project.settings),
       );
@@ -2233,6 +2243,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         && newlyCompleted
       ) {
         await get().loadRegions(activeImageId, true);
+      }
+      if (
+        activeImageId
+        && completedTypesetImageIds.has(activeImageId)
+        && get().images.find((image) => image.id === activeImageId)?.status.typeset === 'done'
+      ) {
+        set({ canvasMode: 'typeset' });
       }
     } catch (error) {
       set({ globalError: errorMessage(error) });

@@ -1437,6 +1437,157 @@ describe('workbench store', () => {
     ]);
   });
 
+  it('switches to the typeset preview when a typeset job for the active page completes', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'running',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, typeset: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+  });
+
+  it('does not change the canvas when a typeset job was already complete', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, typeset: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+  });
+
+  it('does not change the canvas when an OCR job completes', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-ocr',
+        kind: 'ocr',
+        status: 'running',
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-ocr',
+        kind: 'ocr',
+        status: 'completed',
+      }),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+  });
+
+  it('does not change the canvas when typesetting completes on another page', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      jobs: [jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'running',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-2',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-typeset',
+        kind: 'typeset',
+        status: 'completed',
+        items: [{
+          id: 'item-typeset',
+          imageId: 'image-2',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1'),
+      imageFixture('image-2', {
+        status: { ...imageFixture('image-2').status, typeset: 'done' },
+      }),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+  });
+
   it('does not apply a region response that became stale during its request', async () => {
     seedWorkbench({ selectedRegionIds: ['region-1'] });
     vi.spyOn(api, 'listJobs').mockResolvedValue([

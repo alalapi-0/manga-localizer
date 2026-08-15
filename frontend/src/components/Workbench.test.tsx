@@ -1138,9 +1138,56 @@ describe('desktop workbench interactions', () => {
         rightTab: 'typesetting',
         canvasMode: 'typeset',
         focusRegionIds: ['region-9'],
+        drawerOpen: false,
       });
     });
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+    expect(screen.queryByRole('dialog', { name: '批处理与导出' })).not.toBeInTheDocument();
+  });
+
+  it('opens a failed queue item onto the matching inspector', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2'),
+      ],
+    });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'project',
+      jobs: [jobFixture({
+        id: 'job-ocr-failed',
+        kind: 'ocr',
+        status: 'failed',
+        total: 1,
+        completed: 0,
+        progress: 0,
+        items: [{
+          id: 'item-ocr-page2',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'failed',
+          progress: 0,
+          error: 'tesseract unavailable',
+        }],
+      })],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    await user.click(screen.getByText('查看 1 个队列项'));
+    await user.click(screen.getByRole('button', { name: '打开队列项 第二话/image-2.png' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-2',
+        rightTab: 'text',
+        canvasMode: 'original',
+        drawerOpen: false,
+      });
+    });
+    expect(screen.queryByRole('dialog', { name: '批处理与导出' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '文本' })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('keeps unavailable generated previews disabled and falls back to the original', () => {

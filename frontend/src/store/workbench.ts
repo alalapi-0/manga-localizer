@@ -2358,13 +2358,15 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     const image = get().images.find((entry) => entry.id === imageId);
     if (!image) return false;
     const regions = get().regionsByImage[imageId] ?? [];
+    const rightTab = inspectorTabForJobKind(job.kind);
     if (job.kind === 'typeset') {
       const overlayIds = overlayRegionIdsFromJobItem(item, regions);
       const overflowIds = overflowingRegionIds(image, regions);
       const focusIds = overlayIds.length ? overlayIds : overflowIds;
       set((state) => ({
         canvasMode: image.status.typeset === 'done' ? 'typeset' : state.canvasMode,
-        rightTab: 'typesetting',
+        rightTab,
+        drawerOpen: false,
         ...(focusIds.length
           ? {
             selectedRegionIds: focusIds,
@@ -2376,13 +2378,14 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       return true;
     }
     if (job.kind === 'inpaint' && image.status.inpaint === 'done') {
-      set({ canvasMode: 'erased', showMask: true, rightTab: 'repair' });
+      set({ canvasMode: 'erased', showMask: true, rightTab, drawerOpen: false });
       return true;
     }
     if (job.kind === 'preprocess' && image.status.preprocess === 'done') {
-      set({ canvasMode: 'preprocessed' });
+      set({ canvasMode: 'preprocessed', rightTab, drawerOpen: false });
       return true;
     }
+    set({ rightTab, drawerOpen: false });
     return true;
   },
 
@@ -2528,6 +2531,13 @@ function adjacentVisibleImage(
   return [...visible].reverse().find((image) =>
     images.findIndex((entry) => entry.id === image.id) < fullIndex
   );
+}
+
+function inspectorTabForJobKind(kind: JobKind): RightPanelTab {
+  if (kind === 'typeset') return 'typesetting';
+  if (kind === 'inpaint') return 'repair';
+  if (kind === 'preprocess' || kind === 'export') return 'project';
+  return 'text';
 }
 
 function overlayRegionIdsFromJobItem(item: Job['items'][number], regions: Region[]): string[] {

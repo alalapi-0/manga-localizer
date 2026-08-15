@@ -94,6 +94,8 @@ Last updated: 2026-08-15
   the remaining 112/130 clean-plate visual reviews.
 - Round 41 — the sidebar page counter follows the visible (filtered/search) list, and **← / →** disable
   at the ends of that list. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 42 — a failed queue item opens that page and the matching inspector, then closes the batch
+  drawer. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -508,3 +510,8 @@ pages. Those files remain `detector-draft` until human review.
   release audit scanned 128 candidate files and 771 historical blobs. Backend was unchanged from
   Round 31.
   GitHub CI run `31886984640` passed at `a1031f1604a0cb8372fe130ac64b380a251df0a7`.
+- **Round 42:** a failed queue item opens that page and the matching inspector, then closes the batch
+  drawer. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed
+  2 launcher tests and frontend lint/typecheck/135 tests/build. The release audit scanned 128
+  candidate files and 782 historical blobs. Backend was unchanged from Round 31. GitHub CI is
+  pending after push.

@@ -1162,6 +1162,7 @@ describe('workbench store', () => {
     useWorkbenchStore.setState((state) => ({
       canvasMode: 'original',
       rightTab: 'text',
+      drawerOpen: true,
       regionsByImage: { ...state.regionsByImage, 'image-2': [overlay] },
       jobs: [jobFixture({
         id: 'job-typeset',
@@ -1189,6 +1190,7 @@ describe('workbench store', () => {
       rightTab: 'typesetting',
       canvasMode: 'typeset',
       focusRegionIds: ['region-9'],
+      drawerOpen: false,
     });
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
@@ -1246,6 +1248,7 @@ describe('workbench store', () => {
       canvasMode: 'original',
       rightTab: 'text',
       showMask: false,
+      drawerOpen: true,
       jobs: [jobFixture({
         id: 'job-inpaint',
         kind: 'inpaint',
@@ -1266,6 +1269,70 @@ describe('workbench store', () => {
       canvasMode: 'erased',
       showMask: true,
       rightTab: 'repair',
+      drawerOpen: false,
+    });
+  });
+
+  it('opens a failed queue item on the matching inspector', async () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1'),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, inpaint: 'failed' },
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      rightTab: 'project',
+      drawerOpen: true,
+      jobs: [jobFixture({
+        id: 'job-ocr',
+        kind: 'ocr',
+        status: 'failed',
+        items: [{
+          id: 'item-ocr',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'failed',
+          progress: 0,
+          error: 'tesseract unavailable',
+        }],
+      })],
+    });
+
+    expect(await useWorkbenchStore.getState().openJobItem('job-ocr', 'item-ocr')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      canvasMode: 'original',
+      rightTab: 'text',
+      drawerOpen: false,
+    });
+
+    useWorkbenchStore.setState({
+      activeImageId: 'image-1',
+      rightTab: 'text',
+      drawerOpen: true,
+      jobs: [jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'failed',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-2',
+          label: 'opaque-id',
+          status: 'failed',
+          progress: 0,
+          error: 'mask empty',
+        }],
+      })],
+    });
+    expect(await useWorkbenchStore.getState().openJobItem('job-inpaint', 'item-inpaint')).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-2',
+      canvasMode: 'original',
+      rightTab: 'repair',
+      drawerOpen: false,
     });
   });
 

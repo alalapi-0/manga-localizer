@@ -19,12 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 41 shows the sidebar page counter on the visible (filtered/search) list and disables **← / →**
-at the ends of that list. The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
+Round 42 opens a failed (and other) job-queue item onto that page and the matching inspector, then
+closes the batch drawer. The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
 Remote CI for Round 41 passed as run `31886984640` on `a1031f1604a0cb8372fe130ac64b380a251df0a7`.
-Round 40 (`520133a74f231a5464400e78ade7c8cf1b522dca`, CI `31886581607`) remains G/toolbar framing.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 42 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -189,6 +189,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   and complete CI.
 - [x] Round 41: show visible-list page position and disable adjacent navigation at the ends, with
   public regression, and complete CI.
+- [x] Round 42: open a failed queue item onto the matching inspector, with public regression.
+  Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -509,6 +511,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `a1031f1604a0cb8372fe130ac64b380a251df0a7`. Backend Ruff lint/format, 231 pytest cases, and the
   release audit passed. Frontend lint/typecheck/133 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 42 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 135 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 782 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 
@@ -534,9 +541,11 @@ full-book output quality.
   overflowing boxes. The footer counter is that visible list, and **← / →** disable at its ends.
   **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
   **G** and the canvas **框住** control frame the current selection.
-  Clicking a job-queue item opens that page. Overlay typeset items select and frame the redrawn boxes;
-  full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and
-  review mask; completed preprocess items open the enhanced preview.
+  Clicking a job-queue item opens that page and the matching inspector, then closes the batch drawer.
+  Overlay typeset items select and frame the redrawn boxes; full-page typeset items frame leftover
+  overflow. Completed inpaint items open the erased preview and review mask; completed preprocess
+  items open the enhanced preview. Failed detect/OCR/translate items open **文本**; failed inpaint
+  items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
   When an inpaint job for the current page completes, the canvas switches to the erased
   preview and shows the review mask. When a preprocess job for the current page completes, the canvas
   switches to the enhanced preview. Those visual-stage completions also open original-vs-result compare.

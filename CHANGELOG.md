@@ -51,9 +51,11 @@ Semantic Versioning.
   shows the review mask, opens compare, and opens the repair inspector.
 - After a preprocess job for the current page completes, the canvas switches to the enhanced preview
   and opens original-vs-result compare.
-- Clicking a job-queue item opens that page. Overlay typeset items select and frame the redrawn boxes;
-  full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and
-  review mask; completed preprocess items open the enhanced preview.
+- Clicking a job-queue item opens that page and the matching inspector, then closes the batch drawer.
+  Overlay typeset items select and frame the redrawn boxes; full-page typeset items frame leftover
+  overflow. Completed inpaint items open the erased preview and review mask; completed preprocess
+  items open the enhanced preview. Failed detect/OCR/translate items open **文本**; failed inpaint
+  items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
@@ -279,6 +281,10 @@ Semantic Versioning.
   plus the production build. The release audit scanned 128 candidate files and 771 historical blobs.
   Backend was unchanged from Round 31. GitHub CI run `31886984640` passed on
   `a1031f1604a0cb8372fe130ac64b380a251df0a7`.
+- Round 42 opens a failed queue item onto that page and the matching inspector, then closes the batch
+  drawer. Local gates passed 2 launcher tests and frontend lint/typecheck/135 tests plus the
+  production build. The release audit scanned 128 candidate files and 782 historical blobs. Backend
+  was unchanged from Round 31. GitHub CI is pending after push.
 
 ### Known limitations
 

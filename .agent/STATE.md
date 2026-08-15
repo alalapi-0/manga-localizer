@@ -21,7 +21,8 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 33 frames the just-selected typeset boxes in the canvas after a typeset job for the current
 page completes, so compare-split does not leave them as a tiny rectangle on the full page. The work
-is on `agent/manga-round7-governance-20260812` through draft PR #3. Round 32
+is on `agent/manga-round7-governance-20260812` through draft PR #3. The Round 33 candidate is
+`e41261ab2e37aa974cde07b0d79aba9d7a22ae9b` with GitHub CI run `31883910085` green. Round 32
 (`b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`, CI `31883446023`) remains overlay-box selection.
 Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
 product goal remains active. No merge, tag, release, or deployment has occurred.
@@ -172,7 +173,7 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
 - [x] Round 32: keep overlay boxes selected when a partial typeset job for the current page completes,
   with public regression, and complete CI.
 - [x] Round 33: frame selected typeset boxes in the canvas after the current page's typeset job
-  completes, with public regression. Remote CI for this round is still pending.
+  completes, with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -416,7 +417,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   and the production build; release audit over 128 candidate files plus 673 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
-  evidence remains the GitHub e2e job after push. Remote CI for Round 33 is pending.
+  evidence remains the GitHub e2e job after push.
+- Round 33 authoritative remote verification: GitHub CI run `31883910085` passed at
+  `e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/119 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

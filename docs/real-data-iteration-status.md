@@ -447,4 +447,5 @@ pages. Those files remain `detector-draft` until human review.
   completes, including after compare splits the view. Fit-to-window clears that framing. This does
   not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests
   and frontend lint/typecheck/119 tests/build. The release audit scanned 128 candidate files and 673
-  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31883910085` passed at `e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`.

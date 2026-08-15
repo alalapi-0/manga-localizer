@@ -230,7 +230,8 @@ Semantic Versioning.
 - Round 33 frames the selected typeset boxes in the canvas after a typeset job for the current page
   completes. Fit-to-window clears that framing. Local gates passed 2 launcher tests and frontend
   lint/typecheck/119 tests plus the production build. The release audit scanned 128 candidate files
-  and 673 historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  and 673 historical blobs. Backend was unchanged from Round 31. GitHub CI run `31883910085`
+  passed on `e41261ab2e37aa974cde07b0d79aba9d7a22ae9b`.
 
 ### Known limitations
 

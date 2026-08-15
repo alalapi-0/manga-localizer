@@ -393,4 +393,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 26:** the canvas switches to the typeset preview when a typeset job for the current page
   completes. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
   passed frontend lint/typecheck/110 tests/build. The release audit scanned 128 candidate files and
-  599 historical blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  599 historical blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31879945945` passed at `906c898bd664a9a2ffdc33d5ef3bb1a783c84e0c`.

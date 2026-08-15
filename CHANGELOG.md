@@ -191,7 +191,7 @@ Semantic Versioning.
 - Round 26 switches the canvas to the typeset preview when a typeset job for the current page
   completes. Local gates passed frontend lint/typecheck/110 tests plus the production build. The
   release audit scanned 128 candidate files and 599 historical blobs. Backend was unchanged from
-  Round 23.
+  Round 23. GitHub CI run `31879945945` passed on `906c898bd664a9a2ffdc33d5ef3bb1a783c84e0c`.
 
 ### Known limitations
 

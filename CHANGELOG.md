@@ -150,6 +150,11 @@ Semantic Versioning.
   layouts keep authored punctuation. Local gates passed 2 launcher tests and 222 backend tests; frontend
   was unchanged from Round 17. The release audit scanned 128 candidate files and 492 historical blobs.
   GitHub CI run `31874726926` passed on `41545b8e453aaebab9325ab253f9754168712acc`.
+- Round 19 packs adjacent small typesetting boxes as fragment clusters. Identical translations share
+  the cluster; distinct fragment texts concatenate in reading order. Local gates passed 2 launcher
+  tests and 224 backend tests; frontend was unchanged from Round 17. The release audit scanned 128
+  candidate files and 505 historical blobs. GitHub CI run `31875271369` passed on
+  `7dfccd324d29ab7c33055c70d7140e318c2b7cc7`.
 
 ### Known limitations
 

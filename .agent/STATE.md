@@ -20,11 +20,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 19 packs adjacent small typesetting boxes as fragment clusters on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. Shared translation text is laid out
-across aligned nearby fragments; distinct fragment texts are concatenated in reading order. Large
-balloons stay independent. Round 18 vertical punctuation remains in place (`41545b8`, CI
-`31874726926`). Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed.
-The full product goal remains active. No merge, tag, release, or deployment has occurred.
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 19 feature commit is
+`7dfccd324d29ab7c33055c70d7140e318c2b7cc7` with GitHub CI run `31875271369` green. Shared translation
+text is laid out across aligned nearby fragments; distinct fragment texts are concatenated in reading
+order. Large balloons stay independent. Round 18 vertical punctuation remains in place. Round 8 remains
+18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains
+active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -144,8 +145,8 @@ The full product goal remains active. No merge, tag, release, or deployment has 
   public regression, and complete CI.
 - [x] Round 18: vertical CJK punctuation presentation forms and hanging comma/period glyphs, with
   public regression, and complete CI.
-- [x] Round 19: adjacent small-box fragment clustering for typesetting, with public regression.
-  Remote CI for this round is still pending.
+- [x] Round 19: adjacent small-box fragment clustering for typesetting, with public regression,
+  and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -272,7 +273,11 @@ The full product goal remains active. No merge, tag, release, or deployment has 
   release audit over 128 candidate files plus 505 historical blobs; `uv lock --check --project backend`;
   compileall; and `git diff --check`. Frontend was unchanged from Round 17 (99 Vitest). Playwright
   discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
-  browser evidence remains the GitHub e2e job after push. Remote CI for Round 19 is pending.
+  browser evidence remains the GitHub e2e job after push.
+- Round 19 authoritative remote verification: GitHub CI run `31875271369` passed at
+  `7dfccd324d29ab7c33055c70d7140e318c2b7cc7`. Backend Ruff lint/format, 224 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/99 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

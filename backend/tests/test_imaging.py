@@ -390,3 +390,46 @@ def test_restore_clean_region_boxes_replaces_only_selected_pixels() -> None:
     pixels = np.asarray(restored.convert("RGB"))
     assert pixels[12, 15].tolist() == [255, 255, 255]
     assert pixels[40, 50].tolist() == [0, 0, 255]
+
+
+def test_typeset_overlay_redraws_one_horizontal_box_on_an_existing_plate() -> None:
+    capabilities = font_capabilities()
+    if not capabilities["available"]:
+        pytest.skip("No usable system CJK font")
+    style = {
+        "fontSize": 32,
+        "minFontSize": 32,
+        "autoFit": False,
+        "autoWrap": False,
+        "strokeWidth": 0,
+        "color": "#cc0000",
+        "align": "start",
+        "padding": 2,
+    }
+    first = {
+        "id": "left",
+        "x": 16,
+        "y": 24,
+        "width": 168,
+        "height": 88,
+        "direction": "horizontal",
+        "translationText": "甲甲",
+        "style": style,
+    }
+    second = {
+        **first,
+        "id": "right",
+        "x": 216,
+        "translationText": "乙乙乙乙",
+    }
+    source = Image.new("RGB", (400, 160), "white")
+    initial = typeset_image(source, [first, second]).image
+    punched = restore_clean_region_boxes(initial, source, [first])
+    first = {**first, "translationText": "丙丙丙丙丙丙丙丙"}
+    overlay = typeset_image(punched, [first]).image
+    before = np.asarray(initial.convert("RGB"))
+    after = np.asarray(overlay.convert("RGB"))
+    left = np.s_[24:112, 16:184]
+    right = np.s_[24:112, 216:384]
+    assert not np.array_equal(before[left], after[left])
+    assert np.array_equal(before[right], after[right])

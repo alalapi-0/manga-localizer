@@ -810,26 +810,49 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
     if not font_capabilities()["available"]:
         pytest.skip("No usable system CJK font")
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    style = {
+        "fontSize": 28,
+        "minFontSize": 28,
+        "autoFit": False,
+        "autoWrap": False,
+        "strokeWidth": 0,
+        "color": "#cc0000",
+        "align": "start",
+        "padding": 2,
+    }
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
-        image = upload_image(client, project["id"])
-        first = _confirm_region(
-            client,
-            _add_region(client, image["id"], translation="甲文"),
+        image = upload_image(client, project["id"], data=png_bytes((400, 160)))
+        first = _add_region(client, image["id"], translation="甲甲")
+        first = client.patch(
+            f"/api/regions/{first['id']}",
+            json={
+                "x": 16,
+                "y": 24,
+                "width": 168,
+                "height": 88,
+                "direction": "horizontal",
+                "style": style,
+                "expectedRevision": first["revision"],
+            },
         )
-        second = _add_region(client, image["id"], translation="乙文")
-        moved = client.patch(
+        assert first.status_code == 200, first.text
+        first = _confirm_region(client, first.json())
+        second = _add_region(client, image["id"], translation="乙乙乙乙")
+        second = client.patch(
             f"/api/regions/{second['id']}",
             json={
-                "x": 150,
-                "y": 40,
-                "width": 80,
-                "height": 120,
+                "x": 216,
+                "y": 24,
+                "width": 168,
+                "height": 88,
+                "direction": "horizontal",
+                "style": style,
                 "expectedRevision": second["revision"],
             },
         )
-        assert moved.status_code == 200, moved.text
-        second = _confirm_region(client, moved.json())
+        assert second.status_code == 200, second.text
+        second = _confirm_region(client, second.json())
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -845,11 +868,12 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         edited = client.patch(
             f"/api/regions/{first['id']}",
             json={
-                "translationText": "丙文",
+                "translationText": "丙丙丙丙丙丙丙丙",
                 "expectedRevision": first["revision"],
             },
         )
         assert edited.status_code == 200, edited.text
+        assert edited.json()["translationText"] == "丙丙丙丙丙丙丙丙"
         assert edited.json()["trustDisposition"] == "trusted"
         stale = client.get(f"/api/projects/{project['id']}/images").json()[0]
         assert stale["status"]["inpaint"] == "done"
@@ -868,6 +892,7 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         assert finished["status"] == "completed", finished
         output = finished["items"][0]["output"]
         assert output["typesetEligibleRegionCount"] == 1, output
+        assert output["typesetSkippedRegionCount"] == 1, output
         after = client.get(f"/api/images/{image['id']}/generated/typeset")
         assert after.status_code == 200, after.text
         with Image.open(io.BytesIO(after.content)) as opened:
@@ -884,9 +909,11 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         first_after = region_pixels(current, first)
         second_before = region_pixels(previous, second)
         second_after = region_pixels(current, second)
-        assert np.any(first_before != 255)
-        assert np.any(first_after != 255)
-        assert not np.array_equal(first_before, first_after)
+        red_before = int(np.sum((first_before[..., 0] > 150) & (first_before[..., 1] < 80)))
+        red_after = int(np.sum((first_after[..., 0] > 150) & (first_after[..., 1] < 80)))
+        assert red_before > 0
+        assert red_after > red_before
+        assert not np.array_equal(previous, current)
         assert np.array_equal(second_before, second_after)
 
 

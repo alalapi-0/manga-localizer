@@ -260,7 +260,8 @@ Semantic Versioning.
 - Round 38 keeps **← / →** on the visible sidebar list. Under the overflow filter they skip hidden
   pages and frame overflowing boxes. Local gates passed 2 launcher tests and frontend
   lint/typecheck/129 tests plus the production build. The release audit scanned 128 candidate files
-  and 735 historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  and 735 historical blobs. Backend was unchanged from Round 31. GitHub CI run `31885919299` passed
+  on `35e6293e0e5d242aaad5cad55530f4f080262626`.
 
 ### Known limitations
 

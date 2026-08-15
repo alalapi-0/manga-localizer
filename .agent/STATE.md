@@ -22,6 +22,7 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 Round 38 makes **← / →** follow the sidebar filter and search. With **排版溢出** selected, next/previous
 image skip hidden pages and frame overflowing boxes. The work is on
 `agent/manga-round7-governance-20260812` through draft PR #3.
+Remote CI for Round 38 passed as run `31885919299` on `35e6293e0e5d242aaad5cad55530f4f080262626`.
 Round 37 (`ee182935b4916bd810ca38fd5b48b738e7e9258b`, CI `31885552346`) remains the overflow pill.
 Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product
 goal remains active. No merge, tag, release, or deployment has occurred.
@@ -181,8 +182,8 @@ goal remains active. No merge, tag, release, or deployment has occurred.
   with public regression, and complete CI.
 - [x] Round 37: frame overflow boxes from the sidebar overflow pill, with public regression,
   and complete CI.
-- [x] Round 38: keep adjacent image navigation on the visible sidebar list, with public regression.
-  Remote CI for this round is still pending.
+- [x] Round 38: keep adjacent image navigation on the visible sidebar list, with public regression,
+  and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -471,7 +472,11 @@ goal remains active. No merge, tag, release, or deployment has occurred.
   and the production build; release audit over 128 candidate files plus 735 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
-  evidence remains the GitHub e2e job after push. Remote CI for Round 38 is pending.
+  evidence remains the GitHub e2e job after push.
+- Round 38 authoritative remote verification: GitHub CI run `31885919299` passed at
+  `35e6293e0e5d242aaad5cad55530f4f080262626`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/129 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

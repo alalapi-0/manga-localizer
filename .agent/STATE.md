@@ -20,11 +20,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 21 adds a per-region typeset action in the typesetting inspector on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. After editing font or box geometry,
-the editor can rerun Pillow typesetting for the selected region only. Round 20 overflow-only
-typesetting remains in place (`d02e873`, CI `31876251138`). Round 8 remains 18/130 explicit visual
-reviews; detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag,
-release, or deployment has occurred.
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 21 feature commit is
+`59a821b7707f19b8a8d2109c150b8e941981c895` with GitHub CI run `31876680453` green. After editing font
+or box geometry, the editor can rerun Pillow typesetting for the selected region only. Round 20
+overflow-only typesetting remains in place. Round 8 remains 18/130 explicit visual reviews; detector
+drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release, or
+deployment has occurred.
 
 ## Environment evidence
 
@@ -148,8 +149,8 @@ release, or deployment has occurred.
   and complete CI.
 - [x] Round 20: overflow-only typesetting and overflow-box selection in the inspector, with public
   regression, and complete CI.
-- [x] Round 21: per-region typeset rerun from the typesetting inspector, with public regression.
-  Remote CI for this round is still pending.
+- [x] Round 21: per-region typeset rerun from the typesetting inspector, with public regression,
+  and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -294,7 +295,11 @@ release, or deployment has occurred.
   build; release audit over 128 candidate files plus 533 historical blobs; and `git diff --check`.
   Backend was unchanged from Round 19 (224 pytest). Playwright discovers both Chromium journeys; this
   environment lacks Playwright Chromium revision 1234, so live browser evidence remains the GitHub e2e
-  job after push. Remote CI for Round 21 is pending.
+  job after push.
+- Round 21 authoritative remote verification: GitHub CI run `31876680453` passed at
+  `59a821b7707f19b8a8d2109c150b8e941981c895`. Backend Ruff lint/format, 224 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/102 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

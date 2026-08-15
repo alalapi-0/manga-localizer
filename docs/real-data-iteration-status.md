@@ -355,4 +355,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 21:** the typesetting inspector can rerun Pillow typesetting for the selected region only
   after font or box edits. This does not complete the remaining 112/130 clean-plate visual reviews.
   Local gates passed frontend lint/typecheck/102 tests/build. The release audit scanned 128 candidate
-  files and 533 historical blobs. Backend was unchanged from Round 19. Remote CI is pending.
+  files and 533 historical blobs. Backend was unchanged from Round 19.
+  GitHub CI run `31876680453` passed at `59a821b7707f19b8a8d2109c150b8e941981c895`.

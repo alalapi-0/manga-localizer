@@ -163,6 +163,10 @@ Semantic Versioning.
   region IDs only. Local gates passed 2 launcher tests and frontend lint/typecheck/101 tests plus the
   production build. The release audit scanned 128 candidate files and 518 historical blobs. GitHub CI
   run `31876251138` passed on `d02e873fd3860290ebf15bbb98586079ab40b1be`.
+- Round 21 adds a typesetting-inspector action to rerun Pillow typesetting for the selected box only.
+  Local gates passed frontend lint/typecheck/102 tests plus the production build. The release audit
+  scanned 128 candidate files and 533 historical blobs. GitHub CI run `31876680453` passed on
+  `59a821b7707f19b8a8d2109c150b8e941981c895`.
 
 ### Known limitations
 

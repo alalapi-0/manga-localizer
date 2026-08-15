@@ -85,7 +85,10 @@ function useGlobalShortcuts() {
             ? event.key === 'ArrowUp' ? regions.length - 1 : 0
             : (currentIndex + offset + regions.length) % regions.length;
           const nextRegion = regions[nextIndex];
-          if (nextRegion) state.selectRegion(nextRegion.id);
+          if (nextRegion) {
+            state.selectRegion(nextRegion.id);
+            state.focusRegions([nextRegion.id]);
+          }
         }
         return;
       }

@@ -46,7 +46,8 @@ skips pages already marked reviewed so you can keep moving through a book. Filte
 **排版溢出**, then **← / →** stay on those visible overflowing pages and frame their overflow boxes.
 The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame
-them in the typesetting inspector. Vertical balloons keep
+them in the typesetting inspector. **⌥↓ / ⌥↑** and the inspector region list also frame the selected
+box. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical
 presentation forms and hangs comma/period glyphs. Horizontal balloons leave that text unchanged.
 Adjacent small OCR fragments that share direction and sit close together can share one typeset run;

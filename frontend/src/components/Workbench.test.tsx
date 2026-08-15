@@ -98,6 +98,19 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('frames a box from the inspector region list', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '选择文本框 #2' }));
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      selectedRegionIds: ['region-2'],
+      focusRegionIds: ['region-2'],
+    });
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+
   it('skips hidden pages when using next-image under the overflow filter', async () => {
     const user = userEvent.setup();
     const overflow = regionFixture('region-9', { imageId: 'image-3' });
@@ -790,6 +803,7 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
     fireEvent.keyDown(window, { key: 'ArrowDown', altKey: true });
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
     fireEvent.keyDown(window, { key: 'Enter' });
     await waitFor(() => expect(
       useWorkbenchStore.getState().regionsByImage['image-1']?.[1]?.confirmed,

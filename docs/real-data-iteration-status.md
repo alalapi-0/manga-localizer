@@ -88,6 +88,8 @@ Last updated: 2026-08-15
   complete the remaining 112/130 clean-plate visual reviews.
 - Round 38 — **← / →** follow the sidebar filter; under overflow they skip hidden pages and frame
   overflowing boxes. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 39 — **⌥↓ / ⌥↑** and the inspector region list frame the selected box. This does not complete
+  the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -486,3 +488,7 @@ pages. Those files remain `detector-draft` until human review.
   lint/typecheck/129 tests/build. The release audit scanned 128 candidate files and 735 historical
   blobs. Backend was unchanged from Round 31.
   GitHub CI run `31885919299` passed at `35e6293e0e5d242aaad5cad55530f4f080262626`.
+- **Round 39:** **⌥↓ / ⌥↑** and the inspector region list frame the selected box. This does not
+  complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
+  frontend lint/typecheck/130 tests/build. The release audit scanned 128 candidate files and 747
+  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.

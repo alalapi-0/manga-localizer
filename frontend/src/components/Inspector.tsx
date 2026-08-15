@@ -160,6 +160,7 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
 function TextInspector({ regions, selected }: { regions: Region[]; selected: Region[] }) {
   const image = useWorkbenchStore(activeImage);
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
+  const focusRegions = useWorkbenchStore((state) => state.focusRegions);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
   const setRegionConfirmed = useWorkbenchStore((state) => state.setRegionConfirmed);
   const deleteSelectedRegions = useWorkbenchStore((state) => state.deleteSelectedRegions);
@@ -199,7 +200,15 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
       <div className="region-index">
         <p className="panel-hint">选择一个文本框编辑内容；按住 Shift 可多选。</p>
         {regions.map((region) => (
-          <button key={region.id} onClick={() => selectRegion(region.id)} type="button">
+          <button
+            aria-label={`选择文本框 #${region.order}`}
+            key={region.id}
+            onClick={() => {
+              selectRegion(region.id);
+              focusRegions([region.id]);
+            }}
+            type="button"
+          >
             <b>#{region.order}</b>
             <span>{region.sourceText || '（空文本）'}</span>
             <em>{regionHasTypesetOverflow(image, region.id) ? '排版溢出' : dispositionLabels[region.trustDisposition]}</em>

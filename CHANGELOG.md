@@ -57,6 +57,7 @@ Semantic Versioning.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes.
+- **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -262,6 +263,10 @@ Semantic Versioning.
   lint/typecheck/129 tests plus the production build. The release audit scanned 128 candidate files
   and 735 historical blobs. Backend was unchanged from Round 31. GitHub CI run `31885919299` passed
   on `35e6293e0e5d242aaad5cad55530f4f080262626`.
+- Round 39 frames the selected box from **⌥↓ / ⌥↑** and the inspector region list. Local gates passed
+  2 launcher tests and frontend lint/typecheck/130 tests plus the production build. The release audit
+  scanned 128 candidate files and 747 historical blobs. Backend was unchanged from Round 31. Remote
+  CI is pending.
 
 ### Known limitations
 

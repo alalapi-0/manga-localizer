@@ -277,7 +277,8 @@ Semantic Versioning.
 - Round 41 shows the sidebar page counter on the visible (filtered/search) list and disables **← / →**
   at the ends of that list. Local gates passed 2 launcher tests and frontend lint/typecheck/133 tests
   plus the production build. The release audit scanned 128 candidate files and 771 historical blobs.
-  Backend was unchanged from Round 31. GitHub CI is pending after push.
+  Backend was unchanged from Round 31. GitHub CI run `31886984640` passed on
+  `a1031f1604a0cb8372fe130ac64b380a251df0a7`.
 
 ### Known limitations
 

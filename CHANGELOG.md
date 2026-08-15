@@ -235,7 +235,8 @@ Semantic Versioning.
 - Round 34 frames overflow boxes from the inspector **选中溢出框** and **打开** actions, and opens
   the typesetting tab. Local gates passed 2 launcher tests and frontend lint/typecheck/120 tests plus
   the production build. The release audit scanned 128 candidate files and 686 historical blobs.
-  Backend was unchanged from Round 31. Remote CI is pending.
+  Backend was unchanged from Round 31. GitHub CI run `31884339883` passed on
+  `b637b97d9a56a8ec73170adb6abb0c3a2811eb46`.
 
 ### Known limitations
 

@@ -389,6 +389,7 @@ function TypesettingInspector({ region }: { region: Region | undefined }) {
             setDrawerOpen(true);
             void startBatch(['typeset'], [image.id], defaultExportOptions, 1, [region.id]);
           }}
+          title="T"
           type="button"
         >
           重排当前框
@@ -772,6 +773,7 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
               setDrawerOpen(true);
               void startBatch(['typeset'], [image.id], defaultExportOptions, 1, overflowIds);
             }}
+            title="⇧T"
             type="button"
           >
             只重排溢出框

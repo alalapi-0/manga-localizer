@@ -6,7 +6,7 @@ import { EmptyState, IconButton, LoadingState } from './components/Primitives';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { hasPendingChanges, useWorkbenchStore } from './store/workbench';
+import { hasPendingChanges, overflowingRegionIds, useWorkbenchStore } from './store/workbench';
 
 const CanvasWorkspace = lazy(async () => {
   const module = await import('./components/CanvasWorkspace');
@@ -103,6 +103,34 @@ function useGlobalShortcuts() {
       if (event.code === 'Space') {
         event.preventDefault();
         state.setSpacePressed(true);
+        return;
+      }
+      if (!modifier && event.key.toLowerCase() === 't') {
+        const image = state.images.find((entry) => entry.id === state.activeImageId);
+        if (!image) return;
+        const exportOptions = {
+          format: 'both' as const,
+          imageVariant: 'typeset' as const,
+          conflict: 'rename' as const,
+          preserveTree: true,
+        };
+        if (event.shiftKey) {
+          const overflowIds = overflowingRegionIds(
+            image,
+            state.regionsByImage[image.id] ?? [],
+          );
+          if (!overflowIds.length) return;
+          event.preventDefault();
+          state.setDrawerOpen(true);
+          void state.startBatch(['typeset'], [image.id], exportOptions, 1, overflowIds);
+          return;
+        }
+        if (state.selectedRegionIds.length !== 1) return;
+        const regionId = state.selectedRegionIds[0];
+        if (!regionId) return;
+        event.preventDefault();
+        state.setDrawerOpen(true);
+        void state.startBatch(['typeset'], [image.id], exportOptions, 1, [regionId]);
         return;
       }
       switch (event.key.toLowerCase()) {

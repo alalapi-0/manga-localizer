@@ -24,7 +24,8 @@ unchanged.
 
 Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Use
 **只重排溢出框** to rerun typesetting for those boxes only, or **选中溢出框** then merge/resize.
-Shrink the font or enable auto-fit, then click **重排当前框**. **只重排溢出框** and **重排当前框**
+Shrink the font or enable auto-fit, then click **重排当前框** or press **T**. **只重排溢出框**
+(**⇧T**) and **重排当前框**
 overlay those boxes onto the last typeset plate when the clean plate is still current; other boxes
 keep their pixels. If the previous typeset file is missing, that action redraws the whole page so
 other boxes are not dropped. The job queue then shows whether that run overlaid selected boxes or

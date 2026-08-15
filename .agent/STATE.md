@@ -19,12 +19,11 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 24 shows whether a typeset job overlaid selected boxes or redrew the page in the job queue.
-The work is on `agent/manga-round7-governance-20260812` through draft PR #3. The Round 24 candidate is
-`5e8545bd7e747b22b0cb989ce4a5a0221ed598a1` with GitHub CI run `31879071282` green. Round 23
-(`c8fb20beca736452f702121ad64b7a16ac52b1c3`, CI `31878760451`) remains the missing-plate fallback.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 25 adds T / Shift+T shortcuts to retypeset the selected box or overflowing boxes.
+The work is on `agent/manga-round7-governance-20260812` through draft PR #3. Round 24
+(`5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`, CI `31879071282`) remains the job-queue overlay
+summary. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
+full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -156,6 +155,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   and complete CI.
 - [x] Round 24: job-queue overlay vs full-page typeset summary, with public regression,
   and complete CI.
+- [x] Round 25: T / Shift+T shortcuts for selected-box and overflow-only typesetting, with public
+  regression. Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -329,6 +330,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`. Backend Ruff lint/format, 230 pytest cases, and the
   release audit passed. Frontend lint/typecheck/104 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 25 local verification passed frontend ESLint, TypeScript, 106 Vitest cases, and the production
+  build; release audit over 128 candidate files plus 587 historical blobs. Backend was unchanged from
+  Round 23 (230 pytest). Playwright discovers both Chromium journeys; this environment lacks Playwright
+  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push. Remote CI
+  for Round 25 is pending.
 
 ## Known limitations and blockers
 

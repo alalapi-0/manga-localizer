@@ -58,6 +58,8 @@ Last updated: 2026-08-15
   does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 24 — the job queue shows whether a typeset run overlaid selected boxes or redrew the page.
   This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 25 — T retypesets the selected box and Shift+T retypesets overflowing boxes. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -381,3 +383,7 @@ pages. Those files remain `detector-draft` until human review.
   lint/typecheck/104 tests/build. The release audit scanned 128 candidate files and 576 historical
   blobs. Backend was unchanged from Round 23.
   GitHub CI run `31879071282` passed at `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`.
+- **Round 25:** T retypesets the selected box and Shift+T retypesets overflowing boxes. This does not
+  complete the remaining 112/130 clean-plate visual reviews. Local gates passed frontend
+  lint/typecheck/106 tests/build. The release audit scanned 128 candidate files and 587 historical
+  blobs. Backend was unchanged from Round 23. Remote CI is pending.

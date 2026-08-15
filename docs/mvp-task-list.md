@@ -67,6 +67,7 @@ not inferred from this tracked checklist.
 - [x] Overlay selected typeset boxes onto the last plate without redrawing untouched boxes
 - [x] Redraw the whole page when a region-scoped typeset has no last typeset plate
 - [x] Show overlay vs full-page typeset counts on the job queue card
+- [x] Keyboard shortcuts to retypeset the selected box (T) or overflowing boxes (Shift+T)
 
 ## Explicitly deferred
 

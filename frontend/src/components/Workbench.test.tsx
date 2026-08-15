@@ -152,6 +152,82 @@ describe('desktop workbench interactions', () => {
     });
   });
 
+  it('queues typesetting for the selected region with the T shortcut', async () => {
+    const region = regionFixture('region-1', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 0, trustedCount: 1 })],
+      regions: [region],
+      selectedRegionIds: ['region-1'],
+    });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listRegions').mockResolvedValue([region]);
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-shortcut-typeset',
+      kind: 'typeset',
+    }));
+    render(<App />);
+
+    fireEvent.keyDown(window, { key: 't' });
+    await waitFor(() => expect(startJob).toHaveBeenCalledWith('project-1', 'typeset', {
+      imageIds: ['image-1'],
+      regionIds: ['region-1'],
+      options: expect.objectContaining({ provider: 'pillow', concurrency: 1 }),
+    }));
+  });
+
+  it('queues overflow-only typesetting with Shift+T', async () => {
+    const overflowing = regionFixture('region-1', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    const other = regionFixture('region-2', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+          trustReviewCount: 0,
+          trustedCount: 2,
+        }),
+      ],
+      regions: [overflowing, other],
+    });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listRegions').mockResolvedValue([overflowing, other]);
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-shortcut-overflow',
+      kind: 'typeset',
+    }));
+    render(<App />);
+
+    fireEvent.keyDown(window, { key: 'T', shiftKey: true });
+    await waitFor(() => expect(startJob).toHaveBeenCalledWith('project-1', 'typeset', {
+      imageIds: ['image-1'],
+      regionIds: ['region-1'],
+      options: expect.objectContaining({ provider: 'pillow', concurrency: 1 }),
+    }));
+  });
+
   it('requires an explicit confirmation before a zero-region page is treated as reviewed', async () => {
     const user = userEvent.setup();
     const zeroText = imageFixture('image-1', {

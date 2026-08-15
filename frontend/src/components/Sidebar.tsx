@@ -3,50 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import {
   imageHasTypesetOverflow,
+  imageReviewState,
   useWorkbenchStore,
+  visibleWorkbenchImages,
 } from '../store/workbench';
-import type { ImageAsset, ProviderCapability, StageState } from '../types';
+import type { ImageAsset, ProviderCapability } from '../types';
 import { EmptyState, IconButton, ProviderBadge, StatusPill } from './Primitives';
 import { ProjectDialog } from './ProjectDialog';
-
-function imageReviewState(
-  image: ImageAsset,
-): StageState | 'no_text_reviewed' | 'no_text_pending' | 'needs_review' {
-  const stages = [
-    image.status.import,
-    image.status.preprocess,
-    image.status.detection,
-    image.status.ocr,
-    image.status.translation,
-    image.status.inpaint,
-    image.status.typeset,
-    image.status.export,
-  ];
-  if (image.error || stages.includes('failed')) return 'failed';
-  if (stages.includes('running')) return 'running';
-  if (stages.includes('queued')) return 'queued';
-  if (image.status.ocr === 'unavailable' || image.status.detection === 'unavailable') return 'unavailable';
-  if (image.status.reviewState === 'no-text-reviewed') return 'no_text_reviewed';
-  if (image.status.reviewState === 'reviewed') return 'done';
-  if (image.regionCount === image.ignoredCount && image.status.ocr === 'done') {
-    return 'no_text_pending';
-  }
-  return 'needs_review';
-}
-
-function matchesFilter(image: ImageAsset, filter: string): boolean {
-  const state = imageReviewState(image);
-  if (filter === 'all') return true;
-  if (filter === 'failed') return state === 'failed' || state === 'unavailable';
-  if (filter === 'complete') return state === 'done';
-  if (filter === 'no_text') return state === 'no_text_reviewed';
-  if (filter === 'overflow') return imageHasTypesetOverflow(image);
-  return state === 'needs_review'
-    || state === 'no_text_pending'
-    || state === 'not_started'
-    || state === 'running'
-    || state === 'queued';
-}
 
 function folderName(path: string): string {
   const parts = path.split('/');
@@ -161,14 +124,10 @@ export function Sidebar() {
     return () => window.removeEventListener('manga-localizer:import', openImporter);
   }, []);
 
-  const visibleImages = useMemo(() => {
-    const query = imageSearch.trim().toLocaleLowerCase();
-    return images.filter(
-      (image) =>
-        (!query || image.relativePath.toLocaleLowerCase().includes(query)) &&
-        matchesFilter(image, imageFilter),
-    );
-  }, [imageFilter, imageSearch, images]);
+  const visibleImages = useMemo(
+    () => visibleWorkbenchImages({ images, imageFilter, imageSearch }),
+    [imageFilter, imageSearch, images],
+  );
 
   const groups = useMemo(() => {
     const map = new Map<string, ImageAsset[]>();

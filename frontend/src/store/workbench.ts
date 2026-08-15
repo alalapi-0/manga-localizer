@@ -1376,15 +1376,17 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   },
 
   navigateImage: async (direction, target = 'adjacent') => {
-    const { images, activeImageId } = get();
+    const state = get();
+    const { images, activeImageId } = state;
     if (!images.length) return false;
     const currentIndex = Math.max(0, images.findIndex((image) => image.id === activeImageId));
     const step = direction < 0 ? -1 : 1;
     if (target === 'adjacent') {
-      const nextIndex = Math.min(images.length - 1, Math.max(0, currentIndex + step));
-      const nextImage = images[nextIndex];
+      const nextImage = adjacentVisibleImage(images, visibleWorkbenchImages(state), activeImageId, step);
       if (!nextImage || nextImage.id === activeImageId) return false;
-      return get().selectImage(nextImage.id);
+      return get().selectImage(nextImage.id, {
+        focusOverflow: state.imageFilter === 'overflow',
+      });
     }
     const matches = target === 'overflow' ? imageHasTypesetOverflow : imagePageReviewPending;
     for (let seen = 0; seen < images.length - 1; seen += 1) {
@@ -2427,6 +2429,76 @@ export function overflowingRegionIds(
   if (!imageHasTypesetOverflow(image) || !image) return [];
   const present = new Set(regions.map((region) => region.id));
   return image.typesetOverflowRegionIds.filter((regionId) => present.has(regionId));
+}
+
+export function imageReviewState(
+  image: ImageAsset,
+): StageState | 'no_text_reviewed' | 'no_text_pending' | 'needs_review' {
+  const stages = [
+    image.status.import,
+    image.status.preprocess,
+    image.status.detection,
+    image.status.ocr,
+    image.status.translation,
+    image.status.inpaint,
+    image.status.typeset,
+    image.status.export,
+  ];
+  if (image.error || stages.includes('failed')) return 'failed';
+  if (stages.includes('running')) return 'running';
+  if (stages.includes('queued')) return 'queued';
+  if (image.status.ocr === 'unavailable' || image.status.detection === 'unavailable') return 'unavailable';
+  if (image.status.reviewState === 'no-text-reviewed') return 'no_text_reviewed';
+  if (image.status.reviewState === 'reviewed') return 'done';
+  if (image.regionCount === image.ignoredCount && image.status.ocr === 'done') {
+    return 'no_text_pending';
+  }
+  return 'needs_review';
+}
+
+export function imageMatchesFilter(
+  image: ImageAsset,
+  filter: WorkbenchState['imageFilter'],
+): boolean {
+  const state = imageReviewState(image);
+  if (filter === 'all') return true;
+  if (filter === 'failed') return state === 'failed' || state === 'unavailable';
+  if (filter === 'complete') return state === 'done';
+  if (filter === 'no_text') return state === 'no_text_reviewed';
+  if (filter === 'overflow') return imageHasTypesetOverflow(image);
+  return state === 'needs_review'
+    || state === 'no_text_pending'
+    || state === 'not_started'
+    || state === 'running'
+    || state === 'queued';
+}
+
+export function visibleWorkbenchImages(
+  state: Pick<WorkbenchState, 'images' | 'imageFilter' | 'imageSearch'>,
+): ImageAsset[] {
+  const query = state.imageSearch.trim().toLocaleLowerCase();
+  return state.images.filter((image) => (
+    (!query || image.relativePath.toLocaleLowerCase().includes(query))
+    && imageMatchesFilter(image, state.imageFilter)
+  ));
+}
+
+function adjacentVisibleImage(
+  images: ImageAsset[],
+  visible: ImageAsset[],
+  activeImageId: string | null,
+  step: number,
+): ImageAsset | undefined {
+  if (!visible.length) return undefined;
+  const visibleIndex = visible.findIndex((image) => image.id === activeImageId);
+  if (visibleIndex >= 0) return visible[visibleIndex + step];
+  const fullIndex = images.findIndex((image) => image.id === activeImageId);
+  if (step > 0) {
+    return visible.find((image) => images.findIndex((entry) => entry.id === image.id) > fullIndex);
+  }
+  return [...visible].reverse().find((image) =>
+    images.findIndex((entry) => entry.id === image.id) < fullIndex
+  );
 }
 
 function overlayRegionIdsFromJobItem(item: Job['items'][number], regions: Region[]): string[] {

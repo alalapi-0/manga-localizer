@@ -55,6 +55,8 @@ Semantic Versioning.
   full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and
   review mask; completed preprocess items open the enhanced preview.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
+- Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
+  hidden pages and frame overflowing boxes.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -255,6 +257,10 @@ Semantic Versioning.
   tests and frontend lint/typecheck/127 tests plus the production build. The release audit scanned
   128 candidate files and 724 historical blobs. Backend was unchanged from Round 31. GitHub CI run
   `31885552346` passed on `ee182935b4916bd810ca38fd5b48b738e7e9258b`.
+- Round 38 keeps **← / →** on the visible sidebar list. Under the overflow filter they skip hidden
+  pages and frame overflowing boxes. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/129 tests plus the production build. The release audit scanned 128 candidate files
+  and 735 historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
 
 ### Known limitations
 

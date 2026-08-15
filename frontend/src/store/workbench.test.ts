@@ -1079,6 +1079,45 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('steps through visible overflowing pages with adjacent navigation', async () => {
+    const overflow = regionFixture('region-9', { imageId: 'image-3' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+        }),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+        }),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-9'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      imageFilter: 'overflow',
+      canvasMode: 'original',
+      rightTab: 'text',
+      regionsByImage: { ...state.regionsByImage, 'image-3': [overflow] },
+    }));
+
+    expect(await useWorkbenchStore.getState().navigateImage(1)).toBe(true);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      activeImageId: 'image-3',
+      selectedRegionIds: ['region-9'],
+      rightTab: 'typesetting',
+      canvasMode: 'typeset',
+      focusRegionIds: ['region-9'],
+    });
+    expect(await useWorkbenchStore.getState().navigateImage(1)).toBe(false);
+  });
+
   it('opens a typeset queue item and frames overlay boxes', async () => {
     const overlay = regionFixture('region-9', { imageId: 'image-2' });
     seedWorkbench({

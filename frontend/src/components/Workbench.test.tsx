@@ -98,6 +98,46 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('skips hidden pages when using next-image under the overflow filter', async () => {
+    const user = userEvent.setup();
+    const overflow = regionFixture('region-9', { imageId: 'image-3' });
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+        }),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+        }),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-9'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState((state) => ({
+      imageFilter: 'overflow',
+      regionsByImage: { ...state.regionsByImage, 'image-3': [overflow] },
+    }));
+    render(<App />);
+
+    expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '下一张图' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-3',
+        selectedRegionIds: ['region-9'],
+        focusRegionIds: ['region-9'],
+        canvasMode: 'typeset',
+      });
+    });
+  });
+
   it('selects overflowing boxes and queues typesetting for those region ids only', async () => {
     const user = userEvent.setup();
     const overflowing = regionFixture('region-1', {

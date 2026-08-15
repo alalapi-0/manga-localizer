@@ -42,7 +42,9 @@ just redrawn, and leftover overflow is framed after a full-page typeset. When a 
 resize, refit, or press **⇧T** without hunting for them. The canvas also opens **对比** so the original
 and result sit side by side; press **B** to close it. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
 from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
-skips pages already marked reviewed so you can keep moving through a book. The sidebar overflow
+skips pages already marked reviewed so you can keep moving through a book. Filter the sidebar to
+**排版溢出**, then **← / →** stay on those visible overflowing pages and frame their overflow boxes.
+The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame
 them in the typesetting inspector. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical

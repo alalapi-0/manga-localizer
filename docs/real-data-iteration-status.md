@@ -86,6 +86,8 @@ Last updated: 2026-08-15
   This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 37 — the sidebar overflow pill opens that page and frames overflowing boxes. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Round 38 — **← / →** follow the sidebar filter; under overflow they skip hidden pages and frame
+  overflowing boxes. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -478,3 +480,8 @@ pages. Those files remain `detector-draft` until human review.
   and frontend lint/typecheck/127 tests/build. The release audit scanned 128 candidate files and 724
   historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31885552346` passed at `ee182935b4916bd810ca38fd5b48b738e7e9258b`.
+- **Round 38:** adjacent image navigation follows the sidebar filter and search. Under **排版溢出**,
+  **← / →** skip hidden pages and frame overflowing boxes. This does not complete the remaining
+  112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/129 tests/build. The release audit scanned 128 candidate files and 735 historical
+  blobs. Backend was unchanged from Round 31. Remote CI is pending.

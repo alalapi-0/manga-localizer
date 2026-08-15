@@ -498,4 +498,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 40:** **G** and the canvas **框住** control frame the current selection. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
   frontend lint/typecheck/132 tests/build. The release audit scanned 128 candidate files and 758
-  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31886581607` passed at `520133a74f231a5464400e78ade7c8cf1b522dca`.

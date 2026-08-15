@@ -271,8 +271,8 @@ Semantic Versioning.
   CI run `31886262454` passed on `d8e7c05467ebf9359f61defd534c526c9e02fc21`.
 - Round 40 frames the current selection from **G** and the canvas **框住** control. Local gates passed
   2 launcher tests and frontend lint/typecheck/132 tests plus the production build. The release audit
-  scanned 128 candidate files and 758 historical blobs. Backend was unchanged from Round 31. Remote
-  CI is pending.
+  scanned 128 candidate files and 758 historical blobs. Backend was unchanged from Round 31. GitHub
+  CI run `31886581607` passed on `520133a74f231a5464400e78ade7c8cf1b522dca`.
 
 ### Known limitations
 

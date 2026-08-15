@@ -300,6 +300,9 @@ _PUBLIC_JOB_OUTPUT_FIELDS = {
         "typesetSkippedRegionCount",
         "overflowCount",
         "overflowRegionIds",
+        "partialTypeset",
+        "overlayRegionCount",
+        "overlayRegionIds",
     },
 }
 

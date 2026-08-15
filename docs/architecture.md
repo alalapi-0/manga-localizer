@@ -45,7 +45,9 @@ exports. A future desktop wrapper may launch both without changing their API.
 Region or upstream-provider changes invalidate affected downstream status. Typesetting-only edits keep
 the last typeset plate on disk so a region-scoped rerun can overlay selected boxes; preview endpoints
 and image export still require a current completed stage, so an old bitmap cannot be silently paired
-with newly edited JSON. Inpaint invalidation still removes repair, mask, and typeset artifacts.
+with newly edited JSON. If that typeset file is missing while the clean plate is still current, the
+job redraws every eligible box instead of compositing onto a blank plate. Inpaint invalidation still
+removes repair, mask, and typeset artifacts.
 
 The canonical pipeline is:
 

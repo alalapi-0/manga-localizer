@@ -1872,7 +1872,7 @@ class PersistentJobQueue:
             if requested_ids and not rebuilt_inpaint:
                 page_ids = {str(region["id"]) for region in active_regions}
                 matching = [region_id for region_id in requested_ids if region_id in page_ids]
-                if matching:
+                if matching and typeset_path.is_file() and inpaint_path.is_file():
                     overlay_ids = expand_typeset_region_ids(typesetting_data, matching)
                     overlay_set = set(overlay_ids)
                     overlay_ids.extend(
@@ -1885,24 +1885,22 @@ class PersistentJobQueue:
                     typesetting_data = [
                         region for region in typesetting_data if str(region["id"]) in overlay_set
                     ]
-                    if typeset_path.is_file() and inpaint_path.is_file():
-                        try:
-                            with Image.open(typeset_path) as current_typeset:
-                                current_typeset.load()
-                                current = current_typeset.copy()
-                            with Image.open(inpaint_path) as clean_plate:
-                                clean_plate.load()
-                                clean = clean_plate.copy()
-                            typeset_source = restore_clean_region_boxes(
-                                current,
-                                clean,
-                                punch_regions,
-                            )
-                        except (OSError, ValueError) as error:
-                            raise ProjectError(
-                                "Current typeset overlay could not be prepared; "
-                                "rerun full typesetting"
-                            ) from error
+                    try:
+                        with Image.open(typeset_path) as current_typeset:
+                            current_typeset.load()
+                            current = current_typeset.copy()
+                        with Image.open(inpaint_path) as clean_plate:
+                            clean_plate.load()
+                            clean = clean_plate.copy()
+                        typeset_source = restore_clean_region_boxes(
+                            current,
+                            clean,
+                            punch_regions,
+                        )
+                    except (OSError, ValueError) as error:
+                        raise ProjectError(
+                            "Current typeset overlay could not be prepared; rerun full typesetting"
+                        ) from error
                     did_partial_typeset = True
         if kind != "inpaint":
             if render_mask is None:
@@ -2040,4 +2038,7 @@ class PersistentJobQueue:
             ),
             "overflowCount": len(overflow_ids),
             "overflowRegionIds": overflow_ids,
+            "partialTypeset": did_partial_typeset,
+            "overlayRegionCount": len(overlay_ids) if did_partial_typeset else 0,
+            "overlayRegionIds": list(overlay_ids) if did_partial_typeset else [],
         }

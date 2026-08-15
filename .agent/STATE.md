@@ -19,13 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 22 honors typeset `regionIds` on the worker so inspector actions actually overlay selected
-boxes on the last typeset plate. Translation and typography edits keep a current inpaint plate;
-geometry/mask/trust edits still rebuild repair. The work is on `agent/manga-round7-governance-20260812`
-through draft PR #3. The Round 22 candidate is `df15d7c6d0ae86d1189b3a3de081a1777046b739` with GitHub
-CI run `31878242652` green. Round 21 remains the per-region inspector control. Round 8 remains 18/130
-explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains active.
-No merge, tag, release, or deployment has occurred.
+Round 23 falls back to full-page typesetting when a region-scoped overlay cannot use the last
+typeset plate, so untouched boxes are not dropped. The work is on
+`agent/manga-round7-governance-20260812` through draft PR #3. Round 22
+(`df15d7c6d0ae86d1189b3a3de081a1777046b739`, CI `31878242652`) remains the selected-box overlay.
+Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -153,6 +152,8 @@ No merge, tag, release, or deployment has occurred.
   and complete CI.
 - [x] Round 22: worker overlay of selected typeset region IDs, keeping untouched boxes and overflow
   IDs, with public regression, and complete CI.
+- [x] Round 23: full-page typeset fallback when the overlay plate is missing, with public regression.
+  Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -310,6 +311,11 @@ No merge, tag, release, or deployment has occurred.
   `df15d7c6d0ae86d1189b3a3de081a1777046b739`. Backend Ruff lint/format, 229 pytest cases, and the
   release audit passed. Frontend lint/typecheck/102 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 23 local verification passed backend Ruff lint/format and 230 pytest cases, plus the release
+  audit over 128 candidate files and 563 historical blobs. Frontend was unchanged from Round 22.
+  Playwright discovers both Chromium journeys; this environment lacks Playwright Chromium revision
+  1234, so live browser evidence remains the GitHub e2e job after push. Remote CI for Round 23 is
+  pending.
 
 ## Known limitations and blockers
 
@@ -323,8 +329,9 @@ full-book output quality.
   general English-pivot MT, not manga-tuned, and currently Simplified Chinese only. Remaining font-fit
   issues and restoration artifacts still prevent unattended publication. Adjacent small OCR fragments
   can share a typeset run, and a region-scoped typeset overlays those boxes onto the last plate when
-  the clean plate is still current. Widely separated or misaligned boxes still overflow independently.
-  Geometry, mask, or trust edits still rebuild inpainting.
+  the clean plate is still current. If that typeset file is missing, the job redraws every eligible
+  box on the current inpaint plate instead of dropping untouched text. Widely separated or misaligned
+  boxes still overflow independently. Geometry, mask, or trust edits still rebuild inpainting.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
   sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.

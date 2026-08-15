@@ -40,7 +40,9 @@ only while `status.typeset` is `done`. They are review hints, not an export hard
 maps CJK punctuation to presentation forms at render time and does not rewrite stored translation text.
 Adjacent small boxes may share one render-time layout cluster; stored region geometry and text stay
 separate. The workbench can rerun typesetting for persisted overflow region IDs without changing other
-boxes.
+boxes when the last typeset plate is still on disk. If that plate is missing, the same region-scoped
+job redraws every eligible box on the current inpaint plate. Public typeset job output includes
+whether the run was a partial overlay.
 
 `status.preprocessSuggestion` records a local, non-binding profile hint from source-image size and a
 native-resolution sample of contrast/sharpness. Import writes the sampled suggestion; listing an older

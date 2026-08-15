@@ -173,6 +173,10 @@ Semantic Versioning.
   pytest cases. The release audit scanned 128 candidate files and 544 historical blobs. Frontend was
   unchanged from Round 21. GitHub CI run `31878242652` passed on
   `df15d7c6d0ae86d1189b3a3de081a1777046b739`.
+- Round 23 redraws the whole page when a region-scoped typeset cannot overlay because the last
+  typeset plate is missing, instead of dropping untouched boxes. Local gates passed backend Ruff
+  lint/format and 230 pytest cases. The release audit scanned 128 candidate files and 563 historical
+  blobs. Frontend was unchanged from Round 22.
 
 ### Known limitations
 

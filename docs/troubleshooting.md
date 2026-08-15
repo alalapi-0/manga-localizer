@@ -26,7 +26,8 @@ Open the overflowing page from the sidebar **排版溢出** filter or the inspec
 **只重排溢出框** to rerun typesetting for those boxes only, or **选中溢出框** then merge/resize.
 Shrink the font or enable auto-fit, then click **重排当前框**. **只重排溢出框** and **重排当前框**
 overlay those boxes onto the last typeset plate when the clean plate is still current; other boxes
-keep their pixels. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
+keep their pixels. If the previous typeset file is missing, that action redraws the whole page so
+other boxes are not dropped. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
 from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
 skips pages already marked reviewed so you can keep moving through a book. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical

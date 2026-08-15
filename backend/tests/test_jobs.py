@@ -893,6 +893,9 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         output = finished["items"][0]["output"]
         assert output["typesetEligibleRegionCount"] == 1, output
         assert output["typesetSkippedRegionCount"] == 1, output
+        assert output["partialTypeset"] is True, output
+        assert output["overlayRegionCount"] == 1, output
+        assert output["overlayRegionIds"] == [first["id"]], output
         after = client.get(f"/api/images/{image['id']}/generated/typeset")
         assert after.status_code == 200, after.text
         with Image.open(io.BytesIO(after.content)) as opened:
@@ -915,6 +918,105 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         assert red_after > red_before
         assert not np.array_equal(previous, current)
         assert np.array_equal(second_before, second_after)
+
+
+def test_typeset_region_ids_redraw_the_page_when_the_plate_is_missing(
+    tmp_path: Path,
+) -> None:
+    from manga_localizer.imaging.typesetting import font_capabilities
+
+    if not font_capabilities()["available"]:
+        pytest.skip("No usable system CJK font")
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    style = {
+        "fontSize": 28,
+        "minFontSize": 28,
+        "autoFit": False,
+        "autoWrap": False,
+        "strokeWidth": 0,
+        "color": "#cc0000",
+        "align": "start",
+        "padding": 2,
+    }
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"], data=png_bytes((400, 160)))
+        first = _add_region(client, image["id"], translation="甲甲")
+        first = client.patch(
+            f"/api/regions/{first['id']}",
+            json={
+                "x": 16,
+                "y": 24,
+                "width": 168,
+                "height": 88,
+                "direction": "horizontal",
+                "style": style,
+                "expectedRevision": first["revision"],
+            },
+        )
+        assert first.status_code == 200, first.text
+        first = _confirm_region(client, first.json())
+        second = _add_region(client, image["id"], translation="乙乙乙乙")
+        second = client.patch(
+            f"/api/regions/{second['id']}",
+            json={
+                "x": 216,
+                "y": 24,
+                "width": 168,
+                "height": 88,
+                "direction": "horizontal",
+                "style": style,
+                "expectedRevision": second["revision"],
+            },
+        )
+        assert second.status_code == 200, second.text
+        second = _confirm_region(client, second.json())
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"provider": "pillow"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        plates = list((tmp_path / "project").rglob("generated/typeset/**/*.png"))
+        assert plates
+        for plate in plates:
+            plate.unlink()
+
+        edited = client.patch(
+            f"/api/regions/{first['id']}",
+            json={
+                "translationText": "丙丙丙丙丙丙丙丙",
+                "expectedRevision": first["revision"],
+            },
+        )
+        assert edited.status_code == 200, edited.text
+
+        rerun = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={
+                "imageIds": [image["id"]],
+                "regionIds": [first["id"]],
+                "options": {"provider": "pillow"},
+            },
+        )
+        finished = _wait_job(client, rerun.json()["id"])
+        assert finished["status"] == "completed", finished
+        output = finished["items"][0]["output"]
+        assert output["partialTypeset"] is False, output
+        assert output["overlayRegionCount"] == 0, output
+        assert output["typesetEligibleRegionCount"] == 2, output
+        after = client.get(f"/api/images/{image['id']}/generated/typeset")
+        assert after.status_code == 200, after.text
+        with Image.open(io.BytesIO(after.content)) as opened:
+            current = np.asarray(opened.convert("RGB"))
+        left = int(second["x"])
+        top = int(second["y"])
+        right = left + int(second["width"])
+        bottom = top + int(second["height"])
+        second_pixels = current[top:bottom, left:right]
+        red = int(np.sum((second_pixels[..., 0] > 150) & (second_pixels[..., 1] < 80)))
+        assert red > 0
 
 
 def test_partial_typeset_keeps_overflow_ids_for_untouched_boxes(tmp_path: Path) -> None:

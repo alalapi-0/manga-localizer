@@ -64,6 +64,8 @@ not inferred from this tracked checklist.
   text
 - [x] Retypeset overflowing boxes only, and select those boxes from the inspector overflow notice
 - [x] Retypeset the currently selected box from the typesetting inspector
+- [x] Overlay selected typeset boxes onto the last plate without redrawing untouched boxes
+- [x] Redraw the whole page when a region-scoped typeset has no last typeset plate
 
 ## Explicitly deferred
 

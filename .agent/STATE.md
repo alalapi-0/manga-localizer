@@ -21,9 +21,11 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 27 selects overflowing boxes and opens the typesetting inspector when a typeset job for the
 current page completes. The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Round 26 (`906c898bd664a9a2ffdc33d5ef3bb1a783c84e0c`, CI `31879945945`) remains the automatic
-typeset-preview switch. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0
-reviewed. The full product goal remains active. No merge, tag, release, or deployment has occurred.
+The Round 27 candidate is `ebdaae7e14c5a7359faf14ac546549250a985960` with GitHub CI run
+`31880310109` green. Round 26 (`906c898bd664a9a2ffdc33d5ef3bb1a783c84e0c`, CI `31879945945`)
+remains the automatic typeset-preview switch. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -160,7 +162,7 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
 - [x] Round 26: switch the canvas to the typeset preview when the current page's typeset job
   completes, with public regression, and complete CI.
 - [x] Round 27: select overflowing boxes after the current page's typeset job completes, with public
-  regression. Remote CI for this round is still pending.
+  regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -353,8 +355,11 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
 - Round 27 local verification passed frontend ESLint, TypeScript, 111 Vitest cases, and the production
   build; release audit over 128 candidate files plus 609 historical blobs. Backend was unchanged from
   Round 23 (230 pytest). Playwright discovers both Chromium journeys; this environment lacks Playwright
-  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push. Remote CI
-  for Round 27 is pending.
+  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push.
+- Round 27 authoritative remote verification: GitHub CI run `31880310109` passed at
+  `ebdaae7e14c5a7359faf14ac546549250a985960`. Backend Ruff lint/format, 230 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/111 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

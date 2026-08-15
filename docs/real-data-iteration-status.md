@@ -400,4 +400,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 27:** overflowing boxes are selected and the typesetting inspector opens when a typeset job
   for the current page completes. This does not complete the remaining 112/130 clean-plate visual
   reviews. Local gates passed frontend lint/typecheck/111 tests/build. The release audit scanned 128
-  candidate files and 609 historical blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  candidate files and 609 historical blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31880310109` passed at `ebdaae7e14c5a7359faf14ac546549250a985960`.

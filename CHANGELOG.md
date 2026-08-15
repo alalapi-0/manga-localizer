@@ -196,7 +196,8 @@ Semantic Versioning.
 - Round 27 selects overflowing boxes and opens the typesetting inspector when a typeset job for the
   current page completes. Local gates passed frontend lint/typecheck/111 tests plus the production
   build. The release audit scanned 128 candidate files and 609 historical blobs. Backend was
-  unchanged from Round 23.
+  unchanged from Round 23. GitHub CI run `31880310109` passed on
+  `ebdaae7e14c5a7359faf14ac546549250a985960`.
 
 ### Known limitations
 

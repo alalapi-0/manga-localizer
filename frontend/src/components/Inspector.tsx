@@ -648,7 +648,7 @@ function ProjectInspector() {
         <span>
           {isRemote
             ? '只会发送当前文本、当前页前后相邻文本块、术语表和角色名；原图、擦除图和项目路径绝不发送。请确认你有权向所选服务提交文本。'
-            : '图像和文本留在本机；手动模式不会发起任何外部请求。'}
+            : '图像和文本留在本机。本地 Argos 日→中翻译经英语中转，不会把文本发到外部服务；手动模式也不会发起外部请求。'}
         </span>
       </div>
       {isRemote ? (
@@ -661,7 +661,7 @@ function ProjectInspector() {
           {credentialState ? <p className="credential-state" role="status">{credentialState}</p> : null}
         </>
       ) : null}
-      <Field label="术语表" hint="每行“日文 = 中文”。远程模式下此文本会随翻译请求发送。"><textarea onChange={(event) => update({ glossary: event.target.value })} rows={5} value={settings.glossary} /></Field>
+      <Field label="术语表" hint="每行“日文 = 中文”。远程模式下这些条目会随翻译请求发送；本地 Argos 翻译把它们当作需保留的专名。"><textarea onChange={(event) => update({ glossary: event.target.value })} rows={5} value={settings.glossary} /></Field>
       <Field label="角色名" hint="每行一个名字或“日文 = 中文”。"><textarea onChange={(event) => update({ characterNames: event.target.value })} rows={4} value={settings.characterNames} /></Field>
       <Toggle checked={settings.preserveTree} description="导出时重建导入时的相对目录" label="保留目录结构" onChange={(event) => update({ preserveTree: event.target.checked })} />
     </div>

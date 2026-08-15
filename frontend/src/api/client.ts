@@ -161,6 +161,7 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
     manual: '手动翻译',
     mock: '确定性演示翻译',
     dictionary: '本地词典',
+    'argos-ja-zh': 'Argos 本地日→中',
     'openai-compatible': 'OpenAI 兼容接口',
     pillow: 'Pillow 本地排版',
   };
@@ -185,9 +186,11 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
           ? undefined
           : typeof detail.error === 'string'
             ? detail.error
-            : providerId === 'openai-compatible'
-              ? '当前会话尚未配置 API Key'
-              : '本地服务报告此能力不可用',
+            : providerId === 'argos-ja-zh'
+              ? '未安装本地 Argos 日英/英中模型或 CTranslate2'
+              : providerId === 'openai-compatible'
+                ? '当前会话尚未配置 API Key'
+                : '本地服务报告此能力不可用',
       });
     }
   };

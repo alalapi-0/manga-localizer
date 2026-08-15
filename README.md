@@ -134,6 +134,20 @@ npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
 uv sync --project backend --extra ai --group dev
 ```
 
+To opt into local Japanese-to-Chinese translation, install the `mt` extra and both Argos packages.
+This is a separate explicit step and does not send text off-machine:
+
+```bash
+npm run setup:mt
+```
+
+If your `.env` changes `MANGA_LOCALIZER_DATA_DIR`, point the model setup at the same directory:
+
+```bash
+uv sync --project backend --extra mt --group dev
+npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
+```
+
 Model installation is always a user-invoked action. The default application and test suite remain
 offline and usable with Tesseract/OpenCV/Pillow only.
 

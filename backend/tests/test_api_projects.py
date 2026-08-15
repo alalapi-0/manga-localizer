@@ -639,6 +639,11 @@ def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_pa
     assert union["dropsLowConfidence"] is False
     assert union["keepsAllProposals"] is True
     assert union["tesseractContourFallback"] is False
+    argos = providers["translation"]["argos-ja-zh"]
+    assert argos["remote"] is False
+    assert argos["downloadsModelsAtStartup"] is False
+    assert argos["sendsImages"] is False
+    assert argos["available"] is False
 
     root = tmp_path / "portable"
     response = client.post(

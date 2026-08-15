@@ -4,7 +4,9 @@ Manga Localizer is local-first. Imported image bytes, masks, previews, OCR datab
 on the machine unless the user moves them with another tool. The application does not include telemetry.
 
 Remote translation is the only MVP feature designed to make an outbound content request. It is disabled
-until the user selects a remote provider and supplies configuration. Requests contain only an explicitly
+until the user selects a remote provider and supplies configuration. The optional `argos-ja-zh` provider
+translates trusted text locally through an English pivot and does not open a network connection at
+translate time. Remote requests contain only an explicitly
 trusted current text, explicitly trusted bounded preceding/following text regions by reading order on the
 same page, optional character names, and relevant glossary entries. They do not contain pending/ignored
 regions, adjacent pages, the entire book, project paths, or image bytes.

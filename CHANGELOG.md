@@ -27,6 +27,9 @@ Semantic Versioning.
   Navier-Stokes, Telea, and a structure/texture blend. Pages that used only LaMa default to the
   line-art-guided plate. Editors can compare, switch, accept, or reject locally; auto metrics only flag
   mask-outside changes, chroma, or possible smearing.
+- Optional local Argos Japanese-to-Chinese translator using checksum-verified CTranslate2 packages and
+  an English pivot. It stays unavailable without the `mt` extra and both packages, never downloads at
+  startup, and never sends text off-machine. Traditional Chinese still needs a remote translator.
 - Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
   editable region boundaries plus persisted bounded brush/eraser strokes for manual mask correction.
 - Durable accept/reject review for preprocessing, inpainting, and typesetting artifacts, with
@@ -108,6 +111,12 @@ Semantic Versioning.
   approval. Complex line art and large SFX still need human compare/accept. Local gates passed 2
   launcher tests, 209 backend tests, and 95 frontend tests plus the production build. GitHub CI run
   `31854780188` passed on `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`.
+- Round 14 adds an optional local Argos Japanese-to-Chinese translator with checksum-verified packages,
+  an English pivot, glossary/name protection, and a public synthetic comparison script. It does not send
+  text off-machine. Traditional Chinese and manga-tuned quality remain out of scope for this provider.
+  Local gates passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production
+  build. The release audit scanned 126 candidate files and 390 historical blobs. Remote CI is pending
+  after the task-branch push.
 
 ### Known limitations
 
@@ -116,6 +125,8 @@ Semantic Versioning.
 - AI preprocessing via Real-ESRGAN ONNX is local, optional, and native 4×; 2×/3× requests downscale
   that AI output. The NCNN CLI adapter remains available when a licensed local executable is
   installed. LaMa remains CPU-expensive and imperfect on line art fully hidden by lettering.
+  Local Argos translation is an English-pivot general MT package, not a manga-tuned translator, and
+  currently emits Simplified Chinese only.
 - Mask correction strokes are scoped to one selected rectangular region; arbitrary whole-page raster
   editing and arbitrary persisted region polygons remain roadmap work.
 

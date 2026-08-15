@@ -30,6 +30,9 @@ Last updated: 2026-08-15
   review of those drafts is still required before claiming real-page accuracy.
 - Round 13 — line-art-aware inpainting: comparison candidates, LaMa grayscale preservation, and a
   public synthetic restoration contact sheet. Private visual review of real pages remains required.
+- Round 14 — local Japanese-to-Chinese translation: optional Argos CTranslate2 packages with an English
+  pivot, checksummed install, and a public synthetic phrase comparison. Private OCR text is not used
+  in the public report.
 
 ## Private data boundary
 
@@ -230,8 +233,9 @@ pages. Those files remain `detector-draft` until human review.
    eraser strokes are bounded to one selected rectangular region.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
    Preserve the exact mask-outside invariant and never auto-repair uncertain regions.
-6. **Typesetting:** use real Chinese translation in visual acceptance, improve font/vertical punctuation
-   matching, reduce fragmented small-box layouts, and add collision/overflow review before export.
+6. **Typesetting:** local Argos Simplified Chinese is now selectable for visual acceptance, but it is
+   English-pivot general MT. Continue improving font/vertical punctuation matching, fragmented small-box
+   layouts, and collision/overflow review before export.
 7. **Performance:** reuse batched model tensors where supported. CPU LaMa is practical for selected
    regions, not an unreviewed book-wide `all` policy.
 
@@ -283,3 +287,9 @@ pages. Those files remain `detector-draft` until human review.
   stay unchanged. Automatic smear/chroma flags are anomaly hints. Contact sheets stay ignored and are
   not sent to a remote model. This is not a claim that complex SFX or dense line art is publication-ready.
   GitHub CI run `31854780188` passed at `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`.
+- **Round 14:** added an optional local Argos Japanese-to-Chinese translator with checksum-verified
+  CTranslate2 packages, an English pivot, glossary/name protection, and a public synthetic comparison
+  script. Text stays on-machine. This is not a manga-tuned or Traditional-Chinese result. Local gates
+  passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production build. The
+  release audit scanned 126 candidate files and 390 historical blobs. Remote CI is pending after the
+  task-branch push.

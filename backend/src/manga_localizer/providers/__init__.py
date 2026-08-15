@@ -7,8 +7,10 @@ from manga_localizer.providers.translation import (
     OpenAICompatibleTranslationProvider,
     TranslationProvider,
 )
+from manga_localizer.providers.translation_argos import ArgosJaZhTranslationProvider
 
 __all__ = [
+    "ArgosJaZhTranslationProvider",
     "DictionaryTranslationProvider",
     "InpaintingProvider",
     "ManualTranslationProvider",

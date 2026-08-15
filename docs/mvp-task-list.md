@@ -51,6 +51,8 @@ not inferred from this tracked checklist.
   classic-vs-AI labeling, and a private comparison script
 - [x] Deliver line-art-aware inpainting candidates with mask-outside preservation, grayscale LaMa
   output, local compare/select/accept, and a synthetic comparison script
+- [x] Deliver a local Japanese-to-Chinese translator with checksummed Argos packages, no startup
+  download, and a public synthetic comparison script
 
 ## Explicitly deferred
 

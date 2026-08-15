@@ -226,6 +226,29 @@ def test_setup_optional_models_prints_license_and_checksum_without_download(
     assert "RealESRGAN_x4plus_anime_6B.onnx" in output
 
 
+def test_setup_optional_models_prints_argos_translation_packs_without_download(
+    monkeypatch,
+    capsys,
+) -> None:
+    script = load_script("setup_optional_models.py")
+    ja_en = script.ARCHIVES["argos-ja-en"]
+    en_zh = script.ARCHIVES["argos-en-zh"]
+    assert ja_en.license == "CC-BY-4.0"
+    assert en_zh.license == "CC-BY-4.0"
+    assert len(ja_en.sha256) == 64
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["setup_optional_models.py", "--print-specs", "argos-ja-zh"],
+    )
+    assert script.main() == 0
+    output = capsys.readouterr().out
+    assert ja_en.sha256 in output
+    assert en_zh.sha256 in output
+    assert "translate-ja_en-1_1.argosmodel" in output
+    assert "translate-en_zh-1_9.argosmodel" in output
+
+
 def test_compare_upscale_writes_relative_metrics_without_source_mutation(
     tmp_path: Path,
     monkeypatch,

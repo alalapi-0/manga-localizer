@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     realesrgan_ncnn_models: Path | None = None
     realesrgan_onnx_model: Path | None = None
     lama_inpainting_model: Path | None = None
+    argos_ja_en_model: Path | None = None
+    argos_en_zh_model: Path | None = None
     max_upload_bytes: int = 100 * 1024 * 1024
     thumbnail_size: int = 384
     worker_poll_seconds: float = 0.15
@@ -88,6 +90,14 @@ class Settings(BaseSettings):
     @property
     def realesrgan_ncnn_models_path(self) -> Path:
         return self.realesrgan_ncnn_models or (self.data_dir / "realesrgan-ncnn-vulkan" / "models")
+
+    @property
+    def argos_ja_en_model_path(self) -> Path:
+        return self.argos_ja_en_model or (self.data_dir / "models" / "argos-ja-en")
+
+    @property
+    def argos_en_zh_model_path(self) -> Path:
+        return self.argos_en_zh_model or (self.data_dir / "models" / "argos-en-zh")
 
     @property
     def realesrgan_ncnn_search_paths(self) -> tuple[Path, ...]:

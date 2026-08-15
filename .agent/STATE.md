@@ -19,22 +19,22 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 13 delivers line-art-aware inpainting candidates on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 13 feature commit is
-`751d3a985bf9e320f2bf11b1f2c2c6681b620e45` with GitHub CI run `31854780188` green. The previous
-Round 12 feature commit is `761c30d319455f11af82fc2358bc830797ebdac8`. Round 13 keeps exact
-mask-outside preservation, adds grayscale preservation to LaMa, and stores provider / Navier-Stokes /
-Telea / line-art-guided plates for human compare-and-select. Pages that used only LaMa default to the
-line-art-guided blend. Automatic flags are anomaly hints, not visual approval. Round 8 remains 18/130
-explicit visual reviews. The full product goal remains active. No merge, tag, release, or deployment
-has occurred.
+Round 14 delivers a local Japanese-to-Chinese translator on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 13 feature commit is
+`751d3a985bf9e320f2bf11b1f2c2c6681b620e45` with GitHub CI run `31854780188` green. Round 14 adds
+`argos-ja-zh`: CTranslate2 Argos packages Japanese→English→Simplified Chinese, explicit checksummed
+install, no startup download, and no outbound text. Glossary and character names are protected as exact
+terms. Traditional Chinese still needs a remote translator. Automatic translation is not visual approval.
+Round 8 remains 18/130 explicit visual reviews. The full product goal remains active. No merge, tag,
+release, or deployment has occurred.
 
 ## Environment evidence
 
 - macOS on Apple Silicon (M4, Metal available), Node.js 26, npm 11, uv, and CPython 3.12.
 - Tesseract 5.5 is installed with `jpn`, `jpn_vert`, `chi_sim`, and `chi_tra` data.
 - OpenCV/Pillow are the dependency-light image baseline; ONNX Runtime is available through the optional
-  `ai` extra for LaMa and Real-ESRGAN ONNX.
+  `ai` extra for LaMa and Real-ESRGAN ONNX. CTranslate2 and SentencePiece are available through the
+  optional `mt` extra for local Argos translation.
 - The private PP-OCRv3, LaMa, and Real-ESRGAN anime ONNX weights are checksum-verified and live only in
   ignored local model directories. Real-ESRGAN NCNN remains a CLI adapter; no NCNN executable was run
   here.
@@ -64,6 +64,10 @@ has occurred.
   Automatic proposals always remain `review`; only explicit human confirmation creates `trusted`, and
   confidence alone never authorizes translation or default safe rendering. Recognition-input edits or
   replacement of depended-on preprocessing revoke trust; translation/style/mask-only edits preserve it.
+- Translation providers are exact registry selections. Manual, mock, and dictionary remain local
+  baselines. `argos-ja-zh` is the optional local neural translator (Argos CTranslate2, English pivot,
+  Simplified Chinese). OpenAI-compatible remains the only path that can send trusted text remotely, and
+  only after the user selects it and supplies a session credential.
 - Inpainting uses exact provider routing. OpenCV is the guaranteed fallback; optional LaMa ONNX is lazy,
   local, context-cropped, and composites with exact mask-outside preservation. Grayscale manga pages
   keep chroma suppressed after RGB LaMa inference. Each nonempty repair also stores comparison
@@ -130,8 +134,10 @@ has occurred.
   that keeps all proposals, ignored private draft annotations, public regression, and complete CI.
 - [x] Round 13: line-art-aware inpainting candidates, LaMa grayscale preservation, local
   compare/select/accept, public synthetic comparison script, public regression, and complete CI.
+- [x] Round 14: local Argos Japanese-to-Chinese translation, checksummed packages, public synthetic
+  comparison script, and public regression. Remote CI is pending after the task-branch push.
 - [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
-  truth; real Japanese-to-Chinese translation; remaining 112/130 visual reviews.
+  truth; remaining 112/130 visual reviews.
 
 ## Verification evidence
 
@@ -207,6 +213,11 @@ has occurred.
   `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`. Backend Ruff lint/format, 209 pytest cases, and the
   release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 14 local verification passed 2 launcher tests; backend Ruff lint/format and 214 pytest cases;
+  frontend ESLint, TypeScript, 95 Vitest cases, and production build; release audit over 126 candidate
+  files plus 390 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push. Remote CI is pending.
 
 ## Known limitations and blockers
 
@@ -216,9 +227,9 @@ full-book output quality.
 
 - Private pages still lack human-reviewed boxes/transcriptions. Detector-draft JSON is a starting
   proposal set, not precision/recall evidence.
-- The representative export uses deterministic mock translations for structural testing. Real Chinese
-  translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
-  reconstruction artifacts still prevent unattended publication.
+- The representative export can use mock or local Argos translations for structural testing. Argos is
+  general English-pivot MT, not manga-tuned, and currently Simplified Chinese only. Fragmented boxes,
+  vertical layout, font fit, and restoration artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
   sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.

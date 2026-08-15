@@ -24,6 +24,7 @@ from manga_localizer.providers.translation import (
     OpenAICompatibleTranslationProvider,
     TranslationProvider,
 )
+from manga_localizer.providers.translation_argos import ArgosJaZhTranslationProvider
 from manga_localizer.security import validate_remote_base_url
 
 
@@ -49,6 +50,10 @@ class ProviderRegistry:
         self.manual = ManualTranslationProvider()
         self.mock = MockTranslationProvider()
         self.dictionary = DictionaryTranslationProvider()
+        self.argos = ArgosJaZhTranslationProvider(
+            settings.argos_ja_en_model_path,
+            settings.argos_en_zh_model_path,
+        )
         self._session_openai_key: str | None = settings.openai_api_key
         self._session_openai_base_url = settings.openai_base_url
         self._session_openai_model = settings.openai_model
@@ -114,6 +119,8 @@ class ProviderRegistry:
                 max_context_items=self.settings.remote_context_items,
                 max_context_chars=self.settings.remote_context_chars,
             )
+        if name in {"argos-ja-zh", "argos", "local-nmt"}:
+            return self.argos
         raise ValueError(f"Unknown translation provider: {name}")
 
     def capabilities(self) -> dict[str, Any]:
@@ -141,6 +148,7 @@ class ProviderRegistry:
                 "manual": self.manual.capabilities(),
                 "mock": self.mock.capabilities(),
                 "dictionary": self.dictionary.capabilities(),
+                "argos-ja-zh": self.argos.capabilities(),
                 "openai-compatible": openai.capabilities(),
             },
         }

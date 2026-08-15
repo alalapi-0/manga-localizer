@@ -88,7 +88,12 @@ get_capabilities()
 ```
 
 Manual preserves the current reviewed translation without automatic mutation. Mock is deterministic.
-Dictionary is a local non-LLM exact/glossary translator. OpenAI-compatible sends the current text plus
+Dictionary is a local non-LLM exact/glossary translator. `argos-ja-zh` is the optional local neural
+translator: it runs CTranslate2 Argos packages Japanese→English then English→Simplified Chinese on
+this machine, never at startup, and never sends text anywhere. It is unavailable until the `mt` extra
+and both checksum-verified packages are installed. Glossary and character names are applied as exact
+replacements / protected terms. Traditional Chinese and other targets still need a remote translator.
+OpenAI-compatible sends the current text plus
 bounded preceding/following regions by reading order on the same page to a user-configured endpoint.
 Both targets and context must carry explicit current human trust; pending and ignored regions are
 excluded. A generated translation preserves the OCR trust decision but clears the separate
@@ -151,12 +156,16 @@ data directory used by the application:
 npm run setup:models -- ppocr
 npm run setup:models -- lama
 npm run setup:models -- realesrgan
+npm run setup:models -- argos-ja-zh
 uv sync --project backend --extra ai --group dev  # required by LaMa and Real-ESRGAN ONNX
+uv sync --project backend --extra mt --group dev  # required by Argos local translation
 ```
 
-Or install the listed models plus the runtime with `npm run setup:ai`. Configuration can override the
+Or install the listed models plus the runtime with `npm run setup:ai`. Local Japanese-to-Chinese
+translation is a separate explicit step: `npm run setup:mt`. Configuration can override the
 standard model locations with `MANGA_LOCALIZER_PPOCR_DETECTION_MODEL`,
-`MANGA_LOCALIZER_LAMA_INPAINTING_MODEL`, and `MANGA_LOCALIZER_REALESRGAN_ONNX_MODEL`. The NCNN adapter
+`MANGA_LOCALIZER_LAMA_INPAINTING_MODEL`, `MANGA_LOCALIZER_REALESRGAN_ONNX_MODEL`,
+`MANGA_LOCALIZER_ARGOS_JA_EN_MODEL`, and `MANGA_LOCALIZER_ARGOS_EN_ZH_MODEL`. The NCNN adapter
 uses `MANGA_LOCALIZER_REALESRGAN_NCNN_COMMAND` and optional
 `MANGA_LOCALIZER_REALESRGAN_NCNN_MODELS`. Inspect licenses and checksums without downloading:
 

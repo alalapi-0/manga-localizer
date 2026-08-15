@@ -23,7 +23,8 @@ are rejected.
 
 Remote translation is opt-in and transmits only explicitly trusted current text plus explicitly trusted
 bounded preceding/following text by reading order on the same page to the configured service. Pending
-and ignored regions are excluded. Use HTTPS for every non-loopback endpoint.
+and ignored regions are excluded. The optional `argos-ja-zh` provider translates locally and does not
+open a network connection when translating. Use HTTPS for every non-loopback endpoint.
 Plain HTTP is appropriate only for a deliberately configured service on trusted loopback:
 OpenAI-compatible API keys travel as bearer credentials and are otherwise exposed in transit.
 Remote base URLs containing embedded credentials, queries, fragments, control characters, or

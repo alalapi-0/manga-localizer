@@ -38,6 +38,13 @@ npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
 uv sync --project backend --extra ai --group dev
 ```
 
+Install the optional local Japanese-to-Chinese translator separately. It is not part of `setup:ai`:
+
+```bash
+npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
+uv sync --project backend --extra mt --group dev
+```
+
 Without a repository `.env`, omit `--data-dir .manga-localizer` to use the normal
 `~/.manga-localizer` default, or run `npm run setup:ai`. `realesrgan-onnx` is the local AI
 upscaler once that model and the `ai` extra are installed. `realesrgan-ncnn` still wraps a separately
@@ -61,6 +68,15 @@ explicit mask, into an ignored output directory:
 uv run --project backend --extra ai python scripts/compare_inpaint.py \
   --synthetic \
   --output tests/real-data/<dataset>/runs/<new-inpaint-run> \
+  --data-dir .manga-localizer
+```
+
+Compare the local Argos Japanese-to-Chinese translator on public synthetic phrases into an ignored
+directory. The summary stores character counts and CJK ratios, not translations or private OCR text:
+
+```bash
+uv run --project backend --extra mt python scripts/compare_translate.py \
+  --output tests/real-data/<dataset>/runs/<new-translate-run> \
   --data-dir .manga-localizer
 ```
 

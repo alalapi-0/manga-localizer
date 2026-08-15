@@ -18,6 +18,9 @@ Apache-2.0 project. Their own license texts remain authoritative.
 | Tesseract OCR | Optional system-installed default OCR engine | Apache-2.0 |
 | ONNX Runtime | Optional local inference for LaMa and Real-ESRGAN | MIT |
 | Real-ESRGAN `RealESRGAN_x4plus_anime_6B` | Optional local anime super-resolution weights | BSD-3-Clause |
+| CTranslate2 | Optional local Argos translation runtime | MIT |
+| SentencePiece | Optional local Argos tokenization | Apache-2.0 |
+| Argos Translate `translate-ja_en` / `translate-en_zh` | Optional local Japanese-English and English-Chinese packages from OPUS-MT | CC-BY-4.0 |
 | Lightning CSS (transitive build dependency) | CSS transformation used by the frontend toolchain | MPL-2.0 |
 
 Build and test dependencies include Playwright (Apache-2.0), Vite/Vitest, TypeScript, ESLint,
@@ -26,6 +29,6 @@ authoritative package metadata are recorded in `backend/uv.lock`, `frontend/pack
 the root `package-lock.json`.
 
 No font, OCR language data, model weight, or user image is redistributed by this repository.
-Users install Tesseract language packs, optional ONNX models, and fonts already available on their
-own system. Optional model setup prints each file's license and verifies a pinned SHA-256 checksum
-before the application will use it.
+Users install Tesseract language packs, optional ONNX models, optional Argos translation packages,
+and fonts already available on their own system. Optional model setup prints each file's license and
+verifies a pinned SHA-256 checksum before the application will use it.

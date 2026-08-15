@@ -90,3 +90,21 @@ uv sync --project backend --extra ai --group dev
 `realesrgan-onnx` is the local AI provider. `opencv-pillow` Lanczos is classic interpolation and will
 not appear as AI upscaling. The NCNN adapter still needs a separately installed
 `realesrgan-ncnn-vulkan` executable; it is optional once the ONNX provider is installed.
+
+## Local Argos Japanese-to-Chinese translation is unavailable
+
+Install the backend `mt` extra and both checksum-verified Argos packages, then restart `npm run dev`:
+
+```bash
+npm run setup:mt
+```
+
+Or, with a repository data directory:
+
+```bash
+uv sync --project backend --extra mt --group dev
+npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
+```
+
+`argos-ja-zh` translates locally through English and currently produces Simplified Chinese. It does not
+replace human review. Mock translation remains a deterministic demo and is not this provider.

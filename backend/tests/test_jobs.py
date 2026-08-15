@@ -363,6 +363,40 @@ def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path)
         assert image_state["status"]["translation"] == "done"
 
 
+def test_argos_translation_job_uses_local_pivot_without_mock_prefix(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+
+    class FakeHop:
+        def __init__(self, mapping: dict[str, str]):
+            self.mapping = mapping
+
+        def translate(self, text: str) -> str:
+            return self.mapping.get(text, text)
+
+    def factory(path: Path):
+        if path.name == "argos-ja-en":
+            return FakeHop({"こんにちは": "Hello"})
+        return FakeHop({"Hello": "你好"})
+
+    app.state.providers.argos._hop_factory = factory
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        job = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "argos-ja-zh"}},
+        ).json()
+        completed = _wait_job(client, job["id"])
+        assert completed["status"] == "completed"
+        translated = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert translated["translationText"] == "你好"
+        assert translated["translationText"].startswith("【模拟译文】") is False
+        image_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert image_state["translatorProvider"] == "argos-ja-zh"
+
+
 def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
     tmp_path: Path,
 ) -> None:

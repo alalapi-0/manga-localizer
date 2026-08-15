@@ -31,6 +31,12 @@ describe('api client contract', () => {
         translation: {
           manual: { provider: 'manual', available: true, remote: false },
           mock: { provider: 'mock', available: true, deterministic: true, remote: false },
+          'argos-ja-zh': {
+            provider: 'argos-ja-zh',
+            available: false,
+            remote: false,
+            error: 'ctranslate2 and sentencepiece are not installed',
+          },
           'openai-compatible': {
             provider: 'openai-compatible',
             available: false,
@@ -54,6 +60,14 @@ describe('api client contract', () => {
       expect.objectContaining({ id: 'tesseract', kind: 'detector', available: true }),
       expect.objectContaining({ id: 'tesseract', kind: 'ocr', available: true }),
       expect.objectContaining({ id: 'mock', kind: 'translator', isMock: true }),
+      expect.objectContaining({
+        id: 'argos-ja-zh',
+        kind: 'translator',
+        available: false,
+        local: true,
+        label: 'Argos 本地日→中',
+        reason: 'ctranslate2 and sentencepiece are not installed',
+      }),
       expect.objectContaining({
         id: 'openai-compatible',
         available: false,

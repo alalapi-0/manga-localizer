@@ -248,8 +248,8 @@ Semantic Versioning.
 - Round 36 opens a job-queue item onto its page, frames overlay or leftover overflow boxes, and
   switches completed inpaint or preprocess items to the matching preview. Local gates passed 2
   launcher tests and frontend lint/typecheck/125 tests plus the production build. The release audit
-  scanned 128 candidate files and 712 historical blobs. Backend was unchanged from Round 31. Remote
-  CI is pending.
+  scanned 128 candidate files and 712 historical blobs. Backend was unchanged from Round 31. GitHub
+  CI run `31885226463` passed on `1184c07e1cabeb8257fe60601584910536d4ef2a`.
 
 ### Known limitations
 

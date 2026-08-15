@@ -469,4 +469,5 @@ pages. Those files remain `detector-draft` until human review.
   and switches completed inpaint or preprocess items to the matching preview. This does not complete
   the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
   lint/typecheck/125 tests/build. The release audit scanned 128 candidate files and 712 historical
-  blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31885226463` passed at `1184c07e1cabeb8257fe60601584910536d4ef2a`.

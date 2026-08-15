@@ -84,6 +84,8 @@ Last updated: 2026-08-15
   overflow boxes. This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 36 — clicking a job-queue item opens that page and frames overlay or leftover overflow boxes.
   This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 37 — the sidebar overflow pill opens that page and frames overflowing boxes. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -471,3 +473,7 @@ pages. Those files remain `detector-draft` until human review.
   lint/typecheck/125 tests/build. The release audit scanned 128 candidate files and 712 historical
   blobs. Backend was unchanged from Round 31.
   GitHub CI run `31885226463` passed at `1184c07e1cabeb8257fe60601584910536d4ef2a`.
+- **Round 37:** the sidebar **排版溢出** pill opens that page and frames overflowing boxes. This does
+  not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests
+  and frontend lint/typecheck/127 tests/build. The release audit scanned 128 candidate files and 724
+  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.

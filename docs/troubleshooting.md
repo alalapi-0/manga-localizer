@@ -22,7 +22,8 @@ unchanged.
 
 ## Chinese text overflows a balloon
 
-Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Use
+Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Click the
+page's **排版溢出** pill to select and frame those boxes. Use
 **只重排溢出框** to rerun typesetting for those boxes only, or **选中溢出框** then merge/resize.
 Shrink the font or enable auto-fit, then click **重排当前框** or press **T**. **只重排溢出框**
 (**⇧T**) and **重排当前框**

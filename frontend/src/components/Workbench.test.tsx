@@ -71,6 +71,33 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('还有 1 页排版溢出')).toBeInTheDocument();
   });
 
+  it('frames overflow boxes from the sidebar overflow pill', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+        }),
+        imageFixture('image-2'),
+      ],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '框住 image-1.png 的排版溢出' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState()).toMatchObject({
+        activeImageId: 'image-1',
+        selectedRegionIds: ['region-1'],
+        rightTab: 'typesetting',
+        canvasMode: 'typeset',
+        focusRegionIds: ['region-1'],
+      });
+    });
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
+  });
+
   it('selects overflowing boxes and queues typesetting for those region ids only', async () => {
     const user = userEvent.setup();
     const overflowing = regionFixture('region-1', {

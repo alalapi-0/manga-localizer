@@ -91,37 +91,46 @@ function ImageRow({ image }: { image: ImageAsset }) {
           type="checkbox"
         />
       </label>
-      <button className="image-row__main" onClick={() => void selectImage(image.id)} type="button">
-        <span className="thumbnail-wrap">
-          <img alt="" loading="lazy" src={api.thumbnailUrl(image.id)} />
-          <span>{image.regionCount}</span>
-        </span>
-        <span className="image-row__content">
-          <span className="image-row__name" title={image.relativePath}>{image.name}</span>
-          <span className="image-row__meta">{image.width} × {image.height}px</span>
-          {reviewState === 'no_text_reviewed' ? (
-            <span className="status-pill status-pill--no-text"><span />已确认无文字</span>
-          ) : reviewState === 'no_text_pending' ? (
-            <span className="status-pill status-pill--needs-review"><span />待确认无文字</span>
-          ) : reviewState === 'needs_review' ? (
-            <span className="status-pill status-pill--needs-review"><span />待检查</span>
-          ) : (
-            <StatusPill state={reviewState} label={reviewState === 'done' ? '已检查' : undefined} />
-          )}
-          {imageHasTypesetOverflow(image) ? (
-            <span className="status-pill status-pill--overflow"><span />排版溢出 {image.typesetOverflowCount}</span>
-          ) : null}
-          <span className="image-row__stages" aria-label="页面处理阶段">
-            <span className={`stage-mini stage-mini--${image.status.detection}`}>检测</span>
-            <span className={`stage-mini stage-mini--${image.status.ocr}`}>OCR</span>
-            <span className={`stage-mini stage-mini--${image.status.translation}`}>翻译</span>
+      <div className="image-row__body">
+        <button className="image-row__main" onClick={() => void selectImage(image.id)} type="button">
+          <span className="thumbnail-wrap">
+            <img alt="" loading="lazy" src={api.thumbnailUrl(image.id)} />
+            <span>{image.regionCount}</span>
           </span>
-        </span>
-      </button>
-      <div className="image-row__providers" aria-label="本页实际 provider">
-        <span>D</span><ProviderBadge provider={detector} />
-        <span>O</span><ProviderBadge provider={ocr} />
-        <span>T</span><ProviderBadge provider={translator} />
+          <span className="image-row__content">
+            <span className="image-row__name" title={image.relativePath}>{image.name}</span>
+            <span className="image-row__meta">{image.width} × {image.height}px</span>
+            {reviewState === 'no_text_reviewed' ? (
+              <span className="status-pill status-pill--no-text"><span />已确认无文字</span>
+            ) : reviewState === 'no_text_pending' ? (
+              <span className="status-pill status-pill--needs-review"><span />待确认无文字</span>
+            ) : reviewState === 'needs_review' ? (
+              <span className="status-pill status-pill--needs-review"><span />待检查</span>
+            ) : (
+              <StatusPill state={reviewState} label={reviewState === 'done' ? '已检查' : undefined} />
+            )}
+            <span className="image-row__stages" aria-label="页面处理阶段">
+              <span className={`stage-mini stage-mini--${image.status.detection}`}>检测</span>
+              <span className={`stage-mini stage-mini--${image.status.ocr}`}>OCR</span>
+              <span className={`stage-mini stage-mini--${image.status.translation}`}>翻译</span>
+            </span>
+          </span>
+        </button>
+        {imageHasTypesetOverflow(image) ? (
+          <button
+            aria-label={`框住 ${image.name} 的排版溢出`}
+            className="status-pill status-pill--overflow image-row__overflow"
+            onClick={() => void selectImage(image.id, { focusOverflow: true })}
+            type="button"
+          >
+            <span />排版溢出 {image.typesetOverflowCount}
+          </button>
+        ) : null}
+        <div className="image-row__providers" aria-label="本页实际 provider">
+          <span>D</span><ProviderBadge provider={detector} />
+          <span>O</span><ProviderBadge provider={ocr} />
+          <span>T</span><ProviderBadge provider={translator} />
+        </div>
       </div>
     </article>
   );

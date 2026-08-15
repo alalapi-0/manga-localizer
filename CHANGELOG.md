@@ -54,6 +54,7 @@ Semantic Versioning.
 - Clicking a job-queue item opens that page. Overlay typeset items select and frame the redrawn boxes;
   full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and
   review mask; completed preprocess items open the enhanced preview.
+- The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -250,6 +251,10 @@ Semantic Versioning.
   launcher tests and frontend lint/typecheck/125 tests plus the production build. The release audit
   scanned 128 candidate files and 712 historical blobs. Backend was unchanged from Round 31. GitHub
   CI run `31885226463` passed on `1184c07e1cabeb8257fe60601584910536d4ef2a`.
+- Round 37 frames overflow boxes from the sidebar **排版溢出** pill. Local gates passed 2 launcher
+  tests and frontend lint/typecheck/127 tests plus the production build. The release audit scanned
+  128 candidate files and 724 historical blobs. Backend was unchanged from Round 31. Remote CI is
+  pending.
 
 ### Known limitations
 

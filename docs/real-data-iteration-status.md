@@ -28,6 +28,8 @@ Last updated: 2026-08-15
 - Round 12 — privacy-safe detection/OCR evaluation: public synthetic ground truth, union detector,
   ignored private draft annotations, and sanitized precision/recall/CER reporting. Private human
   review of those drafts is still required before claiming real-page accuracy.
+- Round 13 — line-art-aware inpainting: comparison candidates, LaMa grayscale preservation, and a
+  public synthetic restoration contact sheet. Private visual review of real pages remains required.
 
 ## Private data boundary
 
@@ -276,3 +278,7 @@ pages. Those files remain `detector-draft` until human review.
   PP-OCRv3 scored precision/recall 1.0 on the synthetic ground truth with zero negative-page false
   positives; Tesseract OCR CER on matched boxes was 0.42. Private drafts are not independent ground
   truth. GitHub CI run `31852816928` passed at `761c30d319455f11af82fc2358bc830797ebdac8`.
+- **Round 13:** added line-art-guided inpainting candidates, grayscale preservation for LaMa on manga
+  pages, compare/select in the workbench, and a synthetic local comparison script. Mask-outside pixels
+  stay unchanged. Automatic smear/chroma flags are anomaly hints. Contact sheets stay ignored and are
+  not sent to a remote model. This is not a claim that complex SFX or dense line art is publication-ready.

@@ -21,7 +21,12 @@ Semantic Versioning.
 - Privacy-safe detection/OCR evaluation with IoU matching, separate detector/OCR confidence, CER,
   negative-page false positives, a public synthetic stress set, and ignored private draft annotations.
 - Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact
-  mask-outside preservation, and an explicit checksum-verifying model installer.
+  mask-outside preservation, grayscale preservation on manga pages, and an explicit checksum-verifying
+  model installer.
+- Line-art-guided inpainting candidates: each repair job stores the provider result plus OpenCV
+  Navier-Stokes, Telea, and a structure/texture blend. Pages that used only LaMa default to the
+  line-art-guided plate. Editors can compare, switch, accept, or reject locally; auto metrics only flag
+  mask-outside changes, chroma, or possible smearing.
 - Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
   editable region boundaries plus persisted bounded brush/eraser strokes for manual mask correction.
 - Durable accept/reject review for preprocessing, inpainting, and typesetting artifacts, with
@@ -97,6 +102,11 @@ Semantic Versioning.
   0.42. Tesseract-alone produced 80 false positives on the negative page. Private ignored drafts cover
   all 130 pages (727 PP-OCR boxes, 18 empty pages) and are not independent ground truth. GitHub CI run
   `31852816928` passed on `761c30d319455f11af82fc2358bc830797ebdac8`.
+- Round 13 stores provider, Navier-Stokes, Telea, and line-art-guided inpainting candidates after each
+  nonempty repair, keeps mask-outside pixels exact, preserves grayscale on LaMa manga pages, and adds a
+  synthetic local comparison script. Automatic smear/chroma flags are anomaly hints, not visual
+  approval. Complex line art and large SFX still need human compare/accept. Local gates passed 2
+  launcher tests, 209 backend tests, and 95 frontend tests plus the production build.
 
 ### Known limitations
 

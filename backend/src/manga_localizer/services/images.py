@@ -237,6 +237,9 @@ def invalidate_image_pipeline(
         provider_key = _PROVIDER_STATUS_KEYS.get(stage)
         if provider_key:
             status[provider_key] = ""
+    if "inpaint" in stages:
+        status.pop("inpaintCandidate", None)
+        status.pop("inpaintCandidates", None)
     image.status = status
     invalid_error_stages = set().union(*(_ERROR_STAGE_KEYS[stage] for stage in stages))
     image.processing_errors = [
@@ -251,6 +254,9 @@ def invalidate_image_pipeline(
         artifact_directories.add("preprocessed")
     if "inpaint" in stages:
         artifact_directories.update(("inpainted", "masks", "typeset"))
+        from manga_localizer.services.inpaint_candidates import delete_inpaint_candidate_files
+
+        delete_inpaint_candidate_files(store, relative)
     elif "typeset" in stages:
         artifact_directories.add("typeset")
     for directory in artifact_directories:

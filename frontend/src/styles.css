@@ -246,6 +246,10 @@ h1, h2, h3, p { margin: 0; }
 .stage-review-state { min-width: 3.5em; color: var(--text-muted); font-size: 12px; text-align: center; }
 .stage-review-state--accepted { color: var(--success); }
 .stage-review-state--rejected { color: var(--danger); }
+.candidate-select select { min-height: 28px; max-width: 14rem; }
+.inpaint-candidates { display: flex; flex-direction: column; gap: 6px; }
+.inpaint-candidate { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; }
+.inpaint-candidate__anomalies { display: block; color: var(--amber); font-size: 12px; }
 .segmented { display: flex; padding: 2px; background: var(--surface-0); border: 1px solid var(--border); border-radius: 6px; }
 .segmented button { min-height: 25px; padding: 2px 9px; color: var(--muted); background: transparent; border: 0; border-radius: 4px; font-size: 10px; font-weight: 650; cursor: pointer; }
 .segmented button[aria-pressed="true"] { color: var(--text); background: var(--surface-3); box-shadow: 0 1px 3px rgba(0,0,0,.18); }

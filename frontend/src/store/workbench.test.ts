@@ -743,6 +743,32 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().stageReviewSaving).toBeNull();
   });
 
+  it('selects an inpaint candidate and replaces the current plate identity', async () => {
+    const initial = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      inpaintCandidate: 'primary',
+      inpaintCandidates: [
+        { id: 'primary', label: '当前 Provider 结果', anomalies: [] },
+        { id: 'lineart-guided', label: '线稿引导(结构+纹理)', anomalies: [] },
+      ],
+    });
+    seedWorkbench({ images: [initial] });
+    const select = vi.spyOn(api, 'selectInpaintCandidate').mockResolvedValue({
+      ...initial,
+      revision: 8,
+      inpaintCandidate: 'lineart-guided',
+      stageReviews: {},
+    });
+
+    expect(await useWorkbenchStore.getState().selectInpaintCandidate('lineart-guided')).toBe(true);
+    expect(select).toHaveBeenCalledWith('image-1', 'lineart-guided', 7);
+    expect(useWorkbenchStore.getState().images[0]).toMatchObject({
+      revision: 8,
+      inpaintCandidate: 'lineart-guided',
+    });
+  });
+
   it('clears optimistic visual reviews when project settings invalidate their artifacts', () => {
     const initial = imageFixture('image-1', {
       stageReviews: {

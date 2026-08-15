@@ -19,22 +19,14 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 12 delivers a privacy-safe annotated detection/OCR evaluation path on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 12 feature commit is
-`761c30d319455f11af82fc2358bc830797ebdac8` with GitHub CI run `31852816928` green. The previous
-Round 11 feature commit is `866ad13728a029f468e447aa6c39bebe42121d92`. Round 12 adds IoU matching,
-separate detector/OCR
-confidence, character-error-rate, negative-page false-positive metrics, a public synthetic stress set
-covering bubble, non-bubble, SFX/art, horizontal, vertical, single-character, complex line-art, and
-no-text negatives, plus ignored private draft-annotation bootstrap. Automatic proposals are still not
-dropped, merged, or authorized by confidence. `ppocr-v3+tesseract` concatenates both detectors without
-NMS; Tesseract contour fallback stays off in that union so hatching blobs from the empty-page contour
-path are not added on top of Tesseract TSV. On the public synthetic ground-truth set, PP-OCRv3 reached
-precision 1.0 / recall 1.0 / 0 negative-page false positives; Tesseract OCR CER on matched boxes was
-0.42. Tesseract-alone over-detected hatching (80 false positives on the synthetic negative). Private
-PP-OCR drafts for all 130 pages produced 727 proposal boxes and 18 empty pages; those drafts are not
-independent ground truth. Round 8 remains 18/130 explicit visual reviews. The full product goal remains
-active. No merge, tag, release, or deployment has occurred.
+Round 13 delivers line-art-aware inpainting candidates on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 12 feature commit is
+`761c30d319455f11af82fc2358bc830797ebdac8` with GitHub CI run `31852816928` green. Round 13 keeps exact
+mask-outside preservation, adds grayscale preservation to LaMa, and stores provider / Navier-Stokes /
+Telea / line-art-guided plates for human compare-and-select. Pages that used only LaMa default to the
+line-art-guided blend. Automatic flags are anomaly hints, not visual approval. Local public regression
+is complete; remote CI is pending the task-branch push. Round 8 remains 18/130 explicit visual
+reviews. The full product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -72,7 +64,11 @@ active. No merge, tag, release, or deployment has occurred.
   confidence alone never authorizes translation or default safe rendering. Recognition-input edits or
   replacement of depended-on preprocessing revoke trust; translation/style/mask-only edits preserve it.
 - Inpainting uses exact provider routing. OpenCV is the guaranteed fallback; optional LaMa ONNX is lazy,
-  local, context-cropped, and composites with exact mask-outside preservation.
+  local, context-cropped, and composites with exact mask-outside preservation. Grayscale manga pages
+  keep chroma suppressed after RGB LaMa inference. Each nonempty repair also stores comparison
+  candidates (provider, Navier-Stokes, Telea, line-art-guided); LaMa-only pages default to the
+  line-art-guided plate. Switching a candidate replaces the canonical inpainted bytes and clears
+  dependent reviews.
 - Repair defaults to the `safe` eligibility policy. Canonical repair settings are persisted across API,
   queue, and UI; text/full-region masks support padding, dilation, feathering, editable geometry, and an
   actual-mask preview. Bounded add/erase strokes are persisted per region. Typesetting requires safe
@@ -131,9 +127,11 @@ active. No merge, tag, release, or deployment has occurred.
   private classic-vs-AI comparison, public regression, and complete CI on the non-default branch.
 - [x] Round 12: privacy-safe detection/OCR evaluation, public synthetic ground truth, union detector
   that keeps all proposals, ignored private draft annotations, public regression, and complete CI.
+- [x] Round 13: line-art-aware inpainting candidates, LaMa grayscale preservation, local
+  compare/select/accept, public synthetic comparison script, and public regression. Remote CI is
+  pending after the task-branch push.
 - [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
-  truth; line-art-aware restoration; real Japanese-to-Chinese translation; remaining 112/130 visual
-  reviews.
+  truth; real Japanese-to-Chinese translation; remaining 112/130 visual reviews.
 
 ## Verification evidence
 
@@ -196,6 +194,15 @@ active. No merge, tag, release, or deployment has occurred.
   `761c30d319455f11af82fc2358bc830797ebdac8`. Backend Ruff lint/format, 203 pytest cases, and the
   release audit passed. Frontend lint/typecheck/92 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 13 local synthetic inpaint comparison (one generated line-art page, local LaMa ONNX available):
+  four candidates, zero mask-outside pixel changes, chroma 0, no automatic smear/chroma flags. LaMa
+  primary inside-mask Laplacian variance 19256; line-art-guided 11020; Navier-Stokes 34; Telea 28.
+  Contact sheets remain under the ignored real-data run directory and were not opened by a remote model.
+- Round 13 local verification passed 2 launcher tests; backend Ruff lint/format and 209 pytest cases;
+  frontend ESLint, TypeScript, 95 Vitest cases, and production build; release audit over 123 candidate
+  files plus 357 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 
@@ -208,8 +215,8 @@ full-book output quality.
 - The representative export uses deterministic mock translations for structural testing. Real Chinese
   translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
   reconstruction artifacts still prevent unattended publication.
-- MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and line-art-aware
-  restoration remain roadmap work. Local visual review of Real-ESRGAN contact sheets is still required
-  before treating AI upscaling as publication-quality.
+- MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and unattended
+  publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
+  sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.
 - Tesseract TSV over-detects hatching/line art. Prefer `ppocr-v3` when precision on negatives matters;
   use `ppocr-v3+tesseract` only when extra Tesseract proposals are wanted.

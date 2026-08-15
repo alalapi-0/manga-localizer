@@ -133,6 +133,7 @@ interface WorkbenchState {
     state: StageReviewState,
     observation?: StageReviewObservation,
   ) => Promise<boolean>;
+  selectInpaintCandidate: (candidateId: string) => Promise<boolean>;
   setCanvasMode: (mode: CanvasMode) => void;
   setCanvasTool: (tool: CanvasTool) => void;
   toggleCompareMode: () => void;
@@ -289,6 +290,8 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     stageReviews: image.stageReviews && typeof image.stageReviews === 'object'
       ? image.stageReviews
       : {},
+    inpaintCandidate: typeof image.inpaintCandidate === 'string' ? image.inpaintCandidate : undefined,
+    inpaintCandidates: Array.isArray(image.inpaintCandidates) ? image.inpaintCandidates : [],
     status: {
       import: stageState(rawStatus.import ?? 'done'),
       preprocess: stageState(rawStatus.preprocess),
@@ -1791,6 +1794,45 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         ...response,
         status: { ...image.status, ...(response.status ?? {}) },
         stageReviews: response.stageReviews ?? {},
+      }, state.currentProject?.settings);
+      set((currentState) => ({
+        images: currentState.images.map((entry) =>
+          entry.id === merged.id && entry.revision <= merged.revision ? merged : entry,
+        ),
+      }));
+      return true;
+    } catch (error) {
+      set({
+        globalError: errorMessage(error),
+        revisionConflict: error instanceof ApiError && error.status === 409,
+      });
+      return false;
+    } finally {
+      set((currentState) => ({
+        stageReviewSaving: currentState.stageReviewSaving === mutationKey
+          ? null
+          : currentState.stageReviewSaving,
+      }));
+    }
+  },
+
+  selectInpaintCandidate: async (candidateId) => {
+    if (!(await get().flushAutosave())) return false;
+    const state = get();
+    const image = activeImage(state);
+    if (!image || image.inpaintCandidate === candidateId) return false;
+    const mutationKey = `${image.id}:inpaint-candidate`;
+    if (state.stageReviewSaving !== null) return false;
+    set({ globalError: '', revisionConflict: false, stageReviewSaving: mutationKey });
+    try {
+      const response = await api.selectInpaintCandidate(image.id, candidateId, image.revision);
+      const merged = hydrateImage({
+        ...image,
+        ...response,
+        status: { ...image.status, ...(response.status ?? {}) },
+        stageReviews: response.stageReviews ?? {},
+        inpaintCandidate: response.inpaintCandidate,
+        inpaintCandidates: response.inpaintCandidates ?? image.inpaintCandidates,
       }, state.currentProject?.settings);
       set((currentState) => ({
         images: currentState.images.map((entry) =>

@@ -136,6 +136,11 @@ def _portable_image_status(
             status["stageReviews"] = retained
         else:
             status.pop("stageReviews", None)
+    if "inpaint" not in available_stages:
+        status.pop("inpaintCandidate", None)
+        status.pop("inpaintCandidates", None)
+    else:
+        status.pop("inpaintCandidates", None)
     if "inpaint" not in available_stages or "typeset" not in available_stages:
         status["export"] = "pending"
     return status

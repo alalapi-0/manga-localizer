@@ -60,6 +60,17 @@ class ProjectOut(APIModel):
     updated_at: datetime
 
 
+class InpaintCandidateOut(APIModel):
+    id: str
+    label: str
+    anomalies: list[str] = Field(default_factory=list)
+
+
+class SelectInpaintCandidateRequest(APIModel):
+    candidate_id: str
+    expected_revision: int = Field(ge=0)
+
+
 class ImageOut(APIModel):
     id: str
     project_id: str
@@ -87,6 +98,8 @@ class ImageOut(APIModel):
     translator_provider: str | None
     inpainting_provider: str | None
     typesetting_provider: str | None
+    inpaint_candidate: str | None = None
+    inpaint_candidates: list[InpaintCandidateOut] = Field(default_factory=list)
     thumbnail_url: str
     content_url: str
     created_at: datetime

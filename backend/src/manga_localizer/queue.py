@@ -38,6 +38,10 @@ from manga_localizer.services.images import (
     invalidate_image_pipeline,
     reset_image_review,
 )
+from manga_localizer.services.inpaint_candidates import (
+    prepare_page_inpaint_candidates,
+    write_page_inpaint_candidates,
+)
 from manga_localizer.services.projects import (
     ProjectError,
     ProjectRegistry,
@@ -1659,6 +1663,10 @@ class PersistentJobQueue:
         typeset_bytes: bytes | None = None
         render_mask: np.ndarray | None = None
         typeset_source: Path | Image.Image = inpaint_path
+        selected_inpaint_candidate: str | None = None
+        public_inpaint_candidates: list[dict[str, Any]] = []
+        pending_candidate_files: list[tuple[str, bytes]] = []
+        pending_candidate_manifest: list[dict[str, Any]] = []
         region_inpainting_providers: dict[str, str] = {}
         effective_inpainting_provider_name = str(
             recorded_inpainting_provider or page_inpainting_provider_name
@@ -1792,8 +1800,29 @@ class PersistentJobQueue:
             if isinstance(cleaned, Path):
                 with Image.open(source) as opened:
                     cleaned = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
+            with Image.open(source) as opened:
+                opened.load()
+                original = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
+            used_only_lama = bool(region_inpainting_providers) and all(
+                name in {"lama", "lama-onnx"} for name in region_inpainting_providers.values()
+            )
+            (
+                selected_inpaint_candidate,
+                inpainted_bytes,
+                public_inpaint_candidates,
+                pending_candidate_files,
+                pending_candidate_manifest,
+            ) = prepare_page_inpaint_candidates(
+                source=original,
+                mask=mask,
+                primary=cleaned,
+                used_only_lama=used_only_lama,
+                radius=float(DEFAULT_REPAIR_SETTINGS["radius"]),
+            )
+            with Image.open(io.BytesIO(inpainted_bytes)) as selected_image:
+                selected_image.load()
+                cleaned = selected_image.copy()
             mask_bytes = self._png_bytes(Image.fromarray(mask))
-            inpainted_bytes = self._png_bytes(cleaned)
             render_mask = mask
             typeset_source = cleaned
         if kind != "inpaint":
@@ -1847,6 +1876,14 @@ class PersistentJobQueue:
                 atomic_write_bytes(mask_path, mask_bytes)
             if inpainted_bytes is not None:
                 atomic_write_bytes(inpaint_path, inpainted_bytes)
+            if pending_candidate_files and selected_inpaint_candidate is not None:
+                write_page_inpaint_candidates(
+                    store,
+                    relative,
+                    selected_id=selected_inpaint_candidate,
+                    encoded_files=pending_candidate_files,
+                    manifest_candidates=pending_candidate_manifest,
+                )
             if typeset_bytes is not None:
                 atomic_write_bytes(typeset_path, typeset_bytes)
             if inpainted_bytes is not None or typeset_bytes is not None:
@@ -1862,6 +1899,12 @@ class PersistentJobQueue:
                 status["inpaintingProvider"] = effective_inpainting_provider_name
                 status["inpaintingRepairPolicy"] = repair_policy
                 status.pop("repairPolicy", None)
+                if public_inpaint_candidates:
+                    status["inpaintCandidate"] = selected_inpaint_candidate
+                    status["inpaintCandidates"] = public_inpaint_candidates
+                else:
+                    status.pop("inpaintCandidate", None)
+                    status.pop("inpaintCandidates", None)
             if kind != "inpaint":
                 status["typeset"] = "done"
                 status["typesettingProvider"] = typesetting_provider_name
@@ -1891,6 +1934,10 @@ class PersistentJobQueue:
             "eligibleRegionCount": len(repair_data),
             "skippedRegionCount": len(active_regions) - len(repair_data),
             "repairedRegionCount": repaired_region_count if mask_bytes is not None else None,
+            "inpaintCandidate": selected_inpaint_candidate,
+            "inpaintCandidateCount": (
+                len(public_inpaint_candidates) if public_inpaint_candidates else None
+            ),
             "typesetEligibleRegionCount": (
                 len(renderable_typesetting_data) if kind != "inpaint" else None
             ),

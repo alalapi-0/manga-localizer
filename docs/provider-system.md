@@ -114,7 +114,16 @@ get_capabilities()
 - `lama-onnx` implements the
   [OpenCV Zoo LaMa](https://github.com/opencv/opencv_zoo/tree/main/models/inpainting_lama) 512×512 ONNX
   contract through optional ONNX Runtime. It uses a context crop, lazy thread-safe session, inward
-  feathering, alpha preservation, and exact zero-mask compositing.
+  feathering, alpha preservation, grayscale preservation on effectively gray pages, and exact zero-mask
+  compositing.
+
+After a page is repaired, the queue also writes comparison candidates: the provider result, OpenCV
+Navier-Stokes, OpenCV Telea, and a line-art-guided blend that keeps Navier-Stokes structure where edges
+continue and the smoother/AI fill in interiors. Pixels outside the mask stay bit-exact on every
+candidate. A page that used only LaMa selects the line-art-guided plate by default; mixed or OpenCV
+pages keep the provider result. Switching a candidate replaces the canonical inpainted bytes, clears
+inpaint/typeset reviews, and does not export the unused alternatives. Automatic flags
+(`mask-outside-changed`, `chroma-introduced`, `possible-smear`) are anomaly hints, not visual approval.
 
 Masks can use detector polygons/current region geometry or text-aware local segmentation, followed by
 padding, dilation, and feathering. Moving/resizing/rotating a detector-created region discards its stale

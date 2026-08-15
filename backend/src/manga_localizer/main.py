@@ -36,6 +36,7 @@ from manga_localizer.schemas import (
     RegionCreate,
     RegionOut,
     RegionPatch,
+    SelectInpaintCandidateRequest,
     StageReviewRequest,
 )
 from manga_localizer.security import (
@@ -56,6 +57,11 @@ from manga_localizer.services.images import (
     stage_reviews,
     thumbnail_path,
     validate_image_bytes,
+)
+from manga_localizer.services.inpaint_candidates import (
+    candidate_image_path,
+    public_candidates_from_status,
+    select_inpaint_candidate,
 )
 from manga_localizer.services.projects import (
     ProjectError,
@@ -191,6 +197,9 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
     pipeline_status["reviewedAt"] = image.status.get("reviewedAt") or ""
     regions = image.__dict__.get("regions", [])
     processing_errors = _public_processing_errors(image.processing_errors)
+    selected_inpaint_candidate, inpaint_candidate_records = public_candidates_from_status(
+        image.status
+    )
     return {
         "id": image.id,
         "projectId": image.project_id,
@@ -218,6 +227,8 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "translatorProvider": image.status.get("translatorProvider") or None,
         "inpaintingProvider": image.status.get("inpaintingProvider") or None,
         "typesettingProvider": image.status.get("typesettingProvider") or None,
+        "inpaintCandidate": selected_inpaint_candidate,
+        "inpaintCandidates": inpaint_candidate_records,
         "thumbnailUrl": f"/api/images/{image.id}/thumbnail",
         "contentUrl": f"/api/images/{image.id}/content",
         "createdAt": image.created_at,
@@ -271,6 +282,8 @@ _PUBLIC_JOB_OUTPUT_FIELDS = {
         "eligibleRegionCount",
         "skippedRegionCount",
         "repairedRegionCount",
+        "inpaintCandidate",
+        "inpaintCandidateCount",
         "typesetEligibleRegionCount",
         "typesetSkippedRegionCount",
         "overflowCount",
@@ -676,6 +689,19 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         )
         return _image_dict(reviewed)
 
+    @router.patch("/images/{image_id}/inpaint-candidate", response_model=ImageOut)
+    async def image_inpaint_candidate(
+        image_id: str, body: SelectInpaintCandidateRequest
+    ) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        selected = select_inpaint_candidate(
+            store,
+            image.id,
+            candidate_id=body.candidate_id,
+            expected_revision=body.expected_revision,
+        )
+        return _image_dict(selected)
+
     @router.get("/images/{image_id}/content")
     async def image_content(
         image_id: str,
@@ -727,6 +753,29 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             thumbnail_path(store, image, resolved_settings.thumbnail_size),
             media_type="image/jpeg",
         )
+
+    @router.get("/images/{image_id}/generated/inpaint-candidates/{candidate_id}")
+    async def image_inpaint_candidate_file(image_id: str, candidate_id: str) -> FileResponse:
+        store, image = registry.find_image(image_id)
+        if image.status.get("inpaint") != "done":
+            raise HTTPException(
+                status_code=404,
+                detail="Generated inpainting candidate is stale or not available",
+            )
+        _selected, records = public_candidates_from_status(image.status)
+        if candidate_id not in {item["id"] for item in records}:
+            raise HTTPException(status_code=404, detail="Unknown inpainting candidate")
+        relative = safe_relative_path(image.relative_path).with_suffix(".png")
+        try:
+            target = candidate_image_path(store, relative, candidate_id)
+        except ProjectError as error:
+            raise HTTPException(status_code=404, detail=str(error)) from error
+        if not target.is_file():
+            raise HTTPException(
+                status_code=404,
+                detail="Generated inpainting candidate is not available",
+            )
+        return FileResponse(target, media_type="image/png")
 
     @router.get("/images/{image_id}/generated/{stage}")
     async def image_generated(image_id: str, stage: str) -> FileResponse:

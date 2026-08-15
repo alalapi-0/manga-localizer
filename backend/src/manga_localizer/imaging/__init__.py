@@ -6,6 +6,11 @@ from manga_localizer.imaging.inpainting import (
     inpaint,
     validate_mask_edits,
 )
+from manga_localizer.imaging.lineart_inpaint import (
+    CANDIDATE_IDS,
+    CANDIDATE_LABELS,
+    lineart_guided_inpaint,
+)
 from manga_localizer.imaging.preprocessing import (
     ImageEnhancementProvider,
     LocalPreprocessProvider,
@@ -29,6 +34,8 @@ from manga_localizer.imaging.typesetting import (
 )
 
 __all__ = [
+    "CANDIDATE_IDS",
+    "CANDIDATE_LABELS",
     "DEFAULT_REPAIR_SETTINGS",
     "ImageEnhancementProvider",
     "InpaintingProvider",
@@ -49,6 +56,7 @@ __all__ = [
     "discover_system_fonts",
     "font_capabilities",
     "inpaint",
+    "lineart_guided_inpaint",
     "preprocess_image",
     "typeset_image",
     "validate_mask_edits",

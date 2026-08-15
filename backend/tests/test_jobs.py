@@ -622,6 +622,52 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
             assert pixels.getpixel((55, 70)) == (255, 255, 255)
 
 
+def test_inpaint_stores_comparison_candidates_and_selection_keeps_mask_outside(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        _add_region(client, image["id"], confirmed=True)
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["inpaintCandidate"] == "primary"
+        assert output["inpaintCandidateCount"] == 4
+
+        listed = client.get(f"/api/projects/{project['id']}/images").json()
+        current = next(item for item in listed if item["id"] == image["id"])
+        assert current["inpaintCandidate"] == "primary"
+        ids = [item["id"] for item in current["inpaintCandidates"]]
+        assert ids == ["primary", "opencv-ns", "opencv-telea", "lineart-guided"]
+        primary = client.get(f"/api/images/{image['id']}/generated/inpaint-candidates/primary")
+        assert primary.status_code == 200, primary.text
+        selected = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "lineart-guided",
+                "expectedRevision": current["revision"],
+            },
+        )
+        assert selected.status_code == 200, selected.text
+        payload = selected.json()
+        assert payload["inpaintCandidate"] == "lineart-guided"
+        assert payload["revision"] > current["revision"]
+        assert payload["status"]["inpaint"] == "done"
+        assert payload["stageReviews"] == {}
+        erased = client.get(f"/api/images/{image['id']}/content?variant=inpainted")
+        with Image.open(io.BytesIO(erased.content)) as result:
+            pixels = result.convert("RGB")
+            assert pixels.getpixel((5, 5)) == (255, 255, 255)
+        missing = client.get(f"/api/images/{image['id']}/generated/inpaint-candidates/missing")
+        assert missing.status_code == 404
+
+
 def test_typeset_provider_is_not_misrouted_to_inpainting(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:

@@ -13,6 +13,11 @@ import numpy as np
 from PIL import Image
 
 from manga_localizer.imaging.inpainting import create_mask
+from manga_localizer.imaging.lineart_inpaint import (
+    composite_mask_outside,
+    is_effectively_grayscale,
+    preserve_grayscale,
+)
 
 type ImageInput = Path | Image.Image | np.ndarray
 type SessionFactory = Callable[[str, tuple[str, ...] | None], Any]
@@ -292,6 +297,7 @@ class LaMaONNXInpaintingProvider:
             "inputNames": [IMAGE_INPUT_NAME, MASK_INPUT_NAME],
             "inputTypes": ["path", "pil", "ndarray"],
             "preservesAlpha": True,
+            "preservesGrayscale": True,
             "modifiesSource": False,
             "contextCrop": True,
             "softMaskComposite": True,
@@ -389,7 +395,11 @@ class LaMaONNXInpaintingProvider:
         result_rgb = source_rgb.copy()
         result_rgb[top:bottom, left:right] = np.rint(blended).astype(np.uint8)
         result = Image.fromarray(result_rgb, mode="RGB")
+        if is_effectively_grayscale(source):
+            result = preserve_grayscale(result, source)
+        result = composite_mask_outside(source, result, mask_array)
         if source.mode == "RGBA":
+            result = result.convert("RGBA")
             result.putalpha(source.getchannel("A"))
         return result
 

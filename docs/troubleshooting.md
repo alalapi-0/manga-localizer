@@ -28,9 +28,10 @@ does not download or bundle copyrighted font files.
 ## OpenCV leaves visible artifacts
 
 Adjust the text box, mask padding, dilation, repair radius, or fill method. Preserve/ignore the region or
-select one region and refine its actual mask with the brush/eraser. Rerun inpaint and typeset, inspect
-both results, and explicitly accept only usable output. The baseline interpolator still cannot
-reconstruct detailed line art semantically, so difficult repairs may need an external editor.
+select one region and refine its actual mask with the brush/eraser. After inpainting, compare the stored
+candidates (provider result, Navier-Stokes, Telea, and line-art-guided) in the repair inspector or the
+擦除 toolbar, then accept only a usable plate. Automatic smear/chroma flags are hints. The interpolators
+still cannot invent missing line art, so some repairs may need an external editor.
 
 ## Export says a visual-stage review is missing or stale
 

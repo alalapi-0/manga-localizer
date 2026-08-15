@@ -54,6 +54,16 @@ uv run --project backend --extra ai python scripts/compare_upscale.py \
   --factor 2
 ```
 
+Compare local inpainting candidates on a public synthetic line-art page, or on private pages with an
+explicit mask, into an ignored output directory:
+
+```bash
+uv run --project backend --extra ai python scripts/compare_inpaint.py \
+  --synthetic \
+  --output tests/real-data/<dataset>/runs/<new-inpaint-run> \
+  --data-dir .manga-localizer
+```
+
 The 0.2.0 launcher was exercised through `npm run dev`: the root Web page, direct FastAPI
 health endpoint, and the Vite `/api` proxy all responded successfully. Launcher platform logic also has
 two Node tests in the unified `npm run check` gate.

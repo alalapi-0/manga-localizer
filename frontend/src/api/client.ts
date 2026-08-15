@@ -430,6 +430,20 @@ export const api = {
     );
   },
 
+  async selectInpaintCandidate(
+    imageId: string,
+    candidateId: string,
+    expectedRevision: number,
+  ): Promise<ImageAsset> {
+    return unwrap(
+      await request(`/images/${encodeURIComponent(imageId)}/inpaint-candidate`, {
+        method: 'PATCH',
+        headers: { 'If-Match': String(expectedRevision) },
+        body: { candidateId, expectedRevision },
+      }),
+    );
+  },
+
   async createRegion(imageId: string, region: Region): Promise<Region> {
     const {
       x,

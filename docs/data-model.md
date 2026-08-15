@@ -29,6 +29,11 @@ same response bytes it decodes in the review canvas, and the server recomputes a
 persisting the decision. Rejecting or withdrawing an upstream result, regenerating it, or accepting
 different upstream bytes clears dependent reviews.
 
+When inpainting produces a nonempty mask, `status.inpaintCandidate` names the selected plate and
+`status.inpaintCandidates` lists compact ids, labels, and anomaly flags. Candidate PNG files live under
+`generated/inpaint-candidates/` and are local working files; portable bundles keep only the selected
+canonical `generated/inpainted/` artifact.
+
 ## Import boundary
 
 Each trusted local import selection stores an exact file or directory `ImportBoundary` before any

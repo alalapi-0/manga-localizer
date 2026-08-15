@@ -7,6 +7,7 @@ import {
 } from '../store/workbench';
 import type {
   ExportOptions,
+  ImageAsset,
   ProjectSettings,
   ProviderCapability,
   Region,
@@ -393,6 +394,50 @@ function TypesettingInspector({ region }: { region: Region | undefined }) {
   );
 }
 
+const inpaintAnomalyLabels: Record<string, string> = {
+  'mask-outside-changed': '蒙版外像素变化',
+  'chroma-introduced': '引入彩色',
+  'possible-smear': '可能涂抹过重',
+};
+
+function InpaintCandidatePicker({ image }: { image: ImageAsset }) {
+  const selectInpaintCandidate = useWorkbenchStore((state) => state.selectInpaintCandidate);
+  const busy = useWorkbenchStore((state) => state.stageReviewSaving);
+  const candidates = image.inpaintCandidates ?? [];
+  if (image.status.inpaint !== 'done' || candidates.length < 2) return null;
+  return (
+    <Field
+      label="修复候选"
+      hint="比较后选择一个作为当前擦除结果。接受/拒绝仍绑定该结果的校验和。自动指标只标异常，不能代替目视。"
+    >
+      <div className="inpaint-candidates" role="radiogroup" aria-label="修复候选">
+        {candidates.map((candidate) => (
+          <label className="inpaint-candidate" key={candidate.id}>
+            <input
+              checked={image.inpaintCandidate === candidate.id}
+              disabled={Boolean(busy)}
+              name="inpaint-candidate"
+              onChange={() => {
+                void selectInpaintCandidate(candidate.id);
+              }}
+              type="radio"
+              value={candidate.id}
+            />
+            <span>
+              <span>{candidate.label}</span>
+              {candidate.anomalies.length ? (
+                <span className="inpaint-candidate__anomalies">
+                  {candidate.anomalies.map((flag) => inpaintAnomalyLabels[flag] ?? flag).join(' · ')}
+                </span>
+              ) : null}
+            </span>
+          </label>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
 function RepairInspector({ region }: { region: Region | undefined }) {
   const image = useWorkbenchStore(activeImage);
   const project = useWorkbenchStore((state) => state.currentProject);
@@ -402,7 +447,15 @@ function RepairInspector({ region }: { region: Region | undefined }) {
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
-  if (!region) return <EmptyState icon="◌" title="选择一个文本框" description="蒙版与修复参数会按区域保存。" />;
+  const candidatePicker = image ? <InpaintCandidatePicker image={image} /> : null;
+  if (!region) {
+    return (
+      <div className="form-stack">
+        {candidatePicker}
+        <EmptyState icon="◌" title="选择一个文本框" description="蒙版与修复参数会按区域保存。" />
+      </div>
+    );
+  }
   const repair = region.repair;
   const updateRepair = (patch: Partial<Region['repair']>) => updateRegion(region.id, { repair: { ...repair, ...patch } });
   const inheritedProvider = project?.settings.inpainterProvider ?? 'opencv';
@@ -415,6 +468,7 @@ function RepairInspector({ region }: { region: Region | undefined }) {
   const providerUnavailable = providerCapability?.available === false;
   return (
     <div className="form-stack">
+      {candidatePicker}
       <div className="notice notice--local"><b>本地处理 · {provider}</b><span>图像、蒙版和修复结果只在本机处理；可在画布用蒙版画笔与橡皮擦精修选中区域。</span></div>
       <div className="notice notice--local"><b>安全修复策略</b><span>只处理已确认、可信自动识别或手工识别区域；完成后任务抽屉会显示实际修复与跳过数量。</span></div>
       {providerUnavailable ? <div className="notice notice--warning"><b>当前修复 Provider 不可用</b><span>{providerCapability?.reason}</span></div> : null}
@@ -443,7 +497,7 @@ function RepairInspector({ region }: { region: Region | undefined }) {
         </select>
       </Field>
       {isLama ? (
-        <div className="notice notice--local"><b>LaMa AI 背景修复</b><span>使用当前蒙版的局部上下文推理；OpenCV 方法、半径与填充色不参与本次修复。</span></div>
+        <div className="notice notice--local"><b>LaMa AI 背景修复</b><span>使用当前蒙版的局部上下文推理，并保持灰度页不被染色。复杂线稿可在修复完成后比较 Navier–Stokes 与线稿引导候选。</span></div>
       ) : (
         <Field label="修复方法">
           <select onChange={(event) => updateRepair({ method: event.target.value as Region['repair']['method'] })} value={repair.method}>

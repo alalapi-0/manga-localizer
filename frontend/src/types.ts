@@ -121,6 +121,12 @@ export interface PipelineStatus {
   reviewedAt?: string | null;
 }
 
+export interface InpaintCandidate {
+  id: string;
+  label: string;
+  anomalies: string[];
+}
+
 export interface ImageAsset {
   id: string;
   projectId: string;
@@ -141,6 +147,8 @@ export interface ImageAsset {
   translatorProvider?: string;
   inpaintingProvider?: string;
   typesettingProvider?: string;
+  inpaintCandidate?: string;
+  inpaintCandidates?: InpaintCandidate[];
   revision: number;
   error?: string;
 }

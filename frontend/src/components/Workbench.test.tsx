@@ -658,6 +658,32 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('LaMa AI 背景修复')).toBeInTheDocument();
   });
 
+  it('lets the editor choose among inpaint candidates from the repair inspector', async () => {
+    const user = userEvent.setup();
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      inpaintCandidate: 'primary',
+      inpaintCandidates: [
+        { id: 'primary', label: '当前 Provider 结果', anomalies: [] },
+        { id: 'lineart-guided', label: '线稿引导(结构+纹理)', anomalies: ['possible-smear'] },
+      ],
+    });
+    seedWorkbench({ images: [image] });
+    const select = vi.spyOn(api, 'selectInpaintCandidate').mockResolvedValue({
+      ...image,
+      revision: 2,
+      inpaintCandidate: 'lineart-guided',
+      stageReviews: {},
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    expect(screen.getByRole('radiogroup', { name: '修复候选' })).toBeInTheDocument();
+    expect(screen.getByText('可能涂抹过重')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /线稿引导/ }));
+    expect(select).toHaveBeenCalledWith('image-1', 'lineart-guided', 1);
+  });
+
   it('surfaces a successful safe-repair job that changed no image pixels', async () => {
     const user = userEvent.setup();
     seedWorkbench();

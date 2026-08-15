@@ -701,6 +701,7 @@ function CanvasToolbar({
   const requestFit = useWorkbenchStore((state) => state.requestFit);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
   const reviewActiveImageStage = useWorkbenchStore((state) => state.reviewActiveImageStage);
+  const selectInpaintCandidate = useWorkbenchStore((state) => state.selectInpaintCandidate);
   const stageReviewSaving = useWorkbenchStore((state) => state.stageReviewSaving);
   const compareAvailable = hasGeneratedPreview(image);
   const maskToolAvailable = Boolean(image && selectedRegionIds.length === 1);
@@ -799,6 +800,23 @@ function CanvasToolbar({
           <button disabled={!stageReviewEnabled || stageReviewBusy || stageReviewState === 'rejected'} onClick={() => void reviewActiveImageStage(reviewStage, 'rejected', submittedObservation)} type="button">拒绝</button>
           <button disabled={stageReviewBusy || stageReviewState === 'pending'} onClick={() => void reviewActiveImageStage(reviewStage, 'pending')} type="button">撤回复核</button>
         </div>
+      ) : null}
+      {mode === 'erased' && (image?.inpaintCandidates?.length ?? 0) > 1 ? (
+        <label className="candidate-select">
+          <span className="sr-only">修复候选</span>
+          <select
+            aria-label="修复候选"
+            disabled={stageReviewBusy}
+            onChange={(event) => {
+              void selectInpaintCandidate(event.target.value);
+            }}
+            value={image?.inpaintCandidate ?? ''}
+          >
+            {image?.inpaintCandidates?.map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
+            ))}
+          </select>
+        </label>
       ) : null}
       <span className="toolbar-divider" />
       <div className="tool-buttons" aria-label="编辑工具">

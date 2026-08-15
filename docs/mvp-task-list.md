@@ -49,6 +49,8 @@ not inferred from this tracked checklist.
   fail-closed automatic proposals, relevant-input invalidation, and trusted-only translation/safe rendering
 - [x] Deliver a runnable local Real-ESRGAN AI upscaler with explicit checksummed install, honest
   classic-vs-AI labeling, and a private comparison script
+- [x] Deliver line-art-aware inpainting candidates with mask-outside preservation, grayscale LaMa
+  output, local compare/select/accept, and a synthetic comparison script
 
 ## Explicitly deferred
 

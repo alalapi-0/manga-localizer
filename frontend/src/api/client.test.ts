@@ -222,6 +222,24 @@ describe('api client contract', () => {
     });
   });
 
+  it('selects an inpaint candidate with the image revision guard', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse({
+      id: 'image-1',
+      inpaintCandidate: 'lineart-guided',
+      revision: 8,
+    }));
+
+    await api.selectInpaintCandidate('image-1', 'lineart-guided', 7);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('/api/images/image-1/inpaint-candidate');
+    expect(fetchMock.mock.calls[0]?.[1]?.method).toBe('PATCH');
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('If-Match')).toBe('7');
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toEqual({
+      candidateId: 'lineart-guided',
+      expectedRevision: 7,
+    });
+  });
+
   it('keeps the delete revision guard in the expectedRevision query', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }));
 

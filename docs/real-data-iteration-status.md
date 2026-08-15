@@ -439,4 +439,5 @@ pages. Those files remain `detector-draft` until human review.
   leftover overflow. A full-page typeset still selects remaining overflowing boxes. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
   frontend lint/typecheck/118 tests/build. The release audit scanned 128 candidate files and 663
-  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31883446023` passed at `b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`.

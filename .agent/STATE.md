@@ -21,7 +21,8 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 32 keeps the just-overlaid boxes selected when a partial typeset job for the current page
 completes, instead of jumping to leftover overflow. The work is on
-`agent/manga-round7-governance-20260812` through draft PR #3. Round 31
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 32 candidate is
+`b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c` with GitHub CI run `31883446023` green. Round 31
 (`656e3650b1fc45fc9c68febd3fcc6bc077854f55`, CI `31882562724`) remains the generated-image cache
 fix. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
 full product goal remains active. No merge, tag, release, or deployment has occurred.
@@ -170,7 +171,7 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   with public regression, and complete CI.
 - [x] Round 31: forbid HTTP caching of generated preview images, with public regression, and complete CI.
 - [x] Round 32: keep overlay boxes selected when a partial typeset job for the current page completes,
-  with public regression. Remote CI for this round is still pending.
+  with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -405,7 +406,11 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   and the production build; release audit over 128 candidate files plus 663 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
-  evidence remains the GitHub e2e job after push. Remote CI for Round 32 is pending.
+  evidence remains the GitHub e2e job after push.
+- Round 32 authoritative remote verification: GitHub CI run `31883446023` passed at
+  `b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/118 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

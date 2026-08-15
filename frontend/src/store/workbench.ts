@@ -2202,9 +2202,9 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         (job) => job.status === 'completed'
           && previousJobs.find((previous) => previous.id === job.id)?.status !== 'completed',
       );
-      const completedTypesetImageIds = new Set(
+      const newlyCompletedImageIds = (kind: JobKind) => new Set(
         jobs.flatMap((job) => {
-          if (job.kind !== 'typeset' || job.status !== 'completed') return [];
+          if (job.kind !== kind || job.status !== 'completed') return [];
           const previous = previousJobs.find((entry) => entry.id === job.id);
           if (!previous || previous.status === 'completed') return [];
           return job.items
@@ -2212,6 +2212,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
             .filter((imageId): imageId is string => Boolean(imageId));
         }),
       );
+      const completedTypesetImageIds = newlyCompletedImageIds('typeset');
+      const completedInpaintImageIds = newlyCompletedImageIds('inpaint');
       const refreshedImages = imageResponse.map((image) =>
         hydrateImage(image, project.settings),
       );
@@ -2258,6 +2260,12 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
               : {}),
           });
         }
+      } else if (
+        activeImageId
+        && completedInpaintImageIds.has(activeImageId)
+        && get().images.find((entry) => entry.id === activeImageId)?.status.inpaint === 'done'
+      ) {
+        set({ canvasMode: 'erased', showMask: true, rightTab: 'repair' });
       }
     } catch (error) {
       set({ globalError: errorMessage(error) });

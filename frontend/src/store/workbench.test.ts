@@ -1533,6 +1533,97 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
   });
 
+  it('switches to the erased preview and mask when an inpaint job for the active page completes', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      showMask: false,
+      rightTab: 'text',
+      jobs: [jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'running',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'completed',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('erased');
+    expect(useWorkbenchStore.getState().showMask).toBe(true);
+    expect(useWorkbenchStore.getState().rightTab).toBe('repair');
+  });
+
+  it('does not change the canvas when an inpaint job was already complete', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      canvasMode: 'original',
+      showMask: false,
+      jobs: [jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'completed',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-inpaint',
+        kind: 'inpaint',
+        status: 'completed',
+        items: [{
+          id: 'item-inpaint',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+    expect(useWorkbenchStore.getState().showMask).toBe(false);
+  });
+
   it('does not change the canvas when a typeset job was already complete', async () => {
     seedWorkbench();
     useWorkbenchStore.setState({

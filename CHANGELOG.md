@@ -47,6 +47,8 @@ Semantic Versioning.
 - T retypesets the selected box and Shift+T retypesets overflowing boxes when the canvas is focused.
 - After a typeset job for the current page completes, the canvas switches to the typeset preview.
   Remaining overflowing boxes are selected and the typesetting inspector opens.
+- After an inpaint job for the current page completes, the canvas switches to the erased preview,
+  shows the review mask, and opens the repair inspector.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -198,6 +200,10 @@ Semantic Versioning.
   build. The release audit scanned 128 candidate files and 609 historical blobs. Backend was
   unchanged from Round 23. GitHub CI run `31880310109` passed on
   `ebdaae7e14c5a7359faf14ac546549250a985960`.
+- Round 28 switches the canvas to the erased preview and shows the review mask when an inpaint job
+  for the current page completes. Local gates passed frontend lint/typecheck/113 tests plus the
+  production build. The release audit scanned 128 candidate files and 619 historical blobs. Backend
+  was unchanged from Round 23.
 
 ### Known limitations
 

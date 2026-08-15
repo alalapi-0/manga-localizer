@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../api/client';
 import {
+  canNavigateAdjacent,
   imageHasTypesetOverflow,
   imageReviewState,
   useWorkbenchStore,
+  visibleImagePosition,
   visibleWorkbenchImages,
 } from '../store/workbench';
 import type { ImageAsset, ProviderCapability } from '../types';
@@ -105,6 +107,7 @@ export function Sidebar() {
   const images = useWorkbenchStore((state) => state.images);
   const imageSearch = useWorkbenchStore((state) => state.imageSearch);
   const imageFilter = useWorkbenchStore((state) => state.imageFilter);
+  const activeImageId = useWorkbenchStore((state) => state.activeImageId);
   const selectedImageIds = useWorkbenchStore((state) => state.selectedImageIds);
   const setImageSearch = useWorkbenchStore((state) => state.setImageSearch);
   const setImageFilter = useWorkbenchStore((state) => state.setImageFilter);
@@ -137,6 +140,11 @@ export function Sidebar() {
     });
     return [...map.entries()];
   }, [visibleImages]);
+  const listState = { images, imageFilter, imageSearch, activeImageId };
+  const pagePosition = visibleImagePosition(listState);
+  const pageLabel = pagePosition.total
+    ? `${pagePosition.current ?? '—'} / ${pagePosition.total}`
+    : '0 / 0';
 
   async function handleFiles(input: HTMLInputElement) {
     const files = [...(input.files ?? [])].filter((file) => file.type.startsWith('image/'));
@@ -251,13 +259,13 @@ export function Sidebar() {
       </div>
 
       <footer className="sidebar__footer">
-        <IconButton aria-label="上一张图" disabled={!images.length} onClick={() => void navigateImage(-1)}>←</IconButton>
+        <IconButton aria-label="上一张图" disabled={!canNavigateAdjacent(listState, -1)} onClick={() => void navigateImage(-1)}>←</IconButton>
         <IconButton aria-label="上一张未检查" disabled={!images.length} onClick={() => void navigateImage(-1, 'unreviewed')} title="上一张未检查">⇤</IconButton>
         <IconButton aria-label="上一张排版溢出" disabled={!images.length} onClick={() => void navigateImage(-1, 'overflow')} title="上一张排版溢出">⇐</IconButton>
-        <span>{images.length ? `${images.findIndex((image) => image.id === useWorkbenchStore.getState().activeImageId) + 1} / ${images.length}` : '0 / 0'}</span>
+        <span aria-label={`可见列表 ${pageLabel}`}>{pageLabel}</span>
         <IconButton aria-label="下一张排版溢出" disabled={!images.length} onClick={() => void navigateImage(1, 'overflow')} title="下一张排版溢出">⇒</IconButton>
         <IconButton aria-label="下一张未检查" disabled={!images.length} onClick={() => void navigateImage(1, 'unreviewed')} title="下一张未检查">⇥</IconButton>
-        <IconButton aria-label="下一张图" disabled={!images.length} onClick={() => void navigateImage(1)}>→</IconButton>
+        <IconButton aria-label="下一张图" disabled={!canNavigateAdjacent(listState, 1)} onClick={() => void navigateImage(1)}>→</IconButton>
       </footer>
 
       {dialog ? <ProjectDialog mode={dialog} onClose={() => setDialog(null)} /> : null}

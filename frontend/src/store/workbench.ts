@@ -2487,6 +2487,31 @@ export function visibleWorkbenchImages(
   ));
 }
 
+export function visibleImagePosition(
+  state: Pick<WorkbenchState, 'images' | 'imageFilter' | 'imageSearch' | 'activeImageId'>,
+): { current: number | null; total: number } {
+  const visible = visibleWorkbenchImages(state);
+  const index = visible.findIndex((image) => image.id === state.activeImageId);
+  return {
+    current: index >= 0 ? index + 1 : null,
+    total: visible.length,
+  };
+}
+
+export function canNavigateAdjacent(
+  state: Pick<WorkbenchState, 'images' | 'imageFilter' | 'imageSearch' | 'activeImageId'>,
+  direction: -1 | 1,
+): boolean {
+  return Boolean(
+    adjacentVisibleImage(
+      state.images,
+      visibleWorkbenchImages(state),
+      state.activeImageId,
+      direction,
+    ),
+  );
+}
+
 function adjacentVisibleImage(
   images: ImageAsset[],
   visible: ImageAsset[],

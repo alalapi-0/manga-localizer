@@ -19,12 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 40 adds **G** and a canvas **框住** control to frame the current selection. The work is on
-`agent/manga-round7-governance-20260812` through draft PR #3.
+Round 41 shows the sidebar page counter on the visible (filtered/search) list and disables **← / →**
+at the ends of that list. The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
 Remote CI for Round 40 passed as run `31886581607` on `520133a74f231a5464400e78ade7c8cf1b522dca`.
-Round 39 (`d8e7c05467ebf9359f61defd534c526c9e02fc21`, CI `31886262454`) remains Alt+arrow and
-region-list framing. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0
-reviewed. The full product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 41 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -187,6 +187,8 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
   regression, and complete CI.
 - [x] Round 40: frame the current selection from G and the canvas toolbar, with public regression,
   and complete CI.
+- [x] Round 41: show visible-list page position and disable adjacent navigation at the ends, with
+  public regression. Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -498,6 +500,11 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
   `520133a74f231a5464400e78ade7c8cf1b522dca`. Backend Ruff lint/format, 231 pytest cases, and the
   release audit passed. Frontend lint/typecheck/132 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 41 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 133 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 771 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 
@@ -520,7 +527,8 @@ full-book output quality.
   Sidebar overflow skip and **⌥⇧← / ⌥⇧→** jump to overflowing pages and frame their overflow boxes.
   The sidebar **排版溢出** pill also opens that page and frames those boxes.
   **← / →** follow the sidebar filter and search; under **排版溢出** they skip hidden pages and frame
-  overflowing boxes. **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
+  overflowing boxes. The footer counter is that visible list, and **← / →** disable at its ends.
+  **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
   **G** and the canvas **框住** control frame the current selection.
   Clicking a job-queue item opens that page. Overlay typeset items select and frame the redrawn boxes;
   full-page typeset items frame leftover overflow. Completed inpaint items open the erased preview and

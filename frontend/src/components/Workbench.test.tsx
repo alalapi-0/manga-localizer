@@ -158,6 +158,8 @@ describe('desktop workbench interactions', () => {
     render(<App />);
 
     expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('可见列表 1 / 2')).toHaveTextContent('1 / 2');
+    expect(screen.getByRole('button', { name: '上一张图' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: '下一张图' }));
     await waitFor(() => {
       expect(useWorkbenchStore.getState()).toMatchObject({
@@ -167,6 +169,8 @@ describe('desktop workbench interactions', () => {
         canvasMode: 'typeset',
       });
     });
+    expect(screen.getByLabelText('可见列表 2 / 2')).toHaveTextContent('2 / 2');
+    expect(screen.getByRole('button', { name: '下一张图' })).toBeDisabled();
   });
 
   it('selects overflowing boxes and queues typesetting for those region ids only', async () => {

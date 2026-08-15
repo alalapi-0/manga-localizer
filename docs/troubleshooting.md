@@ -44,6 +44,8 @@ and result sit side by side; press **B** to close it. Geometry or mask edits sti
 from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
 skips pages already marked reviewed so you can keep moving through a book. Filter the sidebar to
 **排版溢出**, then **← / →** stay on those visible overflowing pages and frame their overflow boxes.
+The footer **可见列表** counter is that filtered list, and **← / →** disable at its first and last
+pages. Overflow-skip and unreviewed-skip still wrap the full library.
 The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame
 them in the typesetting inspector. **⌥↓ / ⌥↑** and the inspector region list also frame the selected

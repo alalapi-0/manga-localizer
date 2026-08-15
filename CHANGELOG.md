@@ -56,7 +56,8 @@ Semantic Versioning.
   review mask; completed preprocess items open the enhanced preview.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
-  hidden pages and frame overflowing boxes.
+  hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
+  disable at its ends.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
@@ -273,6 +274,10 @@ Semantic Versioning.
   2 launcher tests and frontend lint/typecheck/132 tests plus the production build. The release audit
   scanned 128 candidate files and 758 historical blobs. Backend was unchanged from Round 31. GitHub
   CI run `31886581607` passed on `520133a74f231a5464400e78ade7c8cf1b522dca`.
+- Round 41 shows the sidebar page counter on the visible (filtered/search) list and disables **← / →**
+  at the ends of that list. Local gates passed 2 launcher tests and frontend lint/typecheck/133 tests
+  plus the production build. The release audit scanned 128 candidate files and 771 historical blobs.
+  Backend was unchanged from Round 31. GitHub CI is pending after push.
 
 ### Known limitations
 

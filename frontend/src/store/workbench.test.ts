@@ -8,7 +8,7 @@ import {
   regionFixture,
   seedWorkbench,
 } from '../test/fixtures';
-import { activeRegions, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore } from './workbench';
+import { activeRegions, canNavigateAdjacent, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -1116,6 +1116,35 @@ describe('workbench store', () => {
       focusRegionIds: ['region-9'],
     });
     expect(await useWorkbenchStore.getState().navigateImage(1)).toBe(false);
+  });
+
+  it('counts visible pages for adjacent navigation', () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-1'],
+        }),
+        imageFixture('image-2', {
+          status: { ...imageFixture('image-2').status, typeset: 'done' },
+        }),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-1').status, typeset: 'done' },
+          typesetOverflowCount: 1,
+          typesetOverflowRegionIds: ['region-9'],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ imageFilter: 'overflow' });
+    expect(visibleImagePosition(useWorkbenchStore.getState())).toEqual({ current: 1, total: 2 });
+    expect(canNavigateAdjacent(useWorkbenchStore.getState(), -1)).toBe(false);
+    expect(canNavigateAdjacent(useWorkbenchStore.getState(), 1)).toBe(true);
+    useWorkbenchStore.setState({ activeImageId: 'image-3' });
+    expect(visibleImagePosition(useWorkbenchStore.getState())).toEqual({ current: 2, total: 2 });
+    expect(canNavigateAdjacent(useWorkbenchStore.getState(), 1)).toBe(false);
   });
 
   it('opens a typeset queue item and frames overlay boxes', async () => {

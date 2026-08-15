@@ -1481,6 +1481,7 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual([]);
     expect(useWorkbenchStore.getState().rightTab).toBe('text');
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
   });
 
   it('selects overflowing boxes when a typeset job for the active page completes', async () => {
@@ -1533,6 +1534,8 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-1']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
   it('selects overlay boxes instead of leftover overflow when a partial typeset completes', async () => {
@@ -1590,6 +1593,8 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
   it('selects overlay boxes when a partial typeset completes without leftover overflow', async () => {
@@ -1645,6 +1650,9 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-2']);
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual(['region-2']);
+    useWorkbenchStore.getState().requestFit();
+    expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
   });
 
   it('switches to the erased preview and mask when an inpaint job for the active page completes', async () => {

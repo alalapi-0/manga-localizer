@@ -31,7 +31,8 @@ keep their pixels. If the previous typeset file is missing, that action redraws 
 other boxes are not dropped. Generated plates are not kept in the browser HTTP cache, so the canvas
 reloads the rewritten file instead of an old overlay. When an overlay typeset for the current page
 finishes, the boxes just redrawn stay selected in the typesetting inspector so you can adjust and
-press **T** again. A full-page typeset still selects remaining overflowing boxes. The job queue then
+press **T** again. The canvas also frames those boxes after compare splits the view. **适窗** or
+**F** returns to the whole page. A full-page typeset still selects remaining overflowing boxes. The job queue then
 shows whether that run overlaid selected boxes or
 redrew the whole page. When a typeset job for the current page finishes, the canvas switches to
 **成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can

@@ -7,6 +7,7 @@ import { imageFixture, regionFixture, seedWorkbench } from '../test/fixtures';
 import {
   buildMaskStroke,
   centeredNodeToRegionGeometry,
+  frameRegions,
   maskEditCapacity,
   MAX_MASK_BRUSH_RADIUS,
   MAX_MASK_EDIT_POINTS,
@@ -107,6 +108,27 @@ describe('canvas generated-image refresh', () => {
       '/generated/typeset?v=5',
       expect.objectContaining({ cache: 'no-store' }),
     );
+  });
+
+  it('frames selected boxes inside the viewport instead of fitting the whole page', () => {
+    expect(frameRegions({ width: 0, height: 400 }, [{ x: 100, y: 100, width: 50, height: 50 }])).toBeNull();
+    expect(frameRegions({ width: 400, height: 400 }, [])).toBeNull();
+
+    const viewport = frameRegions(
+      { width: 400, height: 400 },
+      [{ x: 200, y: 300, width: 40, height: 60 }],
+      { width: 1200, height: 1800 },
+    );
+    expect(viewport).not.toBeNull();
+    expect(viewport?.scale).toBeGreaterThan(0.5);
+    const left = (0 - (viewport?.x ?? 0)) / (viewport?.scale ?? 1);
+    const top = (0 - (viewport?.y ?? 0)) / (viewport?.scale ?? 1);
+    const right = (400 - (viewport?.x ?? 0)) / (viewport?.scale ?? 1);
+    const bottom = (400 - (viewport?.y ?? 0)) / (viewport?.scale ?? 1);
+    expect(left).toBeLessThan(200);
+    expect(top).toBeLessThan(300);
+    expect(right).toBeGreaterThan(240);
+    expect(bottom).toBeGreaterThan(360);
   });
 
   it('rejects a decoded image whose dimensions do not match the canonical backend grid', async () => {

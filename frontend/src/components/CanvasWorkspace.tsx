@@ -23,6 +23,7 @@ import {
   buildMaskStroke,
   canonicalPoint,
   centeredNodeToRegionGeometry,
+  frameRegions,
   maskEditCapacity,
   regionToCenteredNodeGeometry,
 } from './canvasGeometry';
@@ -328,6 +329,8 @@ function CanvasViewport({
   const showConfidence = useWorkbenchStore((state) => state.showConfidence);
   const maskBrushRadius = useWorkbenchStore((state) => state.maskBrushRadius);
   const fitRequest = useWorkbenchStore((state) => state.fitRequest);
+  const focusRequest = useWorkbenchStore((state) => state.focusRequest);
+  const focusRegionIds = useWorkbenchStore((state) => state.focusRegionIds);
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const clearRegionSelection = useWorkbenchStore((state) => state.clearRegionSelection);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
@@ -381,10 +384,26 @@ function CanvasViewport({
   ]);
 
   useEffect(() => {
-    // Canvas viewport follows measured container geometry and an explicit fit command.
+    // Canvas viewport follows measured container geometry, an explicit fit command,
+    // or a post-typeset request to frame the selected boxes.
+    const focused = focusRegionIds.length
+      ? (useWorkbenchStore.getState().regionsByImage[imageAsset.id] ?? []).filter((region) =>
+        focusRegionIds.includes(region.id))
+      : [];
+    const next = focused.length
+      ? frameRegions(size, focused, { width: imageAsset.width, height: imageAsset.height })
+      : null;
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setViewport(fitViewport(size, imageAsset.width, imageAsset.height));
-  }, [fitRequest, imageAsset.height, imageAsset.width, size]);
+    setViewport(next ?? fitViewport(size, imageAsset.width, imageAsset.height));
+  }, [
+    fitRequest,
+    focusRegionIds,
+    focusRequest,
+    imageAsset.height,
+    imageAsset.id,
+    imageAsset.width,
+    size,
+  ]);
 
   useEffect(() => {
     if (!zoomSignal.nonce || zoomSignal.direction === 0) return;

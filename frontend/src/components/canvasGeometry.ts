@@ -45,6 +45,50 @@ export function canonicalPoint(pointer: Point, viewport: Viewport): Point {
   };
 }
 
+export function frameRegions(
+  container: { width: number; height: number },
+  regions: Array<{ x: number; y: number; width: number; height: number }>,
+  imageSize?: { width: number; height: number },
+): Viewport | null {
+  if (!regions.length || container.width <= 1 || container.height <= 1) return null;
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const region of regions) {
+    minX = Math.min(minX, region.x);
+    minY = Math.min(minY, region.y);
+    maxX = Math.max(maxX, region.x + region.width);
+    maxY = Math.max(maxY, region.y + region.height);
+  }
+  const boxWidth = Math.max(1, maxX - minX);
+  const boxHeight = Math.max(1, maxY - minY);
+  const pad = Math.max(48, Math.max(boxWidth, boxHeight) * 0.4);
+  minX -= pad;
+  minY -= pad;
+  maxX += pad;
+  maxY += pad;
+  if (imageSize) {
+    minX = Math.max(0, minX);
+    minY = Math.max(0, minY);
+    maxX = Math.min(imageSize.width, maxX);
+    maxY = Math.min(imageSize.height, maxY);
+  }
+  const width = Math.max(1, maxX - minX);
+  const height = Math.max(1, maxY - minY);
+  const inset = 24;
+  const scale = clamp(
+    Math.min((container.width - inset) / width, (container.height - inset) / height),
+    0.02,
+    8,
+  );
+  return {
+    scale,
+    x: (container.width - width * scale) / 2 - minX * scale,
+    y: (container.height - height * scale) / 2 - minY * scale,
+  };
+}
+
 export function regionToCenteredNodeGeometry(region: RegionGeometry) {
   return {
     x: region.x + region.width / 2,

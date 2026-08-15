@@ -87,6 +87,8 @@ interface WorkbenchState {
   showMask: boolean;
   maskBrushRadius: number;
   fitRequest: number;
+  focusRequest: number;
+  focusRegionIds: string[];
   rightTab: RightPanelTab;
   theme: Theme;
   drawerOpen: boolean;
@@ -1147,6 +1149,8 @@ const initialUiState = {
   showMask: false,
   maskBrushRadius: 12,
   fitRequest: 0,
+  focusRequest: 0,
+  focusRegionIds: [] as string[],
   rightTab: 'text' as RightPanelTab,
   theme: storedTheme(),
   drawerOpen: false,
@@ -1992,7 +1996,10 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   setMaskBrushRadius: (maskBrushRadius) => set({
     maskBrushRadius: Math.max(1, Math.min(200, Math.round(maskBrushRadius))),
   }),
-  requestFit: () => set((state) => ({ fitRequest: state.fitRequest + 1 })),
+  requestFit: () => set((state) => ({
+    fitRequest: state.fitRequest + 1,
+    focusRegionIds: [],
+  })),
   setRightTab: (rightTab) => set({ rightTab }),
   setTheme: (theme) => {
     try {
@@ -2259,13 +2266,18 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           );
           const overflowIds = overflowingRegionIds(image, regions);
           const focusIds = overlayIds.length ? overlayIds : overflowIds;
-          set({
+          set((state) => ({
             canvasMode: 'typeset',
             compareMode: true,
             ...(focusIds.length
-              ? { selectedRegionIds: focusIds, rightTab: 'typesetting' as const }
+              ? {
+                selectedRegionIds: focusIds,
+                rightTab: 'typesetting' as const,
+                focusRegionIds: focusIds,
+                focusRequest: state.focusRequest + 1,
+              }
               : {}),
-          });
+          }));
         }
       } else if (
         activeImageId

@@ -75,6 +75,7 @@ not inferred from this tracked checklist.
 - [x] Open original-vs-result compare when a visual-stage job for the current page completes
 - [x] Serve generated preview images without HTTP caching so overlay typesetting reloads the new plate
 - [x] Keep overlay boxes selected when a partial typeset job for the current page completes
+- [x] Frame selected typeset boxes in the canvas after the current page's typeset job completes
 
 ## Explicitly deferred
 

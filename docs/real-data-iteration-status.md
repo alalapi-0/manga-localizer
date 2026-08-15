@@ -76,6 +76,8 @@ Last updated: 2026-08-15
   clean-plate visual reviews.
 - Round 32 — a partial overlay typeset keeps the boxes just redrawn selected. This does not complete
   the remaining 112/130 clean-plate visual reviews.
+- Round 33 — the canvas frames those selected typeset boxes after the job completes. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -441,3 +443,8 @@ pages. Those files remain `detector-draft` until human review.
   frontend lint/typecheck/118 tests/build. The release audit scanned 128 candidate files and 663
   historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31883446023` passed at `b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`.
+- **Round 33:** the canvas frames the selected typeset boxes after a typeset job for the current page
+  completes, including after compare splits the view. Fit-to-window clears that framing. This does
+  not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests
+  and frontend lint/typecheck/119 tests/build. The release audit scanned 128 candidate files and 673
+  historical blobs. Backend was unchanged from Round 31. Remote CI is pending.

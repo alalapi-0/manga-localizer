@@ -227,6 +227,10 @@ Semantic Versioning.
   launcher tests and frontend lint/typecheck/118 tests plus the production build. The release audit
   scanned 128 candidate files and 663 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31883446023` passed on `b28ca6b25c7d3b33ff47db9a9f74ed90ed2b663c`.
+- Round 33 frames the selected typeset boxes in the canvas after a typeset job for the current page
+  completes. Fit-to-window clears that framing. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/119 tests plus the production build. The release audit scanned 128 candidate files
+  and 673 historical blobs. Backend was unchanged from Round 31. Remote CI is pending.
 
 ### Known limitations
 

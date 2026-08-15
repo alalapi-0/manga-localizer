@@ -106,7 +106,8 @@ Semantic Versioning.
   nonempty repair, keeps mask-outside pixels exact, preserves grayscale on LaMa manga pages, and adds a
   synthetic local comparison script. Automatic smear/chroma flags are anomaly hints, not visual
   approval. Complex line art and large SFX still need human compare/accept. Local gates passed 2
-  launcher tests, 209 backend tests, and 95 frontend tests plus the production build.
+  launcher tests, 209 backend tests, and 95 frontend tests plus the production build. GitHub CI run
+  `31854780188` passed on `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`.
 
 ### Known limitations
 

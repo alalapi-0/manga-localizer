@@ -20,13 +20,14 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 13 delivers line-art-aware inpainting candidates on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 12 feature commit is
-`761c30d319455f11af82fc2358bc830797ebdac8` with GitHub CI run `31852816928` green. Round 13 keeps exact
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 13 feature commit is
+`751d3a985bf9e320f2bf11b1f2c2c6681b620e45` with GitHub CI run `31854780188` green. The previous
+Round 12 feature commit is `761c30d319455f11af82fc2358bc830797ebdac8`. Round 13 keeps exact
 mask-outside preservation, adds grayscale preservation to LaMa, and stores provider / Navier-Stokes /
 Telea / line-art-guided plates for human compare-and-select. Pages that used only LaMa default to the
-line-art-guided blend. Automatic flags are anomaly hints, not visual approval. Local public regression
-is complete; remote CI is pending the task-branch push. Round 8 remains 18/130 explicit visual
-reviews. The full product goal remains active. No merge, tag, release, or deployment has occurred.
+line-art-guided blend. Automatic flags are anomaly hints, not visual approval. Round 8 remains 18/130
+explicit visual reviews. The full product goal remains active. No merge, tag, release, or deployment
+has occurred.
 
 ## Environment evidence
 
@@ -128,8 +129,7 @@ reviews. The full product goal remains active. No merge, tag, release, or deploy
 - [x] Round 12: privacy-safe detection/OCR evaluation, public synthetic ground truth, union detector
   that keeps all proposals, ignored private draft annotations, public regression, and complete CI.
 - [x] Round 13: line-art-aware inpainting candidates, LaMa grayscale preservation, local
-  compare/select/accept, public synthetic comparison script, and public regression. Remote CI is
-  pending after the task-branch push.
+  compare/select/accept, public synthetic comparison script, public regression, and complete CI.
 - [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
   truth; real Japanese-to-Chinese translation; remaining 112/130 visual reviews.
 
@@ -203,6 +203,10 @@ reviews. The full product goal remains active. No merge, tag, release, or deploy
   files plus 357 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
   discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
   browser evidence remains the GitHub e2e job after push.
+- Round 13 authoritative remote verification: GitHub CI run `31854780188` passed at
+  `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`. Backend Ruff lint/format, 209 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

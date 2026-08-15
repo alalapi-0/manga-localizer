@@ -282,3 +282,4 @@ pages. Those files remain `detector-draft` until human review.
   pages, compare/select in the workbench, and a synthetic local comparison script. Mask-outside pixels
   stay unchanged. Automatic smear/chroma flags are anomaly hints. Contact sheets stay ignored and are
   not sent to a remote model. This is not a claim that complex SFX or dense line art is publication-ready.
+  GitHub CI run `31854780188` passed at `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`.

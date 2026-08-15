@@ -379,4 +379,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 24:** the job queue summarizes overlay vs full-page typeset runs from public job output.
   This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed frontend
   lint/typecheck/104 tests/build. The release audit scanned 128 candidate files and 576 historical
-  blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31879071282` passed at `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`.

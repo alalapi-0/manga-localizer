@@ -20,7 +20,8 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 24 shows whether a typeset job overlaid selected boxes or redrew the page in the job queue.
-The work is on `agent/manga-round7-governance-20260812` through draft PR #3. Round 23
+The work is on `agent/manga-round7-governance-20260812` through draft PR #3. The Round 24 candidate is
+`5e8545bd7e747b22b0cb989ce4a5a0221ed598a1` with GitHub CI run `31879071282` green. Round 23
 (`c8fb20beca736452f702121ad64b7a16ac52b1c3`, CI `31878760451`) remains the missing-plate fallback.
 Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
 product goal remains active. No merge, tag, release, or deployment has occurred.
@@ -153,8 +154,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   IDs, with public regression, and complete CI.
 - [x] Round 23: full-page typeset fallback when the overlay plate is missing, with public regression,
   and complete CI.
-- [x] Round 24: job-queue overlay vs full-page typeset summary, with public regression.
-  Remote CI for this round is still pending.
+- [x] Round 24: job-queue overlay vs full-page typeset summary, with public regression,
+  and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -323,8 +324,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
 - Round 24 local verification passed frontend ESLint, TypeScript, 104 Vitest cases, and the production
   build; release audit over 128 candidate files plus 576 historical blobs. Backend was unchanged from
   Round 23 (230 pytest). Playwright discovers both Chromium journeys; this environment lacks Playwright
-  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push. Remote CI
-  for Round 24 is pending.
+  Chromium revision 1234, so live browser evidence remains the GitHub e2e job after push.
+- Round 24 authoritative remote verification: GitHub CI run `31879071282` passed at
+  `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`. Backend Ruff lint/format, 230 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/104 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

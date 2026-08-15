@@ -180,7 +180,8 @@ Semantic Versioning.
   `c8fb20beca736452f702121ad64b7a16ac52b1c3`.
 - Round 24 shows overlay vs full-page typeset counts on the job queue card. Local gates passed
   frontend lint/typecheck/104 tests plus the production build. The release audit scanned 128
-  candidate files and 576 historical blobs. Backend was unchanged from Round 23.
+  candidate files and 576 historical blobs. Backend was unchanged from Round 23. GitHub CI run
+  `31879071282` passed on `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`.
 
 ### Known limitations
 

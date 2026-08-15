@@ -21,6 +21,7 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 39 frames the selected box from **⌥↓ / ⌥↑** and the inspector region list. The work is on
 `agent/manga-round7-governance-20260812` through draft PR #3.
+Remote CI for Round 39 passed as run `31886262454` on `d8e7c05467ebf9359f61defd534c526c9e02fc21`.
 Round 38 (`35e6293e0e5d242aaad5cad55530f4f080262626`, CI `31885919299`) remains filter-aware
 adjacent navigation. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0
 reviewed. The full product goal remains active. No merge, tag, release, or deployment has occurred.
@@ -183,7 +184,7 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
 - [x] Round 38: keep adjacent image navigation on the visible sidebar list, with public regression,
   and complete CI.
 - [x] Round 39: frame the selected box from Alt+arrows and the inspector region list, with public
-  regression. Remote CI for this round is still pending.
+  regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -481,7 +482,11 @@ reviewed. The full product goal remains active. No merge, tag, release, or deplo
   and the production build; release audit over 128 candidate files plus 747 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
-  evidence remains the GitHub e2e job after push. Remote CI for Round 39 is pending.
+  evidence remains the GitHub e2e job after push.
+- Round 39 authoritative remote verification: GitHub CI run `31886262454` passed at
+  `d8e7c05467ebf9359f61defd534c526c9e02fc21`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/130 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

@@ -265,8 +265,8 @@ Semantic Versioning.
   on `35e6293e0e5d242aaad5cad55530f4f080262626`.
 - Round 39 frames the selected box from **⌥↓ / ⌥↑** and the inspector region list. Local gates passed
   2 launcher tests and frontend lint/typecheck/130 tests plus the production build. The release audit
-  scanned 128 candidate files and 747 historical blobs. Backend was unchanged from Round 31. Remote
-  CI is pending.
+  scanned 128 candidate files and 747 historical blobs. Backend was unchanged from Round 31. GitHub
+  CI run `31886262454` passed on `d8e7c05467ebf9359f61defd534c526c9e02fc21`.
 
 ### Known limitations
 

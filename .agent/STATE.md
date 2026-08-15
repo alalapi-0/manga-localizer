@@ -19,15 +19,14 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 14 delivers a local Japanese-to-Chinese translator on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 14 feature commit is
-`a0bd72cc03b1d29b33a5a92ada2b82613f28d581` with GitHub CI run `31856326624` green. The previous
-Round 13 feature commit is `751d3a985bf9e320f2bf11b1f2c2c6681b620e45`. Round 14 adds
-`argos-ja-zh`: CTranslate2 Argos packages Japanese→English→Simplified Chinese, explicit checksummed
-install, no startup download, and no outbound text. Glossary and character names are protected as exact
-terms. Traditional Chinese still needs a remote translator. Automatic translation is not visual approval.
-Round 8 remains 18/130 explicit visual reviews. The full product goal remains active. No merge, tag,
-release, or deployment has occurred.
+Round 15 delivers a privacy-safe detector-draft review CLI on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 14 feature commit is
+`a0bd72cc03b1d29b33a5a92ada2b82613f28d581` with GitHub CI run `31856326624` green. Round 15 copies
+ignored annotation JSON into a new ignored directory when a local human lists page IDs to accept or
+reject. Progress output is aggregate counts only: no OCR text, page IDs, or relative names. The tool
+does not open images and does not auto-promote empty pages. Round 8 remains 18/130 explicit visual
+reviews. Private drafts remain `detector-draft` until those explicit decisions. The full product goal
+remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -137,8 +136,10 @@ release, or deployment has occurred.
   compare/select/accept, public synthetic comparison script, public regression, and complete CI.
 - [x] Round 14: local Argos Japanese-to-Chinese translation, checksummed packages, public synthetic
   comparison script, public regression, and complete CI.
-- [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
-  truth; remaining 112/130 visual reviews.
+- [x] Round 15: privacy-safe detector-draft accept/reject promotion, public regression. Remote CI is
+  pending after the task-branch push.
+- [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
+  CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
@@ -223,6 +224,11 @@ release, or deployment has occurred.
   `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`. Backend Ruff lint/format, 214 pytest cases, and the
   release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 15 local verification passed 2 launcher tests; backend Ruff lint/format and 218 pytest cases;
+  frontend ESLint, TypeScript, 95 Vitest cases, and production build; release audit over 128 candidate
+  files plus 420 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push. Remote CI is pending.
 
 ## Known limitations and blockers
 

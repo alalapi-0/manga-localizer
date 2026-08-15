@@ -8,9 +8,11 @@ from manga_localizer.evaluation.detection_ocr import (
     REQUIRED_CATEGORIES,
     AnnotationBox,
     PageAnnotation,
+    apply_review_decision,
     character_error_rate,
     evaluate_detection_ocr,
     iou,
+    load_annotation_document,
     match_boxes,
     sanitize_report,
 )
@@ -124,6 +126,40 @@ def test_reviewed_only_skips_detector_drafts() -> None:
     assert report["pages"] == 0
     assert report["draftPagesSkipped"] == 1
     assert report["annotationIndependence"] == "detector-draft"
+
+
+def test_apply_review_decision_accepts_and_rejects_without_changing_geometry() -> None:
+    payload = {
+        "status": "draft",
+        "independence": "detector-draft",
+        "negative": False,
+        "image": {"id": "page", "width": 40, "height": 40},
+        "regions": [
+            {
+                "x": 1,
+                "y": 2,
+                "width": 8,
+                "height": 9,
+                "text": "秘密の原文",
+                "status": "draft",
+            }
+        ],
+    }
+    accepted = apply_review_decision(payload, "accept")
+    page = load_annotation_document(accepted)
+    assert page.status == "reviewed"
+    assert page.independence == "ground-truth"
+    assert page.boxes[0].status == "reviewed"
+    assert page.boxes[0].text == "秘密の原文"
+    assert page.boxes[0].x == 1
+    assert payload["status"] == "draft"
+    rejected = apply_review_decision(payload, "reject")
+    skipped = load_annotation_document(rejected)
+    assert skipped.status == "rejected"
+    assert skipped.independence == "detector-draft"
+    report = evaluate_detection_ocr([(skipped, [])], reviewed_only=True)
+    assert report["pages"] == 0
+    assert report["draftPagesSkipped"] == 1
 
 
 class _FakeDetector:

@@ -30,6 +30,9 @@ Semantic Versioning.
 - Optional local Argos Japanese-to-Chinese translator using checksum-verified CTranslate2 packages and
   an English pivot. It stays unavailable without the `mt` extra and both packages, never downloads at
   startup, and never sends text off-machine. Traditional Chinese still needs a remote translator.
+- Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
+  the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
+  counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
 - Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
   editable region boundaries plus persisted bounded brush/eraser strokes for manual mask correction.
 - Durable accept/reject review for preprocessing, inpainting, and typesetting artifacts, with
@@ -117,6 +120,10 @@ Semantic Versioning.
   Local gates passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production
   build. The release audit scanned 126 candidate files and 390 historical blobs. GitHub CI run
   `31856326624` passed on `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`.
+- Round 15 adds a local detector-draft accept/reject promotion CLI. It does not open images, does not
+  auto-promote empty pages, and prints only aggregate counts. Local gates passed 2 launcher tests, 218
+  backend tests, and 95 frontend tests plus the production build. The release audit scanned 128
+  candidate files and 420 historical blobs. Remote CI is pending after the task-branch push.
 
 ### Known limitations
 

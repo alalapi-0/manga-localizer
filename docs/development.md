@@ -80,6 +80,19 @@ uv run --project backend --extra mt python scripts/compare_translate.py \
   --data-dir .manga-localizer
 ```
 
+Promote ignored detector-draft annotation JSON after local visual review. Progress prints aggregate
+counts only. `--list-pending` prints page IDs for local use and must not be pasted into public reports.
+Accept/reject copies into a new ignored directory and never auto-promotes empty pages:
+
+```bash
+uv run --project backend python scripts/review_detection_annotations.py \
+  --annotations tests/real-data/<dataset>/annotations/<draft-set>
+uv run --project backend python scripts/review_detection_annotations.py \
+  --annotations tests/real-data/<dataset>/annotations/<draft-set> \
+  --output tests/real-data/<dataset>/annotations/<reviewed-set> \
+  --accept <page-id> --reject <page-id>
+```
+
 The 0.2.0 launcher was exercised through `npm run dev`: the root Web page, direct FastAPI
 health endpoint, and the Vite `/api` proxy all responded successfully. Launcher platform logic also has
 two Node tests in the unified `npm run check` gate.

@@ -53,6 +53,8 @@ not inferred from this tracked checklist.
   output, local compare/select/accept, and a synthetic comparison script
 - [x] Deliver a local Japanese-to-Chinese translator with checksummed Argos packages, no startup
   download, and a public synthetic comparison script
+- [x] Deliver a privacy-safe detector-draft accept/reject promotion CLI that does not auto-review
+  pages or print OCR text
 
 ## Explicitly deferred
 

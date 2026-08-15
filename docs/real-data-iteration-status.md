@@ -33,6 +33,9 @@ Last updated: 2026-08-15
 - Round 14 — local Japanese-to-Chinese translation: optional Argos CTranslate2 packages with an English
   pivot, checksummed install, and a public synthetic phrase comparison. Private OCR text is not used
   in the public report.
+- Round 15 — detector-draft review promotion: local accept/reject copies into an ignored directory.
+  Progress is aggregate-only. Empty pages and remaining 112/130 clean-plate visual reviews still need
+  a local human.
 
 ## Private data boundary
 
@@ -219,9 +222,10 @@ pages. Those files remain `detector-draft` until human review.
 
 ## Remaining issues and next roadmap
 
-1. **Ground truth:** private detector-draft JSON now exists under the ignored real-data tree (130
-   pages, 727 PP-OCR boxes, 18 empty pages). It is not independent precision/recall evidence until a
-   human reviews boxes and transcriptions. The public synthetic stress set does report those metrics.
+1. **Ground truth:** private detector-draft JSON exists under the ignored real-data tree (130 pages,
+   727 PP-OCR boxes, 18 empty pages). Round 15 adds an explicit local accept/reject copy step; drafts
+   are still not independent precision/recall evidence until a human lists page IDs. The public
+   synthetic stress set does report those metrics.
 2. **Preprocessing policy:** support per-page profile suggestions and paired preview, not a book-wide
    assumption. Round 11 made `realesrgan-onnx` runnable with an explicit checksummed install; continue
    comparing it against annotated pages once ground truth exists. Classic Lanczos remains available and
@@ -293,3 +297,8 @@ pages. Those files remain `detector-draft` until human review.
   passed 2 launcher tests, 214 backend tests, and 95 frontend tests plus the production build. The
   release audit scanned 126 candidate files and 390 historical blobs. GitHub CI run `31856326624`
   passed at `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`.
+- **Round 15:** added a local detector-draft accept/reject promotion CLI. Copies stay Git-ignored.
+  Progress output omits OCR text and page IDs. Empty pages are not auto-promoted. This does not complete
+  the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 218 backend
+  tests, and 95 frontend tests. The release audit scanned 128 candidate files and 420 historical blobs.
+  Remote CI is pending after the task-branch push.

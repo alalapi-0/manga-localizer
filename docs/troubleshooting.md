@@ -108,3 +108,10 @@ npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
 
 `argos-ja-zh` translates locally through English and currently produces Simplified Chinese. It does not
 replace human review. Mock translation remains a deterministic demo and is not this provider.
+
+## Detector drafts should not count as ground truth
+
+Private detector-draft JSON stays `draft` until a local human lists page IDs for
+`scripts/review_detection_annotations.py`. That command copies accepted/rejected pages into a new
+ignored directory. Progress output is aggregate counts; do not paste `--list-pending` page IDs into
+public reports. Empty pages are not auto-promoted.

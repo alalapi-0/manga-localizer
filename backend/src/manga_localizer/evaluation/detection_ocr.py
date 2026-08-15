@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable
@@ -20,6 +21,9 @@ REQUIRED_CATEGORIES = (
 
 REVIEWED_STATUS = "reviewed"
 DRAFT_STATUS = "draft"
+REJECTED_STATUS = "rejected"
+GROUND_TRUTH_INDEPENDENCE = "ground-truth"
+DETECTOR_DRAFT_INDEPENDENCE = "detector-draft"
 
 
 @dataclass(frozen=True)
@@ -217,7 +221,9 @@ def load_annotation_document(
     negative = bool(payload.get("negative") or image.get("negative"))
     if not negative and not boxes:
         negative = True
-    independence = str(payload.get("independence") or image.get("independence") or "ground-truth")
+    independence = str(
+        payload.get("independence") or image.get("independence") or GROUND_TRUTH_INDEPENDENCE
+    )
     return PageAnnotation(
         page_id=page_id,
         width=int(payload.get("width") or image.get("width") or 0),
@@ -227,6 +233,31 @@ def load_annotation_document(
         status=status,
         independence=independence,
     )
+
+
+def apply_review_decision(payload: MappingLike, decision: str) -> dict[str, Any]:
+    normalized = str(decision).strip().lower()
+    if normalized not in {"accept", "reject"}:
+        raise ValueError("Review decision must be accept or reject")
+    result = copy.deepcopy(payload)
+    if normalized == "accept":
+        result["status"] = REVIEWED_STATUS
+        result["independence"] = GROUND_TRUTH_INDEPENDENCE
+        regions = result.get("regions")
+        if isinstance(regions, list):
+            updated: list[Any] = []
+            for item in regions:
+                if isinstance(item, dict):
+                    region = dict(item)
+                    region["status"] = REVIEWED_STATUS
+                    updated.append(region)
+                else:
+                    updated.append(item)
+            result["regions"] = updated
+        return result
+    result["status"] = REJECTED_STATUS
+    result["independence"] = DETECTOR_DRAFT_INDEPENDENCE
+    return result
 
 
 def _filtered_boxes(
@@ -340,10 +371,10 @@ def evaluate_detection_ocr(
             }
         )
 
-    independence = "ground-truth"
-    if independence_values == {"detector-draft"}:
-        independence = "detector-draft"
-    elif independence_values - {"ground-truth"}:
+    independence = GROUND_TRUTH_INDEPENDENCE
+    if independence_values == {DETECTOR_DRAFT_INDEPENDENCE}:
+        independence = DETECTOR_DRAFT_INDEPENDENCE
+    elif independence_values - {GROUND_TRUTH_INDEPENDENCE}:
         independence = "mixed"
 
     category_report = {}

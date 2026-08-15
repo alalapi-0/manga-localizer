@@ -372,4 +372,5 @@ pages. Those files remain `detector-draft` until human review.
   the job redraws every eligible box on the current inpaint plate instead of dropping untouched text.
   This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed backend
   Ruff lint/format and 230 pytest cases. The release audit scanned 128 candidate files and 563
-  historical blobs. Frontend was unchanged from Round 22. Remote CI is pending.
+  historical blobs. Frontend was unchanged from Round 22.
+  GitHub CI run `31878760451` passed at `c8fb20beca736452f702121ad64b7a16ac52b1c3`.

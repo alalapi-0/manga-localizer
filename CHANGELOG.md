@@ -176,7 +176,8 @@ Semantic Versioning.
 - Round 23 redraws the whole page when a region-scoped typeset cannot overlay because the last
   typeset plate is missing, instead of dropping untouched boxes. Local gates passed backend Ruff
   lint/format and 230 pytest cases. The release audit scanned 128 candidate files and 563 historical
-  blobs. Frontend was unchanged from Round 22.
+  blobs. Frontend was unchanged from Round 22. GitHub CI run `31878760451` passed on
+  `c8fb20beca736452f702121ad64b7a16ac52b1c3`.
 
 ### Known limitations
 

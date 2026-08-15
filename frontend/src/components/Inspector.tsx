@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import {
   activeImage,
   imageHasTypesetOverflow,
+  latestPageProcessingError,
   overflowingRegionIds,
   preprocessingSettingsForProfile,
   regionHasTypesetOverflow,
@@ -12,6 +13,7 @@ import {
 import type {
   ExportOptions,
   ImageAsset,
+  JobKind,
   PreprocessingSettings,
   ProjectSettings,
   ProviderCapability,
@@ -62,6 +64,28 @@ const defaultExportOptions: ExportOptions = {
   imageVariant: 'typeset',
   conflict: 'rename',
   preserveTree: true,
+};
+
+const retryStageLabels: Partial<Record<JobKind, string>> = {
+  preprocess: '重试本页增强',
+  detect: '重试本页检测',
+  ocr: '重试本页 OCR',
+  translate: '重试本页翻译',
+  inpaint: '重试本页修复',
+  typeset: '重试本页排版',
+  export: '重试本页导出',
+};
+
+const processingStageTitles: Record<string, string> = {
+  preprocess: '图片增强失败',
+  detect: '文字检测失败',
+  ocr: '日文 OCR 失败',
+  translate: '翻译失败',
+  inpaint: '擦字修复失败',
+  typeset: '嵌字排版失败',
+  export: '导出失败',
+  render: '图像渲染失败',
+  processing: '本页处理失败',
 };
 
 const EMPTY_REGIONS: Region[] = [];
@@ -154,6 +178,37 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
                 : '标记本页已检查'}
       </button>
     </section>
+  );
+}
+
+function ProcessingErrorNotice() {
+  const image = useWorkbenchStore(activeImage);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const failure = latestPageProcessingError(image);
+  if (!image || !failure) return null;
+  const retryKind = failure.kind;
+  const retryLabel = retryKind ? retryStageLabels[retryKind] : undefined;
+
+  return (
+    <div className="notice notice--error" role="alert">
+      <b>{processingStageTitles[failure.stage] ?? processingStageTitles.processing}</b>
+      <span>详情只保存在本机项目日志中。可重试这一页，或打开批处理抽屉查看队列。</span>
+      {retryKind && retryLabel ? (
+        <div className="notice__actions">
+          <button
+            className="button button--compact"
+            onClick={() => {
+              setDrawerOpen(true);
+              void startBatch([retryKind], [image.id], defaultExportOptions, 1);
+            }}
+            type="button"
+          >
+            {retryLabel}
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -822,6 +877,7 @@ export function Inspector() {
       </nav>
       <div className="inspector__content" role="tabpanel">
         <PageReviewControl regions={regions} />
+        <ProcessingErrorNotice />
         <PreprocessSuggestionNotice />
         <TypesetOverflowNotice regions={regions} />
         {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}

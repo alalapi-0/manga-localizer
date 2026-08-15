@@ -371,6 +371,20 @@ function hydratePreprocessSuggestion(
   };
 }
 
+function hydrateProcessingErrors(value: ImageAsset['processingErrors'] | undefined): ImageAsset['processingErrors'] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry) =>
+    Boolean(
+      entry
+      && typeof entry === 'object'
+      && typeof entry.stage === 'string'
+      && typeof entry.error === 'string'
+      && entry.stage.length > 0
+      && entry.error.length > 0
+    ),
+  );
+}
+
 function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset {
   const rawStatus = (image.status ?? EMPTY_PIPELINE_STATUS) as ImageAsset['status'] & Record<string, unknown>;
   const legacyImage = image as ImageAsset & {
@@ -408,6 +422,8 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     inpaintCandidates: Array.isArray(image.inpaintCandidates) ? image.inpaintCandidates : [],
     typesetOverflowCount: overflowRegionIds.length,
     typesetOverflowRegionIds: overflowRegionIds,
+    processingErrors: hydrateProcessingErrors(image.processingErrors),
+    error: typeof image.error === 'string' && image.error.length > 0 ? image.error : undefined,
     preprocessSuggestion: hydratePreprocessSuggestion(
       image.preprocessSuggestion,
       Number(image.width ?? 1),
@@ -2436,6 +2452,61 @@ export function overflowingRegionIds(
   if (!imageHasTypesetOverflow(image) || !image) return [];
   const present = new Set(regions.map((region) => region.id));
   return image.typesetOverflowRegionIds.filter((regionId) => present.has(regionId));
+}
+
+const STATUS_STAGE_KIND = [
+  ['preprocess', 'preprocess'],
+  ['detection', 'detect'],
+  ['ocr', 'ocr'],
+  ['translation', 'translate'],
+  ['inpaint', 'inpaint'],
+  ['typeset', 'typeset'],
+  ['export', 'export'],
+] as const;
+
+function jobKindForProcessingStage(image: ImageAsset, stage: string): JobKind | null {
+  if (stage === 'detect') return 'detect';
+  if (
+    stage === 'preprocess'
+    || stage === 'ocr'
+    || stage === 'translate'
+    || stage === 'inpaint'
+    || stage === 'typeset'
+    || stage === 'export'
+  ) {
+    return stage;
+  }
+  if (stage === 'render') {
+    if (image.status.inpaint === 'failed' || image.status.inpaint === 'unavailable') return 'inpaint';
+    if (image.status.typeset === 'failed' || image.status.typeset === 'unavailable') return 'typeset';
+  }
+  return null;
+}
+
+export function latestPageProcessingError(
+  image: ImageAsset | null | undefined,
+): { stage: string; error: string; kind: JobKind | null } | null {
+  if (!image) return null;
+  const recorded = (image.processingErrors ?? []).filter((entry) => entry.stage && entry.error);
+  const last = recorded.at(-1);
+  if (last) {
+    return {
+      stage: last.stage,
+      error: last.error,
+      kind: jobKindForProcessingStage(image, last.stage),
+    };
+  }
+  const failed = [...STATUS_STAGE_KIND].reverse().find(([statusKey]) => {
+    const state = image.status[statusKey];
+    return state === 'failed' || state === 'unavailable';
+  });
+  if (!image.error && !failed) return null;
+  const stage = failed?.[1] ?? 'processing';
+  return {
+    stage,
+    error: image.error ?? '',
+    kind: jobKindForProcessingStage(image, stage),
+  };
 }
 
 export function imageReviewState(

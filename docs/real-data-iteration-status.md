@@ -96,6 +96,8 @@ Last updated: 2026-08-15
   at the ends of that list. This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 42 — a failed queue item opens that page and the matching inspector, then closes the batch
   drawer. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 43 — the inspector shows the current page's processing failure and can retry that stage for
+  this page. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -515,3 +517,8 @@ pages. Those files remain `detector-draft` until human review.
   2 launcher tests and frontend lint/typecheck/135 tests/build. The release audit scanned 128
   candidate files and 782 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31888156798` passed at `ce2395e71f2029dc09c98d937a6ce7901672c1ae`.
+- **Round 43:** the inspector shows the current page's processing failure and can retry that stage for
+  this page. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
+  passed 2 launcher tests and frontend lint/typecheck/137 tests/build. The release audit scanned 128
+  candidate files and 792 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
+  after push.

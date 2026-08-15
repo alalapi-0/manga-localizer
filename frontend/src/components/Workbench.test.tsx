@@ -98,6 +98,34 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
+  it('shows a page processing failure in the inspector and retries that stage', async () => {
+    const user = userEvent.setup();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-ocr-retry',
+      kind: 'ocr',
+      status: 'queued',
+    }));
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          error: 'OCR failed; inspect the private project log',
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+      ],
+    });
+    render(<App />);
+
+    expect(screen.getByText('日文 OCR 失败')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重试本页 OCR' }));
+    await waitFor(() => expect(startJob).toHaveBeenCalled());
+    expect(startJob).toHaveBeenCalledWith('project-1', 'ocr', expect.objectContaining({
+      imageIds: ['image-1'],
+    }));
+    expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
+  });
+
   it('frames a box from the inspector region list', async () => {
     const user = userEvent.setup();
     seedWorkbench();

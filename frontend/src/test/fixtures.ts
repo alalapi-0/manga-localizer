@@ -50,6 +50,7 @@ export function imageFixture(id = 'image-1', overrides: Partial<ImageAsset> = {}
       reasons: ['large-page'],
       metrics: { width: 1200, height: 1800, minSide: 1200, sampled: false },
     },
+    processingErrors: [],
     ...overrides,
   };
 }

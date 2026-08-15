@@ -8,7 +8,7 @@ import {
   regionFixture,
   seedWorkbench,
 } from '../test/fixtures';
-import { activeRegions, canNavigateAdjacent, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
+import { activeRegions, canNavigateAdjacent, latestPageProcessingError, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -1344,6 +1344,27 @@ describe('workbench store', () => {
     });
     expect(overflowingRegionIds(image, [regionFixture('region-1')])).toEqual(['region-1']);
     expect(overflowingRegionIds(image, [])).toEqual([]);
+  });
+
+  it('exposes the latest page processing error for inspector retry', () => {
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, ocr: 'failed' },
+      error: 'OCR failed; inspect the private project log',
+      processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+    });
+    expect(latestPageProcessingError(image)).toEqual({
+      stage: 'ocr',
+      error: 'OCR failed; inspect the private project log',
+      kind: 'ocr',
+    });
+    expect(latestPageProcessingError(imageFixture('image-2', {
+      status: { ...imageFixture('image-2').status, inpaint: 'failed' },
+    }))).toEqual({
+      stage: 'inpaint',
+      error: '',
+      kind: 'inpaint',
+    });
+    expect(latestPageProcessingError(imageFixture('image-1'))).toBeNull();
   });
 
   it('frames requested region ids until fit-to-window clears them', () => {

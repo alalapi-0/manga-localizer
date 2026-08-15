@@ -359,6 +359,7 @@ h1, h2, h3, p { margin: 0; }
 .notice span { color: var(--text-soft); font-size: 9px; line-height: 1.45; }
 .notice--local { color: var(--green); background: var(--green-soft); border-color: rgba(80,200,120,.24); }
 .notice--remote, .notice--warning { color: var(--amber); background: var(--amber-soft); border-color: rgba(244,185,87,.27); }
+.notice--error { color: var(--red); background: var(--red-soft); border-color: rgba(255,107,107,.32); }
 .notice--mock { color: var(--purple); background: var(--purple-soft); border-color: rgba(191,140,255,.28); }
 .notice__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .field-hint { margin: 0; color: var(--muted); font-size: 9px; line-height: 1.45; }

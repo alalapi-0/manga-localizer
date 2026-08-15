@@ -143,6 +143,11 @@ export interface PreprocessSuggestion {
   };
 }
 
+export interface ProcessingError {
+  stage: string;
+  error: string;
+}
+
 export interface ImageAsset {
   id: string;
   projectId: string;
@@ -168,6 +173,7 @@ export interface ImageAsset {
   typesetOverflowCount: number;
   typesetOverflowRegionIds: string[];
   preprocessSuggestion: PreprocessSuggestion;
+  processingErrors: ProcessingError[];
   revision: number;
   error?: string;
 }

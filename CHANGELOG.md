@@ -56,6 +56,7 @@ Semantic Versioning.
   overflow. Completed inpaint items open the erased preview and review mask; completed preprocess
   items open the enhanced preview. Failed detect/OCR/translate items open **文本**; failed inpaint
   items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
+  The inspector then shows that page's processing failure and can retry the failed stage for this page.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
@@ -286,6 +287,10 @@ Semantic Versioning.
   production build. The release audit scanned 128 candidate files and 782 historical blobs. Backend
   was unchanged from Round 31. GitHub CI run `31888156798` passed on
   `ce2395e71f2029dc09c98d937a6ce7901672c1ae`.
+- Round 43 shows the current page's processing failure in the inspector and offers a same-page retry.
+  Local gates passed 2 launcher tests and frontend lint/typecheck/137 tests plus the production build.
+  The release audit scanned 128 candidate files and 792 historical blobs. Backend was unchanged from
+  Round 31. GitHub CI is pending after push.
 
 ### Known limitations
 

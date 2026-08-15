@@ -422,4 +422,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 30:** original-vs-result compare opens when a preprocess, inpaint, or typeset job for the
   current page completes. This does not complete the remaining 112/130 clean-plate visual reviews.
   Local gates passed frontend lint/typecheck/115 tests/build. The release audit scanned 128 candidate
-  files and 640 historical blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  files and 640 historical blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31882096845` passed at `ca7bc89134a1f98a8f7536cad7539d18136bf6b0`.

@@ -2256,6 +2256,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           );
           set({
             canvasMode: 'typeset',
+            compareMode: true,
             ...(overflowIds.length
               ? { selectedRegionIds: overflowIds, rightTab: 'typesetting' as const }
               : {}),
@@ -2266,13 +2267,13 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         && completedInpaintImageIds.has(activeImageId)
         && get().images.find((entry) => entry.id === activeImageId)?.status.inpaint === 'done'
       ) {
-        set({ canvasMode: 'erased', showMask: true, rightTab: 'repair' });
+        set({ canvasMode: 'erased', showMask: true, rightTab: 'repair', compareMode: true });
       } else if (
         activeImageId
         && completedPreprocessImageIds.has(activeImageId)
         && get().images.find((entry) => entry.id === activeImageId)?.status.preprocess === 'done'
       ) {
-        set({ canvasMode: 'preprocessed' });
+        set({ canvasMode: 'preprocessed', compareMode: true });
       }
     } catch (error) {
       set({ globalError: errorMessage(error) });

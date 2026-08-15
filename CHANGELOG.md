@@ -45,11 +45,12 @@ Semantic Versioning.
 - The typesetting inspector can rerun Pillow typesetting for the currently selected box after style or
   geometry edits.
 - T retypesets the selected box and Shift+T retypesets overflowing boxes when the canvas is focused.
-- After a typeset job for the current page completes, the canvas switches to the typeset preview.
-  Remaining overflowing boxes are selected and the typesetting inspector opens.
+- After a typeset job for the current page completes, the canvas switches to the typeset preview,
+  opens original-vs-result compare, and selects remaining overflowing boxes.
 - After an inpaint job for the current page completes, the canvas switches to the erased preview,
-  shows the review mask, and opens the repair inspector.
-- After a preprocess job for the current page completes, the canvas switches to the enhanced preview.
+  shows the review mask, opens compare, and opens the repair inspector.
+- After a preprocess job for the current page completes, the canvas switches to the enhanced preview
+  and opens original-vs-result compare.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -210,6 +211,10 @@ Semantic Versioning.
   completes. Local gates passed frontend lint/typecheck/115 tests plus the production build. The
   release audit scanned 128 candidate files and 629 historical blobs. Backend was unchanged from
   Round 23. GitHub CI run `31880896973` passed on `e97fe14ba1492ee85fdea884e73aab10a9753470`.
+- Round 30 opens original-vs-result compare when a preprocess, inpaint, or typeset job for the
+  current page completes. Local gates passed frontend lint/typecheck/115 tests plus the production
+  build. The release audit scanned 128 candidate files and 640 historical blobs. Backend was
+  unchanged from Round 23.
 
 ### Known limitations
 

@@ -1478,6 +1478,7 @@ describe('workbench store', () => {
 
     await useWorkbenchStore.getState().refreshJobs();
     expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual([]);
     expect(useWorkbenchStore.getState().rightTab).toBe('text');
   });
@@ -1529,6 +1530,7 @@ describe('workbench store', () => {
 
     await useWorkbenchStore.getState().refreshJobs();
     expect(useWorkbenchStore.getState().canvasMode).toBe('typeset');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
     expect(useWorkbenchStore.getState().rightTab).toBe('typesetting');
   });
@@ -1576,6 +1578,7 @@ describe('workbench store', () => {
 
     await useWorkbenchStore.getState().refreshJobs();
     expect(useWorkbenchStore.getState().canvasMode).toBe('erased');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
     expect(useWorkbenchStore.getState().showMask).toBe(true);
     expect(useWorkbenchStore.getState().rightTab).toBe('repair');
   });
@@ -1665,6 +1668,7 @@ describe('workbench store', () => {
 
     await useWorkbenchStore.getState().refreshJobs();
     expect(useWorkbenchStore.getState().canvasMode).toBe('preprocessed');
+    expect(useWorkbenchStore.getState().compareMode).toBe(true);
   });
 
   it('does not change the canvas when a preprocess job was already complete', async () => {

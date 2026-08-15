@@ -31,7 +31,8 @@ keep their pixels. If the previous typeset file is missing, that action redraws 
 other boxes are not dropped. The job queue then shows whether that run overlaid selected boxes or
 redrew the whole page. When a typeset job for the current page finishes, the canvas switches to
 **成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can
-resize, refit, or press **⇧T** without hunting for them. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
+resize, refit, or press **⇧T** without hunting for them. The canvas also opens **对比** so the original
+and result sit side by side; press **B** to close it. Geometry or mask edits still rebuild inpainting for the page. Overflow is recorded
 from the last successful typeset and is a review hint, not an export hard gate. Shift+Left/Right
 skips pages already marked reviewed so you can keep moving through a book. Vertical balloons keep
 ordinary CJK quotes and punctuation in the translation; the renderer maps them to vertical
@@ -57,7 +58,8 @@ still cannot invent missing line art, so some repairs may need an external edito
 Finish the page-level text review, switch the canvas to **擦除**, display and inspect **复核蒙版**, then
 accept the inpaint result. When an inpaint job for the current page finishes, the canvas switches to
 **擦除** and shows the mask so that review can start without changing those controls by hand. When a
-preprocess job for the current page finishes, the canvas switches to **增强**. Accept
+preprocess job for the current page finishes, the canvas switches to **增强**. Those visual-stage
+completions also open **对比**. Accept
 **成品** as well when exporting a typeset image. The decision is bound
 to the exact bytes loaded by the canvas. A changed artifact or mask
 no longer matches the saved review and must be reloaded, rerun, or accepted again. Upstream changes clear

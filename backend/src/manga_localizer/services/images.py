@@ -241,9 +241,6 @@ def invalidate_image_pipeline(
     if "inpaint" in stages:
         status.pop("inpaintCandidate", None)
         status.pop("inpaintCandidates", None)
-    if "typeset" in stages:
-        status.pop("typesetOverflowCount", None)
-        status.pop("typesetOverflowRegionIds", None)
     image.status = status
     invalid_error_stages = set().union(*(_ERROR_STAGE_KEYS[stage] for stage in stages))
     image.processing_errors = [
@@ -261,8 +258,8 @@ def invalidate_image_pipeline(
         from manga_localizer.services.inpaint_candidates import delete_inpaint_candidate_files
 
         delete_inpaint_candidate_files(store, relative)
-    elif "typeset" in stages:
-        artifact_directories.add("typeset")
+    # Keep the last typeset plate when only typesetting is stale so a region-scoped
+    # rerun can overlay selected boxes. Inpaint invalidation still removes it.
     for directory in artifact_directories:
         relative_artifact = Path("generated") / directory / relative
         target = resolve_write_target(

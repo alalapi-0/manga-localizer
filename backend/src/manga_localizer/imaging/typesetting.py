@@ -147,6 +147,54 @@ def typeset_overflow_from_status(status: object) -> tuple[int, list[str]]:
     return len(ids), ids
 
 
+def expand_typeset_region_ids(
+    regions: Sequence[Mapping[str, Any]],
+    region_ids: Sequence[str],
+) -> list[str]:
+    """Include fragment-cluster mates of the requested typesetting boxes."""
+    selected = {region_id for region_id in region_ids if region_id}
+    if not selected:
+        return []
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for group in cluster_fragment_regions(regions):
+        group_ids = [str(region.get("id") or "") for region in group]
+        group_ids = [region_id for region_id in group_ids if region_id]
+        if selected.intersection(group_ids):
+            for region_id in group_ids:
+                if region_id not in seen:
+                    seen.add(region_id)
+                    expanded.append(region_id)
+    for region_id in region_ids:
+        if region_id in selected and region_id not in seen:
+            seen.add(region_id)
+            expanded.append(region_id)
+    return expanded
+
+
+def restore_clean_region_boxes(
+    typeset: Image.Image,
+    clean: Image.Image,
+    regions: Sequence[Mapping[str, Any]],
+) -> Image.Image:
+    """Replace selected boxes on a typeset plate with clean-plate pixels."""
+    canvas = typeset.convert("RGBA")
+    plate = clean.convert("RGBA")
+    if canvas.size != plate.size:
+        raise ValueError("Typeset and clean plates must share dimensions")
+    for region in regions:
+        x1, y1, x2, y2 = _region_box(region)
+        left = max(0, min(canvas.width, math.floor(x1)))
+        top = max(0, min(canvas.height, math.floor(y1)))
+        right = max(left, min(canvas.width, math.ceil(x2)))
+        bottom = max(top, min(canvas.height, math.ceil(y2)))
+        if right <= left or bottom <= top:
+            continue
+        box = (left, top, right, bottom)
+        canvas.paste(plate.crop(box), box)
+    return canvas
+
+
 _VERTICAL_PUNCTUATION = str.maketrans(
     {
         "\u300c": "\ufe41",

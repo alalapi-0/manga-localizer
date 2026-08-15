@@ -15,7 +15,13 @@ from sqlalchemy.orm import selectinload
 
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, Job, JobItem, JobStatus, TextRegion
-from manga_localizer.imaging import DEFAULT_REPAIR_SETTINGS, overflow_region_ids, typeset_image
+from manga_localizer.imaging import (
+    DEFAULT_REPAIR_SETTINGS,
+    expand_typeset_region_ids,
+    overflow_region_ids,
+    restore_clean_region_boxes,
+    typeset_image,
+)
 from manga_localizer.logging_utils import without_secrets
 from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
@@ -317,6 +323,22 @@ class PersistentJobQueue:
         process_and_finish(expected_image_revision)
 
     @staticmethod
+    def _typeset_region_ids(options: dict[str, Any]) -> list[str]:
+        raw = options.get("regionIds")
+        if raw is None:
+            return []
+        if not isinstance(raw, list):
+            raise ProjectError("regionIds must be a list of region ids")
+        ids: list[str] = []
+        seen: set[str] = set()
+        for item in raw:
+            if not isinstance(item, str) or not item or item in seen:
+                continue
+            seen.add(item)
+            ids.append(item)
+        return ids
+
+    @staticmethod
     def _job_concurrency(kind: str, options: dict[str, Any]) -> int:
         raw = options.get("concurrency", 1)
         if isinstance(raw, bool):
@@ -497,6 +519,10 @@ class PersistentJobQueue:
         if len(set(image_ids)) != len(image_ids) or len(set(region_ids)) != len(region_ids):
             raise ProjectError("Job targets must not contain duplicate ids")
         safe_options = normalize_remote_endpoints(without_secrets(options))
+        safe_options.pop("regionIds", None)
+        safe_options.pop("region_ids", None)
+        if region_ids and kind == "typeset":
+            safe_options["regionIds"] = list(region_ids)
         if kind == "export":
             export_format = safe_options.get("format", "both")
             if not isinstance(export_format, str) or export_format not in {
@@ -1616,6 +1642,18 @@ class PersistentJobQueue:
             relative = safe_relative_path(image.relative_path).with_suffix(".png")
             expected_image_revision = image.revision
             expected_region_versions = {region.id: region.revision for region in regions}
+            raw_overflow = image.status.get("typesetOverflowRegionIds")
+            previous_overflow_ids = (
+                overflow_region_ids(
+                    [
+                        {"regionId": item, "overflow": True}
+                        for item in raw_overflow
+                        if isinstance(item, str)
+                    ]
+                )
+                if isinstance(raw_overflow, list)
+                else []
+            )
         if kind != "inpaint" and typesetting_provider_name != "pillow":
             raise ProjectError(f"Unknown typesetting provider: {typesetting_provider_name}")
         active_regions = [region_payload(region) for region in regions if not region.ignored]
@@ -1671,12 +1709,16 @@ class PersistentJobQueue:
         effective_inpainting_provider_name = str(
             recorded_inpainting_provider or page_inpainting_provider_name
         )
+        rebuilt_inpaint = False
+        overlay_ids: list[str] = []
+        did_partial_typeset = False
         if (
             kind != "typeset"
             or not inpaint_is_current
             or recorded_repair_policy != repair_policy
             or not inpaint_path.exists()
         ):
+            rebuilt_inpaint = True
             try:
                 page_inpainting_provider = self.providers.inpainter(page_inpainting_provider_name)
             except ValueError as error:
@@ -1825,6 +1867,43 @@ class PersistentJobQueue:
             mask_bytes = self._png_bytes(Image.fromarray(mask))
             render_mask = mask
             typeset_source = cleaned
+        if kind == "typeset":
+            requested_ids = self._typeset_region_ids(options)
+            if requested_ids and not rebuilt_inpaint:
+                page_ids = {str(region["id"]) for region in active_regions}
+                matching = [region_id for region_id in requested_ids if region_id in page_ids]
+                if matching:
+                    overlay_ids = expand_typeset_region_ids(typesetting_data, matching)
+                    overlay_set = set(overlay_ids)
+                    overlay_ids.extend(
+                        region_id for region_id in matching if region_id not in overlay_set
+                    )
+                    overlay_set = set(overlay_ids)
+                    punch_regions = [
+                        region for region in active_regions if str(region["id"]) in overlay_set
+                    ]
+                    typesetting_data = [
+                        region for region in typesetting_data if str(region["id"]) in overlay_set
+                    ]
+                    if typeset_path.is_file() and inpaint_path.is_file():
+                        try:
+                            with Image.open(typeset_path) as current_typeset:
+                                current_typeset.load()
+                                current = current_typeset.copy()
+                            with Image.open(inpaint_path) as clean_plate:
+                                clean_plate.load()
+                                clean = clean_plate.copy()
+                            typeset_source = restore_clean_region_boxes(
+                                current,
+                                clean,
+                                punch_regions,
+                            )
+                        except (OSError, ValueError) as error:
+                            raise ProjectError(
+                                "Current typeset overlay could not be prepared; "
+                                "rerun full typesetting"
+                            ) from error
+                    did_partial_typeset = True
         if kind != "inpaint":
             if render_mask is None:
                 if not mask_path.is_file():
@@ -1907,6 +1986,15 @@ class PersistentJobQueue:
                     status.pop("inpaintCandidate", None)
                     status.pop("inpaintCandidates", None)
             overflow_ids = overflow_region_ids(layouts)
+            if did_partial_typeset:
+                touched = set(overlay_ids)
+                kept = [
+                    region_id for region_id in previous_overflow_ids if region_id not in touched
+                ]
+                seen_overflow = set(kept)
+                overflow_ids = kept + [
+                    region_id for region_id in overflow_ids if region_id not in seen_overflow
+                ]
             if kind != "inpaint":
                 status["typeset"] = "done"
                 status["typesettingProvider"] = typesetting_provider_name

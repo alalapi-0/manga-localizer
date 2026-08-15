@@ -53,10 +53,36 @@ def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[st
         stages.update(("translation", "inpaint", "typeset"))
     if keys & {"source_text"}:
         stages.update(("translation", "inpaint", "typeset"))
-    if keys & {"confidence", "confirmed"}:
-        # Confidence is trust evidence and confirmation can promote safe repair.
-        # Never reuse a mask produced under an older trust decision.
+    if "confidence" in keys:
         stages.update(("inpaint", "typeset"))
+    if "confirmed" in keys:
+        stages.add("typeset")
+        layout_only_unconfirm = (
+            not region.confirmed
+            and bool(keys & {"translation_text", "style"})
+            and not (
+                keys
+                & {
+                    "x",
+                    "y",
+                    "width",
+                    "height",
+                    "rotation",
+                    "repair",
+                    "source_text",
+                    "recognition",
+                    "type",
+                    "direction",
+                    "order",
+                    "ignored",
+                    "confidence",
+                }
+            )
+        )
+        if not layout_only_unconfirm:
+            # Confirmation changes which boxes enter safe repair. Auto-unconfirm
+            # after a translation or style edit must not discard a still-valid plate.
+            stages.add("inpaint")
     if keys & {
         "translation_text",
         "style",

@@ -95,6 +95,17 @@ def _add_region(
     return response.json()
 
 
+def _confirm_region(client: TestClient, region: dict[str, Any]) -> dict[str, Any]:
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    payload = confirmed.json()
+    assert payload["trustDisposition"] == "trusted"
+    return payload
+
+
 def _review_image(
     client: TestClient,
     project_id: str,
@@ -793,6 +804,155 @@ def test_typeset_persists_overflow_review_fields(tmp_path: Path) -> None:
         assert after_edit["typesetOverflowRegionIds"] == []
 
 
+def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
+    from manga_localizer.imaging.typesetting import font_capabilities
+
+    if not font_capabilities()["available"]:
+        pytest.skip("No usable system CJK font")
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        first = _confirm_region(
+            client,
+            _add_region(client, image["id"], translation="甲文"),
+        )
+        second = _add_region(client, image["id"], translation="乙文")
+        moved = client.patch(
+            f"/api/regions/{second['id']}",
+            json={
+                "x": 150,
+                "y": 40,
+                "width": 80,
+                "height": 120,
+                "expectedRevision": second["revision"],
+            },
+        )
+        assert moved.status_code == 200, moved.text
+        second = _confirm_region(client, moved.json())
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"provider": "pillow"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        before = client.get(f"/api/images/{image['id']}/generated/typeset")
+        assert before.status_code == 200, before.text
+        with Image.open(io.BytesIO(before.content)) as opened:
+            previous = np.asarray(opened.convert("RGB")).copy()
+
+        edited = client.patch(
+            f"/api/regions/{first['id']}",
+            json={
+                "translationText": "丙文",
+                "expectedRevision": first["revision"],
+            },
+        )
+        assert edited.status_code == 200, edited.text
+        assert edited.json()["trustDisposition"] == "trusted"
+        stale = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert stale["status"]["inpaint"] == "done"
+        assert stale["status"]["typeset"] == "pending"
+        assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 404
+
+        rerun = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={
+                "imageIds": [image["id"]],
+                "regionIds": [first["id"]],
+                "options": {"provider": "pillow"},
+            },
+        )
+        finished = _wait_job(client, rerun.json()["id"])
+        assert finished["status"] == "completed", finished
+        output = finished["items"][0]["output"]
+        assert output["typesetEligibleRegionCount"] == 1, output
+        after = client.get(f"/api/images/{image['id']}/generated/typeset")
+        assert after.status_code == 200, after.text
+        with Image.open(io.BytesIO(after.content)) as opened:
+            current = np.asarray(opened.convert("RGB"))
+
+        first_box = np.s_[50:90, 40:80]
+        second_box = np.s_[50:90, 160:200]
+        assert not np.array_equal(previous[first_box], current[first_box])
+        assert np.array_equal(previous[second_box], current[second_box])
+
+
+def test_partial_typeset_keeps_overflow_ids_for_untouched_boxes(tmp_path: Path) -> None:
+    from manga_localizer.imaging.typesetting import font_capabilities
+
+    if not font_capabilities()["available"]:
+        pytest.skip("No usable system CJK font")
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        overflowing = _add_region(
+            client,
+            image["id"],
+            translation="非常非常非常长的文本",
+        )
+        cramped = client.patch(
+            f"/api/regions/{overflowing['id']}",
+            json={
+                "x": 10,
+                "y": 10,
+                "width": 48,
+                "height": 24,
+                "direction": "horizontal",
+                "style": {
+                    "fontSize": 18,
+                    "minFontSize": 18,
+                    "autoFit": False,
+                    "autoWrap": False,
+                    "strokeWidth": 0,
+                },
+                "expectedRevision": overflowing["revision"],
+            },
+        )
+        assert cramped.status_code == 200, cramped.text
+        overflowing = _confirm_region(client, cramped.json())
+        fitting = _add_region(client, image["id"], translation="短")
+        moved = client.patch(
+            f"/api/regions/{fitting['id']}",
+            json={"x": 140, "y": 40, "expectedRevision": fitting["revision"]},
+        )
+        assert moved.status_code == 200, moved.text
+        fitting = _confirm_region(client, moved.json())
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"provider": "pillow"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        assert completed["items"][0]["output"]["overflowRegionIds"] == [overflowing["id"]]
+
+        edited = client.patch(
+            f"/api/regions/{fitting['id']}",
+            json={
+                "translationText": "更短",
+                "expectedRevision": fitting["revision"],
+            },
+        )
+        assert edited.status_code == 200, edited.text
+
+        rerun = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={
+                "imageIds": [image["id"]],
+                "regionIds": [fitting["id"]],
+                "options": {"provider": "pillow"},
+            },
+        )
+        finished = _wait_job(client, rerun.json()["id"])
+        assert finished["status"] == "completed", finished
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert current["typesetOverflowRegionIds"] == [overflowing["id"]]
+        assert current["typesetOverflowCount"] == 1
+
+
 def test_safe_typesetting_does_not_overlay_an_unrepaired_detection(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:
@@ -988,12 +1148,11 @@ def test_region_and_translation_edits_invalidate_stale_render_and_export(tmp_pat
         assert edited.status_code == 200, edited.text
         assert edited.json()["confirmed"] is False
         state = client.get(f"/api/projects/{project['id']}/images").json()[0]
-        assert state["status"]["inpaint"] == "pending"
+        assert state["status"]["inpaint"] == "done"
         assert state["status"]["typeset"] == "pending"
         assert state["status"]["export"] == "pending"
-        assert client.get(f"/api/images/{image['id']}/content?variant=erased").status_code == 404
+        assert client.get(f"/api/images/{image['id']}/content?variant=erased").status_code == 200
         assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 404
-        assert not (project_root / "generated/typeset/第一章/ページ一.png").exists()
 
         stale_export = client.post(
             f"/api/projects/{project['id']}/export",

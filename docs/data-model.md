@@ -75,7 +75,8 @@ review. The migration also invalidates old translation/inpaint/typeset/export st
 repair/typeset artifacts created under the former confidence policy. Source, geometry, type, direction,
 confidence, provider/language, or recognition provenance changes invalidate trust, while translation,
 typography, and ordinary mask edits retain it.
-Translation can retain OCR trust while clearing the separate current-content confirmation flag; page
+Translation can retain OCR trust while clearing the separate current-content confirmation flag; that
+combination marks typesetting stale without discarding a current inpaint plate. Page
 review requires every active region to be both trusted and confirmed after its latest content edit.
 
 Region numbers shown in the UI derive from editable reading order.

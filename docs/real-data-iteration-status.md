@@ -357,3 +357,9 @@ pages. Those files remain `detector-draft` until human review.
   Local gates passed frontend lint/typecheck/102 tests/build. The release audit scanned 128 candidate
   files and 533 historical blobs. Backend was unchanged from Round 19.
   GitHub CI run `31876680453` passed at `59a821b7707f19b8a8d2109c150b8e941981c895`.
+- **Round 22:** typeset jobs honor `regionIds` by restoring clean-plate pixels in those boxes (and
+  fragment-cluster mates) then redrawing only that overlay. Translation and typography edits keep the
+  current inpaint plate. Geometry, mask, or trust edits still rebuild repair. This does not complete
+  the remaining 112/130 clean-plate visual reviews. Local gates passed backend Ruff lint/format and
+  228 pytest cases. The release audit scanned 128 candidate files and 544 historical blobs. Frontend
+  was unchanged from Round 21. Remote CI is pending.

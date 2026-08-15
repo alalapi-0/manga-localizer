@@ -7,8 +7,10 @@ from PIL import Image
 from manga_localizer.imaging import OpenCVInpaintingProvider, create_mask, inpaint, typeset_image
 from manga_localizer.imaging.typesetting import (
     cluster_fragment_regions,
+    expand_typeset_region_ids,
     font_capabilities,
     overflow_region_ids,
+    restore_clean_region_boxes,
     typeset_overflow_from_status,
     verticalize_punctuation,
 )
@@ -354,3 +356,37 @@ def test_fragment_clusters_concatenate_distinct_fragment_text() -> None:
     packed = "".join("".join(layout["lines"]) for layout in result.layouts)
     assert "上" in packed
     assert "下" in packed
+
+
+def test_expand_typeset_region_ids_includes_fragment_cluster_mates() -> None:
+    first = {
+        "id": "frag-a",
+        "x": 40,
+        "y": 10,
+        "width": 22,
+        "height": 80,
+        "direction": "vertical",
+        "order": 0,
+        "translationText": "这段译文需要两个碎框一起排",
+    }
+    second = {**first, "id": "frag-b", "y": 94, "order": 1}
+    distant = {**first, "id": "lonely", "x": 200, "y": 10, "translationText": "单独"}
+    assert expand_typeset_region_ids([first, second, distant], ["frag-a"]) == [
+        "frag-a",
+        "frag-b",
+    ]
+    assert expand_typeset_region_ids([first, second, distant], ["lonely"]) == ["lonely"]
+    assert expand_typeset_region_ids([first, second, distant], []) == []
+
+
+def test_restore_clean_region_boxes_replaces_only_selected_pixels() -> None:
+    typeset = Image.new("RGB", (80, 60), (0, 0, 255))
+    clean = Image.new("RGB", (80, 60), (255, 255, 255))
+    restored = restore_clean_region_boxes(
+        typeset,
+        clean,
+        [{"x": 10, "y": 8, "width": 20, "height": 16}],
+    )
+    pixels = np.asarray(restored.convert("RGB"))
+    assert pixels[12, 15].tolist() == [255, 255, 255]
+    assert pixels[40, 50].tolist() == [0, 0, 255]

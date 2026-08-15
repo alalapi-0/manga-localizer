@@ -873,10 +873,21 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         with Image.open(io.BytesIO(after.content)) as opened:
             current = np.asarray(opened.convert("RGB"))
 
-        first_box = np.s_[50:90, 40:80]
-        second_box = np.s_[50:90, 160:200]
-        assert not np.array_equal(previous[first_box], current[first_box])
-        assert np.array_equal(previous[second_box], current[second_box])
+        def region_pixels(pixels: np.ndarray, region: dict[str, Any]) -> np.ndarray:
+            left = max(0, int(region["x"]))
+            top = max(0, int(region["y"]))
+            right = min(pixels.shape[1], left + int(region["width"]))
+            bottom = min(pixels.shape[0], top + int(region["height"]))
+            return pixels[top:bottom, left:right]
+
+        first_before = region_pixels(previous, first)
+        first_after = region_pixels(current, first)
+        second_before = region_pixels(previous, second)
+        second_after = region_pixels(current, second)
+        assert np.any(first_before != 255)
+        assert np.any(first_after != 255)
+        assert not np.array_equal(first_before, first_after)
+        assert np.array_equal(second_before, second_after)
 
 
 def test_partial_typeset_keeps_overflow_ids_for_untouched_boxes(tmp_path: Path) -> None:

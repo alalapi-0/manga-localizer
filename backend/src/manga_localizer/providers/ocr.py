@@ -388,6 +388,7 @@ class TesseractOCRProvider:
         *,
         direction: str = "auto",
         language: str | None = None,
+        include_contour_fallback: bool = True,
     ) -> list[OCRRegion]:
         with self._image_path(image) as path:
             regions: list[OCRRegion] = []
@@ -409,7 +410,7 @@ class TesseractOCRProvider:
                         continue
                     accepted.append(candidate)
                 regions = accepted
-            if not regions:
+            if not regions and include_contour_fallback:
                 regions = self._contour_candidates(path, direction)
         return sorted(
             regions,

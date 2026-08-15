@@ -296,3 +296,114 @@ def test_compare_upscale_writes_relative_metrics_without_source_mutation(
     assert "/" + "Users" + "/" not in markdown
     assert (output / "classic/page.png").is_file()
     assert (output / "ai/page.png").is_file()
+
+
+def test_detection_eval_script_writes_anonymous_metrics_without_ocr_text(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    script = load_script("evaluate_detection_ocr.py")
+    from manga_localizer.providers.ocr import OCRRegion
+
+    class FakeDetector:
+        def health_check(self) -> dict[str, object]:
+            return {"available": True, "error": None}
+
+        def detect_text_regions(self, image, **_options):
+            del image
+            return [OCRRegion(210, 190, 220, 70, "こんにちは", 0.2, "horizontal")]
+
+    class FakeOCR:
+        def health_check(self) -> dict[str, object]:
+            return {"available": True, "error": None}
+
+        def recognize_region(self, image, region, **_options):
+            del image, region
+            return OCRRegion(0, 0, 1, 1, "こんにちは", 0.8, "horizontal")
+
+    def allow_test_output(path: Path) -> Path:
+        resolved = path.resolve()
+        resolved.mkdir()
+        return resolved
+
+    monkeypatch.setattr(script, "require_ignored_empty_output", allow_test_output)
+    monkeypatch.setattr(script, "build_detector", lambda _args: FakeDetector())
+    monkeypatch.setattr(script, "TesseractOCRProvider", FakeOCR)
+    output = tmp_path / "eval"
+    result = script.run(
+        argparse.Namespace(
+            annotations=None,
+            images=None,
+            synthetic=True,
+            write_synthetic=None,
+            detector="ppocr-v3+tesseract",
+            ppocr_model=None,
+            ocr="tesseract",
+            direction="auto",
+            iou=0.5,
+            reviewed_only=True,
+            output=output,
+            label="test-detection-eval",
+        )
+    )
+    assert result == 0
+    report = json.loads((output / "report.json").read_text(encoding="utf-8"))
+    stdout = capsys.readouterr().out
+    assert "こんにちは" not in stdout
+    assert "こんにちは" not in (output / "report.md").read_text(encoding="utf-8")
+    assert report["privacy"]["ocrTextStored"] is False
+    assert report["privacy"]["imageNamesStored"] is False
+    assert report["pageSummaries"][0]["id"] == "page-0001"
+    assert report["confidence"]["usedToDropPredictions"] is False
+
+
+def test_bootstrap_annotations_refuse_ocr_in_manifest_and_keep_relative_names(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    script = load_script("bootstrap_detection_annotations.py")
+    from manga_localizer.providers.ocr import OCRRegion
+
+    source_dir = tmp_path / "input"
+    source_dir.mkdir()
+    Image.new("RGB", (64, 48), "#f4f4f4").save(source_dir / "page.png")
+
+    class FakeDetector:
+        def health_check(self) -> dict[str, object]:
+            return {"available": True, "error": None}
+
+        def detect_text_regions(self, image, **_options):
+            del image
+            return [OCRRegion(4, 4, 20, 12, "", 0.11, "horizontal")]
+
+    def allow_test_output(path: Path) -> Path:
+        resolved = path.resolve()
+        resolved.mkdir()
+        return resolved
+
+    monkeypatch.setattr(script, "require_ignored_empty_output", allow_test_output)
+    monkeypatch.setattr(script, "build_detector", lambda _args: FakeDetector())
+    output = tmp_path / "annotations"
+    result = script.run(
+        argparse.Namespace(
+            input=source_dir,
+            output=output,
+            detector="tesseract",
+            ppocr_model=None,
+            ocr_draft=False,
+            direction="auto",
+            label="test-bootstrap",
+        )
+    )
+    assert result == 0
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    page = json.loads((output / "page.json").read_text(encoding="utf-8"))
+    assert manifest["privacy"]["absolutePathsStored"] is False
+    assert manifest["privacy"]["ocrTextStored"] is False
+    assert manifest["independence"] == "detector-draft"
+    assert page["image"]["relativeName"] == "page.png"
+    assert "/" not in page["image"]["relativeName"]
+    assert page["regions"][0]["detectorConfidence"] == 0.11
+    assert page["regions"][0]["ocrConfidence"] is None
+    assert page["status"] == "draft"

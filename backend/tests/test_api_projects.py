@@ -634,6 +634,11 @@ def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_pa
     assert providers["preprocessing"]["realesrgan-onnx"]["aiUpscale"] is True
     assert providers["preprocessing"]["realesrgan-onnx"]["downloadsModelsAtStartup"] is False
     assert providers["preprocessing"]["realesrgan-ncnn"]["aiUpscale"] is True
+    union = providers["detection"]["ppocr-v3+tesseract"]
+    assert union["mergesOverlaps"] is False
+    assert union["dropsLowConfidence"] is False
+    assert union["keepsAllProposals"] is True
+    assert union["tesseractContourFallback"] is False
 
     root = tmp_path / "portable"
     response = client.post(

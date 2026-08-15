@@ -19,20 +19,23 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 11 delivers a runnable local Real-ESRGAN AI upscaler on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 11 feature commit is
-`866ad13728a029f468e447aa6c39bebe42121d92` with GitHub CI run `31851316610` green. The previous
-Round 10 trust-gate head is `0d6ff98387447c176ef5addeeaa21d007df05db3`. Round 11 adds
-`realesrgan-onnx` (BSD-3-Clause `RealESRGAN_x4plus_anime_6B`, checksum-verified explicit install, native
-4× with honest 2×/3× downscale, tiling, grayscale preservation) and keeps `realesrgan-ncnn` as an
-optional CLI adapter that now discovers a data-dir binary and passes a sibling `models/` folder. Classic
-Lanczos remains `opencv-pillow` and is labeled `aiUpscale: false`. A third-party NCNN executable was not
-run in this environment; the ONNX provider is the exercised equivalent local AI path. Three
-representative private pages were compared against Lanczos in an ignored directory: source checksums
-unchanged, output sizes exact, AI distinct from classic, Laplacian variance 47.3 → 2428.0, unique colors
-kept at 8-bit grayscale, 65 s on M4 CPU. Contact sheets were not published or sent to a remote vision
-model. Round 8 remains 18/130 explicit visual reviews. The full product goal remains active. No merge,
-tag, release, or deployment has occurred.
+Round 12 delivers a privacy-safe annotated detection/OCR evaluation path on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 11 feature commit is
+`866ad13728a029f468e447aa6c39bebe42121d92` with GitHub CI run `31851316610` green; the Round 11 docs
+commit `963def1f3b0699083f5b264962d65125e6dd99be` hit a pre-existing preprocess-snapshot race in CI
+run `31851555065`, which was hardened and verified by run `31852347022` at
+`99d9fefd9953f3a9c1a914bf3ff85d855c5fb895`. Round 12 adds IoU matching, separate detector/OCR
+confidence, character-error-rate, negative-page false-positive metrics, a public synthetic stress set
+covering bubble, non-bubble, SFX/art, horizontal, vertical, single-character, complex line-art, and
+no-text negatives, plus ignored private draft-annotation bootstrap. Automatic proposals are still not
+dropped, merged, or authorized by confidence. `ppocr-v3+tesseract` concatenates both detectors without
+NMS; Tesseract contour fallback stays off in that union so hatching blobs from the empty-page contour
+path are not added on top of Tesseract TSV. On the public synthetic ground-truth set, PP-OCRv3 reached
+precision 1.0 / recall 1.0 / 0 negative-page false positives; Tesseract OCR CER on matched boxes was
+0.42. Tesseract-alone over-detected hatching (80 false positives on the synthetic negative). Private
+PP-OCR drafts for all 130 pages produced 727 proposal boxes and 18 empty pages; those drafts are not
+independent ground truth. Round 8 remains 18/130 explicit visual reviews. The full product goal remains
+active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -55,8 +58,13 @@ tag, release, or deployment has occurred.
   result, tile size 256 on this 16 GB M4, and grayscale preservation. `realesrgan-ncnn` remains optional
   and never downloaded at application startup.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
-  baseline; optional PP-OCRv3 supplies bounded detector polygons. A completed zero-detection result is
-  authoritative and is not silently replaced during OCR.
+  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` keeps every
+  candidate from both detectors as an editable proposal and does not NMS or drop by confidence.
+  A completed zero-detection result is authoritative and is not silently replaced during OCR.
+- Annotated detection/OCR evaluation is path-parameterized. Public reports store only anonymous page
+  IDs and aggregate precision, recall, CER, and negative-page false positives. Transcriptions, image
+  names, checksums, and absolute paths stay out of sanitized output. Private draft JSON remains under
+  `tests/real-data/` until a human marks it reviewed.
 - Low/empty OCR on a preprocessed crop is retried against the immutable original crop, with the selected
   input and attempt count persisted as provenance.
 - Detector confidence, OCR confidence, every OCR attempt across reruns, and the selected input are
@@ -122,8 +130,11 @@ tag, release, or deployment has occurred.
   delivery, and complete backend/frontend/privacy/browser CI verification.
 - [x] Round 11: runnable local Real-ESRGAN ONNX upscaler, explicit model install, NCNN model-dir fix,
   private classic-vs-AI comparison, public regression, and complete CI on the non-default branch.
-- [ ] Next real-data checkpoint: privacy-safe annotated detection/OCR evaluation and local visual review
-  of the ignored Real-ESRGAN contact sheets; then line-art-aware restoration and real translation.
+- [x] Round 12: privacy-safe detection/OCR evaluation, public synthetic ground truth, union detector
+  that keeps all proposals, ignored private draft annotations, and public regression.
+- [ ] Next real-data checkpoint: human review of private detection drafts into independent ground
+  truth; line-art-aware restoration; real Japanese-to-Chinese translation; remaining 112/130 visual
+  reviews.
 
 ## Verification evidence
 
@@ -173,20 +184,29 @@ tag, release, or deployment has occurred.
   failures, exact output sizes, AI distinct from Lanczos on every page, mean Laplacian variance
   47.324 → 2427.957, unique colors remained 8-bit grayscale after chroma suppression, 64.9 s total.
   Contact sheets stay under the ignored real-data run directory and were not opened by a remote model.
+- Round 12 local synthetic ground-truth evaluation (7 generated pages, IoU 0.5, Tesseract OCR):
+  PP-OCRv3 precision 1.0, recall 1.0, F1 1.0, 0 false positives on the no-text hatch page, matched
+  transcription coverage 6/6, CER 0.421. Tesseract-alone precision 0.008, recall 0.333, 80 false
+  positives on the negative page. Union recall 1.0 with precision 0.023 because it retains Tesseract
+  proposals. Private ignored drafts: 130 pages, 727 PP-OCR boxes, 18 empty pages; 3 representative
+  pages also have OCR drafts. Those private files are not independent ground truth.
+- Round 12 local verification passed 2 launcher tests; backend Ruff lint/format and 203 pytest cases;
+  frontend ESLint, TypeScript, 92 Vitest cases, and production build; release audit over 119 candidate
+  files plus 334 historical blobs; `uv lock --check`; compileall; and `git diff --check`.
 
 ## Known limitations and blockers
 
 No source-integrity or privacy blocker is currently known, but the full product objective is not yet
-complete. Round 11 is an AI-upscale checkpoint rather than a claim of unattended full-book output
-quality.
+complete. Round 12 is a detection/OCR evaluation checkpoint rather than a claim of unattended
+full-book output quality.
 
-- The private dataset has no annotated boxes/transcriptions, so coverage and confidence are proxies,
-  not detection recall or OCR accuracy.
+- Private pages still lack human-reviewed boxes/transcriptions. Detector-draft JSON is a starting
+  proposal set, not precision/recall evidence.
 - The representative export uses deterministic mock translations for structural testing. Real Chinese
   translations require manual/remote review, and fragmented boxes, vertical layout, font fit, and LaMa
   reconstruction artifacts still prevent unattended publication.
 - MangaOCR/PaddleOCR recognition, arbitrary polygon/whole-page mask editing, and line-art-aware
   restoration remain roadmap work. Local visual review of Real-ESRGAN contact sheets is still required
   before treating AI upscaling as publication-quality.
-- The post-OCR trust gate is delivered and CI-verified, but its precision/recall and calibration still
-  require privacy-safe annotated or aggregate real-data evaluation.
+- Tesseract TSV over-detects hatching/line art. Prefer `ppocr-v3` when precision on negatives matters;
+  use `ppocr-v3+tesseract` only when extra Tesseract proposals are wanted.

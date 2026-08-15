@@ -226,9 +226,10 @@ and has maintained cross-platform packages. Install Japanese horizontal and vert
 provider health in Project Settings.
 
 `ppocr-v3` is an optional, local detection-only provider using OpenCV DNN and the official OpenCV Zoo
-PP-OCRv3 ONNX model. It returns polygon geometry; Tesseract then recognizes each detected region. A
-completed zero-detection page remains a valid empty result and is not silently re-detected by another
-provider. MangaOCR and PaddleOCR recognition adapters remain roadmap work. See
+PP-OCRv3 ONNX model. It returns polygon geometry; Tesseract then recognizes each detected region.
+`ppocr-v3+tesseract` concatenates both detectors' candidates without dropping or merging by
+confidence. A completed zero-detection page remains a valid empty result and is not silently
+re-detected by another provider. MangaOCR and PaddleOCR recognition adapters remain roadmap work. See
 [Provider system](docs/provider-system.md).
 
 ## Image preprocessing

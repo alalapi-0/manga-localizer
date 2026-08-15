@@ -25,6 +25,9 @@ Last updated: 2026-08-15
 - Round 11 — local Real-ESRGAN ONNX upscaling: delivered as a runnable optional provider with explicit
   checksum/license install. Three representative private pages were compared against classic Lanczos
   into an ignored run directory; visual contact sheets were not published.
+- Round 12 — privacy-safe detection/OCR evaluation: public synthetic ground truth, union detector,
+  ignored private draft annotations, and sanitized precision/recall/CER reporting. Private human
+  review of those drafts is still required before claiming real-page accuracy.
 
 ## Private data boundary
 
@@ -175,7 +178,11 @@ before unattended publication would be appropriate.
   the CLI. A local NCNN executable was not run in this environment.
 - Optional Real-ESRGAN ONNX anime 4× provider with checksum-verified install, tiling, grayscale
   preservation, and a private classic-vs-AI comparison script.
-- Optional PP-OCRv3 polygon detector and explicit detection/OCR provider separation.
+- Optional PP-OCRv3 polygon detector, `ppocr-v3+tesseract` union that keeps every proposal, and
+  explicit detection/OCR provider separation.
+- Privacy-safe detection/OCR evaluation: IoU matching, CER, negative-page false positives, public
+  synthetic ground truth, and ignored private detector-draft bootstrap. Sanitized reports omit
+  transcriptions, filenames, checksums, and paths.
 - Preprocessed-crop OCR retry against original, quality selection, and attempt/input provenance.
 - Versioned separate detector/OCR evidence, retained automatic proposals, stable trust reasons, and
   trusted-only translation/default safe rendering, with fail-closed legacy migration and complete CI.
@@ -191,18 +198,32 @@ before unattended publication would be appropriate.
 - Generic private evaluator with per-file failures, OCR proxies, immutable-source checks, dimension and
   mask structural metrics.
 
+## Round 12 synthetic detection/OCR metrics
+
+These figures come from seven generated public pages with independent box/transcription ground truth
+(IoU 0.5, Tesseract recognition). They are not private-manga accuracy.
+
+| Detector | Precision | Recall | Negative-page FPs | Matched OCR CER |
+| --- | ---: | ---: | ---: | ---: |
+| `ppocr-v3` | 1.000 | 1.000 | 0 | 0.421 |
+| `tesseract` | 0.008 | 0.333 | 80 | 0.167 |
+| `ppocr-v3+tesseract` | 0.023 | 1.000 | 80 | 0.421 |
+
+Private ignored drafts (PP-OCRv3, no OCR text in the full-book set): 130 pages, 727 boxes, 18 empty
+pages. Those files remain `detector-draft` until human review.
+
 ## Remaining issues and next roadmap
 
-1. **Ground truth:** create a private annotated stress set with box precision/recall and Japanese OCR CER.
-   Current proxies cannot decide whether the safe profile's 25 empty pages are missed text or true
-   negatives.
+1. **Ground truth:** private detector-draft JSON now exists under the ignored real-data tree (130
+   pages, 727 PP-OCR boxes, 18 empty pages). It is not independent precision/recall evidence until a
+   human reviews boxes and transcriptions. The public synthetic stress set does report those metrics.
 2. **Preprocessing policy:** support per-page profile suggestions and paired preview, not a book-wide
    assumption. Round 11 made `realesrgan-onnx` runnable with an explicit checksummed install; continue
    comparing it against annotated pages once ground truth exists. Classic Lanczos remains available and
    is not labeled as AI.
 3. **Detection/OCR:** add MangaOCR or PaddleOCR recognition behind the existing protocol, region-level
-   rerun/history controls, and calibrated confidence. Evaluate the delivered human trust gate against
-   annotated/private-safe evidence; keep empty detection authoritative.
+   rerun/history controls, and calibrated confidence. Human-review the private detector drafts before
+   treating 18 empty pages as true negatives; keep empty detection authoritative.
 4. **Mask editing:** add arbitrary polygon regions and a whole-page raster workflow. Current brush and
    eraser strokes are bounded to one selected rectangular region.
 5. **Restoration quality:** add tiled/GPU execution and compare LaMa with newer line-art-aware models.
@@ -250,3 +271,8 @@ before unattended publication would be appropriate.
   grayscale after the chroma fix. Contact sheets remain ignored for local visual review and were not
   sent to a remote model. GitHub CI run `31851316610` passed at
   `866ad13728a029f468e447aa6c39bebe42121d92`.
+- **Round 12:** added sanitized detection/OCR evaluation, a public synthetic stress set, ignored
+  private draft annotations, and a union detector that keeps all PP-OCR and Tesseract proposals.
+  PP-OCRv3 scored precision/recall 1.0 on the synthetic ground truth with zero negative-page false
+  positives; Tesseract OCR CER on matched boxes was 0.42. Private drafts are not independent ground
+  truth. GitHub CI for this checkpoint is recorded after the non-default-branch push.

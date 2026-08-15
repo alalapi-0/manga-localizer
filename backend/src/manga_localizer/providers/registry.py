@@ -10,7 +10,11 @@ from manga_localizer.imaging import (
     RealESRGANNCNNPreprocessProvider,
     RealESRGANONNXPreprocessProvider,
 )
-from manga_localizer.providers.detection import PPOCRTextDetectionProvider, TextDetectionProvider
+from manga_localizer.providers.detection import (
+    PPOCRTextDetectionProvider,
+    TextDetectionProvider,
+    UnionTextDetectionProvider,
+)
 from manga_localizer.providers.inpainting_lama import LaMaONNXInpaintingProvider
 from manga_localizer.providers.ocr import TesseractOCRProvider
 from manga_localizer.providers.translation import (
@@ -28,6 +32,7 @@ class ProviderRegistry:
         self.settings = settings
         self.ocr = TesseractOCRProvider(settings.tesseract_command)
         self.ppocr = PPOCRTextDetectionProvider(settings.ppocr_detection_model_path)
+        self.union_detector = UnionTextDetectionProvider(self.ppocr, self.ocr)
         self.preprocessing = OpenCVPillowPreprocessProvider(profile="off")
         self.realesrgan = RealESRGANNCNNPreprocessProvider(
             command=settings.realesrgan_ncnn_command,
@@ -53,6 +58,8 @@ class ProviderRegistry:
             return self.ocr
         if name in {"ppocr", "ppocr-v3", "paddleocr-detection"}:
             return self.ppocr
+        if name in {"ppocr-v3+tesseract", "union", "ppocr-tesseract"}:
+            return self.union_detector
         raise ValueError(f"Unknown text detection provider: {name}")
 
     def ocr_provider(self, name: str):
@@ -123,6 +130,7 @@ class ProviderRegistry:
             "detection": {
                 "tesseract": ocr,
                 "ppocr-v3": self.ppocr.get_capabilities(),
+                "ppocr-v3+tesseract": self.union_detector.get_capabilities(),
             },
             "ocr": {"tesseract": ocr},
             "inpainting": {

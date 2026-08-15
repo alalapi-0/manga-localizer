@@ -94,6 +94,23 @@ It refuses a non-empty run directory and records source-checksum preservation, g
 mask coverage, and changed pixels outside masks. These reports are stability/coverage evidence unless a
 private ground-truth transcription/box set is supplied; region count and OCR confidence are not accuracy.
 
+Detection/OCR box evaluation is separate. Generate or point at annotation JSON, then write a sanitized
+report that omits transcriptions, filenames, checksums, and paths:
+
+```bash
+uv run --project backend python scripts/evaluate_detection_ocr.py \
+  --synthetic \
+  --detector ppocr-v3 \
+  --output tests/real-data/synthetic-stress/runs/<new-run>
+uv run --project backend python scripts/bootstrap_detection_annotations.py \
+  --input tests/real-data/<dataset>/input \
+  --output tests/real-data/<dataset>/annotations/<new-draft> \
+  --detector ppocr-v3 \
+  --no-ocr-draft
+```
+
+Draft annotation JSON is not independent ground truth until a human marks regions `reviewed`.
+
 The current automated browser suite uses Chromium. The GitHub Actions workflow targets Ubuntu; macOS
 is the primary local development environment, while Windows has documented startup steps but no CI job.
 

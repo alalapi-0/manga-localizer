@@ -200,6 +200,83 @@ class PPOCRTextDetectionProvider:
             "modelRequired": True,
             "detectTextRegions": health["available"],
             "polygonDetections": True,
+            "dropsLowConfidence": False,
+            "mergesOverlaps": False,
+            "directions": {"horizontal": True, "vertical": True},
+            "error": health["error"],
+        }
+
+
+class UnionTextDetectionProvider:
+    """Keep every PP-OCR and Tesseract candidate as an editable proposal.
+
+    Overlapping or low-confidence boxes are not dropped, merged, or authorized.
+    Both members must be available; otherwise health is unavailable and detection fails.
+    """
+
+    name = "ppocr-v3+tesseract"
+
+    def __init__(self, ppocr: TextDetectionProvider, tesseract: TextDetectionProvider):
+        self.ppocr = ppocr
+        self.tesseract = tesseract
+
+    def detect_text_regions(
+        self,
+        image: Path | Image.Image | np.ndarray,
+        *,
+        direction: str = "auto",
+        language: str | None = None,
+    ) -> list[OCRRegion]:
+        health = self.health_check()
+        if not health["available"]:
+            raise TextDetectionUnavailable(health["error"] or "Union text detector is unavailable")
+        ppocr_regions = self.ppocr.detect_text_regions(
+            image,
+            direction=direction,
+            language=language,
+        )
+        tesseract_regions = self.tesseract.detect_text_regions(
+            image,
+            direction=direction,
+            language=language,
+            include_contour_fallback=False,
+        )
+        return [*ppocr_regions, *tesseract_regions]
+
+    def health_check(self) -> dict[str, Any]:
+        ppocr = self.ppocr.health_check()
+        tesseract = self.tesseract.health_check()
+        available = bool(ppocr.get("available") and tesseract.get("available"))
+        errors = [
+            f"{name}: {payload['error']}"
+            for name, payload in (("ppocr-v3", ppocr), ("tesseract", tesseract))
+            if payload.get("error")
+        ]
+        return {
+            "available": available,
+            "members": {
+                "ppocr-v3": {"available": bool(ppocr.get("available"))},
+                "tesseract": {"available": bool(tesseract.get("available"))},
+            },
+            "error": (
+                None if available else "; ".join(errors) or "Union text detector is unavailable"
+            ),
+        }
+
+    def get_capabilities(self) -> dict[str, Any]:
+        health = self.health_check()
+        return {
+            "provider": self.name,
+            "available": health["available"],
+            "local": True,
+            "modelRequired": True,
+            "detectTextRegions": health["available"],
+            "polygonDetections": True,
+            "keepsAllProposals": True,
+            "dropsLowConfidence": False,
+            "mergesOverlaps": False,
+            "unionOf": ["ppocr-v3", "tesseract"],
+            "tesseractContourFallback": False,
             "directions": {"horizontal": True, "vertical": True},
             "error": health["error"],
         }

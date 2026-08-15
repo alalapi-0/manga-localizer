@@ -16,6 +16,10 @@ Semantic Versioning.
   inference, and explicit 2×/3× downscale from the native 4× result. Classic Lanczos remains a
   separate compatibility upscaler.
 - Optional PP-OCRv3 OpenCV-DNN polygon detector, separated from Tesseract recognition.
+- Optional `ppocr-v3+tesseract` union detector that concatenates both proposal lists without
+  confidence filtering or overlap merging. Union disables Tesseract's empty-page contour fallback.
+- Privacy-safe detection/OCR evaluation with IoU matching, separate detector/OCR confidence, CER,
+  negative-page false positives, a public synthetic stress set, and ignored private draft annotations.
 - Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact
   mask-outside preservation, and an explicit checksum-verifying model installer.
 - Actual mask preview, text-aware/full-region mask strategies, padding/dilation/feather controls, and
@@ -87,11 +91,16 @@ Semantic Versioning.
   Lanczos on every page, and substantially higher Laplacian variance after grayscale preservation.
   Contact sheets remain in the ignored private run directory for local visual review. GitHub CI run
   `31851316610` passed on `866ad13728a029f468e447aa6c39bebe42121d92`.
+- Round 12 evaluated detectors against a public synthetic ground-truth stress set (bubble, non-bubble,
+  SFX/art, vertical, single-character, complex line-art, and a no-text hatch negative). PP-OCRv3
+  reached precision/recall 1.0 with zero negative-page false positives; matched Tesseract OCR CER was
+  0.42. Tesseract-alone produced 80 false positives on the negative page. Private ignored drafts cover
+  all 130 pages (727 PP-OCR boxes, 18 empty pages) and are not independent ground truth.
 
 ### Known limitations
 
-- The private set has no box/transcription ground truth, so region coverage, confidence, and character
-  counts are proxies rather than detection recall or OCR accuracy.
+- The private set still lacks human-reviewed boxes/transcriptions. Detector-draft JSON is a proposal
+  bootstrap, not precision, recall, or OCR accuracy.
 - AI preprocessing via Real-ESRGAN ONNX is local, optional, and native 4×; 2×/3× requests downscale
   that AI output. The NCNN CLI adapter remains available when a licensed local executable is
   installed. LaMa remains CPU-expensive and imperfect on line art fully hidden by lettering.

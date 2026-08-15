@@ -184,7 +184,8 @@ Semantic Versioning.
   `31879071282` passed on `5e8545bd7e747b22b0cb989ce4a5a0221ed598a1`.
 - Round 25 adds T and Shift+T shortcuts to retypeset the selected box or overflowing boxes. Local
   gates passed frontend lint/typecheck/106 tests plus the production build. The release audit scanned
-  128 candidate files and 587 historical blobs. Backend was unchanged from Round 23.
+  128 candidate files and 587 historical blobs. Backend was unchanged from Round 23. GitHub CI run
+  `31879412533` passed on `d674775ba742aa0103669ce9f1f912b856737728`.
 
 ### Known limitations
 

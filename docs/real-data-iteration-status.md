@@ -386,4 +386,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 25:** T retypesets the selected box and Shift+T retypesets overflowing boxes. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed frontend
   lint/typecheck/106 tests/build. The release audit scanned 128 candidate files and 587 historical
-  blobs. Backend was unchanged from Round 23. Remote CI is pending.
+  blobs. Backend was unchanged from Round 23.
+  GitHub CI run `31879412533` passed at `d674775ba742aa0103669ce9f1f912b856737728`.

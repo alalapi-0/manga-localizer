@@ -30,7 +30,7 @@ inpainting, typesetting, review, and export as separate replaceable stages.
   region boundaries, persisted per-region brush/eraser strokes, safe repair gating, OpenCV fallback,
   optional local LaMa ONNX restoration, and Pillow horizontal or vertical Chinese typesetting with
   vertical punctuation forms, hanging comma/period glyphs, fragment clustering for adjacent small
-  boxes, persisted overflow review, and inspector actions to retypeset overflowing boxes only
+  boxes, persisted overflow review, and inspector actions to retypeset overflowing or selected boxes
 - Persisted accept/reject review for enhanced, repaired, and typeset images; generated-image export
   requires accepted reviews that still match the exact image and repair-mask bytes
 - Persistent non-blocking batch jobs with a 1–8 item limit, progress, cooperative controls, failure

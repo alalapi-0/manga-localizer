@@ -118,6 +118,40 @@ describe('desktop workbench interactions', () => {
     });
   });
 
+  it('queues typesetting for the selected region from the typesetting inspector', async () => {
+    const user = userEvent.setup();
+    const region = regionFixture('region-1', {
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: true,
+    });
+    seedWorkbench({
+      images: [imageFixture('image-1', { trustReviewCount: 0, trustedCount: 1 })],
+      regions: [region],
+      selectedRegionIds: ['region-1'],
+    });
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listRegions').mockResolvedValue([region]);
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-current-typeset',
+      kind: 'typeset',
+    }));
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '排版' }));
+    await user.click(screen.getByRole('button', { name: '重排当前框' }));
+    expect(startJob).toHaveBeenCalledWith('project-1', 'typeset', {
+      imageIds: ['image-1'],
+      regionIds: ['region-1'],
+      options: expect.objectContaining({ provider: 'pillow', concurrency: 1 }),
+    });
+  });
+
   it('requires an explicit confirmation before a zero-region page is treated as reviewed', async () => {
     const user = userEvent.setup();
     const zeroText = imageFixture('image-1', {

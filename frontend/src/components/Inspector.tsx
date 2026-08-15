@@ -345,6 +345,8 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
 function TypesettingInspector({ region }: { region: Region | undefined }) {
   const image = useWorkbenchStore(activeImage);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
   if (!region) return <EmptyState icon="字" title="选择一个文本框" description="排版参数会按文本框单独保存。" />;
   const style = region.style;
   const overflowing = regionHasTypesetOverflow(image, region.id);
@@ -354,7 +356,7 @@ function TypesettingInspector({ region }: { region: Region | undefined }) {
       {overflowing ? (
         <div className="notice notice--warning" role="status">
           <b>当前文本框排版溢出</b>
-          <span>缩小字号、加大文本框，或打开自动适配后再重新排版。</span>
+          <span>缩小字号、加大文本框，或打开自动适配后再点「重排当前框」。</span>
         </div>
       ) : null}
       <Toggle checked={style.autoFit} description="缩小字号直到译文放入区域" label="自动适配字号" onChange={(event) => updateStyle({ autoFit: event.target.checked })} />
@@ -380,6 +382,18 @@ function TypesettingInspector({ region }: { region: Region | undefined }) {
       <div className="typeset-preview" style={{ color: style.color, fontFamily: style.fontFamily, fontSize: `${Math.min(style.fontSize, 32)}px`, lineHeight: style.lineHeight, WebkitTextStroke: `${style.strokeWidth}px ${style.strokeColor}` }}>
         {region.translationText || '中文排版预览'}
       </div>
+      {image ? (
+        <button
+          className="button"
+          onClick={() => {
+            setDrawerOpen(true);
+            void startBatch(['typeset'], [image.id], defaultExportOptions, 1, [region.id]);
+          }}
+          type="button"
+        >
+          重排当前框
+        </button>
+      ) : null}
     </div>
   );
 }

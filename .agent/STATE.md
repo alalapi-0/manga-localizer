@@ -19,13 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 20 adds overflow-only typesetting from the workbench inspector on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 20 feature commit is
-`d02e873fd3860290ebf15bbb98586079ab40b1be` with GitHub CI run `31876251138` green. Editors can select
-overflowing boxes or rerun Pillow typesetting for those region IDs without touching the rest of the
-page. Round 19 fragment clustering remains in place. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Round 21 adds a per-region typeset action in the typesetting inspector on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. After editing font or box geometry,
+the editor can rerun Pillow typesetting for the selected region only. Round 20 overflow-only
+typesetting remains in place (`d02e873`, CI `31876251138`). Round 8 remains 18/130 explicit visual
+reviews; detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag,
+release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -149,6 +148,8 @@ or deployment has occurred.
   and complete CI.
 - [x] Round 20: overflow-only typesetting and overflow-box selection in the inspector, with public
   regression, and complete CI.
+- [x] Round 21: per-region typeset rerun from the typesetting inspector, with public regression.
+  Remote CI for this round is still pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -289,6 +290,11 @@ or deployment has occurred.
   `d02e873fd3860290ebf15bbb98586079ab40b1be`. Backend Ruff lint/format, 224 pytest cases, and the
   release audit passed. Frontend lint/typecheck/101 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 21 local verification passed frontend ESLint, TypeScript, 102 Vitest cases, and the production
+  build; release audit over 128 candidate files plus 533 historical blobs; and `git diff --check`.
+  Backend was unchanged from Round 19 (224 pytest). Playwright discovers both Chromium journeys; this
+  environment lacks Playwright Chromium revision 1234, so live browser evidence remains the GitHub e2e
+  job after push. Remote CI for Round 21 is pending.
 
 ## Known limitations and blockers
 

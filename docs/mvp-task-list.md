@@ -63,6 +63,7 @@ not inferred from this tracked checklist.
 - [x] Pack adjacent small typesetting boxes as fragment clusters without rewriting stored translation
   text
 - [x] Retypeset overflowing boxes only, and select those boxes from the inspector overflow notice
+- [x] Retypeset the currently selected box from the typesetting inspector
 
 ## Explicitly deferred
 

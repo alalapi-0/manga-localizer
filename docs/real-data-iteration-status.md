@@ -39,6 +39,9 @@ Last updated: 2026-08-15
 - Round 16 — typesetting overflow review: overflowing region IDs persist after a typeset run and are
   filterable in the workbench. Shift+arrow skips reviewed pages. This does not complete the remaining
   112/130 clean-plate visual reviews.
+- Round 17 — per-page preprocessing profile suggestions from local image stats, with explicit apply-to-
+  page and adopt-as-default actions. This does not complete the remaining 112/130 clean-plate visual
+  reviews.
 
 ## Private data boundary
 
@@ -229,10 +232,10 @@ pages. Those files remain `detector-draft` until human review.
    727 PP-OCR boxes, 18 empty pages). Round 15 adds an explicit local accept/reject copy step; drafts
    are still not independent precision/recall evidence until a human lists page IDs. The public
    synthetic stress set does report those metrics.
-2. **Preprocessing policy:** support per-page profile suggestions and paired preview, not a book-wide
-   assumption. Round 11 made `realesrgan-onnx` runnable with an explicit checksummed install; continue
-   comparing it against annotated pages once ground truth exists. Classic Lanczos remains available and
-   is not labeled as AI.
+2. **Preprocessing policy:** per-page profile suggestions and paired preview are available; the book-wide
+   project default is unchanged until the editor adopts a suggestion. Continue comparing Real-ESRGAN
+   against annotated pages once ground truth exists. Classic Lanczos remains available and is not labeled
+   as AI.
 3. **Detection/OCR:** add MangaOCR or PaddleOCR recognition behind the existing protocol, region-level
    rerun/history controls, and calibrated confidence. Human-review the private detector drafts before
    treating 18 empty pages as true negatives; keep empty detection authoritative.
@@ -311,3 +314,8 @@ pages. Those files remain `detector-draft` until human review.
   remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 219 backend tests,
   and 97 frontend tests. The release audit scanned 128 candidate files and 435 historical blobs.
   GitHub CI run `31860160644` passed at `20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b`.
+- **Round 17:** added per-page preprocessing profile suggestions from local size, contrast, and
+  sharpness samples. The workbench can process the current page with that profile or adopt it as the
+  project default; it never auto-applies a book-wide assumption. This does not complete the remaining
+  112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 221 backend tests, and 99
+  frontend tests. The release audit scanned 128 candidate files and 467 historical blobs.

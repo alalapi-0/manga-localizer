@@ -10,6 +10,8 @@ import type {
   Job,
   JobKind,
   ImageNavigationTarget,
+  PreprocessSuggestion,
+  PreprocessingSettings,
   Project,
   ProjectSettings,
   ProjectSummary,
@@ -155,6 +157,7 @@ interface WorkbenchState {
     exportOptions: ExportOptions,
     concurrency?: number,
     regionIds?: string[],
+    preprocessing?: PreprocessingSettings,
   ) => Promise<boolean>;
   refreshJobs: () => Promise<void>;
   runJobAction: (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'retry') => Promise<void>;
@@ -263,6 +266,105 @@ function reviewState(value: unknown): ReviewState {
   return value === 'reviewed' || value === 'no-text-reviewed' ? value : 'pending';
 }
 
+const PREPROCESS_PROFILES: PreprocessingSettings['profile'][] = [
+  'off',
+  'ocr-friendly',
+  'balanced',
+  'visual-quality',
+];
+const PREPROCESS_SUGGESTION_REASONS = new Set([
+  'small-page',
+  'low-contrast',
+  'soft-detail',
+  'high-res-sharp',
+  'large-page',
+]);
+
+export function preprocessingSettingsForProfile(
+  profile: PreprocessingSettings['profile'],
+  base: PreprocessingSettings,
+): PreprocessingSettings {
+  const switches: Record<PreprocessingSettings['profile'], Pick<
+    PreprocessingSettings,
+    | 'enableUpscale'
+    | 'enableDenoise'
+    | 'enableSharpen'
+    | 'enableContrastEnhance'
+    | 'enableEdgeOptimize'
+    | 'enableBinarize'
+  >> = {
+    off: {
+      enableUpscale: false,
+      enableDenoise: false,
+      enableSharpen: false,
+      enableContrastEnhance: false,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+    },
+    'ocr-friendly': {
+      enableUpscale: true,
+      enableDenoise: true,
+      enableSharpen: true,
+      enableContrastEnhance: true,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+    },
+    balanced: {
+      enableUpscale: false,
+      enableDenoise: true,
+      enableSharpen: true,
+      enableContrastEnhance: true,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+    },
+    'visual-quality': {
+      enableUpscale: true,
+      enableDenoise: true,
+      enableSharpen: true,
+      enableContrastEnhance: true,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+    },
+  };
+  return {
+    ...base,
+    profile,
+    ...switches[profile],
+  };
+}
+
+function hydratePreprocessSuggestion(
+  raw: ImageAsset['preprocessSuggestion'] | undefined,
+  width: number,
+  height: number,
+): PreprocessSuggestion {
+  const minSide = Math.min(width, height);
+  if (raw && PREPROCESS_PROFILES.includes(raw.profile)) {
+    const metrics = raw.metrics ?? { width, height, minSide, sampled: false };
+    return {
+      profile: raw.profile,
+      reasons: Array.isArray(raw.reasons)
+        ? raw.reasons.filter((reason) => PREPROCESS_SUGGESTION_REASONS.has(reason))
+        : [],
+      metrics: {
+        width,
+        height,
+        minSide,
+        sampled: Boolean(metrics.sampled),
+        ...(typeof metrics.laplacianVar === 'number' ? { laplacianVar: metrics.laplacianVar } : {}),
+        ...(typeof metrics.luminanceStd === 'number' ? { luminanceStd: metrics.luminanceStd } : {}),
+        ...(typeof metrics.uniqueGray === 'number' ? { uniqueGray: metrics.uniqueGray } : {}),
+        ...(typeof metrics.grayscale === 'boolean' ? { grayscale: metrics.grayscale } : {}),
+      },
+    };
+  }
+  return {
+    profile: minSide < 1200 ? 'ocr-friendly' : 'off',
+    reasons: [minSide < 1200 ? 'small-page' : 'large-page'],
+    metrics: { width, height, minSide, sampled: false },
+  };
+}
+
 function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset {
   const rawStatus = (image.status ?? EMPTY_PIPELINE_STATUS) as ImageAsset['status'] & Record<string, unknown>;
   const legacyImage = image as ImageAsset & {
@@ -300,6 +402,11 @@ function hydrateImage(image: ImageAsset, settings?: ProjectSettings): ImageAsset
     inpaintCandidates: Array.isArray(image.inpaintCandidates) ? image.inpaintCandidates : [],
     typesetOverflowCount: overflowRegionIds.length,
     typesetOverflowRegionIds: overflowRegionIds,
+    preprocessSuggestion: hydratePreprocessSuggestion(
+      image.preprocessSuggestion,
+      Number(image.width ?? 1),
+      Number(image.height ?? 1),
+    ),
     status: {
       import: stageState(rawStatus.import ?? 'done'),
       preprocess: stageState(rawStatus.preprocess),
@@ -1899,7 +2006,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSpacePressed: (spacePressed) => set({ spacePressed }),
 
-  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1, regionIds) => {
+  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1, regionIds, preprocessing) => {
     if (!get().currentProject || !imageIds.length || !kinds.length) return false;
     const hasOcr = kinds.includes('ocr');
     const trustGatedKinds = kinds.filter((kind) =>
@@ -1973,7 +2080,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         const options: Record<string, unknown> = kind === 'preprocess'
           ? {
               provider: project.settings.preprocessorProvider,
-              preprocessing: project.settings.preprocessing,
+              preprocessing: preprocessing ?? project.settings.preprocessing,
             }
           : kind === 'detect'
           ? {

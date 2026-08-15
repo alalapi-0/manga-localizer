@@ -18,7 +18,7 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 - Dense three-pane workbench with a zoomable canvas and editable numbered text regions
 - A persisted image-preprocessing stage with OCR-friendly, balanced, visual-quality, and off profiles;
   2×–4× upscale, denoise, sharpen, contrast, edge, and binarization switches; before/after preview;
-  and original-coordinate mapping
+  original-coordinate mapping; and per-page profile suggestions that are never auto-applied book-wide
 - Offline Tesseract Japanese OCR plus optional PP-OCRv3 polygon detection, including horizontal and
   vertical workflows, low-confidence original-image retry, and actual provider provenance
 - Versioned detector/OCR evidence with separate confidence values, provider/input/language provenance,
@@ -253,6 +253,9 @@ re-detected by another provider. MangaOCR and PaddleOCR recognition adapters rem
 The OCR-friendly profile upscales, denoises, sharpens, and raises contrast. Edge enhancement is
 deliberately opt-in: on the private real-data set it amplified line-art false positives. Every switch
 can be overridden per project, and detection/OCR coordinates are mapped back to the original image.
+Each imported page also gets a local profile suggestion from its size and a sharpness/contrast sample.
+That hint can be applied to the current page or adopted as the project default; it is never auto-applied
+across the book.
 
 `realesrgan-onnx` is the runnable local AI upscaler. It uses ONNX Runtime and the BSD-3-Clause
 `RealESRGAN_x4plus_anime_6B` graph, tiled on large pages. The model is native 4×; 2×/3× requests

@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from manga_localizer.config import Settings
 from manga_localizer.database import ImageAsset, ImportBoundary
+from manga_localizer.imaging.preprocessing import suggest_preprocess_profile
 from manga_localizer.security import (
     UnsafePathError,
     atomic_write_bytes,
@@ -356,6 +357,8 @@ def ingest_bytes(
         try:
             with store.session() as session:
                 project = store.project(session)
+                with Image.open(io.BytesIO(data)) as opened:
+                    suggestion = suggest_preprocess_profile(opened)
                 image = ImageAsset(
                     project_id=project.id,
                     name=actual_relative.name,
@@ -367,6 +370,24 @@ def ingest_bytes(
                     height=height,
                     media_type=media_type,
                     checksum=checksum,
+                    status={
+                        "preprocess": "pending",
+                        "detection": "pending",
+                        "ocr": "pending",
+                        "translation": "pending",
+                        "inpaint": "pending",
+                        "typeset": "pending",
+                        "export": "pending",
+                        "reviewState": "pending",
+                        "reviewedAt": "",
+                        "preprocessingProvider": "",
+                        "detectorProvider": "",
+                        "ocrProvider": "",
+                        "translatorProvider": "",
+                        "inpaintingProvider": "",
+                        "typesettingProvider": "",
+                        "preprocessSuggestion": suggestion,
+                    },
                 )
                 session.add(image)
                 session.flush()

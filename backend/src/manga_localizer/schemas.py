@@ -71,6 +71,12 @@ class SelectInpaintCandidateRequest(APIModel):
     expected_revision: int = Field(ge=0)
 
 
+class PreprocessSuggestionOut(APIModel):
+    profile: Literal["off", "ocr-friendly", "balanced", "visual-quality"]
+    reasons: list[str] = Field(default_factory=list)
+    metrics: dict[str, Any] = Field(default_factory=dict)
+
+
 class ImageOut(APIModel):
     id: str
     project_id: str
@@ -81,6 +87,7 @@ class ImageOut(APIModel):
     height: int
     media_type: str
     status: dict[str, str]
+    preprocess_suggestion: PreprocessSuggestionOut
     stage_reviews: dict[Literal["preprocess", "inpaint", "typeset"], dict[str, str | int]] = Field(
         default_factory=dict
     )

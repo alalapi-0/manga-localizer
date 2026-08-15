@@ -21,7 +21,8 @@ original/processed coordinate mapping helpers. The queue persists preprocessing 
 - `opencv-pillow` is the dependency-light default. It supports profiles `off`, `ocr-friendly`,
   `balanced`, and `visual-quality`, plus independent upscale (2×/3×/4×), denoise, sharpen, contrast,
   edge, and binarize/threshold switches. Its upscaler is classic Lanczos interpolation and is reported
-  with `aiUpscale: false`.
+  with `aiUpscale: false`. Import records a per-page profile suggestion from local image stats; jobs
+  still use the project or explicit job options, never that hint automatically.
 - `realesrgan-onnx` is the local AI upscaler. It runs the BSD-3-Clause
   `RealESRGAN_x4plus_anime_6B` ONNX graph through the optional ONNX Runtime extra. The graph is native
   4×; requested 2×/3× results downscale that AI output with Lanczos. Tiling, alpha preservation, grayscale

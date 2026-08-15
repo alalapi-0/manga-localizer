@@ -57,6 +57,8 @@ not inferred from this tracked checklist.
   pages or print OCR text
 - [x] Persist typesetting overflow on each page, surface it in the workbench, and skip reviewed pages
   during keyboard review
+- [x] Suggest a per-page preprocessing profile from local image stats, with an explicit apply-to-page
+  action that does not change the book-wide default
 
 ## Explicitly deferred
 

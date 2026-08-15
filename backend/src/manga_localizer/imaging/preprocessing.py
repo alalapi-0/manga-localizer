@@ -185,6 +185,152 @@ class PreprocessConfig:
         }
 
 
+PREPROCESS_SUGGESTION_REASONS: tuple[str, ...] = (
+    "small-page",
+    "low-contrast",
+    "soft-detail",
+    "high-res-sharp",
+    "large-page",
+)
+_MIN_SIDE_SMALL = 1200
+_LUMINANCE_STD_LOW = 28.0
+_LUMINANCE_STD_RICH = 40.0
+_LAPLACIAN_SOFT = 50.0
+_LAPLACIAN_SHARP = 180.0
+_SAMPLE_MAX_SIDE = 512
+_GRAYSCALE_CHROMA = 2.0
+
+
+def size_only_preprocess_metrics(width: int, height: int) -> dict[str, Any]:
+    return {
+        "width": int(width),
+        "height": int(height),
+        "minSide": int(min(width, height)),
+        "sampled": False,
+    }
+
+
+def analyze_preprocess_metrics(image: Image.Image) -> dict[str, Any]:
+    working = image.convert("RGB")
+    crop_side = min(_SAMPLE_MAX_SIDE, working.width, working.height)
+    left = (working.width - crop_side) // 2
+    top = (working.height - crop_side) // 2
+    crop = np.asarray(working.crop((left, top, left + crop_side, top + crop_side)))
+    gray = cv2.cvtColor(crop, cv2.COLOR_RGB2GRAY)
+    chroma = float(np.abs(crop.astype(np.float32) - gray[..., None]).mean())
+    return {
+        "width": int(image.width),
+        "height": int(image.height),
+        "minSide": int(min(image.width, image.height)),
+        "laplacianVar": round(float(cv2.Laplacian(gray, cv2.CV_64F).var()), 3),
+        "luminanceStd": round(float(gray.std()), 3),
+        "uniqueGray": int(np.unique(gray).size),
+        "grayscale": chroma < _GRAYSCALE_CHROMA,
+        "sampled": True,
+    }
+
+
+def _sanitize_preprocess_metrics(
+    metrics: Mapping[str, Any] | None,
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    payload = size_only_preprocess_metrics(width, height)
+    if not isinstance(metrics, Mapping):
+        return payload
+    sampled = bool(metrics.get("sampled"))
+    payload["sampled"] = sampled
+    if not sampled:
+        return payload
+    if "laplacianVar" in metrics:
+        payload["laplacianVar"] = round(float(metrics["laplacianVar"]), 3)
+    if "luminanceStd" in metrics:
+        payload["luminanceStd"] = round(float(metrics["luminanceStd"]), 3)
+    if "uniqueGray" in metrics:
+        payload["uniqueGray"] = int(metrics["uniqueGray"])
+    if "grayscale" in metrics:
+        payload["grayscale"] = bool(metrics["grayscale"])
+    return payload
+
+
+def _suggestion_reasons(metrics: Mapping[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    min_side = int(metrics.get("minSide") or min(int(metrics["width"]), int(metrics["height"])))
+    if min_side < _MIN_SIDE_SMALL:
+        reasons.append("small-page")
+    if metrics.get("sampled"):
+        luminance_std = float(metrics.get("luminanceStd") or 0)
+        laplacian_var = float(metrics.get("laplacianVar") or 0)
+        if luminance_std < _LUMINANCE_STD_LOW:
+            reasons.append("low-contrast")
+        if laplacian_var < _LAPLACIAN_SOFT:
+            reasons.append("soft-detail")
+        if (
+            min_side >= _MIN_SIDE_SMALL
+            and laplacian_var >= _LAPLACIAN_SHARP
+            and luminance_std >= _LUMINANCE_STD_RICH
+        ):
+            reasons.append("high-res-sharp")
+    elif min_side >= _MIN_SIDE_SMALL:
+        reasons.append("large-page")
+    return reasons
+
+
+def suggest_preprocess_profile(
+    image: Image.Image | None = None,
+    *,
+    metrics: Mapping[str, Any] | None = None,
+    width: int | None = None,
+    height: int | None = None,
+) -> dict[str, Any]:
+    if metrics is None:
+        if image is not None:
+            metrics = analyze_preprocess_metrics(image)
+        elif width is not None and height is not None:
+            metrics = size_only_preprocess_metrics(width, height)
+        else:
+            raise ValueError("suggest_preprocess_profile requires an image, metrics, or dimensions")
+    width = int(metrics.get("width") if metrics.get("width") is not None else width or 0)
+    height = int(metrics.get("height") if metrics.get("height") is not None else height or 0)
+    cleaned = _sanitize_preprocess_metrics(metrics, width=width, height=height)
+    reasons = _suggestion_reasons(cleaned)
+    if "small-page" in reasons:
+        profile: PreprocessProfile = "ocr-friendly"
+    elif "low-contrast" in reasons or "soft-detail" in reasons:
+        profile = "balanced"
+    else:
+        profile = "off"
+        if "high-res-sharp" not in reasons and "large-page" not in reasons:
+            reasons.append("large-page")
+    return {
+        "profile": profile,
+        "reasons": reasons,
+        "metrics": cleaned,
+    }
+
+
+def preprocess_suggestion_from_status(
+    status: object,
+    *,
+    width: int,
+    height: int,
+) -> dict[str, Any]:
+    raw = status.get("preprocessSuggestion") if isinstance(status, dict) else None
+    if isinstance(raw, dict) and raw.get("profile") in PREPROCESS_PROFILES:
+        metrics = raw.get("metrics") if isinstance(raw.get("metrics"), dict) else {}
+        cleaned = _sanitize_preprocess_metrics(metrics, width=width, height=height)
+        reasons = [
+            reason for reason in raw.get("reasons", []) if reason in PREPROCESS_SUGGESTION_REASONS
+        ] or _suggestion_reasons(cleaned)
+        return {
+            "profile": raw["profile"],
+            "reasons": reasons,
+            "metrics": cleaned,
+        }
+    return suggest_preprocess_profile(width=width, height=height)
+
+
 @dataclass(frozen=True, slots=True)
 class PreprocessedImage:
     """A processed PIL image plus its original-to-processed coordinate mapping."""

@@ -24,6 +24,8 @@ from manga_localizer.imaging.preprocessing import (
     RealESRGANNCNNPreprocessProvider,
     RealESRGANNCNNProvider,
     preprocess_image,
+    preprocess_suggestion_from_status,
+    suggest_preprocess_profile,
 )
 from manga_localizer.imaging.realesrgan_onnx import RealESRGANONNXPreprocessProvider
 from manga_localizer.imaging.typesetting import (
@@ -61,6 +63,8 @@ __all__ = [
     "lineart_guided_inpaint",
     "overflow_region_ids",
     "preprocess_image",
+    "preprocess_suggestion_from_status",
+    "suggest_preprocess_profile",
     "typeset_image",
     "typeset_overflow_from_status",
     "validate_mask_edits",

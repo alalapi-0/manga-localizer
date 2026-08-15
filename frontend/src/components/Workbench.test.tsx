@@ -667,6 +667,43 @@ describe('desktop workbench interactions', () => {
     ).toBe(true);
   });
 
+  it('queues the current page with its preprocess suggestion without changing project defaults', async () => {
+    const user = userEvent.setup();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-page-suggest',
+      kind: 'preprocess',
+    }));
+    seedWorkbench();
+    render(<App />);
+
+    expect(screen.getByText('本页建议预处理：关闭')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '采用为项目默认' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '按建议处理本页' }));
+    expect(startJob).toHaveBeenCalledWith('project-1', 'preprocess', {
+      imageIds: ['image-1'],
+      options: {
+        provider: 'opencv-pillow',
+        preprocessing: expect.objectContaining({
+          profile: 'off',
+          enableUpscale: false,
+          enableDenoise: false,
+        }),
+        concurrency: 1,
+      },
+    });
+    expect(useWorkbenchStore.getState().currentProject?.settings.preprocessing.profile).toBe(
+      'ocr-friendly',
+    );
+
+    await user.click(screen.getByRole('button', { name: '采用为项目默认' }));
+    expect(useWorkbenchStore.getState().currentProject?.settings.preprocessing).toMatchObject({
+      profile: 'off',
+      enableUpscale: false,
+      enableDenoise: false,
+    });
+  });
+
   it('stores a per-region inpainting provider override and exposes an explicit rebuild action', async () => {
     const user = userEvent.setup();
     seedWorkbench({ selectedRegionIds: ['region-1'] });

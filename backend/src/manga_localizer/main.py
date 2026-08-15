@@ -15,7 +15,11 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from manga_localizer import __version__
 from manga_localizer.config import Settings, get_settings
 from manga_localizer.database import ImageAsset, Job, Project, Revision, TextRegion
-from manga_localizer.imaging import font_capabilities, typeset_overflow_from_status
+from manga_localizer.imaging import (
+    font_capabilities,
+    preprocess_suggestion_from_status,
+    typeset_overflow_from_status,
+)
 from manga_localizer.logging_utils import configure_logging, redact, without_secrets
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.queue import JobConflict, PersistentJobQueue
@@ -232,6 +236,11 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "inpaintCandidates": inpaint_candidate_records,
         "typesetOverflowCount": overflow_count,
         "typesetOverflowRegionIds": overflow_ids,
+        "preprocessSuggestion": preprocess_suggestion_from_status(
+            image.status,
+            width=image.width,
+            height=image.height,
+        ),
         "thumbnailUrl": f"/api/images/{image.id}/thumbnail",
         "contentUrl": f"/api/images/{image.id}/content",
         "createdAt": image.created_at,

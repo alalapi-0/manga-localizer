@@ -33,6 +33,9 @@ Semantic Versioning.
 - Typesetting overflow review: completed Pillow layouts persist overflowing region IDs, the workbench
   filters and highlights those boxes, and Shift+arrow skips already-checked pages. Overflow is a review
   hint, not an export hard gate.
+- Per-page preprocessing profile suggestions from source-image size, contrast, and sharpness. The
+  workbench can process the current page with that profile or adopt it as the project default; it never
+  auto-applies a book-wide assumption.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.

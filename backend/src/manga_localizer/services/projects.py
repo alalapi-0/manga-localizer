@@ -25,7 +25,10 @@ from manga_localizer.database import (
     TextRegion,
     create_project_engine,
 )
-from manga_localizer.imaging import typeset_overflow_from_status
+from manga_localizer.imaging import (
+    preprocess_suggestion_from_status,
+    typeset_overflow_from_status,
+)
 from manga_localizer.logging_utils import redact, without_secrets
 from manga_localizer.security import (
     UnsafePathError,
@@ -358,6 +361,11 @@ def _image_snapshot_status(image: ImageAsset) -> dict[str, Any]:
         "stageReviews": image.status.get("stageReviews", {}),
         "typesetOverflowCount": overflow_count,
         "typesetOverflowRegionIds": overflow_ids,
+        "preprocessSuggestion": preprocess_suggestion_from_status(
+            image.status,
+            width=image.width,
+            height=image.height,
+        ),
     }
 
 

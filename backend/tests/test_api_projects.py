@@ -1230,6 +1230,24 @@ def test_unicode_nested_upload_content_thumbnail_and_duplicate_rename(
     assert (tmp_path / "project/source/第一章/ページ一.png").read_bytes() == image_data
 
 
+def test_upload_projects_per_page_preprocess_suggestion(client: TestClient, tmp_path: Path) -> None:
+    project = create_project(client, tmp_path / "project")
+    small = upload_image(
+        client,
+        project["id"],
+        data=png_bytes((400, 600), color="#8c8c8c"),
+    )
+    assert small["preprocessSuggestion"]["profile"] == "ocr-friendly"
+    assert "small-page" in small["preprocessSuggestion"]["reasons"]
+    assert small["preprocessSuggestion"]["metrics"]["sampled"] is True
+    assert small["preprocessSuggestion"]["metrics"]["minSide"] == 400
+
+    listed = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert listed["preprocessSuggestion"] == small["preprocessSuggestion"]
+    snapshot = json.loads((tmp_path / "project/project/project.json").read_text("utf-8"))
+    assert snapshot["images"][0]["status"]["preprocessSuggestion"]["profile"] == "ocr-friendly"
+
+
 def test_upload_renames_unicode_and_case_collisions_for_portable_projects(
     client: TestClient, tmp_path: Path
 ) -> None:

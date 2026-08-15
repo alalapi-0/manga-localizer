@@ -38,6 +38,11 @@ When typesetting completes, `status.typesetOverflowCount` and `status.typesetOve
 which current boxes could not fit. Invalidating typesetting clears those fields. The API projects them
 only while `status.typeset` is `done`. They are review hints, not an export hard gate.
 
+`status.preprocessSuggestion` records a local, non-binding profile hint from source-image size and a
+native-resolution sample of contrast/sharpness. Import writes the sampled suggestion; listing an older
+image without that record falls back to size only. Changing preprocessing settings or running a job
+does not rewrite it, and it is never an automatic book-wide default.
+
 ## Import boundary
 
 Each trusted local import selection stores an exact file or directory `ImportBoundary` before any

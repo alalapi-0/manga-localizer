@@ -45,6 +45,11 @@ export function imageFixture(id = 'image-1', overrides: Partial<ImageAsset> = {}
     revision: 1,
     typesetOverflowCount: 0,
     typesetOverflowRegionIds: [],
+    preprocessSuggestion: {
+      profile: 'off',
+      reasons: ['large-page'],
+      metrics: { width: 1200, height: 1800, minSide: 1200, sampled: false },
+    },
     ...overrides,
   };
 }

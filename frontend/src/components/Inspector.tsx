@@ -4,12 +4,14 @@ import { api } from '../api/client';
 import {
   activeImage,
   imageHasTypesetOverflow,
+  preprocessingSettingsForProfile,
   regionHasTypesetOverflow,
   useWorkbenchStore,
 } from '../store/workbench';
 import type {
   ExportOptions,
   ImageAsset,
+  PreprocessingSettings,
   ProjectSettings,
   ProviderCapability,
   Region,
@@ -39,42 +41,19 @@ const directionLabels: Record<TextDirection, string> = {
   horizontal: '横排',
 };
 
-const preprocessingProfileDefaults: Record<
-  ProjectSettings['preprocessing']['profile'],
-  Partial<ProjectSettings['preprocessing']>
-> = {
-  off: {
-    enableUpscale: false,
-    enableDenoise: false,
-    enableSharpen: false,
-    enableContrastEnhance: false,
-    enableEdgeOptimize: false,
-    enableBinarize: false,
-  },
-  'ocr-friendly': {
-    enableUpscale: true,
-    enableDenoise: true,
-    enableSharpen: true,
-    enableContrastEnhance: true,
-    enableEdgeOptimize: false,
-    enableBinarize: false,
-  },
-  balanced: {
-    enableUpscale: false,
-    enableDenoise: true,
-    enableSharpen: true,
-    enableContrastEnhance: true,
-    enableEdgeOptimize: false,
-    enableBinarize: false,
-  },
-  'visual-quality': {
-    enableUpscale: true,
-    enableDenoise: true,
-    enableSharpen: true,
-    enableContrastEnhance: true,
-    enableEdgeOptimize: false,
-    enableBinarize: false,
-  },
+const preprocessingProfileLabels: Record<PreprocessingSettings['profile'], string> = {
+  off: '关闭',
+  'ocr-friendly': 'OCR 友好',
+  balanced: '平衡',
+  'visual-quality': '视觉质量',
+};
+
+const preprocessSuggestionReasonLabels: Record<string, string> = {
+  'small-page': '短边偏小，超分可能有助于 OCR',
+  'low-contrast': '对比度偏低',
+  'soft-detail': '细节偏软',
+  'high-res-sharp': '已是清晰大图，默认不必增强',
+  'large-page': '短边已够大（仅按尺寸估计）',
 };
 
 const defaultExportOptions: ExportOptions = {
@@ -576,6 +555,7 @@ function ProviderSelect({
 
 function ProjectInspector() {
   const project = useWorkbenchStore((state) => state.currentProject);
+  const image = useWorkbenchStore(activeImage);
   const providers = useWorkbenchStore((state) => state.capabilities.providers);
   const updateProjectSettings = useWorkbenchStore((state) => state.updateProjectSettings);
   const [sessionKey, setSessionKey] = useState('');
@@ -631,7 +611,7 @@ function ProjectInspector() {
         <Field label="预处理配置">
           <select onChange={(event) => {
             const profile = event.target.value as ProjectSettings['preprocessing']['profile'];
-            updatePreprocessing({ profile, ...preprocessingProfileDefaults[profile] });
+            updatePreprocessing(preprocessingSettingsForProfile(profile, settings.preprocessing));
           }} value={settings.preprocessing.profile}>
             <option value="off">关闭</option>
             <option value="ocr-friendly">OCR 友好</option>
@@ -649,6 +629,14 @@ function ProjectInspector() {
         <Toggle checked={settings.preprocessing.enableContrastEnhance} label="增强对比度" onChange={(event) => updatePreprocessing({ enableContrastEnhance: event.target.checked })} />
         <Toggle checked={settings.preprocessing.enableEdgeOptimize} label="边缘优化" onChange={(event) => updatePreprocessing({ enableEdgeOptimize: event.target.checked })} />
         <Toggle checked={settings.preprocessing.enableBinarize} label="OCR 二值化" onChange={(event) => updatePreprocessing({ enableBinarize: event.target.checked })} />
+        {image ? (
+          <p className="field-hint">
+            当前页建议 {preprocessingProfileLabels[image.preprocessSuggestion.profile]}
+            {image.preprocessSuggestion.profile === settings.preprocessing.profile
+              ? '，与项目默认一致。建议不会自动套用到整本。'
+              : '；这是本页提示，不会自动改项目默认。'}
+          </p>
+        ) : null}
       </section>
       {translator?.isMock ? (
         <div className="notice notice--mock"><b>演示 MOCK 翻译</b><span>输出是确定性演示文本，不代表真实翻译质量，导出前必须复核。</span></div>
@@ -674,6 +662,52 @@ function ProjectInspector() {
       <Field label="术语表" hint="每行“日文 = 中文”。远程模式下这些条目会随翻译请求发送；本地 Argos 翻译把它们当作需保留的专名。"><textarea onChange={(event) => update({ glossary: event.target.value })} rows={5} value={settings.glossary} /></Field>
       <Field label="角色名" hint="每行一个名字或“日文 = 中文”。"><textarea onChange={(event) => update({ characterNames: event.target.value })} rows={4} value={settings.characterNames} /></Field>
       <Toggle checked={settings.preserveTree} description="导出时重建导入时的相对目录" label="保留目录结构" onChange={(event) => update({ preserveTree: event.target.checked })} />
+    </div>
+  );
+}
+
+function PreprocessSuggestionNotice() {
+  const image = useWorkbenchStore(activeImage);
+  const project = useWorkbenchStore((state) => state.currentProject);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const updateProjectSettings = useWorkbenchStore((state) => state.updateProjectSettings);
+  if (!image || !project) return null;
+  const imageId = image.id;
+  const suggestion = image.preprocessSuggestion;
+  const matchesDefault = suggestion.profile === project.settings.preprocessing.profile;
+  const suggested = preprocessingSettingsForProfile(suggestion.profile, project.settings.preprocessing);
+  const reasons = suggestion.reasons
+    .map((reason) => preprocessSuggestionReasonLabels[reason] ?? reason)
+    .join('；');
+
+  function applyToPage() {
+    setDrawerOpen(true);
+    void startBatch(['preprocess'], [imageId], defaultExportOptions, 1, undefined, suggested);
+  }
+
+  function adoptDefault() {
+    updateProjectSettings({ preprocessing: suggested });
+  }
+
+  return (
+    <div className={`notice ${matchesDefault ? 'notice--local' : 'notice--warning'}`} role="status">
+      <b>本页建议预处理：{preprocessingProfileLabels[suggestion.profile]}</b>
+      <span>
+        {reasons || '按本页尺寸和采样统计给出，不会自动套用到整本。'}
+        {suggestion.metrics.sampled ? '' : ' 完整对比度/锐度统计会在导入时写入。'}
+        {' '}处理后可在画布对比原图与增强结果。
+      </span>
+      <div className="notice__actions">
+        <button className="button button--compact" onClick={applyToPage} type="button">
+          按建议处理本页
+        </button>
+        {matchesDefault ? null : (
+          <button className="button button--compact" onClick={adoptDefault} type="button">
+            采用为项目默认
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -730,6 +764,7 @@ export function Inspector() {
       </nav>
       <div className="inspector__content" role="tabpanel">
         <PageReviewControl regions={regions} />
+        <PreprocessSuggestionNotice />
         <TypesetOverflowNotice regions={regions} />
         {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}
         {tab === 'typesetting' ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}

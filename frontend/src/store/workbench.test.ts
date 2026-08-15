@@ -1317,6 +1317,43 @@ describe('workbench store', () => {
     });
   });
 
+  it('can queue preprocess with a per-page profile override', async () => {
+    seedWorkbench();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-page-preprocess',
+      kind: 'preprocess',
+    }));
+    const override = {
+      profile: 'off' as const,
+      enableUpscale: false,
+      upscaleFactor: 2 as const,
+      enableDenoise: false,
+      enableSharpen: false,
+      enableContrastEnhance: false,
+      enableEdgeOptimize: false,
+      enableBinarize: false,
+      threshold: 180,
+    };
+
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['preprocess'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+      1,
+      undefined,
+      override,
+    )).toBe(true);
+
+    expect(startJob).toHaveBeenCalledWith('project-1', 'preprocess', {
+      imageIds: ['image-1'],
+      options: {
+        provider: 'opencv-pillow',
+        preprocessing: override,
+        concurrency: 1,
+      },
+    });
+  });
+
   it('reuses the OCR job endpoint for only the selected region ids', async () => {
     seedWorkbench({ selectedRegionIds: ['region-1'] });
     const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({

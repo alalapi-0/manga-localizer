@@ -19,13 +19,13 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 16 delivers persisted typesetting overflow review on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The Round 16 feature commit is
-`20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b` with GitHub CI run `31860160644` green. Overflowing region
-IDs are stored on the image while typesetting is current, shown in the sidebar/inspector/canvas, and
-filterable. Shift+arrow skips pages already marked reviewed. Overflow is a review hint, not an export
-hard gate. Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The
-full product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 17 delivers per-page preprocessing profile suggestions on the non-default branch
+`agent/manga-round7-governance-20260812` through draft PR #3. Import samples source-image size, contrast,
+and sharpness, stores a non-binding profile hint, and the workbench can process the current page with
+that profile or adopt it as the project default. It never auto-applies a book-wide assumption.
+`visual-quality` remains a manual choice. Round 16 overflow review remains in place. Round 8 remains
+18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full product goal remains
+active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -47,7 +47,9 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   uses classic Lanczos (`aiUpscale: false`). `realesrgan-onnx` is the runnable local AI upscaler:
   explicit checksum/license install, no startup download, native 4×, 2×/3× downscale from that AI
   result, tile size 256 on this 16 GB M4, and grayscale preservation. `realesrgan-ncnn` remains optional
-  and never downloaded at application startup.
+  and never downloaded at application startup. Each imported page stores a local profile suggestion
+  from size plus a native-resolution contrast/sharpness sample. The editor may apply that hint to the
+  current page or adopt it as the project default; it is never an automatic book-wide setting.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
   baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` keeps every
   candidate from both detectors as an editable proposal and does not NMS or drop by confidence.
@@ -139,6 +141,8 @@ full product goal remains active. No merge, tag, release, or deployment has occu
 - [x] Round 15: privacy-safe detector-draft accept/reject promotion, public regression, and complete CI.
 - [x] Round 16: persisted typesetting overflow review, unreviewed-page keyboard skip, public regression,
   and complete CI.
+- [x] Round 17: per-page preprocessing profile suggestions, apply-to-page and adopt-as-default actions,
+  public regression, and local gates. Remote CI is pending after push.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -243,6 +247,11 @@ full product goal remains active. No merge, tag, release, or deployment has occu
   `20b3b1e9236b866dd4cdf07aa9b6d865b03f3d2b`. Backend Ruff lint/format, 219 pytest cases, and the
   release audit passed. Frontend lint/typecheck/97 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 17 local verification passed 2 launcher tests; backend Ruff lint/format and 221 pytest cases;
+  frontend ESLint, TypeScript, 99 Vitest cases, and production build; release audit over 128 candidate
+  files plus 467 historical blobs; `uv lock --check --project backend`; compileall; and `git diff --check`.
+  Playwright discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234,
+  so live browser evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 

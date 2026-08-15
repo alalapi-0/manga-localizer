@@ -309,3 +309,55 @@ def test_realesrgan_ncnn_discovers_search_paths_and_passes_models_directory(
     assert result.processed_size == (6, 4)
     assert "-m" in captured["command"]
     assert captured["command"][captured["command"].index("-m") + 1] == str(models.resolve())
+
+
+def test_preprocess_profile_suggestion_uses_page_stats_not_book_defaults() -> None:
+    from PIL import ImageDraw
+
+    from manga_localizer.imaging.preprocessing import (
+        preprocess_suggestion_from_status,
+        suggest_preprocess_profile,
+    )
+
+    small_flat = suggest_preprocess_profile(Image.new("L", (400, 600), 140))
+    assert small_flat["profile"] == "ocr-friendly"
+    assert "small-page" in small_flat["reasons"]
+    assert small_flat["metrics"]["sampled"] is True
+
+    large_flat = suggest_preprocess_profile(Image.new("L", (2000, 2800), 140))
+    assert large_flat["profile"] == "balanced"
+    assert "low-contrast" in large_flat["reasons"]
+    assert "small-page" not in large_flat["reasons"]
+
+    large_sharp = Image.new("L", (2000, 2800), 240)
+    draw = ImageDraw.Draw(large_sharp)
+    for y in range(0, 2800, 6):
+        draw.line((0, y, 1999, y), fill=0)
+    sharp = suggest_preprocess_profile(large_sharp)
+    assert sharp["profile"] == "off"
+    assert "high-res-sharp" in sharp["reasons"]
+
+    size_only = suggest_preprocess_profile(width=800, height=1200)
+    assert size_only["profile"] == "ocr-friendly"
+    assert size_only["metrics"]["sampled"] is False
+    assert size_only["metrics"]["minSide"] == 800
+
+    cached = preprocess_suggestion_from_status(
+        {
+            "preprocessSuggestion": {
+                "profile": "balanced",
+                "reasons": ["low-contrast"],
+                "metrics": {"sampled": True, "luminanceStd": 12.5, "laplacianVar": 8.0},
+            }
+        },
+        width=2000,
+        height=2800,
+    )
+    assert cached["profile"] == "balanced"
+    assert cached["reasons"] == ["low-contrast"]
+    assert cached["metrics"]["sampled"] is True
+
+    missing = preprocess_suggestion_from_status({}, width=1600, height=2400)
+    assert missing["profile"] == "off"
+    assert missing["reasons"] == ["large-page"]
+    assert missing["metrics"]["sampled"] is False

@@ -128,6 +128,21 @@ export interface InpaintCandidate {
   anomalies: string[];
 }
 
+export interface PreprocessSuggestion {
+  profile: PreprocessingSettings['profile'];
+  reasons: string[];
+  metrics: {
+    width: number;
+    height: number;
+    minSide: number;
+    sampled: boolean;
+    laplacianVar?: number;
+    luminanceStd?: number;
+    uniqueGray?: number;
+    grayscale?: boolean;
+  };
+}
+
 export interface ImageAsset {
   id: string;
   projectId: string;
@@ -152,6 +167,7 @@ export interface ImageAsset {
   inpaintCandidates?: InpaintCandidate[];
   typesetOverflowCount: number;
   typesetOverflowRegionIds: string[];
+  preprocessSuggestion: PreprocessSuggestion;
   revision: number;
   error?: string;
 }

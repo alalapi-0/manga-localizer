@@ -520,5 +520,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 43:** the inspector shows the current page's processing failure and can retry that stage for
   this page. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
   passed 2 launcher tests and frontend lint/typecheck/137 tests/build. The release audit scanned 128
-  candidate files and 792 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
-  after push.
+  candidate files and 792 historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31888824260` passed at `4c7511695ba896bfe5834620b862ac669b4e74d9`.

@@ -21,10 +21,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 43 shows the current page's processing failure in the inspector and offers a same-page retry.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 42 passed as run `31888156798` on `ce2395e71f2029dc09c98d937a6ce7901672c1ae`.
-Round 43 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Remote CI for Round 43 passed as run `31888824260` on `4c7511695ba896bfe5834620b862ac669b4e74d9`.
+Round 42 (`ce2395e71f2029dc09c98d937a6ce7901672c1ae`, CI `31888156798`) remains failed-queue jumps.
+Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -192,7 +192,7 @@ or deployment has occurred.
 - [x] Round 42: open a failed queue item onto the matching inspector, with public regression,
   and complete CI.
 - [x] Round 43: show the current page processing failure in the inspector with a same-page retry,
-  with public regression. Remote CI pending.
+  with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -527,6 +527,10 @@ or deployment has occurred.
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 43 authoritative remote verification: GitHub CI run `31888824260` passed at
+  `4c7511695ba896bfe5834620b862ac669b4e74d9`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/137 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

@@ -157,8 +157,17 @@ def test_preprocess_artifact_drives_scaled_detection_and_ocr_fallback(
             client.get(f"/api/images/{image['id']}/content?variant=preprocessed").status_code == 200
         )
         assert hashlib.sha256(source_path.read_bytes()).hexdigest() == source_hash
-        manifest = json.loads((project_root / "project/project.json").read_text("utf-8"))
-        manifest_image = next(entry for entry in manifest["images"] if entry["id"] == image["id"])
+        manifest_deadline = time.monotonic() + 2.0
+        manifest_image: dict[str, Any] | None = None
+        while time.monotonic() < manifest_deadline:
+            manifest = json.loads((project_root / "project/project.json").read_text("utf-8"))
+            manifest_image = next(
+                entry for entry in manifest["images"] if entry["id"] == image["id"]
+            )
+            if manifest_image["status"]["preprocess"] == "done":
+                break
+            time.sleep(0.02)
+        assert manifest_image is not None
         assert manifest_image["status"]["preprocess"] == "done"
         assert manifest_image["providers"]["preprocessing"] == "opencv-pillow"
 

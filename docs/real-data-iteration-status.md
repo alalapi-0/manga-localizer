@@ -301,4 +301,5 @@ pages. Those files remain `detector-draft` until human review.
   Progress output omits OCR text and page IDs. Empty pages are not auto-promoted. This does not complete
   the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests, 218 backend
   tests, and 95 frontend tests. The release audit scanned 128 candidate files and 420 historical blobs.
-  Remote CI is pending after the task-branch push.
+  GitHub CI run `31858177141` passed at `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`. A local progress
+  run on the private draft set reported 130 draft pages, 727 regions, 18 empty pages, and 0 reviewed.

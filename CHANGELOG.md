@@ -123,7 +123,8 @@ Semantic Versioning.
 - Round 15 adds a local detector-draft accept/reject promotion CLI. It does not open images, does not
   auto-promote empty pages, and prints only aggregate counts. Local gates passed 2 launcher tests, 218
   backend tests, and 95 frontend tests plus the production build. The release audit scanned 128
-  candidate files and 420 historical blobs. Remote CI is pending after the task-branch push.
+  candidate files and 420 historical blobs. GitHub CI run
+  `31858177141` passed on `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`.
 
 ### Known limitations
 

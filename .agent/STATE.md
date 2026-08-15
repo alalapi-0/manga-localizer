@@ -20,13 +20,15 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 ## Current round and candidate
 
 Round 15 delivers a privacy-safe detector-draft review CLI on the non-default branch
-`agent/manga-round7-governance-20260812` through draft PR #3. The previous Round 14 feature commit is
-`a0bd72cc03b1d29b33a5a92ada2b82613f28d581` with GitHub CI run `31856326624` green. Round 15 copies
-ignored annotation JSON into a new ignored directory when a local human lists page IDs to accept or
-reject. Progress output is aggregate counts only: no OCR text, page IDs, or relative names. The tool
-does not open images and does not auto-promote empty pages. Round 8 remains 18/130 explicit visual
-reviews. Private drafts remain `detector-draft` until those explicit decisions. The full product goal
-remains active. No merge, tag, release, or deployment has occurred.
+`agent/manga-round7-governance-20260812` through draft PR #3. The Round 15 feature commit is
+`8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219` with GitHub CI run `31858177141` green. The previous
+Round 14 feature commit is `a0bd72cc03b1d29b33a5a92ada2b82613f28d581`. Round 15 copies ignored
+annotation JSON into a new ignored directory when a local human lists page IDs to accept or reject.
+Progress output is aggregate counts only: no OCR text, page IDs, or relative names. The tool does not
+open images and does not auto-promote empty pages. A local progress run on the private draft set
+reported 130 draft pages, 727 regions, 18 empty pages, and 0 reviewed. Round 8 remains 18/130 explicit
+visual reviews. The full product goal remains active. No merge, tag, release, or deployment has
+occurred.
 
 ## Environment evidence
 
@@ -136,8 +138,7 @@ remains active. No merge, tag, release, or deployment has occurred.
   compare/select/accept, public synthetic comparison script, public regression, and complete CI.
 - [x] Round 14: local Argos Japanese-to-Chinese translation, checksummed packages, public synthetic
   comparison script, public regression, and complete CI.
-- [x] Round 15: privacy-safe detector-draft accept/reject promotion, public regression. Remote CI is
-  pending after the task-branch push.
+- [x] Round 15: privacy-safe detector-draft accept/reject promotion, public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -228,7 +229,11 @@ remains active. No merge, tag, release, or deployment has occurred.
   frontend ESLint, TypeScript, 95 Vitest cases, and production build; release audit over 128 candidate
   files plus 420 historical blobs; `uv lock --check`; compileall; and `git diff --check`. Playwright
   discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
-  browser evidence remains the GitHub e2e job after push. Remote CI is pending.
+  browser evidence remains the GitHub e2e job after push.
+- Round 15 authoritative remote verification: GitHub CI run `31858177141` passed at
+  `8d50361ac4cf8b5f296fd480e2c2c7bd1efe2219`. Backend Ruff lint/format, 218 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/95 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

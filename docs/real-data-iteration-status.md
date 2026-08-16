@@ -121,6 +121,8 @@ Last updated: 2026-08-16
   loopback. This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 54 — the phone workbench and batch drawer stay out of the iOS notch and home indicator. This
   does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 55 — the Mac window can copy the same-LAN companion URL. This does not complete the remaining
+  112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -600,4 +602,10 @@ pages. Those files remain `detector-draft` until human review.
   This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 5
   launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend
   lint/typecheck/150 tests/build. The release audit scanned 133 candidate files and 932 historical
-  blobs. GitHub CI is pending after push.
+  blobs.
+  GitHub CI run `31934721559` passed at `d2244becf2996a0ec7a5ba4d6a7184e6c3429ab5`.
+- **Round 55:** the Mac window copies the same-LAN companion URL with **复制地址**. This does not
+  complete the remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests,
+  backend lint/format/235 pytest (unchanged from Round 53), and frontend lint/typecheck/150
+  tests/build. The release audit scanned 133 candidate files and 936 historical blobs. GitHub CI is
+  pending after push.

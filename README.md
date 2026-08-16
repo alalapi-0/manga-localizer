@@ -126,9 +126,9 @@ To let an iPhone on the same Wi-Fi import photos while processing stays on the M
 npm run app:lan
 ```
 
-That binds a private LAN IPv4 (not `0.0.0.0`). The Mac window shows the Safari URL. On the phone, open
-that address and import with **多图**. macOS may still block incoming connections until Local Network
-or firewall access is allowed. `npm run dev` remains loopback-only.
+That binds a private LAN IPv4 (not `0.0.0.0`). The Mac window shows the Safari URL and a **复制地址**
+control. On the phone, open that address and import with **多图**. macOS may still block incoming
+connections until Local Network or firewall access is allowed. `npm run dev` remains loopback-only.
 
 For browser-only development, `npm run dev` still opens the Vite workbench at
 <http://127.0.0.1:5173>. Configuration is optional: copy `.env.example` to `.env` before starting if you

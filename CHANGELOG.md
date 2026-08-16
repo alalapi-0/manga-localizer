@@ -345,7 +345,12 @@ Semantic Versioning.
 - Round 54 keeps the iPhone workbench and batch drawer out of the notch and home indicator. Local
   gates passed 5 launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and
   frontend lint/typecheck/150 tests plus the production build. The release audit scanned 133
-  candidate files and 932 historical blobs. GitHub CI is pending after push.
+  candidate files and 932 historical blobs. GitHub CI run `31934721559` passed on
+  `d2244becf2996a0ec7a5ba4d6a7184e6c3429ab5`.
+- Round 55 copies the same-LAN companion URL from the Mac window. Local gates passed 5 launcher
+  tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend lint/typecheck/150
+  tests plus the production build. The release audit scanned 133 candidate files and 936 historical
+  blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

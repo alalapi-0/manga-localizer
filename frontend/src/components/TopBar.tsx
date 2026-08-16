@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+
 import { hasPendingChanges, useWorkbenchStore } from '../store/workbench';
 import { IconButton } from './Primitives';
 
@@ -20,6 +22,13 @@ export function TopBar() {
     const value = state.capabilities.system?.companionUrl;
     return typeof value === 'string' && value.startsWith('http://') ? value : '';
   });
+  const [copiedCompanion, setCopiedCompanion] = useState(false);
+
+  useEffect(() => {
+    if (!copiedCompanion) return undefined;
+    const timer = window.setTimeout(() => setCopiedCompanion(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copiedCompanion]);
 
   const saveLabel = saving
     ? '正在保存…'
@@ -30,6 +39,15 @@ export function TopBar() {
         : lastSavedAt
           ? `已保存 ${new Date(lastSavedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
           : '已同步';
+
+  async function copyCompanionUrl() {
+    try {
+      await navigator.clipboard.writeText(companionUrl);
+      setCopiedCompanion(true);
+    } catch {
+      setCopiedCompanion(false);
+    }
+  }
 
   return (
     <header className="topbar">
@@ -42,12 +60,22 @@ export function TopBar() {
         {project?.rootPath ? <span className="topbar__project-path">{project.rootPath}</span> : null}
       </div>
       {companionUrl ? (
-        <p className="topbar__companion" aria-label="手机入口" role="status">
-          同一 Wi-Fi 的手机请在 Safari 打开
-          {' '}
-          <code>{companionUrl}</code>
-          ，用「多图」从相册导入。
-        </p>
+        <div className="topbar__companion" aria-label="手机入口" role="status">
+          <p>
+            同一 Wi-Fi 的手机请在 Safari 打开
+            {' '}
+            <code>{companionUrl}</code>
+            ，用「多图」从相册导入。
+          </p>
+          <button
+            aria-label="复制手机入口地址"
+            className="text-button"
+            onClick={() => void copyCompanionUrl()}
+            type="button"
+          >
+            {copiedCompanion ? '已复制' : '复制地址'}
+          </button>
+        </div>
       ) : null}
       <div className="topbar__history" aria-label="编辑历史">
         <IconButton aria-label="撤销" disabled={!canUndo} onClick={undo} title="撤销 ⌘Z">↶</IconButton>

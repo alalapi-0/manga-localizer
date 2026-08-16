@@ -149,7 +149,13 @@ describe('desktop workbench interactions', () => {
     expect(document.querySelector('.workbench-grid')).toHaveAttribute('data-shell-pane', 'inspect');
   });
 
-  it('shows the same-LAN companion URL when the Mac app exposes one', () => {
+  it('shows the same-LAN companion URL when the Mac app exposes one', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
     seedWorkbench();
     useWorkbenchStore.setState({
       capabilities: {
@@ -162,6 +168,9 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByRole('status', { name: '手机入口' })).toHaveTextContent(
       '同一 Wi-Fi 的手机请在 Safari 打开 http://192.168.1.20:8000，用「多图」从相册导入。',
     );
+    await user.click(screen.getByRole('button', { name: '复制手机入口地址' }));
+    expect(writeText).toHaveBeenCalledWith('http://192.168.1.20:8000');
+    expect(screen.getByRole('button', { name: '复制手机入口地址' })).toHaveTextContent('已复制');
   });
 
   it('frames overflow boxes from the sidebar overflow pill', async () => {

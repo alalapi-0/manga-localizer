@@ -562,4 +562,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 49:** the current page stays in a status filter after retry until you leave it. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
   frontend lint/typecheck/146 tests/build. The release audit scanned 128 candidate files and 860
-  historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31924960171` passed at `118f351cece0dbdc5a54b6b6afc3c1a1689f2d6f`.

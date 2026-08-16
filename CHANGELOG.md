@@ -318,7 +318,7 @@ Semantic Versioning.
 - Round 49 keeps the current page in a status filter after retry until you leave it. Local gates passed
   2 launcher tests and frontend lint/typecheck/146 tests plus the production build. The release audit
   scanned 128 candidate files and 860 historical blobs. Backend was unchanged from Round 31. GitHub CI
-  is pending after push.
+  run `31924960171` passed on `118f351cece0dbdc5a54b6b6afc3c1a1689f2d6f`.
 
 ### Known limitations
 

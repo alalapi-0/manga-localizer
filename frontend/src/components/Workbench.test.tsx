@@ -209,6 +209,48 @@ describe('desktop workbench interactions', () => {
     await user.click(screen.getByRole('button', { name: '查看队列' }));
     expect(useWorkbenchStore.getState().drawerOpen).toBe(true);
     expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
+    expect(screen.getByRole('article', { current: true })).toHaveTextContent('日文 OCR');
+  });
+
+  it('opens the matching queue job from a page processing failure notice', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          error: 'OCR failed; inspect the private project log',
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+      ],
+    });
+    useWorkbenchStore.setState({
+      jobs: [
+        jobFixture({
+          id: 'job-ocr-failed',
+          kind: 'ocr',
+          status: 'failed',
+          items: [{
+            id: 'item-ocr-1',
+            imageId: 'image-1',
+            label: '第一话/image-1.png',
+            status: 'failed',
+            progress: 0,
+          }],
+        }),
+      ],
+    });
+    render(<App />);
+
+    expect(screen.getByText('日文 OCR 失败')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '查看队列' }));
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      drawerOpen: true,
+      queueRevealJobId: 'job-ocr-failed',
+      queueRevealItemId: 'item-ocr-1',
+    });
+    expect(screen.getByRole('article', { current: true })).toHaveTextContent('日文 OCR');
+    expect(screen.getByRole('button', { name: '打开队列项 第一话/image-1.png' })).toHaveAttribute('aria-current', 'true');
   });
 
   it('keeps the retried page in the failed sidebar until you leave it', async () => {

@@ -424,6 +424,7 @@ h1, h2, h3, p { margin: 0; }
 .job-card { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); }
 .job-card--failed, .job-card--unavailable { border-color: rgba(255,107,107,.32); }
 .job-card--completed { border-color: rgba(80,200,120,.26); }
+.job-card--revealed { border-color: color-mix(in srgb, var(--accent) 55%, var(--border)); }
 .job-card > header { display: flex; justify-content: space-between; align-items: center; }
 .job-card > header > div { display: flex; flex-direction: column; gap: 2px; }
 .job-card header strong { font-size: 10px; }
@@ -454,6 +455,10 @@ h1, h2, h3, p { margin: 0; }
 .job-items > button:focus-visible {
   background: var(--surface-3);
   border-color: var(--border);
+}
+.job-items > button[aria-current="true"] {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 .job-items > button:disabled {
   cursor: default;

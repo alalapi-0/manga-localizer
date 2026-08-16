@@ -195,7 +195,7 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
 
 function ProcessingActivityNotice() {
   const image = useWorkbenchStore(activeImage);
-  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const openQueueForImage = useWorkbenchStore((state) => state.openQueueForImage);
   const failure = latestPageProcessingError(image);
   const activity = latestPageProcessingActivity(image);
   if (failure || !image || !activity) return null;
@@ -208,7 +208,7 @@ function ProcessingActivityNotice() {
       <div className="notice__actions">
         <button
           className="button button--compact"
-          onClick={() => setDrawerOpen(true)}
+          onClick={() => openQueueForImage(image.id, activity.kind)}
           type="button"
         >
           查看队列
@@ -221,6 +221,7 @@ function ProcessingActivityNotice() {
 function ProcessingErrorNotice() {
   const image = useWorkbenchStore(activeImage);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
+  const openQueueForImage = useWorkbenchStore((state) => state.openQueueForImage);
   const failure = latestPageProcessingError(image);
   if (!image || !failure) return null;
   const retryKind = failure.kind;
@@ -230,8 +231,8 @@ function ProcessingErrorNotice() {
     <div className="notice notice--error" role="alert">
       <b>{processingStageTitles[failure.stage] ?? processingStageTitles.processing}</b>
       <span>详情只保存在本机项目日志中。可重试这一页，或打开批处理抽屉查看队列。</span>
-      {retryKind && retryLabel ? (
-        <div className="notice__actions">
+      <div className="notice__actions">
+        {retryKind && retryLabel ? (
           <button
             className="button button--compact"
             onClick={() => {
@@ -241,8 +242,15 @@ function ProcessingErrorNotice() {
           >
             {retryLabel}
           </button>
-        </div>
-      ) : null}
+        ) : null}
+        <button
+          className="button button--compact"
+          onClick={() => openQueueForImage(image.id, retryKind)}
+          type="button"
+        >
+          查看队列
+        </button>
+      </div>
     </div>
   );
 }

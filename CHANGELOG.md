@@ -58,7 +58,7 @@ Semantic Versioning.
   items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
   The inspector then shows that page's processing failure and can retry the failed stage for this page
   without opening the batch drawer. After retry, a queued or running notice replaces the stale failure
-  and can open the queue on demand.
+  and can open the matching queue job on demand. The failure notice can open that job too.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
@@ -323,7 +323,11 @@ Semantic Versioning.
 - Round 50 opens the batch queue from the queued inspector notice after retry. Local gates passed
   2 launcher tests and frontend lint/typecheck/146 tests plus the production build. The release audit
   scanned 128 candidate files and 871 historical blobs. Backend was unchanged from Round 31. GitHub CI
-  is pending after push.
+  run `31926599050` passed on `37d96590f80e7a01e1ca43884643176097184fac`.
+- Round 51 reveals the matching queue job from inspector **查看队列**. Local gates passed 2 launcher
+  tests and frontend lint/typecheck/148 tests plus the production build. The release audit scanned 128
+  candidate files and 877 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
+  after push.
 
 ### Known limitations
 

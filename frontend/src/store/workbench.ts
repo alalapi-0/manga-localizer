@@ -92,6 +92,8 @@ interface WorkbenchState {
   rightTab: RightPanelTab;
   theme: Theme;
   drawerOpen: boolean;
+  queueRevealJobId: string | null;
+  queueRevealItemId: string | null;
   shortcutsOpen: boolean;
   spacePressed: boolean;
   jobs: Job[];
@@ -155,6 +157,7 @@ interface WorkbenchState {
   setRightTab: (tab: RightPanelTab) => void;
   setTheme: (theme: Theme) => void;
   setDrawerOpen: (value: boolean) => void;
+  openQueueForImage: (imageId: string, kind?: JobKind | null) => void;
   setShortcutsOpen: (value: boolean) => void;
   setSpacePressed: (value: boolean) => void;
   startBatch: (
@@ -1175,6 +1178,8 @@ const initialUiState = {
   rightTab: 'text' as RightPanelTab,
   theme: storedTheme(),
   drawerOpen: false,
+  queueRevealJobId: null as string | null,
+  queueRevealItemId: null as string | null,
   shortcutsOpen: false,
   spacePressed: false,
   jobs: [] as Job[],
@@ -2079,7 +2084,20 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }
     set({ theme });
   },
-  setDrawerOpen: (drawerOpen) => set({ drawerOpen }),
+  setDrawerOpen: (drawerOpen) => set(
+    drawerOpen
+      ? { drawerOpen }
+      : { drawerOpen, queueRevealJobId: null, queueRevealItemId: null },
+  ),
+  openQueueForImage: (imageId, kind) => {
+    const job = matchingQueueJob(get().jobs, imageId, kind);
+    const item = job?.items.find((entry) => entry.imageId === imageId);
+    set({
+      drawerOpen: true,
+      queueRevealJobId: job?.id ?? null,
+      queueRevealItemId: item?.id ?? null,
+    });
+  },
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSpacePressed: (spacePressed) => set({ spacePressed }),
 
@@ -2558,6 +2576,20 @@ export function latestPageProcessingError(
     error: image.error,
     kind: null,
   };
+}
+
+export function matchingQueueJob(
+  jobs: Job[],
+  imageId: string,
+  kind?: JobKind | null,
+): Job | undefined {
+  const byItem = jobs.find((job) =>
+    (!kind || job.kind === kind)
+    && job.items.some((item) => item.imageId === imageId),
+  );
+  if (byItem) return byItem;
+  if (kind) return jobs.find((job) => job.kind === kind);
+  return undefined;
 }
 
 export function latestPageProcessingActivity(

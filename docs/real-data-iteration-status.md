@@ -112,6 +112,8 @@ Last updated: 2026-08-16
   complete the remaining 112/130 clean-plate visual reviews.
 - Round 50 — **查看队列** on the queued inspector notice opens the batch drawer. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Round 51 — **查看队列** opens the matching job for this page. This does not complete the remaining
+  112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -569,4 +571,9 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 50:** **查看队列** on the queued inspector notice opens the batch drawer. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
   frontend lint/typecheck/146 tests/build. The release audit scanned 128 candidate files and 871
-  historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.
+  historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31926599050` passed at `37d96590f80e7a01e1ca43884643176097184fac`.
+- **Round 51:** **查看队列** opens and marks the matching job for this page. This does not complete
+  the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
+  lint/typecheck/148 tests/build. The release audit scanned 128 candidate files and 877 historical
+  blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.

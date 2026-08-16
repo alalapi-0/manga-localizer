@@ -8,7 +8,7 @@ import {
   regionFixture,
   seedWorkbench,
 } from '../test/fixtures';
-import { activeRegions, canNavigateAdjacent, imageReviewState, latestPageProcessingActivity, latestPageProcessingError, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
+import { activeRegions, canNavigateAdjacent, imageReviewState, latestPageProcessingActivity, latestPageProcessingError, matchingQueueJob, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -1494,6 +1494,48 @@ describe('workbench store', () => {
       stage: 'inpaint',
       error: 'Image rendering failed; inspect the private project log',
       kind: 'inpaint',
+    });
+  });
+
+  it('matches the newest same-kind job for the current page when opening the queue', () => {
+    const ocrJob = jobFixture({
+      id: 'job-ocr',
+      kind: 'ocr',
+      items: [{
+        id: 'item-ocr-1',
+        imageId: 'image-1',
+        label: '第一话/image-1.png',
+        status: 'queued',
+        progress: 0,
+      }],
+    });
+    const inpaintJob = jobFixture({
+      id: 'job-inpaint',
+      kind: 'inpaint',
+      items: [{
+        id: 'item-inpaint-2',
+        imageId: 'image-2',
+        label: '第二话/image-2.png',
+        status: 'queued',
+        progress: 0,
+      }],
+    });
+    expect(matchingQueueJob([ocrJob, inpaintJob], 'image-1', 'ocr')?.id).toBe('job-ocr');
+    expect(matchingQueueJob([inpaintJob], 'image-1', 'ocr')?.id).toBeUndefined();
+    expect(matchingQueueJob([jobFixture({ id: 'job-ocr-empty', kind: 'ocr' })], 'image-1', 'ocr')?.id).toBe('job-ocr-empty');
+    seedWorkbench();
+    useWorkbenchStore.setState({ jobs: [ocrJob, inpaintJob] });
+    useWorkbenchStore.getState().openQueueForImage('image-1', 'ocr');
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      drawerOpen: true,
+      queueRevealJobId: 'job-ocr',
+      queueRevealItemId: 'item-ocr-1',
+    });
+    useWorkbenchStore.getState().setDrawerOpen(false);
+    expect(useWorkbenchStore.getState()).toMatchObject({
+      drawerOpen: false,
+      queueRevealJobId: null,
+      queueRevealItemId: null,
     });
   });
 

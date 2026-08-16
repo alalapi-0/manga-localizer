@@ -19,10 +19,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 50 opens the batch queue from the queued inspector notice after retry.
+Round 51 reveals the matching queue job from inspector 查看队列.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 49 passed as run `31924960171` on `118f351cece0dbdc5a54b6b6afc3c1a1689f2d6f`.
-Round 50 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
+Remote CI for Round 50 passed as run `31926599050` on `37d96590f80e7a01e1ca43884643176097184fac`.
+Round 51 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
 detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
 or deployment has occurred.
 
@@ -206,6 +206,8 @@ or deployment has occurred.
 - [x] Round 49: keep the current page in a status filter after retry until you leave it, with public
   regression, and complete CI.
 - [x] Round 50: open the batch queue from the queued inspector notice after retry, with public
+  regression, and complete CI.
+- [x] Round 51: reveal the matching queue job from inspector notices, with public
   regression. Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
@@ -604,6 +606,15 @@ or deployment has occurred.
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 50 authoritative remote verification: GitHub CI run `31926599050` passed at
+  `37d96590f80e7a01e1ca43884643176097184fac`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/146 tests/build passed. Both Playwright Chromium
+  journeys passed.
+- Round 51 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 148 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 877 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 
@@ -637,7 +648,7 @@ full-book output quality.
   items open the enhanced preview. Failed detect/OCR/translate items open **文本**; failed inpaint
   items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
   The inspector then shows that page's processing failure and can retry the failed stage for this page.
-  After retry, a queued or running notice can open the batch queue on demand.
+  After retry, a queued or running notice can open the matching batch job on demand.
   When an inpaint job for the current page completes, the canvas switches to the erased
   preview and shows the review mask. When a preprocess job for the current page completes, the canvas
   switches to the enhanced preview. Those visual-stage completions also open original-vs-result compare.

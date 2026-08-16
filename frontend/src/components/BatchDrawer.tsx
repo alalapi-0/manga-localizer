@@ -83,6 +83,9 @@ function JobCard({ job }: { job: Job }) {
   const runJobAction = useWorkbenchStore((state) => state.runJobAction);
   const openJobItem = useWorkbenchStore((state) => state.openJobItem);
   const images = useWorkbenchStore((state) => state.images);
+  const queueRevealJobId = useWorkbenchStore((state) => state.queueRevealJobId);
+  const queueRevealItemId = useWorkbenchStore((state) => state.queueRevealItemId);
+  const revealed = job.id === queueRevealJobId;
   const value = Math.max(0, Math.min(100, percent(job)));
   const repaired = job.kind === 'inpaint'
     ? job.items.reduce((total, item) => total + Number(item.output?.repairedRegionCount ?? 0), 0)
@@ -112,7 +115,10 @@ function JobCard({ job }: { job: Job }) {
     ...job.items.slice(20).filter((item) => item.status === 'failed'),
   ];
   return (
-    <article className={`job-card job-card--${job.status}`}>
+    <article
+      aria-current={revealed ? 'true' : undefined}
+      className={`job-card job-card--${job.status}${revealed ? ' job-card--revealed' : ''}`}
+    >
       <header>
         <div><strong>{kindLabels[job.kind]}</strong><span>{statusLabels[job.status]}</span></div>
         <b>{value}%</b>
@@ -129,13 +135,15 @@ function JobCard({ job }: { job: Job }) {
         {job.error ? <span className="job-error">{job.error}</span> : null}
       </div>
       {job.items.length ? (
-        <details>
+        <details open={revealed || undefined}>
           <summary>查看 {job.items.length} 个队列项{displayedItems.length < job.items.length ? `（显示 ${displayedItems.length}）` : ''}</summary>
           <div className="job-items">
             {displayedItems.map((item) => {
               const path = images.find((image) => image.id === item.imageId)?.relativePath ?? item.label;
+              const currentItem = item.id === queueRevealItemId;
               return (
                 <button
+                  aria-current={currentItem ? 'true' : undefined}
                   aria-label={`打开队列项 ${path}`}
                   disabled={!item.imageId}
                   key={item.id}

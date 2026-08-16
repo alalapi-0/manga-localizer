@@ -8,7 +8,7 @@ import {
   regionFixture,
   seedWorkbench,
 } from '../test/fixtures';
-import { activeRegions, canNavigateAdjacent, latestPageProcessingError, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
+import { activeRegions, canNavigateAdjacent, imageReviewState, latestPageProcessingActivity, latestPageProcessingError, overflowingRegionIds, resetWorkbenchStore, useWorkbenchStore, visibleImagePosition } from './workbench';
 
 function deferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void;
@@ -1444,6 +1444,32 @@ describe('workbench store', () => {
       kind: 'inpaint',
     });
     expect(latestPageProcessingError(imageFixture('image-1'))).toBeNull();
+  });
+
+  it('hides a stale processing error after that stage is requeued', () => {
+    const queued = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, ocr: 'queued' },
+      error: 'OCR failed; inspect the private project log',
+      processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+    });
+    expect(latestPageProcessingError(queued)).toBeNull();
+    expect(latestPageProcessingActivity(queued)).toEqual({
+      stage: 'ocr',
+      status: 'queued',
+      kind: 'ocr',
+    });
+    expect(imageReviewState(queued)).toBe('queued');
+    expect(latestPageProcessingError(imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, ocr: 'queued', inpaint: 'failed' },
+      processingErrors: [
+        { stage: 'ocr', error: 'OCR failed; inspect the private project log' },
+        { stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' },
+      ],
+    }))).toEqual({
+      stage: 'inpaint',
+      error: 'Image rendering failed; inspect the private project log',
+      kind: 'inpaint',
+    });
   });
 
   it('frames requested region ids until fit-to-window clears them', () => {

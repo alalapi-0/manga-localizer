@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import {
   activeImage,
   imageHasTypesetOverflow,
+  latestPageProcessingActivity,
   latestPageProcessingError,
   overflowingRegionIds,
   preprocessingSettingsForProfile,
@@ -86,6 +87,17 @@ const processingStageTitles: Record<string, string> = {
   export: '导出失败',
   render: '图像渲染失败',
   processing: '本页处理失败',
+};
+
+const processingStageNouns: Record<string, string> = {
+  preprocess: '图片增强',
+  detect: '文字检测',
+  ocr: '日文 OCR',
+  translate: '翻译',
+  inpaint: '擦字修复',
+  typeset: '嵌字排版',
+  export: '导出',
+  processing: '本页处理',
 };
 
 const EMPTY_REGIONS: Region[] = [];
@@ -178,6 +190,21 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
                 : '标记本页已检查'}
       </button>
     </section>
+  );
+}
+
+function ProcessingActivityNotice() {
+  const image = useWorkbenchStore(activeImage);
+  const failure = latestPageProcessingError(image);
+  const activity = latestPageProcessingActivity(image);
+  if (failure || !image || !activity) return null;
+  const noun = processingStageNouns[activity.stage] ?? processingStageNouns.processing;
+  const title = activity.status === 'running' ? `${noun} 处理中` : `${noun} 排队中`;
+  return (
+    <div className="notice notice--warning" role="status">
+      <b>{title}</b>
+      <span>本页已重新排队，不必打开批处理抽屉；完成后检查器会更新。</span>
+    </div>
   );
 }
 
@@ -876,6 +903,7 @@ export function Inspector() {
       <div className="inspector__content" role="tabpanel">
         <PageReviewControl regions={regions} />
         <ProcessingErrorNotice />
+        <ProcessingActivityNotice />
         <PreprocessSuggestionNotice />
         <TypesetOverflowNotice regions={regions} />
         {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}

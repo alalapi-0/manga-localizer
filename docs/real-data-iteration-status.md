@@ -106,6 +106,8 @@ Last updated: 2026-08-16
   inspector. This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 47 — inspector **重试本页…** requeues that failed stage without opening the batch drawer. This
   does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 48 — after that retry, a queued or running inspector notice replaces the stale failure. This
+  does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -550,3 +552,7 @@ pages. Those files remain `detector-draft` until human review.
   tests and frontend lint/typecheck/143 tests/build. The release audit scanned 128 candidate files and
   840 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31924113820` passed at `322f0229a54a3bbd74bfc069180618649fa1a466`.
+- **Round 48:** after that retry, a queued or running inspector notice replaces the stale failure. This
+  does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher
+  tests and frontend lint/typecheck/144 tests/build. The release audit scanned 128 candidate files and
+  849 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.

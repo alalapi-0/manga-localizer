@@ -2504,28 +2504,77 @@ function jobKindForProcessingStage(image: ImageAsset, stage: string): JobKind | 
   return null;
 }
 
+function pipelineStatusForStage(image: ImageAsset, stage: string): StageState | undefined {
+  const mapped = STATUS_STAGE_KIND.find(([, kind]) => kind === stage || (stage === 'detection' && kind === 'detect'));
+  if (mapped) return image.status[mapped[0]];
+  if (stage === 'render') {
+    if (image.status.inpaint === 'failed' || image.status.inpaint === 'unavailable') return image.status.inpaint;
+    if (image.status.typeset === 'failed' || image.status.typeset === 'unavailable') return image.status.typeset;
+    if (image.status.inpaint === 'queued' || image.status.inpaint === 'running' || image.status.inpaint === 'done') {
+      return image.status.inpaint;
+    }
+    return image.status.typeset;
+  }
+  return undefined;
+}
+
+function isResolvedProcessingStatus(state: StageState | undefined): boolean {
+  return state === 'queued' || state === 'running' || state === 'done';
+}
+
 export function latestPageProcessingError(
   image: ImageAsset | null | undefined,
 ): { stage: string; error: string; kind: JobKind | null } | null {
   if (!image) return null;
   const recorded = (image.processingErrors ?? []).filter((entry) => entry.stage && entry.error);
-  const last = recorded.at(-1);
-  if (last) {
-    return {
-      stage: last.stage,
-      error: last.error,
-      kind: jobKindForProcessingStage(image, last.stage),
-    };
+  for (const entry of [...recorded].reverse()) {
+    if (!isResolvedProcessingStatus(pipelineStatusForStage(image, entry.stage))) {
+      return {
+        stage: entry.stage,
+        error: entry.error,
+        kind: jobKindForProcessingStage(image, entry.stage),
+      };
+    }
   }
   const failed = [...STATUS_STAGE_KIND].reverse().find(([statusKey]) => {
     const state = image.status[statusKey];
     return state === 'failed' || state === 'unavailable';
   });
-  if (!image.error && !failed) return null;
-  const stage = failed?.[1] ?? 'processing';
+  if (failed) {
+    return {
+      stage: failed[1],
+      error: image.error ?? '',
+      kind: jobKindForProcessingStage(image, failed[1]),
+    };
+  }
+  if (!image.error) return null;
+  const busy = STATUS_STAGE_KIND.some(([statusKey]) => {
+    const state = image.status[statusKey];
+    return state === 'queued' || state === 'running';
+  });
+  if (busy) return null;
+  return {
+    stage: 'processing',
+    error: image.error,
+    kind: null,
+  };
+}
+
+export function latestPageProcessingActivity(
+  image: ImageAsset | null | undefined,
+): { stage: string; status: 'queued' | 'running'; kind: JobKind | null } | null {
+  if (!image) return null;
+  const active = [...STATUS_STAGE_KIND].reverse().find(([statusKey]) => {
+    const state = image.status[statusKey];
+    return state === 'queued' || state === 'running';
+  });
+  if (!active) return null;
+  const [statusKey, stage] = active;
+  const status = image.status[statusKey];
+  if (status !== 'queued' && status !== 'running') return null;
   return {
     stage,
-    error: image.error ?? '',
+    status,
     kind: jobKindForProcessingStage(image, stage),
   };
 }
@@ -2543,9 +2592,9 @@ export function imageReviewState(
     image.status.typeset,
     image.status.export,
   ];
-  if (image.error || stages.includes('failed')) return 'failed';
   if (stages.includes('running')) return 'running';
   if (stages.includes('queued')) return 'queued';
+  if (image.error || stages.includes('failed')) return 'failed';
   if (image.status.ocr === 'unavailable' || image.status.detection === 'unavailable') return 'unavailable';
   if (image.status.reviewState === 'no-text-reviewed') return 'no_text_reviewed';
   if (image.status.reviewState === 'reviewed') return 'done';

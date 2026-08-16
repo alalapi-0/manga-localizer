@@ -57,7 +57,7 @@ Semantic Versioning.
   items open the enhanced preview. Failed detect/OCR/translate items open **文本**; failed inpaint
   items open **修复**; failed typeset items open **排版**; failed preprocess/export items open **项目**.
   The inspector then shows that page's processing failure and can retry the failed stage for this page
-  without opening the batch drawer.
+  without opening the batch drawer. After retry, a queued or running notice replaces the stale failure.
 - The sidebar **排版溢出** pill opens that page, selects overflowing boxes, and frames them.
 - Adjacent image navigation follows the sidebar filter and search. Under **排版溢出**, **← / →** skip
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
@@ -310,6 +310,10 @@ Semantic Versioning.
   Local gates passed 2 launcher tests and frontend lint/typecheck/143 tests plus the production build.
   The release audit scanned 128 candidate files and 840 historical blobs. Backend was unchanged from
   Round 31. GitHub CI run `31924113820` passed on `322f0229a54a3bbd74bfc069180618649fa1a466`.
+- Round 48 replaces a stale inspector failure with a queued or running notice after retry. Local gates
+  passed 2 launcher tests and frontend lint/typecheck/144 tests plus the production build. The release
+  audit scanned 128 candidate files and 849 historical blobs. Backend was unchanged from Round 31.
+  GitHub CI is pending after push.
 
 ### Known limitations
 

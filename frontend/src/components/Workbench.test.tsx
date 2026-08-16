@@ -171,6 +171,15 @@ describe('desktop workbench interactions', () => {
       kind: 'ocr',
       status: 'queued',
     }));
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listJobs').mockImplementation(async () =>
+      useWorkbenchStore.getState().jobs,
+    );
     seedWorkbench({
       images: [
         imageFixture('image-1', {
@@ -191,6 +200,12 @@ describe('desktop workbench interactions', () => {
     }));
     expect(useWorkbenchStore.getState().drawerOpen).toBe(false);
     expect(screen.queryByRole('dialog', { name: '批处理与导出' })).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState().images[0]?.status.ocr).toBe('queued');
+      expect(screen.queryByText('日文 OCR 失败')).not.toBeInTheDocument();
+      expect(screen.getByText('日文 OCR 排队中')).toBeInTheDocument();
+    });
+    expect(screen.getByText('本页已重新排队，不必打开批处理抽屉；完成后检查器会更新。')).toBeInTheDocument();
   });
 
   it('frames a box from the inspector region list', async () => {

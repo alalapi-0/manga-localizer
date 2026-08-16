@@ -135,8 +135,8 @@ For browser-only development, `npm run dev` still opens the Vite workbench at
 want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` and
 `scripts/app.mjs` load that root `.env` file. The file is Git-ignored.
 
-Below 900px the workbench collapses to **图像 / 画布 / 检查** so photo-library import and processing
-fit a phone screen.
+Below 900px the workbench collapses to **图像 / 画布 / 检查 / 处理** so photo-library import and
+processing fit a phone screen.
 
 To opt into the checked local ONNX models, run this explicitly before startup:
 

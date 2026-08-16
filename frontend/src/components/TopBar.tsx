@@ -100,7 +100,7 @@ export function TopBar() {
         </IconButton>
         <IconButton aria-label="快捷键" onClick={() => setShortcutsOpen(true)} title="快捷键">⌨</IconButton>
         <button
-          className="button button--accent"
+          className="button button--accent topbar__batch"
           disabled={!project}
           onClick={() => setDrawerOpen(true)}
           type="button"

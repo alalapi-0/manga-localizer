@@ -229,6 +229,7 @@ export default function App() {
   const dirty = useWorkbenchStore(hasPendingChanges);
   const flushAutosave = useWorkbenchStore((state) => state.flushAutosave);
   const [shellPane, setShellPane] = useState<'pages' | 'canvas' | 'inspect'>('canvas');
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   useGlobalShortcuts();
 
   useEffect(() => {
@@ -295,6 +296,15 @@ export default function App() {
           type="button"
         >
           检查
+        </button>
+        <button
+          aria-label="打开批处理与导出"
+          className="button button--compact button--accent"
+          disabled={!project}
+          onClick={() => setDrawerOpen(true)}
+          type="button"
+        >
+          处理
         </button>
       </nav>
       <div className="workbench-grid" data-shell-pane={shellPane}>

@@ -149,6 +149,14 @@ describe('desktop workbench interactions', () => {
     expect(document.querySelector('.workbench-grid')).toHaveAttribute('data-shell-pane', 'inspect');
   });
 
+  it('opens batch processing from the compact phone panes', () => {
+    seedWorkbench();
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '打开批处理与导出', hidden: true }));
+    expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
+  });
+
   it('shows the same-LAN companion URL when the Mac app exposes one', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

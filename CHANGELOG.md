@@ -70,9 +70,8 @@ Semantic Versioning.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
 - Mac application mode: `npm run app` serves the built workbench from the loopback API and opens a
-  dedicated Chromium app window when Chrome, Edge, Chromium, or Brave is installed. Below 900px the
-  workbench switches among **图像 / 画布 / 检查** so a phone can import photos and process them once
-  LAN access exists.
+  dedicated Chromium app window when Chrome, Edge, Chromium, or Brave is installed. `npm run app:lan`
+  binds a private LAN IPv4. Below 900px the workbench switches among **图像 / 画布 / 检查 / 处理**.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -350,7 +349,11 @@ Semantic Versioning.
 - Round 55 copies the same-LAN companion URL from the Mac window. Local gates passed 5 launcher
   tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend lint/typecheck/150
   tests plus the production build. The release audit scanned 133 candidate files and 936 historical
-  blobs. GitHub CI is pending after push.
+  blobs. GitHub CI run `31935090410` passed on `7b5dcaf5f0f22815366aebbb6a5b8aeb95b61efd`.
+- Round 56 opens batch processing from the compact phone **处理** control. Local gates passed 5
+  launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend
+  lint/typecheck/151 tests plus the production build. The release audit scanned 133 candidate files
+  and 944 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

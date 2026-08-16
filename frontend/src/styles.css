@@ -532,6 +532,7 @@ kbd { display: inline-block; padding: 3px 6px; color: var(--text-soft); backgrou
   .topbar { height: auto; min-height: 54px; flex-wrap: wrap; padding: 8px 10px; }
   .topbar__brand { flex-basis: auto; }
   .topbar__project { max-width: none; margin-right: 0; }
+  .topbar__batch { display: none; }
   .mobile-panes {
     display: flex;
     gap: 6px;

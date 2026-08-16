@@ -123,6 +123,8 @@ Last updated: 2026-08-16
   does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 55 — the Mac window can copy the same-LAN companion URL. This does not complete the remaining
   112/130 clean-plate visual reviews.
+- Round 56 — phone layouts open batch processing from the **处理** pane control. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -607,5 +609,9 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 55:** the Mac window copies the same-LAN companion URL with **复制地址**. This does not
   complete the remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests,
   backend lint/format/235 pytest (unchanged from Round 53), and frontend lint/typecheck/150
-  tests/build. The release audit scanned 133 candidate files and 936 historical blobs. GitHub CI is
-  pending after push.
+  tests/build. The release audit scanned 133 candidate files and 936 historical blobs.
+  GitHub CI run `31935090410` passed at `7b5dcaf5f0f22815366aebbb6a5b8aeb95b61efd`.
+- **Round 56:** phone layouts open batch processing from **处理**. This does not complete the remaining
+  112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend lint/format/235
+  pytest (unchanged from Round 53), and frontend lint/typecheck/151 tests/build. The release audit
+  scanned 133 candidate files and 944 historical blobs. GitHub CI is pending after push.

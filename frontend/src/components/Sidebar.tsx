@@ -134,8 +134,8 @@ export function Sidebar() {
   }, []);
 
   const visibleImages = useMemo(
-    () => visibleWorkbenchImages({ images, imageFilter, imageSearch }),
-    [imageFilter, imageSearch, images],
+    () => visibleWorkbenchImages({ images, imageFilter, imageSearch, activeImageId }),
+    [activeImageId, imageFilter, imageSearch, images],
   );
 
   const groups = useMemo(() => {

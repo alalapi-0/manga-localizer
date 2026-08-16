@@ -208,6 +208,61 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('本页已重新排队，不必打开批处理抽屉；完成后检查器会更新。')).toBeInTheDocument();
   });
 
+  it('keeps the retried page in the failed sidebar until you leave it', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-ocr-retry-filter',
+      kind: 'ocr',
+      status: 'queued',
+    }));
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listJobs').mockImplementation(async () =>
+      useWorkbenchStore.getState().jobs,
+    );
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          error: 'OCR failed; inspect the private project log',
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-3').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ imageFilter: 'failed', rightTab: 'text' });
+    render(<App />);
+
+    expect(screen.queryByText('image-2.png')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('可见列表 1 / 2')).toHaveTextContent('1 / 2');
+    await user.click(screen.getByRole('button', { name: '重试本页 OCR' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState().images[0]?.status.ocr).toBe('queued');
+      expect(screen.getByText('日文 OCR 排队中')).toBeInTheDocument();
+    });
+    expect(screen.getByText('image-1.png')).toBeInTheDocument();
+    expect(screen.getByText('image-3.png')).toBeInTheDocument();
+    expect(screen.getByLabelText('可见列表 1 / 2')).toHaveTextContent('1 / 2');
+
+    await user.click(screen.getByRole('button', { name: '下一张图' }));
+    await waitFor(() => {
+      expect(useWorkbenchStore.getState().activeImageId).toBe('image-3');
+    });
+    expect(screen.queryByText('image-1.png')).not.toBeInTheDocument();
+    expect(screen.getByText('image-3.png')).toBeInTheDocument();
+    expect(screen.getByLabelText('可见列表 1 / 1')).toHaveTextContent('1 / 1');
+  });
+
   it('frames a box from the inspector region list', async () => {
     const user = userEvent.setup();
     seedWorkbench();

@@ -53,6 +53,7 @@ The footer **可见列表** counter is that filtered list, and **← / →** dis
 pages. Overflow-skip and unreviewed-skip still wrap the full library.
 Filter the sidebar to **失败 / 不可用**, then **← / →** stay on those pages and open the matching
 inspector for the failed stage. Clicking a failed sidebar row does the same.
+After **重试本页…**, the current page stays in that filtered list until you move to another page.
 **⌥← / ⌥→** jump to the previous / next failed or unavailable page in the full library and open that
 inspector. The sidebar overflow
 skip buttons and **⌥⇧← / ⌥⇧→** jump to the next overflowing page, select those boxes, and frame

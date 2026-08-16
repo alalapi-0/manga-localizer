@@ -19,12 +19,12 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 ## Current round and candidate
 
-Round 48 replaces a stale inspector failure with a queued or running notice after retry.
+Round 49 keeps the current page in a status filter after retry until you leave it.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
 Remote CI for Round 48 passed as run `31924614192` on `47ceeaf7aa475e3064921de144b21c7dc54010cc`.
-Round 47 (`322f0229a54a3bbd74bfc069180618649fa1a466`, CI `31924113820`) remains inspector retry without opening the drawer.
-Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
-product goal remains active. No merge, tag, release, or deployment has occurred.
+Round 49 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
+detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
+or deployment has occurred.
 
 ## Environment evidence
 
@@ -203,6 +203,8 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   with public regression, and complete CI.
 - [x] Round 48: replace a stale inspector failure with a queued or running notice after retry, with
   public regression, and complete CI.
+- [x] Round 49: keep the current page in a status filter after retry until you leave it, with public
+  regression. Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -586,6 +588,11 @@ product goal remains active. No merge, tag, release, or deployment has occurred.
   `47ceeaf7aa475e3064921de144b21c7dc54010cc`. Backend Ruff lint/format, 231 pytest cases, and the
   release audit passed. Frontend lint/typecheck/144 tests/build passed. Both Playwright Chromium
   journeys passed.
+- Round 49 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 146 Vitest cases,
+  and the production build; release audit over 128 candidate files plus 860 historical blobs; and
+  `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 

@@ -108,6 +108,8 @@ Last updated: 2026-08-16
   does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 48 — after that retry, a queued or running inspector notice replaces the stale failure. This
   does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 49 — the current page stays in a status filter after retry until you leave it. This does not
+  complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -557,3 +559,7 @@ pages. Those files remain `detector-draft` until human review.
   tests and frontend lint/typecheck/144 tests/build. The release audit scanned 128 candidate files and
   849 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31924614192` passed at `47ceeaf7aa475e3064921de144b21c7dc54010cc`.
+- **Round 49:** the current page stays in a status filter after retry until you leave it. This does not
+  complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and
+  frontend lint/typecheck/146 tests/build. The release audit scanned 128 candidate files and 860
+  historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.

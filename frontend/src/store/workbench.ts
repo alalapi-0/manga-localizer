@@ -2622,13 +2622,24 @@ export function imageMatchesFilter(
 }
 
 export function visibleWorkbenchImages(
-  state: Pick<WorkbenchState, 'images' | 'imageFilter' | 'imageSearch'>,
+  state: Pick<WorkbenchState, 'images' | 'imageFilter' | 'imageSearch' | 'activeImageId'>,
 ): ImageAsset[] {
   const query = state.imageSearch.trim().toLocaleLowerCase();
-  return state.images.filter((image) => (
-    (!query || image.relativePath.toLocaleLowerCase().includes(query))
-    && imageMatchesFilter(image, state.imageFilter)
-  ));
+  const matchesSearch = (image: ImageAsset) =>
+    !query || image.relativePath.toLocaleLowerCase().includes(query);
+  const matched = state.images.filter((image) =>
+    matchesSearch(image) && imageMatchesFilter(image, state.imageFilter)
+  );
+  const active = state.images.find((image) => image.id === state.activeImageId);
+  if (!active || matched.some((image) => image.id === active.id) || !matchesSearch(active)) {
+    return matched;
+  }
+  const fullIndex = state.images.findIndex((image) => image.id === active.id);
+  const insertAt = matched.findIndex((image) =>
+    state.images.findIndex((entry) => entry.id === image.id) > fullIndex
+  );
+  if (insertAt < 0) return [...matched, active];
+  return [...matched.slice(0, insertAt), active, ...matched.slice(insertAt)];
 }
 
 export function visibleImagePosition(

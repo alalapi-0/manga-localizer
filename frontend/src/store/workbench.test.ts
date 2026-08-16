@@ -1197,6 +1197,31 @@ describe('workbench store', () => {
     expect(await useWorkbenchStore.getState().navigateImage(1)).toBe(false);
   });
 
+  it('keeps the active page visible after it leaves the failed filter', () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'queued' },
+          error: 'OCR failed; inspect the private project log',
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed; inspect the private project log' }],
+        }),
+        imageFixture('image-2'),
+        imageFixture('image-3', {
+          name: 'image-3.png',
+          relativePath: '第三话/image-3.png',
+          status: { ...imageFixture('image-3').status, inpaint: 'failed' },
+          processingErrors: [{ stage: 'inpaint', error: 'Image rendering failed; inspect the private project log' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({ imageFilter: 'failed', activeImageId: 'image-1' });
+    expect(visibleImagePosition(useWorkbenchStore.getState())).toEqual({ current: 1, total: 2 });
+    expect(canNavigateAdjacent(useWorkbenchStore.getState(), 1)).toBe(true);
+    useWorkbenchStore.setState({ activeImageId: 'image-3' });
+    expect(visibleImagePosition(useWorkbenchStore.getState())).toEqual({ current: 1, total: 1 });
+    expect(canNavigateAdjacent(useWorkbenchStore.getState(), -1)).toBe(false);
+  });
+
   it('counts visible pages for adjacent navigation', () => {
     seedWorkbench({
       images: [

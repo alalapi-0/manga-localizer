@@ -63,7 +63,8 @@ Semantic Versioning.
   hidden pages and frame overflowing boxes. The sidebar footer counts that visible list, and **← / →**
   disable at its ends. Under **失败 / 不可用**, **← / →** open the matching inspector for that page's
   failed stage. Clicking a failed or unavailable sidebar page does the same. **⌥← / ⌥→** jump to the
-  previous / next failed or unavailable page in the full library and open that inspector.
+  previous / next failed or unavailable page in the full library and open that inspector. After retry
+  under a status filter, the current page stays in the sidebar until you leave it.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
@@ -314,6 +315,10 @@ Semantic Versioning.
   passed 2 launcher tests and frontend lint/typecheck/144 tests plus the production build. The release
   audit scanned 128 candidate files and 849 historical blobs. Backend was unchanged from Round 31.
   GitHub CI run `31924614192` passed on `47ceeaf7aa475e3064921de144b21c7dc54010cc`.
+- Round 49 keeps the current page in a status filter after retry until you leave it. Local gates passed
+  2 launcher tests and frontend lint/typecheck/146 tests plus the production build. The release audit
+  scanned 128 candidate files and 860 historical blobs. Backend was unchanged from Round 31. GitHub CI
+  is pending after push.
 
 ### Known limitations
 

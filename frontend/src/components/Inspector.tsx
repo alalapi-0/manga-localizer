@@ -195,6 +195,7 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
 
 function ProcessingActivityNotice() {
   const image = useWorkbenchStore(activeImage);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const failure = latestPageProcessingError(image);
   const activity = latestPageProcessingActivity(image);
   if (failure || !image || !activity) return null;
@@ -204,6 +205,15 @@ function ProcessingActivityNotice() {
     <div className="notice notice--warning" role="status">
       <b>{title}</b>
       <span>本页已重新排队，不必打开批处理抽屉；完成后检查器会更新。</span>
+      <div className="notice__actions">
+        <button
+          className="button button--compact"
+          onClick={() => setDrawerOpen(true)}
+          type="button"
+        >
+          查看队列
+        </button>
+      </div>
     </div>
   );
 }

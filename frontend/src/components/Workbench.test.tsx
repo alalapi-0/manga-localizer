@@ -206,6 +206,9 @@ describe('desktop workbench interactions', () => {
       expect(screen.getByText('日文 OCR 排队中')).toBeInTheDocument();
     });
     expect(screen.getByText('本页已重新排队，不必打开批处理抽屉；完成后检查器会更新。')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '查看队列' }));
+    expect(useWorkbenchStore.getState().drawerOpen).toBe(true);
+    expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
   });
 
   it('keeps the retried page in the failed sidebar until you leave it', async () => {

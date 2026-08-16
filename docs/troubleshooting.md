@@ -41,7 +41,8 @@ batch drawer. Overlay items select and frame the boxes just redrawn, leftover ov
 a full-page typeset, and a failed item opens **文本** / **排版** / **修复** / **项目** for that stage.
 The inspector then shows that page's processing failure; **重试本页…** requeues only this page and
 stays on the inspector. The failure notice then becomes a queued or running status so you can keep
-working without opening the batch drawer. Open **批处理与导出** to watch the queue. Details
+working without opening the batch drawer. Use **查看队列** on that notice, or **批处理与导出**, to watch
+the queue. Details
 stay in the private project log. When a typeset job for the current page finishes, the canvas switches to
 **成品**. Remaining overflowing boxes are selected and the typesetting inspector opens so you can
 resize, refit, or press **⇧T** without hunting for them. The canvas also opens **对比** so the original

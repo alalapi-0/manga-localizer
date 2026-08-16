@@ -251,9 +251,27 @@ export function Sidebar() {
 
       <div className="image-tree" aria-label="图像列表">
         {!project ? (
-          <EmptyState icon="▧" title="先创建或打开项目" description="项目数据只保存在你选择的本机目录。" />
+          <EmptyState
+            icon="▧"
+            title="先创建项目"
+            description="输出目录可留空，由 Mac 上的本地服务选择默认位置。然后用「多图」从相册导入。"
+            action={(
+              <button className="button button--accent" onClick={() => setDialog('create')} type="button">
+                创建本机项目
+              </button>
+            )}
+          />
         ) : images.length === 0 ? (
-          <EmptyState icon="▧" title="尚未导入图像" description="支持单图、多图和保留目录结构的文件夹导入。" />
+          <EmptyState
+            icon="▧"
+            title="尚未导入图像"
+            description="手机请用「多图」从相册导入；处理仍在 Mac 上运行。"
+            action={(
+              <button className="button button--accent" onClick={() => multipleRef.current?.click()} type="button">
+                从相册导入
+              </button>
+            )}
+          />
         ) : visibleImages.length === 0 ? (
           <EmptyState icon="⌕" title="没有匹配的图像" description="调整搜索词或状态筛选。" />
         ) : groups.map(([folder, entries]) => (

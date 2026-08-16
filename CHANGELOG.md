@@ -357,8 +357,12 @@ Semantic Versioning.
   `6768ebad4f9d66081fed63cd58641a679907953f`.
 - Round 57 adds an iPhone home-screen icon for the same-LAN companion. Local gates passed 5 launcher
   tests, backend lint/format/236 pytest, and frontend lint/typecheck/151 tests plus the production
-  build. The release audit scanned 136 candidate files and 952 historical blobs. GitHub CI is pending
-  after push.
+  build. The release audit scanned 136 candidate files and 952 historical blobs. GitHub CI run
+  `31935807229` passed on `1214c700135cbedcf58184fe483099269cd87458`.
+- Round 58 adds a first-run create-project action on the empty sidebar. Local gates passed 5 launcher
+  tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend lint/typecheck/152
+  tests plus the production build. The release audit scanned 136 candidate files and 963 historical
+  blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

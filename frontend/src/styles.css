@@ -390,6 +390,7 @@ h1, h2, h3, p { margin: 0; }
 .empty-state { display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 180px; padding: 24px; gap: 7px; color: var(--text-soft); text-align: center; }
 .empty-state__icon { display: grid; place-items: center; width: 42px; height: 42px; margin-bottom: 3px; color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; font-size: 18px; }
 .empty-state strong { font-size: 12px; }
+.empty-state .button { margin-top: 6px; }
 .empty-state p { max-width: 290px; color: var(--muted); font-size: 10px; line-height: 1.5; }
 .loading-state { display: flex; align-items: center; gap: 8px; color: var(--text-soft); font-size: 10px; }
 .spinner { width: 15px; height: 15px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .75s linear infinite; }
@@ -561,6 +562,7 @@ kbd { display: inline-block; padding: 3px 6px; color: var(--text-soft); backgrou
   }
   .sidebar__folder-import { display: none; }
   .sidebar__imports .button { min-height: 36px; }
+  .empty-state .button { min-height: 36px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

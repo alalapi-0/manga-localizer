@@ -157,6 +157,22 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
   });
 
+  it('opens create-project from the empty sidebar', async () => {
+    const user = userEvent.setup();
+    resetWorkbenchStore();
+    useWorkbenchStore.setState({
+      loadState: 'ready',
+      capabilities: capabilitiesFixture(),
+      projects: [],
+      currentProject: null,
+      images: [],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '创建本机项目' }));
+    expect(screen.getByRole('dialog', { name: '新建本地项目' })).toBeInTheDocument();
+  });
+
   it('shows the same-LAN companion URL when the Mac app exposes one', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

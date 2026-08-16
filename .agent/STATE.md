@@ -19,9 +19,9 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 57 adds an iPhone home-screen icon for the same-LAN companion. The work is on
-`agent/manga-round7-governance-20260812`. Remote CI for Round 56 passed as run `31935428949` on
-`6768ebad4f9d66081fed63cd58641a679907953f`. Round 57 is locally verified and awaiting remote CI. Round
+Round 58 adds a first-run create-project action on the empty sidebar. The work is on
+`agent/manga-round7-governance-20260812`. Remote CI for Round 57 passed as run `31935807229` on
+`1214c700135cbedcf58184fe483099269cd87458`. Round 58 is locally verified and awaiting remote CI. Round
 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store /
 notarized release has occurred.
 
@@ -39,7 +39,7 @@ Ordered checkpoints:
    rewrite OCR/inpaint onto iOS. Do not claim App Store distribution until a later checkpoint.
 4. Never commit private manga, models, OCR text, or credentials. Do not force-push.
 5. After each complete checkpoint: local gates, commit, push. Record status in `.agent/STATE.md`.
-6. Skip rewriting Round 35-56 CI docs unless independently verifying a new green run.
+6. Skip rewriting Round 35-57 CI docs unless independently verifying a new green run.
 
 Continue until the Mac app can import images and process them, and a phone on the same LAN can do the
 same through the Mac, or until a hard blocker.
@@ -237,8 +237,10 @@ same through the Mac, or until a hard blocker.
   complete CI.
 - [x] Round 56: open batch processing from the compact phone panes, with public regression, and
   complete CI.
-- [x] Round 57: iPhone home-screen icon for the same-LAN companion, with public regression. Remote CI
-  pending.
+- [x] Round 57: iPhone home-screen icon for the same-LAN companion, with public regression, and
+  complete CI.
+- [x] Round 58: first-run create-project action on the empty sidebar, with public regression. Remote
+  CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -699,6 +701,15 @@ same through the Mac, or until a hard blocker.
   candidate files plus 952 historical blobs; and `git diff --check`. Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 57 authoritative remote verification: GitHub CI run `31935807229` passed at
+  `1214c700135cbedcf58184fe483099269cd87458` on `main`. Backend Ruff lint/format, 236 pytest cases, and
+  the release audit passed. Frontend lint/typecheck/151 tests/build passed. Both Playwright Chromium
+  journeys passed.
+- Round 58 local verification passed 5 launcher tests; backend Ruff lint/format and 236 pytest cases
+  (unchanged from Round 57); frontend ESLint, TypeScript, 152 Vitest cases, and the production build;
+  release audit over 136 candidate files plus 963 historical blobs; and `git diff --check`. Playwright
+  discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
+  browser evidence remains the GitHub e2e job after push.
 
 ## Known limitations and blockers
 

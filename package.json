@@ -11,6 +11,7 @@
     "setup:test": "npm run setup && npx playwright install chromium",
     "dev": "node scripts/dev.mjs",
     "app": "node scripts/app.mjs",
+    "app:lan": "node scripts/app.mjs --lan",
     "check": "npm run check:launcher && npm run check:backend && npm run check:frontend",
     "check:launcher": "node --test scripts/dev-platform.test.mjs scripts/app-platform.test.mjs",
     "check:backend": "uv run --project backend ruff check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && uv run --project backend ruff format --check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && uv run --project backend pytest backend/tests",

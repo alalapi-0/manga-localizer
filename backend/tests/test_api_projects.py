@@ -650,6 +650,23 @@ def test_runtime_environment_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
         Settings()
 
 
+def test_lan_access_binds_private_ipv4_only() -> None:
+    from pydantic import ValidationError
+
+    from manga_localizer.config import Settings
+
+    with pytest.raises(ValidationError, match="loopback"):
+        Settings(host="192.168.1.20")
+    settings = Settings(host="192.168.1.20", lan_access=True)
+    assert settings.host == "192.168.1.20"
+    with pytest.raises(ValidationError, match="loopback"):
+        Settings(host="0.0.0.0", lan_access=True)
+    with pytest.raises(ValidationError, match="loopback"):
+        Settings(host="8.8.8.8", lan_access=True)
+    with pytest.raises(ValidationError, match="loopback"):
+        Settings(host="169.254.1.1", lan_access=True)
+
+
 def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_path: Path) -> None:
     health = client.get("/api/health")
     assert health.status_code == 200

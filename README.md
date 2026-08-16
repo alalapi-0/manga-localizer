@@ -120,14 +120,23 @@ dedicated application window when Chrome, Edge, Chromium, or Brave is installed.
 to `127.0.0.1:8000` and is not exposed to the network by default. Import images with **单图** / **多图**
 / **文件夹**, then run batch processing as before.
 
+To let an iPhone on the same Wi-Fi import photos while processing stays on the Mac:
+
+```bash
+npm run app:lan
+```
+
+That binds a private LAN IPv4 (not `0.0.0.0`). The Mac window shows the Safari URL. On the phone, open
+that address and import with **多图**. macOS may still block incoming connections until Local Network
+or firewall access is allowed. `npm run dev` remains loopback-only.
+
 For browser-only development, `npm run dev` still opens the Vite workbench at
 <http://127.0.0.1:5173>. Configuration is optional: copy `.env.example` to `.env` before starting if you
 want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` and
 `scripts/app.mjs` load that root `.env` file. The file is Git-ignored.
 
-On an iPhone on a later LAN-companion checkpoint you will open the Mac app's address; today the
-workbench already collapses to **图像 / 画布 / 检查** panes below 900px so photo-library import and
-processing fit a phone screen when that access exists.
+Below 900px the workbench collapses to **图像 / 画布 / 检查** so photo-library import and processing
+fit a phone screen.
 
 To opt into the checked local ONNX models, run this explicitly before startup:
 

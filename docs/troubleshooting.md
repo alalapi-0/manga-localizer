@@ -10,8 +10,13 @@ Run `tesseract --version` and `tesseract --list-langs`. Install both `jpn` and `
 
 `npm run app` needs a built workbench (`frontend/dist`) and a loopback API. Install Chrome, Edge,
 Chromium, or Brave for a dedicated window; otherwise macOS opens the workbench URL in the default
-browser. The API remains on `127.0.0.1` and is not shared to a phone until a later LAN companion
-checkpoint.
+browser. The API remains on `127.0.0.1` unless you start `npm run app:lan`.
+
+## The phone cannot open the Mac companion URL
+
+`npm run app:lan` binds one private IPv4 on the same Wi-Fi, not `0.0.0.0`. Confirm the Mac window
+shows `http://<lan-ip>:8000`, that the phone is on that network, and that macOS Local Network /
+firewall prompts allowed incoming connections. `npm run dev` never enables LAN access.
 
 ## A folder import loses nesting
 
@@ -103,6 +108,7 @@ Set `MANGA_LOCALIZER_PORT` or `MANGA_LOCALIZER_WEB_PORT` in the root `.env`, the
 `npm run dev`; the launcher updates the proxy automatically. Set `VITE_DEV_API_TARGET` only when the API
 is managed separately. The launcher rejects non-loopback bind addresses because the MVP has no
 authentication; use an authenticated reverse proxy only as an explicitly unsupported advanced setup.
+Same-LAN phone access is a separate explicit `npm run app:lan` path that binds one private IPv4.
 
 ## A remote translation endpoint is rejected
 

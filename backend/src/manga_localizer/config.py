@@ -3,10 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from manga_localizer.security import is_loopback_host, validate_remote_base_url
+from manga_localizer.security import is_loopback_host, is_private_lan_host, validate_remote_base_url
 
 
 class Settings(BaseSettings):
@@ -14,6 +14,7 @@ class Settings(BaseSettings):
         env_prefix="MANGA_LOCALIZER_",
         env_file=None,
         extra="ignore",
+        populate_by_name=True,
     )
 
     data_dir: Path = Field(default_factory=lambda: Path.home() / ".manga-localizer")
@@ -43,6 +44,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8000",
     ]
     frontend_dist: Path | None = None
+    lan_access: bool = False
     tesseract_command: str = Field(
         default="tesseract",
         validation_alias=AliasChoices(
@@ -125,13 +127,18 @@ class Settings(BaseSettings):
             raise ValueError("log_level must be critical, error, warning, info, or debug")
         return normalized
 
-    @field_validator("host")
-    @classmethod
-    def loopback_only(cls, value: str) -> str:
-        value = value.strip()
-        if not is_loopback_host(value):
-            raise ValueError("host must resolve explicitly to a loopback address")
-        return value
+    @model_validator(mode="after")
+    def bindable_host(self) -> Settings:
+        host = self.host.strip()
+        self.host = host
+        if is_loopback_host(host):
+            return self
+        if self.lan_access and is_private_lan_host(host):
+            return self
+        raise ValueError(
+            "host must be loopback, or a private LAN IPv4 when "
+            "MANGA_LOCALIZER_LAN_ACCESS is enabled"
+        )
 
     @field_validator("openai_model")
     @classmethod

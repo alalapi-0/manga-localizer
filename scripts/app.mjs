@@ -3,25 +3,29 @@ import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import process from 'node:process';
 
-import { desktopWindowLaunch } from './app-platform.mjs';
-import { isLoopbackHost } from './dev-platform.mjs';
+import { applicationBindHost, desktopWindowLaunch, firstPrivateLanIPv4 } from './app-platform.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(root, '.env');
 if (existsSync(envFile)) process.loadEnvFile(envFile);
 
-const apiHost = (process.env.MANGA_LOCALIZER_HOST || '127.0.0.1').replace(/^\[|\]$/g, '');
+const lanAccess = process.argv.includes('--lan')
+  || process.env.MANGA_LOCALIZER_LAN_ACCESS === '1'
+  || process.env.MANGA_LOCALIZER_LAN_ACCESS === 'true';
+const requestedHost = (process.env.MANGA_LOCALIZER_HOST || '127.0.0.1').replace(/^\[|\]$/g, '');
+const apiHost = applicationBindHost({
+  lanAccess,
+  requestedHost,
+  lanAddress: firstPrivateLanIPv4(),
+});
 const apiPort = process.env.MANGA_LOCALIZER_PORT || '8000';
 const frontendDist = path.join(root, 'frontend', 'dist');
-
-if (!isLoopbackHost(apiHost)) {
-  throw new Error('Manga Localizer application services must bind to a loopback host');
-}
-
-const proxyHost = apiHost.includes(':') ? `[${apiHost}]` : apiHost;
-const appUrl = `http://${proxyHost}:${apiPort}`;
+const appUrl = `http://${apiHost}:${apiPort}`;
 const environment = {
   ...process.env,
+  MANGA_LOCALIZER_HOST: apiHost,
+  MANGA_LOCALIZER_PORT: apiPort,
+  MANGA_LOCALIZER_LAN_ACCESS: lanAccess ? '1' : '0',
   MANGA_LOCALIZER_FRONTEND_DIST: process.env.MANGA_LOCALIZER_FRONTEND_DIST || frontendDist,
 };
 
@@ -112,6 +116,9 @@ windowProcess.on('exit', (code) => {
   if (!shuttingDown) stop(code ?? 0);
 });
 
+if (lanAccess) {
+  console.log(`Phone companion enabled. On the same Wi-Fi, open ${appUrl} and import photos with 多图.`);
+}
 console.log(
   windowLaunch.kind === 'app-window'
     ? `Opened Manga Localizer as a Mac application window at ${appUrl}`

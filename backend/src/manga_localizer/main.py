@@ -95,7 +95,11 @@ from manga_localizer.services.trust import (
     recognition_uses_input_variant,
     region_disposition,
 )
-from manga_localizer.workbench_static import resolve_frontend_dist
+from manga_localizer.workbench_static import (
+    companion_url_for,
+    cors_origins_for,
+    resolve_frontend_dist,
+)
 
 _GENERATED_IMAGE_CACHE_HEADERS = {"Cache-Control": "private, no-store"}
 
@@ -445,7 +449,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     app.state.ready = False
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=resolved_settings.cors_origins,
+        allow_origins=cors_origins_for(resolved_settings),
         allow_credentials=False,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "If-Match"],
@@ -496,6 +500,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
     @router.get("/health", response_model=HealthOut)
     async def health() -> dict[str, Any]:
+        companion = companion_url_for(resolved_settings)
         return {
             "status": "ok" if app.state.ready else "degraded",
             "version": __version__,
@@ -503,6 +508,8 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             "queue": "running"
             if queue.running
             else ("disabled" if not start_worker else "stopped"),
+            "lan_access": resolved_settings.lan_access,
+            "companion_url": companion,
         }
 
     @app.get("/health", include_in_schema=False)
@@ -524,6 +531,8 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                 "fonts": fonts,
                 "ocr": provider_capabilities["ocr"],
                 "translation": provider_capabilities["translation"],
+                "lanAccess": resolved_settings.lan_access,
+                "companionUrl": companion_url_for(resolved_settings) or "",
             },
         }
 

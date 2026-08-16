@@ -149,6 +149,21 @@ describe('desktop workbench interactions', () => {
     expect(document.querySelector('.workbench-grid')).toHaveAttribute('data-shell-pane', 'inspect');
   });
 
+  it('shows the same-LAN companion URL when the Mac app exposes one', () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      capabilities: {
+        ...capabilitiesFixture(),
+        system: { companionUrl: 'http://192.168.1.20:8000', lanAccess: true },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByRole('status', { name: '手机入口' })).toHaveTextContent(
+      '同一 Wi-Fi 的手机请在 Safari 打开 http://192.168.1.20:8000，用「多图」从相册导入。',
+    );
+  });
+
   it('frames overflow boxes from the sidebar overflow pill', async () => {
     const user = userEvent.setup();
     seedWorkbench({

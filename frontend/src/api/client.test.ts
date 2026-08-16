@@ -45,7 +45,12 @@ describe('api client contract', () => {
           },
         },
       },
-      capabilities: { fonts: { available: false, error: 'No CJK font' }, safeExport: true },
+      capabilities: {
+        fonts: { available: false, error: 'No CJK font' },
+        safeExport: true,
+        lanAccess: true,
+        companionUrl: 'http://192.168.1.20:8000',
+      },
     }));
 
     const result = await api.getCapabilities();
@@ -77,6 +82,8 @@ describe('api client contract', () => {
       expect.objectContaining({ id: 'pillow', kind: 'typesetter', available: false, reason: 'No CJK font' }),
     ]));
     expect(result.system?.safeExport).toBe(true);
+    expect(result.system?.lanAccess).toBe(true);
+    expect(result.system?.companionUrl).toBe('http://192.168.1.20:8000');
   });
 
   it('sends only RegionCreate fields for a local draft', async () => {

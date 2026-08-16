@@ -16,6 +16,10 @@ export function TopBar() {
   const setTheme = useWorkbenchStore((state) => state.setTheme);
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const setShortcutsOpen = useWorkbenchStore((state) => state.setShortcutsOpen);
+  const companionUrl = useWorkbenchStore((state) => {
+    const value = state.capabilities.system?.companionUrl;
+    return typeof value === 'string' && value.startsWith('http://') ? value : '';
+  });
 
   const saveLabel = saving
     ? '正在保存…'
@@ -37,6 +41,14 @@ export function TopBar() {
         <span className="topbar__project-name">{project?.name ?? '未打开项目'}</span>
         {project?.rootPath ? <span className="topbar__project-path">{project.rootPath}</span> : null}
       </div>
+      {companionUrl ? (
+        <p className="topbar__companion" aria-label="手机入口" role="status">
+          同一 Wi-Fi 的手机请在 Safari 打开
+          {' '}
+          <code>{companionUrl}</code>
+          ，用「多图」从相册导入。
+        </p>
+      ) : null}
       <div className="topbar__history" aria-label="编辑历史">
         <IconButton aria-label="撤销" disabled={!canUndo} onClick={undo} title="撤销 ⌘Z">↶</IconButton>
         <IconButton aria-label="重做" disabled={!canRedo} onClick={redo} title="重做 ⇧⌘Z">↷</IconButton>

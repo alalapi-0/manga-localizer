@@ -1,9 +1,11 @@
 # Architecture
 
 Manga Localizer is a local single-user client/server application. The workbench UI and FastAPI share
-one loopback origin in application mode. The browser or Mac application window owns interaction state
-and immediate canvas history. FastAPI owns durable state, safe filesystem operations, processing, and
-exports. `npm run app` launches that API, serves the built UI, and opens a dedicated Mac window.
+one origin in application mode: loopback by default, or one private LAN IPv4 when `npm run app:lan`
+is started explicitly. The browser, Mac application window, or same-Wi-Fi phone Safari session owns
+interaction state and immediate canvas history. FastAPI owns durable state, safe filesystem
+operations, processing, and exports. `npm run app` launches that API, serves the built UI, and opens
+a dedicated Mac window.
 
 ## Components
 

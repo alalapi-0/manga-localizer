@@ -12,12 +12,16 @@ same page, optional character names, and relevant glossary entries. They do not 
 regions, adjacent pages, the entire book, project paths, or image bytes.
 Review the remote provider's retention policy before enabling it.
 
-Use HTTPS for non-loopback endpoints. Plain HTTP is suitable only for a trusted service bound to
-loopback; otherwise the text and Bearer API credential can be observed in transit. The configured Base
-URL and model are portable project settings, so do not place credentials in either field. Validation
-rejects embedded URL credentials, query strings, fragments, and non-loopback HTTP without persisting or
-echoing the unsafe value. Reopening sanitizes invalid legacy endpoint fields. Changing the endpoint or
-model invalidates translation, typesetting, and export output until those stages are rerun.
+Use HTTPS for non-loopback translation endpoints. Plain HTTP is suitable only for a trusted service
+bound to loopback; otherwise the text and Bearer API credential can be observed in transit. The
+configured Base URL and model are portable project settings, so do not place credentials in either
+field. Validation rejects embedded URL credentials, query strings, fragments, and non-loopback HTTP
+without persisting or echoing the unsafe value. Reopening sanitizes invalid legacy endpoint fields.
+Changing the endpoint or model invalidates translation, typesetting, and export output until those
+stages are rerun.
+
+The optional same-LAN companion (`npm run app:lan`) serves the unauthenticated workbench over plain
+HTTP on one private IPv4. Use it only on a trusted Wi-Fi. Default startup remains loopback.
 
 API keys come from the process environment or volatile session configuration. The development launcher
 can populate the process environment from the user's Git-ignored `.env`, which is a local plaintext file

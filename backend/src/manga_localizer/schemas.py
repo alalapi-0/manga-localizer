@@ -306,6 +306,8 @@ class HealthOut(APIModel):
     version: str
     database: str
     queue: str
+    lan_access: bool = False
+    companion_url: str | None = None
 
 
 class ConfigOut(APIModel):

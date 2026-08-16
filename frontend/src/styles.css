@@ -129,6 +129,15 @@ h1, h2, h3, p { margin: 0; }
 .topbar__project { display: flex; flex-direction: column; min-width: 120px; max-width: 360px; margin-right: auto; }
 .topbar__project-name { overflow: hidden; font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .topbar__project-path { overflow: hidden; color: var(--muted); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.topbar__companion {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+.topbar__companion code { color: var(--text); font-family: inherit; font-size: 11px; }
 .topbar__history, .topbar__actions { display: flex; align-items: center; gap: 5px; }
 .topbar__actions { margin-left: 2px; }
 

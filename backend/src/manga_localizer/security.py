@@ -59,6 +59,23 @@ def is_loopback_host(host: str) -> bool:
         return False
 
 
+def is_private_lan_host(host: str) -> bool:
+    normalized = host.strip().strip("[]").rstrip(".").lower()
+    try:
+        address = ip_address(normalized)
+    except ValueError:
+        return False
+    return (
+        address.version == 4
+        and address.is_private
+        and not address.is_loopback
+        and not address.is_unspecified
+        and not address.is_multicast
+        and not address.is_reserved
+        and not address.is_link_local
+    )
+
+
 def validate_remote_base_url(value: str) -> str:
     """Validate a persisted/session remote endpoint without ever echoing its value."""
     if not isinstance(value, str) or not value or value != value.strip():

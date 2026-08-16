@@ -335,7 +335,12 @@ Semantic Versioning.
 - Round 52 opens a Mac application window (`npm run app`) and a phone-sized **图像 / 画布 / 检查**
   shell. Local gates passed 4 launcher tests, backend lint/format/233 pytest, and frontend
   lint/typecheck/149 tests plus the production build. The release audit scanned 133 candidate files
-  and 887 historical blobs. GitHub CI is pending after push.
+  and 887 historical blobs. GitHub CI run `31933691451` passed on
+  `6feb7bb2bc25bc5af314aae5188847a9d335baa0`.
+- Round 53 adds an explicit same-LAN iPhone companion (`npm run app:lan`) while keeping the default
+  API on loopback. Local gates passed 5 launcher tests, backend lint/format/235 pytest, and frontend
+  lint/typecheck/150 tests plus the production build. The release audit scanned 133 candidate files
+  and 909 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

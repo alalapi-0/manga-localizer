@@ -115,8 +115,10 @@ Last updated: 2026-08-16
 - Round 51 — **查看队列** opens the matching job for this page. This does not complete the remaining
   112/130 clean-plate visual reviews.
 - Round 52 — `npm run app` opens a Mac application window; below 900px the workbench uses **图像 /
-  画布 / 检查**. This does not complete the remaining 112/130 clean-plate visual reviews or a
-  same-LAN iPhone companion.
+  画布 / 检查**. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 53 — `npm run app:lan` binds a private LAN IPv4 so a same-Wi-Fi iPhone can open the Mac
+  workbench, import photos with **多图**, and process them on the Mac. Default `npm run app` stays on
+  loopback. This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -582,7 +584,12 @@ pages. Those files remain `detector-draft` until human review.
   blobs. Backend was unchanged from Round 31.
   GitHub CI run `31931826305` passed at `0a4b6fcb1b8bab194468c89ecab07c70cdb749fd`.
 - **Round 52:** `npm run app` opens a Mac application window and a phone-sized **图像 / 画布 / 检查**
-  shell. This does not complete the remaining 112/130 clean-plate visual reviews or a same-LAN iPhone
-  companion. Local gates passed 4 launcher tests, backend lint/format/233 pytest, and frontend
-  lint/typecheck/149 tests/build. The release audit scanned 133 candidate files and 887 historical
-  blobs. GitHub CI is pending after push.
+  shell. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed
+  4 launcher tests, backend lint/format/233 pytest, and frontend lint/typecheck/149 tests/build. The
+  release audit scanned 133 candidate files and 887 historical blobs.
+  GitHub CI run `31933691451` passed at `6feb7bb2bc25bc5af314aae5188847a9d335baa0`.
+- **Round 53:** `npm run app:lan` binds a private LAN IPv4 so a same-Wi-Fi iPhone can import photos
+  and process them on the Mac. Default startup remains loopback. This does not complete the remaining
+  112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend lint/format/235
+  pytest, and frontend lint/typecheck/150 tests/build. The release audit scanned 133 candidate files
+  and 909 historical blobs. GitHub CI is pending after push.

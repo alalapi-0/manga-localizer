@@ -340,7 +340,12 @@ Semantic Versioning.
 - Round 53 adds an explicit same-LAN iPhone companion (`npm run app:lan`) while keeping the default
   API on loopback. Local gates passed 5 launcher tests, backend lint/format/235 pytest, and frontend
   lint/typecheck/150 tests plus the production build. The release audit scanned 133 candidate files
-  and 909 historical blobs. GitHub CI is pending after push.
+  and 909 historical blobs. GitHub CI run `31934325707` passed on
+  `0a23eae3253724af0cc0c717280a4833bcd3590c`.
+- Round 54 keeps the iPhone workbench and batch drawer out of the notch and home indicator. Local
+  gates passed 5 launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and
+  frontend lint/typecheck/150 tests plus the production build. The release audit scanned 133
+  candidate files and 932 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

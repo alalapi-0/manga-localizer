@@ -119,6 +119,8 @@ Last updated: 2026-08-16
 - Round 53 — `npm run app:lan` binds a private LAN IPv4 so a same-Wi-Fi iPhone can open the Mac
   workbench, import photos with **多图**, and process them on the Mac. Default `npm run app` stays on
   loopback. This does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 54 — the phone workbench and batch drawer stay out of the iOS notch and home indicator. This
+  does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -592,4 +594,10 @@ pages. Those files remain `detector-draft` until human review.
   and process them on the Mac. Default startup remains loopback. This does not complete the remaining
   112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend lint/format/235
   pytest, and frontend lint/typecheck/150 tests/build. The release audit scanned 133 candidate files
-  and 909 historical blobs. GitHub CI is pending after push.
+  and 909 historical blobs.
+  GitHub CI run `31934325707` passed at `0a23eae3253724af0cc0c717280a4833bcd3590c`.
+- **Round 54:** the phone workbench and batch drawer stay out of the iOS notch and home indicator.
+  This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 5
+  launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend
+  lint/typecheck/150 tests/build. The release audit scanned 133 candidate files and 932 historical
+  blobs. GitHub CI is pending after push.

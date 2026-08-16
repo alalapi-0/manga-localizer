@@ -17,7 +17,8 @@ browser. The API remains on `127.0.0.1` unless you start `npm run app:lan`.
 `npm run app:lan` binds one private IPv4 on the same Wi-Fi, not `0.0.0.0`. Confirm the Mac window
 shows `http://<lan-ip>:8000`, copy it with **复制地址**, that the phone is on that network, and that
 macOS Local Network / firewall prompts allowed incoming connections. `npm run dev` never enables LAN
-access.
+access. In Safari, Add to Home Screen uses the local companion icon; that is not an App Store
+install.
 
 ## A folder import loses nesting
 

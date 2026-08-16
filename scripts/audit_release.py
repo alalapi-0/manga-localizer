@@ -29,6 +29,14 @@ ALLOWED_RASTER = {
             )
         }
     ),
+    PurePosixPath("frontend/public/apple-touch-icon.png"): frozenset(
+        {
+            (
+                1051,
+                "3aebec4d7e82690a7a6bba5355314a96055639d70a0ca64d9813b1345d5d244b",
+            )
+        }
+    ),
 }
 PROHIBITED_SUFFIXES = {
     ".ckpt",
@@ -116,6 +124,7 @@ TEXT_SUFFIXES = {
     ".ts",
     ".tsx",
     ".txt",
+    ".webmanifest",
     ".yaml",
     ".yml",
 }

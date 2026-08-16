@@ -353,7 +353,12 @@ Semantic Versioning.
 - Round 56 opens batch processing from the compact phone **处理** control. Local gates passed 5
   launcher tests, backend lint/format/235 pytest (unchanged from Round 53), and frontend
   lint/typecheck/151 tests plus the production build. The release audit scanned 133 candidate files
-  and 944 historical blobs. GitHub CI is pending after push.
+  and 944 historical blobs. GitHub CI run `31935428949` passed on
+  `6768ebad4f9d66081fed63cd58641a679907953f`.
+- Round 57 adds an iPhone home-screen icon for the same-LAN companion. Local gates passed 5 launcher
+  tests, backend lint/format/236 pytest, and frontend lint/typecheck/151 tests plus the production
+  build. The release audit scanned 136 candidate files and 952 historical blobs. GitHub CI is pending
+  after push.
 
 ### Known limitations
 

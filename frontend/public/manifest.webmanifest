@@ -1,0 +1,15 @@
+{
+  "name": "Manga Localizer",
+  "short_name": "漫本地化",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#0d0f11",
+  "theme_color": "#111315",
+  "icons": [
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

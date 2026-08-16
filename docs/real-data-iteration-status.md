@@ -125,6 +125,8 @@ Last updated: 2026-08-16
   112/130 clean-plate visual reviews.
 - Round 56 — phone layouts open batch processing from the **处理** pane control. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Round 57 — iPhone Add to Home Screen uses a local companion icon. This does not complete the
+  remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -614,4 +616,9 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 56:** phone layouts open batch processing from **处理**. This does not complete the remaining
   112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend lint/format/235
   pytest (unchanged from Round 53), and frontend lint/typecheck/151 tests/build. The release audit
-  scanned 133 candidate files and 944 historical blobs. GitHub CI is pending after push.
+  scanned 133 candidate files and 944 historical blobs.
+  GitHub CI run `31935428949` passed at `6768ebad4f9d66081fed63cd58641a679907953f`.
+- **Round 57:** iPhone Add to Home Screen uses a local companion icon. This does not complete the
+  remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend
+  lint/format/236 pytest, and frontend lint/typecheck/151 tests/build. The release audit scanned 136
+  candidate files and 952 historical blobs. GitHub CI is pending after push.

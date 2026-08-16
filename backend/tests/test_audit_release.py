@@ -102,6 +102,22 @@ def test_tracked_documentation_raster_is_allowed_only_at_pinned_blob() -> None:
     assert "unexpected raster image" in _reasons(untracked_findings)
 
 
+def test_home_screen_icon_is_allowed_only_at_pinned_blob() -> None:
+    relative = PurePosixPath("frontend/public/apple-touch-icon.png")
+    approved = audit_release.ALLOWED_RASTER[relative]
+    size, content_hash = next(iter(approved))
+
+    findings = audit_release.inspect_entry(
+        str(relative), relative, size, None, content_hash=content_hash, tracked=True
+    )
+    untracked_findings = audit_release.inspect_entry(
+        str(relative), relative, size, None, content_hash=content_hash, tracked=False
+    )
+
+    assert "unexpected raster image" not in _reasons(findings)
+    assert "unexpected raster image" in _reasons(untracked_findings)
+
+
 def test_raster_allowlist_supports_approved_current_and_historical_versions(
     monkeypatch,
 ) -> None:

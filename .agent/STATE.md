@@ -21,10 +21,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 47 retries a page processing failure from the inspector without opening the batch drawer.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 46 passed as run `31923761102` on `3ffa0f79e017989bba11d56678b9a7ed2a4b2e55`.
-Round 47 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Remote CI for Round 47 passed as run `31924113820` on `322f0229a54a3bbd74bfc069180618649fa1a466`.
+Round 46 (`3ffa0f79e017989bba11d56678b9a7ed2a4b2e55`, CI `31923761102`) remains failed-page option-arrow.
+Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -200,7 +200,7 @@ or deployment has occurred.
 - [x] Round 46: jump to failed or unavailable pages with option-arrow and open the matching
   inspector, with public regression, and complete CI.
 - [x] Round 47: retry a page processing failure from the inspector without opening the batch drawer,
-  with public regression. Remote CI pending.
+  with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -571,6 +571,10 @@ or deployment has occurred.
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 47 authoritative remote verification: GitHub CI run `31924113820` passed at
+  `322f0229a54a3bbd74bfc069180618649fa1a466`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/143 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

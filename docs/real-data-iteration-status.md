@@ -548,4 +548,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 47:** inspector **重试本页…** requeues that failed stage without opening the batch drawer. This
   does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher
   tests and frontend lint/typecheck/143 tests/build. The release audit scanned 128 candidate files and
-  840 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.
+  840 historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31924113820` passed at `322f0229a54a3bbd74bfc069180618649fa1a466`.

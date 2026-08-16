@@ -309,7 +309,7 @@ Semantic Versioning.
 - Round 47 retries a page processing failure from the inspector without opening the batch drawer.
   Local gates passed 2 launcher tests and frontend lint/typecheck/143 tests plus the production build.
   The release audit scanned 128 candidate files and 840 historical blobs. Backend was unchanged from
-  Round 31. GitHub CI is pending after push.
+  Round 31. GitHub CI run `31924113820` passed on `322f0229a54a3bbd74bfc069180618649fa1a466`.
 
 ### Known limitations
 

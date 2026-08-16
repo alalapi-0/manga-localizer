@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { BatchDrawer } from './components/BatchDrawer';
 import { Inspector } from './components/Inspector';
@@ -228,6 +228,7 @@ export default function App() {
   const refreshJobs = useWorkbenchStore((state) => state.refreshJobs);
   const dirty = useWorkbenchStore(hasPendingChanges);
   const flushAutosave = useWorkbenchStore((state) => state.flushAutosave);
+  const [shellPane, setShellPane] = useState<'pages' | 'canvas' | 'inspect'>('canvas');
   useGlobalShortcuts();
 
   useEffect(() => {
@@ -270,7 +271,33 @@ export default function App() {
     <div className="app-shell">
       <TopBar />
       <ErrorBanner />
-      <div className="workbench-grid">
+      <nav className="mobile-panes" aria-label="工作台分区">
+        <button
+          aria-pressed={shellPane === 'pages'}
+          className="button button--compact"
+          onClick={() => setShellPane('pages')}
+          type="button"
+        >
+          图像
+        </button>
+        <button
+          aria-pressed={shellPane === 'canvas'}
+          className="button button--compact"
+          onClick={() => setShellPane('canvas')}
+          type="button"
+        >
+          画布
+        </button>
+        <button
+          aria-pressed={shellPane === 'inspect'}
+          className="button button--compact"
+          onClick={() => setShellPane('inspect')}
+          type="button"
+        >
+          检查
+        </button>
+      </nav>
+      <div className="workbench-grid" data-shell-pane={shellPane}>
         <Sidebar />
         <Suspense fallback={<div className="canvas-workspace"><LoadingState label="正在加载画布…" /></div>}>
           <CanvasWorkspace />

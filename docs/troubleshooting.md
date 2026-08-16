@@ -3,8 +3,15 @@
 ## OCR provider unavailable
 
 Run `tesseract --version` and `tesseract --list-langs`. Install both `jpn` and `jpn_vert`, or set
-`MANGA_LOCALIZER_TESSERACT_COMMAND` to the executable in the root `.env`. Restart `npm run dev` after
-changing the file.
+`MANGA_LOCALIZER_TESSERACT_COMMAND` to the executable in the root `.env`. Restart `npm run app` or
+`npm run dev` after changing the file.
+
+## The Mac application window did not open
+
+`npm run app` needs a built workbench (`frontend/dist`) and a loopback API. Install Chrome, Edge,
+Chromium, or Brave for a dedicated window; otherwise macOS opens the workbench URL in the default
+browser. The API remains on `127.0.0.1` and is not shared to a phone until a later LAN companion
+checkpoint.
 
 ## A folder import loses nesting
 

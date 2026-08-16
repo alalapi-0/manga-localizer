@@ -69,6 +69,10 @@ Semantic Versioning.
 - **⌥↓ / ⌥↑** and the inspector region list frame the selected box.
 - **G** and the canvas **框住** control frame the current selection. **F** / **适窗** return to the
   whole page.
+- Mac application mode: `npm run app` serves the built workbench from the loopback API and opens a
+  dedicated Chromium app window when Chrome, Edge, Chromium, or Brave is installed. Below 900px the
+  workbench switches among **图像 / 画布 / 检查** so a phone can import photos and process them once
+  LAN access exists.
 - Privacy-safe detector-draft review promotion: a local human lists page IDs to accept or reject, and
   the CLI copies ignored annotation JSON into a new ignored directory. Progress output is aggregate
   counts only and never prints OCR text or page IDs. Empty pages are not auto-promoted.
@@ -326,8 +330,12 @@ Semantic Versioning.
   run `31926599050` passed on `37d96590f80e7a01e1ca43884643176097184fac`.
 - Round 51 reveals the matching queue job from inspector **查看队列**. Local gates passed 2 launcher
   tests and frontend lint/typecheck/148 tests plus the production build. The release audit scanned 128
-  candidate files and 877 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
-  after push.
+  candidate files and 877 historical blobs. Backend was unchanged from Round 31. GitHub CI run
+  `31931826305` passed on `0a4b6fcb1b8bab194468c89ecab07c70cdb749fd`.
+- Round 52 opens a Mac application window (`npm run app`) and a phone-sized **图像 / 画布 / 检查**
+  shell. Local gates passed 4 launcher tests, backend lint/format/233 pytest, and frontend
+  lint/typecheck/149 tests plus the production build. The release audit scanned 133 candidate files
+  and 887 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 
@@ -370,4 +378,5 @@ This version records the first complete V0.2 MVP feature set.
 ### Known limitations
 
 - Baseline text detection, OCR, inpainting, and typesetting require manual correction on complex art.
-- Native desktop packaging and advanced ML providers are deferred.
+- Native App Store / notarized installers and advanced ML providers remain later work. `npm run app`
+  already opens a Mac application window over the local loopback API.

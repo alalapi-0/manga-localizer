@@ -11,20 +11,40 @@ verification, protected boundaries, or known blockers materially change.
 
 ## Goal
 
-Deliver a local-first, desktop-oriented manga localization workbench covering immutable image import,
-optional preprocessing, text detection, Japanese OCR, review, translation, safe text removal/background
-restoration, Chinese typesetting, resumable batch work, and portable export. The active Unreleased
-iteration extends the verified 0.2.0 foundation using the user's private 130-image dataset without
-placing private inputs, OCR text, models, databases, or generated artwork in the public candidate.
+Deliver a local-first manga localization workbench that runs as an Apple application: import external
+image data, process it on the Mac, and use the same workbench from an iPhone when explicitly allowed.
+The Unreleased iteration extends the verified 0.2.0 foundation without placing private inputs, OCR
+text, models, databases, or generated artwork in the public candidate. The user verifies in the
+workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 51 reveals the matching queue job from inspector 查看队列.
-The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 50 passed as run `31926599050` on `37d96590f80e7a01e1ca43884643176097184fac`.
-Round 51 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Round 52 opens Manga Localizer as a Mac application window and collapses the workbench for phone-sized
+screens. The work is on `agent/manga-round7-governance-20260812` (also fast-forwarded to `main`).
+Remote CI for Round 51 passed as run `31931826305` on `0a4b6fcb1b8bab194468c89ecab07c70cdb749fd`.
+Round 52 is locally verified and awaiting remote CI. Next software checkpoint: explicit same-LAN
+iPhone companion so a phone can import photos and process them on the Mac. Round 8 remains 18/130
+explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has
+occurred.
+
+## Active loop prompt
+
+Package Manga Localizer as a local-first Apple application. Do not wait for user review of reversible
+product choices. The user will verify in the workbench/app panel after functions exist.
+
+Ordered checkpoints:
+1. Mac application window: launch backend + built workbench inside a native Mac window, not only
+   Chrome at :5173. Import external image files/folders and run the existing process pipeline.
+2. Keep local-first: API stays loopback by default. Optional explicit same-LAN access so an iPhone on
+   the same Wi-Fi can open the workbench, import photos, and process via the Mac.
+3. Mobile-usable workbench: responsive panes, touch import, process current/selected pages. Do not
+   rewrite OCR/inpaint onto iOS. Do not claim App Store distribution until a later checkpoint.
+4. Never commit private manga, models, OCR text, or credentials. Do not force-push.
+5. After each complete checkpoint: local gates, commit, push. Record status in `.agent/STATE.md`.
+6. Skip rewriting Round 35-51 CI docs unless independently verifying a new green run.
+
+Continue until the Mac app can import images and process them, and a phone on the same LAN can do the
+same through the Mac, or until a hard blocker.
 
 ## Environment evidence
 
@@ -208,7 +228,11 @@ or deployment has occurred.
 - [x] Round 50: open the batch queue from the queued inspector notice after retry, with public
   regression, and complete CI.
 - [x] Round 51: reveal the matching queue job from inspector notices, with public
+  regression, and complete CI.
+- [x] Round 52: open a Mac application window and a phone-sized workbench shell, with public
   regression. Remote CI pending.
+- [ ] Next application checkpoint: explicit same-LAN iPhone companion for photo import and Mac-side
+  processing.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -613,6 +637,15 @@ or deployment has occurred.
 - Round 51 local verification passed 2 launcher tests; frontend ESLint, TypeScript, 148 Vitest cases,
   and the production build; release audit over 128 candidate files plus 877 historical blobs; and
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
+  Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
+  evidence remains the GitHub e2e job after push.
+- Round 51 authoritative remote verification: GitHub CI run `31931826305` passed at
+  `0a4b6fcb1b8bab194468c89ecab07c70cdb749fd` on `main`. Backend Ruff lint/format, 231 pytest cases, and
+  the release audit passed. Frontend lint/typecheck/148 tests/build passed. Both Playwright Chromium
+  journeys passed.
+- Round 52 local verification passed 4 launcher tests; backend Ruff lint/format and 233 pytest cases;
+  frontend ESLint, TypeScript, 149 Vitest cases, and the production build; release audit over 133
+  candidate files plus 887 historical blobs; and `git diff --check`. Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
 

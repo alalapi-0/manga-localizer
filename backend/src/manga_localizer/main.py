@@ -9,6 +9,7 @@ import uvicorn
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
@@ -94,6 +95,7 @@ from manga_localizer.services.trust import (
     recognition_uses_input_variant,
     region_disposition,
 )
+from manga_localizer.workbench_static import resolve_frontend_dist
 
 _GENERATED_IMAGE_CACHE_HEADERS = {"Cache-Control": "private, no-store"}
 
@@ -949,6 +951,9 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         return _job_dict(operation(store, job_id))
 
     app.include_router(router)
+    workbench = resolve_frontend_dist(resolved_settings)
+    if workbench is not None:
+        app.mount("/", StaticFiles(directory=workbench, html=True), name="workbench")
     return app
 
 

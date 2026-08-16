@@ -85,4 +85,4 @@ not inferred from this tracked checklist.
 - Fully automatic speech-bubble detection, whole-book character reasoning
 - Arbitrary polygon regions, whole-page raster mask editing, and JSON-only project import
 - MangaOCR and PaddleOCR provider adapters
-- PDF/EPUB ingestion, native installers, cloud sync, and collaboration
+- PDF/EPUB ingestion, signed store installers, cloud sync, and collaboration

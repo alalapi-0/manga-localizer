@@ -1,8 +1,9 @@
 # Architecture
 
-Manga Localizer is a local single-user client/server application. The browser owns interaction state
+Manga Localizer is a local single-user client/server application. The workbench UI and FastAPI share
+one loopback origin in application mode. The browser or Mac application window owns interaction state
 and immediate canvas history. FastAPI owns durable state, safe filesystem operations, processing, and
-exports. A future desktop wrapper may launch both without changing their API.
+exports. `npm run app` launches that API, serves the built UI, and opens a dedicated Mac window.
 
 ## Components
 

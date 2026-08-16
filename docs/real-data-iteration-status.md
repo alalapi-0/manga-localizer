@@ -114,6 +114,9 @@ Last updated: 2026-08-16
   complete the remaining 112/130 clean-plate visual reviews.
 - Round 51 — **查看队列** opens the matching job for this page. This does not complete the remaining
   112/130 clean-plate visual reviews.
+- Round 52 — `npm run app` opens a Mac application window; below 900px the workbench uses **图像 /
+  画布 / 检查**. This does not complete the remaining 112/130 clean-plate visual reviews or a
+  same-LAN iPhone companion.
 
 ## Private data boundary
 
@@ -576,4 +579,10 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 51:** **查看队列** opens and marks the matching job for this page. This does not complete
   the remaining 112/130 clean-plate visual reviews. Local gates passed 2 launcher tests and frontend
   lint/typecheck/148 tests/build. The release audit scanned 128 candidate files and 877 historical
-  blobs. Backend was unchanged from Round 31. GitHub CI is pending after push.
+  blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31931826305` passed at `0a4b6fcb1b8bab194468c89ecab07c70cdb749fd`.
+- **Round 52:** `npm run app` opens a Mac application window and a phone-sized **图像 / 画布 / 检查**
+  shell. This does not complete the remaining 112/130 clean-plate visual reviews or a same-LAN iPhone
+  companion. Local gates passed 4 launcher tests, backend lint/format/233 pytest, and frontend
+  lint/typecheck/149 tests/build. The release audit scanned 133 candidate files and 887 historical
+  blobs. GitHub CI is pending after push.

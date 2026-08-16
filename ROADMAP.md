@@ -21,8 +21,10 @@
 
 ## V0.4 — desktop distribution
 
-- Tauri evaluation and signed macOS/Windows/Linux packaging
-- Native directory picker, file watching, crash diagnostics, and portable-project migration tooling
+- [x] Mac application window via `npm run app` (Chromium `--app` shell; API serves the built workbench)
+- [ ] Signed macOS/Windows/Linux packaging and notarization
+- [ ] Native directory picker beyond HTML file inputs, file watching, crash diagnostics, and portable-project migration tooling
+- [ ] Same-LAN iPhone companion (explicit opt-in; processing remains on the Mac)
 
 ## Later research
 

@@ -36,7 +36,13 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("MANGA_LOCALIZER_OCR_LANGUAGES", "OCR_LANGUAGES"),
     )
     ocr_default_direction: str = "auto"
-    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+    ]
+    frontend_dist: Path | None = None
     tesseract_command: str = Field(
         default="tesseract",
         validation_alias=AliasChoices(

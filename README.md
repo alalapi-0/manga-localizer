@@ -50,7 +50,7 @@ that trust automatically. Human review remains required.
 
 The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, artistic
 sound-effect redraw, automatic font matching, reliable speech-bubble classification, PDF/EPUB import,
-native installers, cloud sync, or collaboration. No model weights or fonts are bundled. See the
+native installers signed for the App Store, cloud sync, or collaboration. No model weights or fonts are bundled. See the
 [real-data iteration report](docs/real-data-iteration-status.md) for measured trade-offs rather than
 accuracy claims without ground truth.
 
@@ -112,13 +112,22 @@ Clone the repository, then run:
 ```bash
 npm install
 npm run setup
-npm run dev
+npm run app
 ```
 
-Open <http://127.0.0.1:5173>. The local API listens on `127.0.0.1:8000`; it is not exposed to the
-network by default. Configuration is optional: copy `.env.example` to `.env` before starting if you
-want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` loads
-that root `.env` file and passes the values to both development processes. The file is Git-ignored.
+On a Mac this starts the local API, serves the built workbench from the same origin, and opens a
+dedicated application window when Chrome, Edge, Chromium, or Brave is installed. The API still binds
+to `127.0.0.1:8000` and is not exposed to the network by default. Import images with **单图** / **多图**
+/ **文件夹**, then run batch processing as before.
+
+For browser-only development, `npm run dev` still opens the Vite workbench at
+<http://127.0.0.1:5173>. Configuration is optional: copy `.env.example` to `.env` before starting if you
+want to change ports, runtime storage, OCR, or remote-translation settings. `scripts/dev.mjs` and
+`scripts/app.mjs` load that root `.env` file. The file is Git-ignored.
+
+On an iPhone on a later LAN-companion checkpoint you will open the Mac app's address; today the
+workbench already collapses to **图像 / 画布 / 检查** panes below 900px so photo-library import and
+processing fit a phone screen when that access exists.
 
 To opt into the checked local ONNX models, run this explicitly before startup:
 
@@ -195,7 +204,7 @@ Package names differ between distributions; verify `tesseract --list-langs` cont
 
 1. Start the application and choose **New project**.
 2. Enter a project/output folder that is different from the source folder, or leave it blank to use
-   the local data directory. Native directory pickers are deferred to desktop packaging.
+   the local data directory. The Mac application window still uses the in-app file and folder pickers.
 3. Import images or a folder. Folder import removes the selected root folder itself and preserves all
    paths beneath it, so selecting `input/` retains `chapter-01/001.png`.
 4. Optionally run preprocessing, compare the enhanced image with the original, then detect and OCR.

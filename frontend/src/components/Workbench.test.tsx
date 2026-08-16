@@ -137,6 +137,18 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByText('还有 1 页排版溢出')).toBeInTheDocument();
   });
 
+  it('switches compact workbench panes used on phone-sized layouts', () => {
+    seedWorkbench();
+    render(<App />);
+
+    const pages = screen.getByRole('button', { name: '图像', hidden: true });
+    fireEvent.click(pages);
+    expect(pages).toHaveAttribute('aria-pressed', 'true');
+    expect(document.querySelector('.workbench-grid')).toHaveAttribute('data-shell-pane', 'pages');
+    fireEvent.click(screen.getByRole('button', { name: '检查', hidden: true }));
+    expect(document.querySelector('.workbench-grid')).toHaveAttribute('data-shell-pane', 'inspect');
+  });
+
   it('frames overflow boxes from the sidebar overflow pill', async () => {
     const user = userEvent.setup();
     seedWorkbench({

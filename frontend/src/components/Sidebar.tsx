@@ -180,7 +180,7 @@ export function Sidebar() {
       <section className="sidebar__imports" aria-label="导入图像">
         <button className="button button--compact" disabled={!project} onClick={() => singleRef.current?.click()} type="button">单图</button>
         <button className="button button--compact" disabled={!project} onClick={() => multipleRef.current?.click()} type="button">多图</button>
-        <button className="button button--compact" disabled={!project} onClick={() => folderRef.current?.click()} type="button">文件夹</button>
+        <button className="button button--compact sidebar__folder-import" disabled={!project} onClick={() => folderRef.current?.click()} type="button">文件夹</button>
         <input
           accept="image/*"
           className="sr-only"

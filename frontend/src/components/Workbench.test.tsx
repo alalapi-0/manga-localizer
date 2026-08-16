@@ -169,7 +169,46 @@ describe('desktop workbench interactions', () => {
     });
     render(<App />);
 
-    await user.click(screen.getByRole('button', { name: '创建本机项目' }));
+    const sidebar = document.querySelector('.image-tree');
+    expect(sidebar).not.toBeNull();
+    await user.click(within(sidebar as HTMLElement).getByRole('button', { name: '创建本机项目' }));
+    expect(screen.getByRole('dialog', { name: '新建本地项目' })).toBeInTheDocument();
+  });
+
+  it('opens create-project from the empty canvas', async () => {
+    const user = userEvent.setup();
+    resetWorkbenchStore();
+    useWorkbenchStore.setState({
+      loadState: 'ready',
+      capabilities: capabilitiesFixture(),
+      projects: [],
+      currentProject: null,
+      images: [],
+    });
+    render(<App />);
+
+    const canvas = document.querySelector('.canvas-panel');
+    expect(canvas).not.toBeNull();
+    await user.click(within(canvas as HTMLElement).getByRole('button', { name: '创建本机项目' }));
+    expect(screen.getByRole('dialog', { name: '新建本地项目' })).toBeInTheDocument();
+  });
+
+  it('opens create-project from the empty inspector pane', async () => {
+    const user = userEvent.setup();
+    resetWorkbenchStore();
+    useWorkbenchStore.setState({
+      loadState: 'ready',
+      capabilities: capabilitiesFixture(),
+      projects: [],
+      currentProject: null,
+      images: [],
+    });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '检查', hidden: true }));
+    const inspector = document.querySelector('.inspector');
+    expect(inspector).not.toBeNull();
+    await user.click(within(inspector as HTMLElement).getByRole('button', { name: '创建本机项目' }));
     expect(screen.getByRole('dialog', { name: '新建本地项目' })).toBeInTheDocument();
   });
 

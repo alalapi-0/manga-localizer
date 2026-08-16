@@ -362,7 +362,11 @@ Semantic Versioning.
 - Round 58 adds a first-run create-project action on the empty sidebar. Local gates passed 5 launcher
   tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend lint/typecheck/152
   tests plus the production build. The release audit scanned 136 candidate files and 963 historical
-  blobs. GitHub CI is pending after push.
+  blobs. GitHub CI run `31936106130` passed on `c625ae7c16543945204ac5c1edbc93f4f088c856`.
+- Round 59 adds first-run create-project actions on the empty canvas and inspector. Local gates
+  passed 5 launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend
+  lint/typecheck/154 tests plus the production build. The release audit scanned 136 candidate files
+  and 970 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

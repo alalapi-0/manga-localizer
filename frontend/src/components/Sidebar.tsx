@@ -129,8 +129,13 @@ export function Sidebar() {
 
   useEffect(() => {
     const openImporter = () => multipleRef.current?.click();
+    const openCreate = () => setDialog('create');
     window.addEventListener('manga-localizer:import', openImporter);
-    return () => window.removeEventListener('manga-localizer:import', openImporter);
+    window.addEventListener('manga-localizer:create-project', openCreate);
+    return () => {
+      window.removeEventListener('manga-localizer:import', openImporter);
+      window.removeEventListener('manga-localizer:create-project', openCreate);
+    };
   }, []);
 
   const visibleImages = useMemo(

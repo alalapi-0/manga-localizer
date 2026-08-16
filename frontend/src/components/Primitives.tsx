@@ -125,6 +125,18 @@ export function EmptyState({
   );
 }
 
+export function CreateLocalProjectButton() {
+  return (
+    <button
+      className="button button--accent"
+      onClick={() => window.dispatchEvent(new Event('manga-localizer:create-project'))}
+      type="button"
+    >
+      创建本机项目
+    </button>
+  );
+}
+
 const stateLabels: Record<StageState, string> = {
   not_started: '未开始',
   queued: '排队中',

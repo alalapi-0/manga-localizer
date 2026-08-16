@@ -29,7 +29,7 @@ import {
 } from './canvasGeometry';
 import type { Point, Viewport } from './canvasGeometry';
 import { loadCanonicalCanvasImage } from './canvasImage';
-import { EmptyState, IconButton, LoadingState } from './Primitives';
+import { CreateLocalProjectButton, EmptyState, IconButton, LoadingState } from './Primitives';
 
 function canvasModeAvailable(image: ImageAsset | null | undefined, mode: CanvasMode): boolean {
   if (mode === 'original') return Boolean(image);
@@ -898,6 +898,7 @@ function CanvasToolbar({
 
 export function CanvasWorkspace() {
   const image = useWorkbenchStore(activeImage);
+  const project = useWorkbenchStore((state) => state.currentProject);
   const compareMode = useWorkbenchStore((state) => state.compareMode);
   const requestedMode = useWorkbenchStore((state) => state.canvasMode);
   const setCanvasMode = useWorkbenchStore((state) => state.setCanvasMode);
@@ -954,8 +955,13 @@ export function CanvasWorkspace() {
         {!image ? (
           <EmptyState
             icon="▧"
-            title="选择一张图像开始"
-            description="画布坐标始终使用原图像素，缩放和平移不会改变区域数据。"
+            title={project ? '选择一张图像开始' : '先创建项目'}
+            description={
+              project
+                ? '画布坐标始终使用原图像素，缩放和平移不会改变区域数据。'
+                : '先创建本机项目，再用手机从相册导入。处理仍在 Mac 上运行。'
+            }
+            action={project ? undefined : <CreateLocalProjectButton />}
           />
         ) : showCompare ? (
           <>

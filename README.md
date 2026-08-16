@@ -127,7 +127,8 @@ npm run app:lan
 ```
 
 That binds a private LAN IPv4 (not `0.0.0.0`). The Mac window shows the Safari URL and a **复制地址**
-control. On the phone, open that address, create a project if needed, then import with **多图**. macOS
+control. On the phone, open that address, then create a local project from **图像**, **画布**, or
+**检查** if needed, and import with **多图**. macOS
 may still block incoming connections until Local Network or firewall access is allowed. `npm run dev`
 remains loopback-only.
 

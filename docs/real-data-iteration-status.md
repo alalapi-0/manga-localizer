@@ -129,6 +129,8 @@ Last updated: 2026-08-16
   remaining 112/130 clean-plate visual reviews.
 - Round 58 — the empty sidebar can create a local project, then import from the photo library. This
   does not complete the remaining 112/130 clean-plate visual reviews.
+- Round 59 — the empty canvas and inspector can create a local project. This does not complete the
+  remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -629,4 +631,10 @@ pages. Those files remain `detector-draft` until human review.
   This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed 5
   launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend
   lint/typecheck/152 tests/build. The release audit scanned 136 candidate files and 963 historical
-  blobs. GitHub CI is pending after push.
+  blobs.
+  GitHub CI run `31936106130` passed at `c625ae7c16543945204ac5c1edbc93f4f088c856`.
+- **Round 59:** the empty canvas and inspector can create a local project. This does not complete
+  the remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend
+  lint/format/236 pytest (unchanged from Round 57), and frontend lint/typecheck/154 tests/build. The
+  release audit scanned 136 candidate files and 970 historical blobs. GitHub CI is pending after
+  push.

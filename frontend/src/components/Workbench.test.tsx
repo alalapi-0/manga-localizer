@@ -164,7 +164,7 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().focusRequest).toBeGreaterThan(0);
   });
 
-  it('shows a page processing failure in the inspector and retries that stage', async () => {
+  it('retries a page processing failure from the inspector without opening the batch drawer', async () => {
     const user = userEvent.setup();
     const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
       id: 'job-ocr-retry',
@@ -189,7 +189,8 @@ describe('desktop workbench interactions', () => {
     expect(startJob).toHaveBeenCalledWith('project-1', 'ocr', expect.objectContaining({
       imageIds: ['image-1'],
     }));
-    expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
+    expect(useWorkbenchStore.getState().drawerOpen).toBe(false);
+    expect(screen.queryByRole('dialog', { name: '批处理与导出' })).not.toBeInTheDocument();
   });
 
   it('frames a box from the inspector region list', async () => {

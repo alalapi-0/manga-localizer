@@ -184,7 +184,6 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
 function ProcessingErrorNotice() {
   const image = useWorkbenchStore(activeImage);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
-  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   const failure = latestPageProcessingError(image);
   if (!image || !failure) return null;
   const retryKind = failure.kind;
@@ -199,7 +198,6 @@ function ProcessingErrorNotice() {
           <button
             className="button button--compact"
             onClick={() => {
-              setDrawerOpen(true);
               void startBatch([retryKind], [image.id], defaultExportOptions, 1);
             }}
             type="button"

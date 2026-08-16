@@ -313,7 +313,7 @@ Semantic Versioning.
 - Round 48 replaces a stale inspector failure with a queued or running notice after retry. Local gates
   passed 2 launcher tests and frontend lint/typecheck/144 tests plus the production build. The release
   audit scanned 128 candidate files and 849 historical blobs. Backend was unchanged from Round 31.
-  GitHub CI is pending after push.
+  GitHub CI run `31924614192` passed on `47ceeaf7aa475e3064921de144b21c7dc54010cc`.
 
 ### Known limitations
 

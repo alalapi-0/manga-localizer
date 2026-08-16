@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-15
+Updated: 2026-08-16
 
 ## Authority and purpose
 
@@ -21,10 +21,10 @@ placing private inputs, OCR text, models, databases, or generated artwork in the
 
 Round 46 jumps to failed or unavailable pages with ⌥← / ⌥→ and opens the matching inspector.
 The work is on `agent/manga-round7-governance-20260812` through draft PR #3.
-Remote CI for Round 45 passed as run `31889559133` on `fc58b181d3a647fb7b9feb4c89341fd1f820966f`.
-Round 46 is locally verified and awaiting remote CI. Round 8 remains 18/130 explicit visual reviews;
-detector drafts remain 130/0 reviewed. The full product goal remains active. No merge, tag, release,
-or deployment has occurred.
+Remote CI for Round 46 passed as run `31923761102` on `3ffa0f79e017989bba11d56678b9a7ed2a4b2e55`.
+Round 45 (`fc58b181d3a647fb7b9feb4c89341fd1f820966f`, CI `31889559133`) remains failed sidebar click.
+Round 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. The full
+product goal remains active. No merge, tag, release, or deployment has occurred.
 
 ## Environment evidence
 
@@ -198,7 +198,7 @@ or deployment has occurred.
 - [x] Round 45: open the matching inspector when clicking a failed sidebar page, with public
   regression, and complete CI.
 - [x] Round 46: jump to failed or unavailable pages with option-arrow and open the matching
-  inspector, with public regression. Remote CI pending.
+  inspector, with public regression, and complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -560,6 +560,10 @@ or deployment has occurred.
   `git diff --check`. Backend was unchanged from Round 31 (231 pytest). Playwright discovers both
   Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live browser
   evidence remains the GitHub e2e job after push.
+- Round 46 authoritative remote verification: GitHub CI run `31923761102` passed at
+  `3ffa0f79e017989bba11d56678b9a7ed2a4b2e55`. Backend Ruff lint/format, 231 pytest cases, and the
+  release audit passed. Frontend lint/typecheck/143 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

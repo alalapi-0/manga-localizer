@@ -4,7 +4,7 @@ This is the sanitized public real-data summary and round log routed from `.agent
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 
-Last updated: 2026-08-15
+Last updated: 2026-08-16
 
 ## Current phase
 
@@ -541,5 +541,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 46:** **⌥← / ⌥→** jump to the previous / next failed or unavailable page and open the matching
   inspector. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates
   passed 2 launcher tests and frontend lint/typecheck/143 tests/build. The release audit scanned 128
-  candidate files and 827 historical blobs. Backend was unchanged from Round 31. GitHub CI is pending
-  after push.
+  candidate files and 827 historical blobs. Backend was unchanged from Round 31.
+  GitHub CI run `31923761102` passed at `3ffa0f79e017989bba11d56678b9a7ed2a4b2e55`.

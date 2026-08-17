@@ -51,8 +51,9 @@ get_capabilities()
 - `ppocr-v3` uses OpenCV DNN with the external
   [OpenCV Zoo PP-OCRv3 model](https://huggingface.co/opencv/text_detection_ppocr). It returns bounded
   polygons and never changes canonical source coordinates.
-- `ppocr-v3+tesseract` keeps every candidate from both detectors as an editable proposal. It does not
-  NMS, drop low confidence, or authorize trust. Union detection disables Tesseract contour fallback.
+- `ppocr-v3+tesseract` merges overlapping, contained, and nearby aligned proposals from both
+  detectors, then pads the surviving box so glyphs are enclosed. It does not drop low-confidence
+  text or authorize trust. Union detection disables Tesseract contour fallback.
 
 Detection and recognition are separate selections. A completed detection job with zero candidates is a
 valid result; OCR does not silently replace it with a different detector. Unknown provider IDs fail the

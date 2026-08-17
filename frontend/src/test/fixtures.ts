@@ -91,7 +91,7 @@ export function capabilitiesFixture(): AppCapabilities {
       { id: 'opencv-pillow', label: 'OpenCV / Pillow 基础增强', kind: 'preprocessor', available: true, local: true, isMock: false },
       { id: 'realesrgan-onnx', label: 'Real-ESRGAN ONNX 动漫超分', kind: 'preprocessor', available: true, local: true, isMock: false },
       { id: 'tesseract', label: 'Tesseract 文本检测', kind: 'detector', available: true, local: true, isMock: false },
-      { id: 'ppocr-v3+tesseract', label: 'PP-OCRv3 + Tesseract 联合候选', kind: 'detector', available: true, local: true, isMock: false },
+      { id: 'ppocr-v3+tesseract', label: 'PP-OCRv3 + Tesseract 联合检测', kind: 'detector', available: true, local: true, isMock: false },
       { id: 'tesseract', label: 'Tesseract', kind: 'ocr', available: true, local: true, isMock: false },
       { id: 'manual', label: '手动翻译', kind: 'translator', available: true, local: true, isMock: false },
       { id: 'mock', label: '确定性演示翻译', kind: 'translator', available: true, local: true, isMock: true },

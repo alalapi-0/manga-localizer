@@ -69,7 +69,7 @@ class PPOCRTextDetectionProvider:
         input_size: tuple[int, int] = (736, 736),
         binary_threshold: float = 0.3,
         polygon_threshold: float = 0.5,
-        unclip_ratio: float = 1.8,
+        unclip_ratio: float = 2.2,
         max_candidates: int = 200,
     ):
         if len(input_size) != 2 or min(input_size) <= 0 or any(value % 32 for value in input_size):
@@ -207,11 +207,197 @@ class PPOCRTextDetectionProvider:
         }
 
 
-class UnionTextDetectionProvider:
-    """Keep every PP-OCR and Tesseract candidate as an editable proposal.
+def _region_box(region: OCRRegion) -> tuple[int, int, int, int]:
+    return region.x, region.y, region.x + region.width, region.y + region.height
 
-    Overlapping or low-confidence boxes are not dropped, merged, or authorized.
-    Both members must be available; otherwise health is unavailable and detection fails.
+
+def _box_intersection(
+    left: tuple[int, int, int, int],
+    right: tuple[int, int, int, int],
+) -> int:
+    width = max(0, min(left[2], right[2]) - max(left[0], right[0]))
+    height = max(0, min(left[3], right[3]) - max(left[1], right[1]))
+    return width * height
+
+
+def _box_area(box: tuple[int, int, int, int]) -> int:
+    return max(0, box[2] - box[0]) * max(0, box[3] - box[1])
+
+
+def _box_iou(left: OCRRegion, right: OCRRegion) -> float:
+    left_box = _region_box(left)
+    right_box = _region_box(right)
+    intersection = _box_intersection(left_box, right_box)
+    if not intersection:
+        return 0.0
+    union = _box_area(left_box) + _box_area(right_box) - intersection
+    return intersection / union if union else 0.0
+
+
+def _overlap_of_smaller(left: OCRRegion, right: OCRRegion) -> float:
+    left_box = _region_box(left)
+    right_box = _region_box(right)
+    smaller = min(_box_area(left_box), _box_area(right_box))
+    return _box_intersection(left_box, right_box) / smaller if smaller else 0.0
+
+
+def _inferred_direction(region: OCRRegion) -> str:
+    if region.direction in {"horizontal", "vertical"}:
+        return region.direction
+    return "vertical" if region.height >= region.width else "horizontal"
+
+
+def _box_gap(left: OCRRegion, right: OCRRegion) -> float:
+    ax1, ay1, ax2, ay2 = _region_box(left)
+    bx1, by1, bx2, by2 = _region_box(right)
+    dx = max(0, ax1 - bx2, bx1 - ax2)
+    dy = max(0, ay1 - by2, by1 - ay2)
+    if dx == 0 and dy == 0:
+        return 0.0
+    return float((dx**2 + dy**2) ** 0.5)
+
+
+def _boxes_aligned(left: OCRRegion, right: OCRRegion, direction: str) -> bool:
+    ax1, ay1, ax2, ay2 = _region_box(left)
+    bx1, by1, bx2, by2 = _region_box(right)
+    if direction == "vertical":
+        overlap = min(ax2, bx2) - max(ax1, bx1)
+        span = min(ax2 - ax1, bx2 - bx1)
+    else:
+        overlap = min(ay2, by2) - max(ay1, by1)
+        span = min(ay2 - ay1, by2 - by1)
+    return span > 0 and overlap >= span * 0.4
+
+
+def _image_bounds(image: Path | Image.Image | np.ndarray) -> tuple[int, int]:
+    if isinstance(image, Path):
+        with Image.open(image) as opened:
+            return opened.size
+    if isinstance(image, Image.Image):
+        return image.size
+    array = np.asarray(image)
+    if array.ndim < 2:
+        raise ValueError("Detector image array must have at least two dimensions")
+    return int(array.shape[1]), int(array.shape[0])
+
+
+def _merge_regions(left: OCRRegion, right: OCRRegion) -> OCRRegion:
+    x = min(left.x, right.x)
+    y = min(left.y, right.y)
+    right_edge = max(left.x + left.width, right.x + right.width)
+    bottom = max(left.y + left.height, right.y + right.height)
+    primary = left if left.width * left.height >= right.width * right.height else right
+    confidences = [value for value in (left.confidence, right.confidence) if value is not None]
+    text = left.text.strip() or right.text.strip()
+    return OCRRegion(
+        x=x,
+        y=y,
+        width=max(1, right_edge - x),
+        height=max(1, bottom - y),
+        text=text,
+        confidence=max(confidences) if confidences else None,
+        direction=primary.direction,
+        polygon=None,
+    )
+
+
+def _expand_region(region: OCRRegion, bounds: tuple[int, int]) -> OCRRegion:
+    page_width, page_height = bounds
+    pad_x = min(28, max(6, round(region.width * 0.08)))
+    pad_y = min(28, max(6, round(region.height * 0.08)))
+    if _inferred_direction(region) == "vertical":
+        pad_x = min(32, max(pad_x, 8))
+    else:
+        pad_y = min(32, max(pad_y, 8))
+    x = max(0, region.x - pad_x)
+    y = max(0, region.y - pad_y)
+    right = min(page_width, region.x + region.width + pad_x)
+    bottom = min(page_height, region.y + region.height + pad_y)
+    return OCRRegion(
+        x=x,
+        y=y,
+        width=max(4, right - x),
+        height=max(4, bottom - y),
+        text=region.text,
+        confidence=region.confidence,
+        direction=region.direction,
+        polygon=None,
+    )
+
+
+def should_merge_detection_regions(
+    left: OCRRegion,
+    right: OCRRegion,
+    bounds: tuple[int, int],
+) -> bool:
+    page_area = max(1, bounds[0] * bounds[1])
+    if _box_iou(left, right) >= 0.22 or _overlap_of_smaller(left, right) >= 0.5:
+        union_width = max(left.x + left.width, right.x + right.width) - min(left.x, right.x)
+        union_height = max(left.y + left.height, right.y + right.height) - min(left.y, right.y)
+        return union_width * union_height <= page_area * 0.22
+    if _inferred_direction(left) != _inferred_direction(right):
+        return False
+    short = min(left.width, left.height, right.width, right.height)
+    if _box_gap(left, right) > max(8.0, short * 0.35):
+        return False
+    if not _boxes_aligned(left, right, _inferred_direction(left)):
+        return False
+    union_width = max(left.x + left.width, right.x + right.width) - min(left.x, right.x)
+    union_height = max(left.y + left.height, right.y + right.height) - min(left.y, right.y)
+    return union_width * union_height <= page_area * 0.18
+
+
+def consolidate_text_regions(
+    regions: list[OCRRegion],
+    bounds: tuple[int, int],
+    *,
+    expand: bool = True,
+) -> list[OCRRegion]:
+    """Merge overlapping or aligned fragments, then optionally pad to enclose glyphs."""
+    if not regions:
+        return []
+    parent = list(range(len(regions)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        root_left, root_right = find(left), find(right)
+        if root_left != root_right:
+            parent[root_right] = root_left
+
+    for left, region in enumerate(regions):
+        for right in range(left + 1, len(regions)):
+            if should_merge_detection_regions(region, regions[right], bounds):
+                union(left, right)
+
+    clusters: dict[int, list[OCRRegion]] = {}
+    order: list[int] = []
+    for index, region in enumerate(regions):
+        root = find(index)
+        if root not in clusters:
+            clusters[root] = []
+            order.append(root)
+        clusters[root].append(region)
+
+    merged: list[OCRRegion] = []
+    for root in order:
+        cluster = clusters[root]
+        current = cluster[0]
+        for extra in cluster[1:]:
+            current = _merge_regions(current, extra)
+        merged.append(_expand_region(current, bounds) if expand else current)
+    return merged
+
+
+class UnionTextDetectionProvider:
+    """Merge PP-OCR and Tesseract proposals into fewer, padded editable boxes.
+
+    Overlaps, containments, and nearby aligned fragments become one box. Low
+    confidence is not used to drop text. Both members must be available.
     """
 
     name = "ppocr-v3+tesseract"
@@ -241,7 +427,10 @@ class UnionTextDetectionProvider:
             language=language,
             include_contour_fallback=False,
         )
-        return [*ppocr_regions, *tesseract_regions]
+        return consolidate_text_regions(
+            [*ppocr_regions, *tesseract_regions],
+            _image_bounds(image),
+        )
 
     def health_check(self) -> dict[str, Any]:
         ppocr = self.ppocr.health_check()
@@ -272,9 +461,10 @@ class UnionTextDetectionProvider:
             "modelRequired": True,
             "detectTextRegions": health["available"],
             "polygonDetections": True,
-            "keepsAllProposals": True,
+            "keepsAllProposals": False,
             "dropsLowConfidence": False,
-            "mergesOverlaps": False,
+            "mergesOverlaps": True,
+            "expandsBoxes": True,
             "unionOf": ["ppocr-v3", "tesseract"],
             "tesseractContourFallback": False,
             "directions": {"horizontal": True, "vertical": True},

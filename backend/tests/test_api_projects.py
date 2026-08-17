@@ -695,9 +695,10 @@ def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_pa
     assert providers["preprocessing"]["realesrgan-onnx"]["downloadsModelsAtStartup"] is False
     assert providers["preprocessing"]["realesrgan-ncnn"]["aiUpscale"] is True
     union = providers["detection"]["ppocr-v3+tesseract"]
-    assert union["mergesOverlaps"] is False
+    assert union["mergesOverlaps"] is True
     assert union["dropsLowConfidence"] is False
-    assert union["keepsAllProposals"] is True
+    assert union["keepsAllProposals"] is False
+    assert union["expandsBoxes"] is True
     assert union["tesseractContourFallback"] is False
     argos = providers["translation"]["argos-ja-zh"]
     assert argos["remote"] is False

@@ -34,6 +34,12 @@ coverage because automatic proposals remain untrusted.
 empty pages. Product Round 8 is not complete. Do not re-arm
 `AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
 
+Review-canvas delivery for main: drag/resize/rotate boxes; union detector
+merges overlaps and pads boxes; re-detect replaces stale empty auto boxes;
+manual **整理本页选框** and **AI 重绘本页** (local Real-ESRGAN 4×). Local
+verification: frontend lint/typecheck/164 tests/build, backend ruff plus
+full pytest, launcher 5/5. Private `tests/real-data/` is not included.
+
 ## Active loop prompt
 
 Stopped. The process/fix loop in `.agent/REALDATA_LOOP_PROMPT.md` completed a
@@ -73,9 +79,13 @@ rewrite and do not re-arm a sleeper.
   from size plus a native-resolution contrast/sharpness sample. The editor may apply that hint to the
   current page or adopt it as the project default; it is never an automatic book-wide setting.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
-  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` keeps every
-  candidate from both detectors as an editable proposal and does not NMS or drop by confidence.
-  A completed zero-detection result is authoritative and is not silently replaced during OCR.
+  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` merges
+  overlapping, contained, and nearby aligned proposals from both detectors, then pads the box so
+  glyphs are enclosed. It does not drop low-confidence text or grant trust. Re-running detection
+  replaces stale empty unconfirmed auto boxes and skips duplicates of kept regions. A completed
+  zero-detection result is authoritative and is not silently replaced during OCR.
+- Low-resolution pages can be manually AI-redrawn with the local Real-ESRGAN anime 4× preprocessor.
+  The workbench button never runs this automatically and does not change the project default.
 - Annotated detection/OCR evaluation is path-parameterized. Public reports store only anonymous page
   IDs and aggregate precision, recall, CER, and negative-page false positives. Transcriptions, image
   names, checksums, and absolute paths stay out of sanitized output. Private draft JSON remains under
@@ -261,6 +271,9 @@ rewrite and do not re-arm a sleeper.
 
 ## Verification evidence
 
+- 2026-08-17 review-canvas/detection delivery: frontend lint, typecheck, 164 Vitest
+  cases, and production build passed; backend Ruff lint/format and full pytest passed;
+  launcher 5/5 passed. Private real-data trees were not committed.
 - Combined process/fix loop: public evaluator export-gate tests passed locally
   (`backend/tests/test_evaluate_real_data.py`). Backend Ruff lint/format and 239 pytest
   cases passed. After that fix, private slices covering all 199 pages completed JSON
@@ -808,4 +821,4 @@ full-book output quality.
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
   sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.
 - Tesseract TSV over-detects hatching/line art. Prefer `ppocr-v3` when precision on negatives matters;
-  use `ppocr-v3+tesseract` only when extra Tesseract proposals are wanted.
+  `ppocr-v3+tesseract` now merges those extra proposals instead of stacking them.

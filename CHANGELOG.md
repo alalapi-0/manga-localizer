@@ -5,7 +5,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Changed
+
+- `ppocr-v3+tesseract` now merges overlapping, contained, and nearby aligned proposals, then pads the
+  surviving box so glyphs are enclosed. Re-running detection replaces stale empty unconfirmed auto
+  boxes and skips duplicates of kept regions.
+
 ### Added
+
+- Review canvas box editing: drag, resize, rotate, inspector geometry, and modifier-arrow nudge.
+- Manual **整理本页选框** to merge overlapping fragments and expand boxes on the current page.
+- Manual **AI 重绘本页** that runs local Real-ESRGAN anime 4× on the current page only.
 
 - Persisted, batch-capable image preprocessing with OpenCV/Pillow profiles and independent upscale,
   denoise, sharpen, contrast, edge, and binarization controls; enhanced-image preview and canonical
@@ -16,8 +26,9 @@ Semantic Versioning.
   inference, and explicit 2×/3× downscale from the native 4× result. Classic Lanczos remains a
   separate compatibility upscaler.
 - Optional PP-OCRv3 OpenCV-DNN polygon detector, separated from Tesseract recognition.
-- Optional `ppocr-v3+tesseract` union detector that concatenates both proposal lists without
-  confidence filtering or overlap merging. Union disables Tesseract's empty-page contour fallback.
+- Optional `ppocr-v3+tesseract` union detector that merges overlapping and nearby aligned proposals
+  from both detectors, then pads the surviving box. Union disables Tesseract's empty-page contour
+  fallback.
 - Privacy-safe detection/OCR evaluation with IoU matching, separate detector/OCR confidence, CER,
   negative-page false positives, a public synthetic stress set, and ignored private draft annotations.
 - Optional local LaMa ONNX inpainting provider with lazy thread-safe inference, context crops, exact

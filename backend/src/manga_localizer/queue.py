@@ -23,6 +23,7 @@ from manga_localizer.imaging import (
     typeset_image,
 )
 from manga_localizer.logging_utils import without_secrets
+from manga_localizer.providers.detection import consolidate_text_regions
 from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.security import (
@@ -877,6 +878,38 @@ class PersistentJobQueue:
             raise ProjectError("Text region is outside the image after coordinate normalization")
         return {"x": left, "y": top, "width": right - left, "height": bottom - top}
 
+    @staticmethod
+    def _is_stale_auto_detection(region: TextRegion) -> bool:
+        repair = region.repair if isinstance(region.repair, dict) else {}
+        if repair.get("detectorGenerated") is not True:
+            return False
+        if region.confirmed or region.ignored:
+            return False
+        if region_trust(region).get("disposition") in {"trusted", "ignored"}:
+            return False
+        if (region.source_text or "").strip() or (region.translation_text or "").strip():
+            return False
+        return (region.region_type or "unknown") == "unknown"
+
+    @staticmethod
+    def _detection_overlaps_kept(detection: OCRRegion, kept: OCRRegion) -> bool:
+        intersection_width = max(
+            0,
+            min(detection.x + detection.width, kept.x + kept.width) - max(detection.x, kept.x),
+        )
+        intersection_height = max(
+            0,
+            min(detection.y + detection.height, kept.y + kept.height) - max(detection.y, kept.y),
+        )
+        intersection = intersection_width * intersection_height
+        if not intersection:
+            return False
+        smaller = min(detection.width * detection.height, kept.width * kept.height)
+        union = detection.width * detection.height + kept.width * kept.height - intersection
+        iou = intersection / union if union else 0.0
+        containment = intersection / smaller if smaller else 0.0
+        return iou >= 0.22 or containment >= 0.5
+
     def _process_preprocess(
         self,
         store: ProjectStore,
@@ -1096,6 +1129,12 @@ class PersistentJobQueue:
                     polygon=polygon,
                 )
             )
+        if provider_name == "ppocr-v3+tesseract":
+            detections = consolidate_text_regions(
+                detections,
+                (image_width, image_height),
+                expand=False,
+            )
         created_count = 0
         with store.session() as session:
             project = store.project(session)
@@ -1109,6 +1148,40 @@ class PersistentJobQueue:
             existing = list(
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
+            for region in list(existing):
+                if not self._is_stale_auto_detection(region):
+                    continue
+                add_revision(
+                    session,
+                    project,
+                    entity_type="region",
+                    entity_id=region.id,
+                    operation="detect-replace",
+                    before=region_payload(region),
+                    after=None,
+                )
+                session.delete(region)
+                existing.remove(region)
+            kept = [
+                OCRRegion(
+                    x=int(region.x),
+                    y=int(region.y),
+                    width=int(region.width),
+                    height=int(region.height),
+                    text="",
+                    confidence=region.confidence,
+                    direction=region.direction,
+                    polygon=None,
+                )
+                for region in existing
+            ]
+            detections = [
+                detection
+                for detection in detections
+                if not any(
+                    self._detection_overlaps_kept(detection, kept_region) for kept_region in kept
+                )
+            ]
             next_reading_order = max((region.reading_order for region in existing), default=-1) + 1
             for offset, detection in enumerate(detections):
                 region = TextRegion(

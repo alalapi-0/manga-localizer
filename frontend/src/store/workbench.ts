@@ -30,6 +30,7 @@ import {
   DEFAULT_REPAIR_SETTINGS,
   EMPTY_PIPELINE_STATUS,
 } from '../types';
+import { clusterRegionIds, expandRegionGeometry } from '../components/canvasGeometry';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -126,9 +127,11 @@ interface WorkbenchState {
   clearRegionSelection: () => void;
   createRegion: (geometry: Pick<Region, 'x' | 'y' | 'width' | 'height'>) => string | null;
   updateRegion: (regionId: string, patch: Partial<Region>, recordHistory?: boolean) => void;
+  nudgeSelectedRegions: (dx: number, dy: number) => void;
   setRegionConfirmed: (regionId: string, confirmed: boolean) => Promise<boolean>;
   deleteSelectedRegions: () => void;
   mergeSelectedRegions: () => void;
+  consolidateActiveImageRegions: () => number;
   splitSelectedRegion: (axis: 'horizontal' | 'vertical') => void;
   undo: () => void;
   redo: () => void;
@@ -167,6 +170,7 @@ interface WorkbenchState {
     concurrency?: number,
     regionIds?: string[],
     preprocessing?: PreprocessingSettings,
+    provider?: string,
   ) => Promise<boolean>;
   refreshJobs: () => Promise<void>;
   runJobAction: (jobId: string, action: 'pause' | 'resume' | 'cancel' | 'retry') => Promise<void>;
@@ -341,6 +345,32 @@ export function preprocessingSettingsForProfile(
     profile,
     ...switches[profile],
   };
+}
+
+export const AI_REDRAW_PREPROCESSING: PreprocessingSettings = {
+  profile: 'visual-quality',
+  enableUpscale: true,
+  upscaleFactor: 4,
+  enableDenoise: true,
+  enableSharpen: true,
+  enableContrastEnhance: true,
+  enableEdgeOptimize: false,
+  enableBinarize: false,
+  threshold: 180,
+};
+
+export function preferredAiRedrawProvider(
+  providers: AppCapabilities['providers'],
+): 'realesrgan-onnx' | 'realesrgan-ncnn' | null {
+  const onnx = providers.find((provider) => (
+    provider.kind === 'preprocessor' && provider.id === 'realesrgan-onnx'
+  ));
+  const ncnn = providers.find((provider) => (
+    provider.kind === 'preprocessor' && provider.id === 'realesrgan-ncnn'
+  ));
+  if (onnx?.available) return 'realesrgan-onnx';
+  if (ncnn?.available) return 'realesrgan-ncnn';
+  return null;
 }
 
 function hydratePreprocessSuggestion(
@@ -1559,6 +1589,20 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     scheduleAutosave();
   },
 
+  nudgeSelectedRegions: (dx, dy) => {
+    const state = get();
+    const image = activeImage(state);
+    if (!image || !state.selectedRegionIds.length || (!dx && !dy)) return;
+    for (const regionId of state.selectedRegionIds) {
+      const region = (state.regionsByImage[image.id] ?? []).find((entry) => entry.id === regionId);
+      if (!region) continue;
+      get().updateRegion(regionId, {
+        x: Math.max(0, Math.min(image.width - region.width, region.x + dx)),
+        y: Math.max(0, Math.min(image.height - region.height, region.y + dy)),
+      });
+    }
+  },
+
   setRegionConfirmed: async (regionId, confirmed) => {
     const state = get();
     const imageId = state.activeImageId;
@@ -1728,6 +1772,33 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       pendingRegionMutations: mutations,
     });
     scheduleAutosave();
+  },
+
+  consolidateActiveImageRegions: () => {
+    const image = activeImage(get());
+    if (!image) return 0;
+    const current = get().regionsByImage[image.id] ?? [];
+    if (!current.length) return 0;
+    const clusters = clusterRegionIds(current, image).filter((ids) => ids.length > 1);
+    let changed = 0;
+    for (const ids of clusters) {
+      set({ selectedRegionIds: ids });
+      get().mergeSelectedRegions();
+      changed += 1;
+    }
+    const afterMerge = get().regionsByImage[image.id] ?? [];
+    for (const region of afterMerge) {
+      const geometry = expandRegionGeometry(region, image, region.direction);
+      if (
+        geometry.x === region.x
+        && geometry.y === region.y
+        && geometry.width === region.width
+        && geometry.height === region.height
+      ) continue;
+      get().updateRegion(region.id, geometry);
+      changed += 1;
+    }
+    return changed;
   },
 
   splitSelectedRegion: (axis) => {
@@ -2101,7 +2172,15 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setSpacePressed: (spacePressed) => set({ spacePressed }),
 
-  startBatch: async (kinds, imageIds, exportOptions, concurrency = 1, regionIds, preprocessing) => {
+  startBatch: async (
+    kinds,
+    imageIds,
+    exportOptions,
+    concurrency = 1,
+    regionIds,
+    preprocessing,
+    provider,
+  ) => {
     if (!get().currentProject || !imageIds.length || !kinds.length) return false;
     const hasOcr = kinds.includes('ocr');
     const trustGatedKinds = kinds.filter((kind) =>
@@ -2171,10 +2250,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         'export',
       ];
       const orderedKinds = operationOrder.filter((kind) => kinds.includes(kind));
+      const preprocessProvider = provider ?? project.settings.preprocessorProvider;
       for (const kind of orderedKinds) {
         const options: Record<string, unknown> = kind === 'preprocess'
           ? {
-              provider: project.settings.preprocessorProvider,
+              provider: preprocessProvider,
               preprocessing: preprocessing ?? project.settings.preprocessing,
             }
           : kind === 'detect'
@@ -2231,7 +2311,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
               ...image,
               status,
               preprocessingProvider: kind === 'preprocess'
-                ? project.settings.preprocessorProvider
+                ? preprocessProvider
                 : image.preprocessingProvider,
               detectorProvider: kind === 'detect'
                 ? project.settings.detectorProvider
@@ -2265,7 +2345,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
           return {
             ...image,
             status,
-            preprocessingProvider: orderedKinds.includes('preprocess') ? project.settings.preprocessorProvider : image.preprocessingProvider,
+            preprocessingProvider: orderedKinds.includes('preprocess') ? preprocessProvider : image.preprocessingProvider,
             detectorProvider: orderedKinds.includes('detect') ? project.settings.detectorProvider : image.detectorProvider,
             ocrProvider: orderedKinds.includes('ocr') ? project.settings.ocrProvider : image.ocrProvider,
             translatorProvider: orderedKinds.includes('translate') ? project.settings.translatorProvider : image.translatorProvider,

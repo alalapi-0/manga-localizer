@@ -182,21 +182,49 @@ class _FakeDetector:
         return {"available": self._available, "error": self._error}
 
 
-def test_union_detector_keeps_overlapping_and_low_confidence_proposals() -> None:
+def test_union_detector_merges_overlapping_proposals_and_pads_boxes() -> None:
+    from manga_localizer.providers.detection import consolidate_text_regions
+
     low = OCRRegion(1, 1, 20, 20, "", 0.02, "horizontal")
     overlap = OCRRegion(2, 2, 20, 20, "", 0.99, "horizontal")
     extra = OCRRegion(80, 80, 12, 12, "", 0.4, "vertical")
+    far = OCRRegion(78, 8, 10, 16, "", 0.3, "vertical")
     provider = UnionTextDetectionProvider(
         _FakeDetector([low, overlap]),
         _FakeDetector([extra]),
     )
     result = provider.detect_text_regions(Image.new("RGB", (100, 100), "white"))
-    assert result == [low, overlap, extra]
+    assert len(result) == 2
+    merged = next(region for region in result if region.confidence == 0.99)
+    isolated = next(region for region in result if region.confidence == 0.4)
+    assert merged.x == 0
+    assert merged.y == 0
+    assert merged.width >= 21
+    assert merged.height >= 21
+    assert isolated.x < extra.x
+    assert isolated.y < extra.y
+    assert isolated.width > extra.width
+    assert isolated.height > extra.height
     capabilities = provider.get_capabilities()
-    assert capabilities["keepsAllProposals"] is True
-    assert capabilities["mergesOverlaps"] is False
+    assert capabilities["keepsAllProposals"] is False
+    assert capabilities["mergesOverlaps"] is True
+    assert capabilities["expandsBoxes"] is True
     assert capabilities["dropsLowConfidence"] is False
     assert capabilities["tesseractContourFallback"] is False
+
+    fragments = consolidate_text_regions(
+        [
+            OCRRegion(10, 10, 12, 40, "", 0.8, "vertical"),
+            OCRRegion(10, 56, 12, 36, "", 0.7, "vertical"),
+            far,
+        ],
+        (100, 100),
+        expand=False,
+    )
+    assert len(fragments) == 2
+    column = next(region for region in fragments if region.x == 10)
+    assert column.y == 10
+    assert column.height == 82
 
 
 def test_union_detector_is_unavailable_unless_both_members_work() -> None:

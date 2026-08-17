@@ -55,6 +55,22 @@ function useGlobalShortcuts() {
         state.requestFit();
         return;
       }
+      if (
+        modifier
+        && !event.altKey
+        && (event.key === 'ArrowLeft'
+          || event.key === 'ArrowRight'
+          || event.key === 'ArrowUp'
+          || event.key === 'ArrowDown')
+      ) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        state.nudgeSelectedRegions(
+          event.key === 'ArrowLeft' ? -step : event.key === 'ArrowRight' ? step : 0,
+          event.key === 'ArrowUp' ? -step : event.key === 'ArrowDown' ? step : 0,
+        );
+        return;
+      }
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         state.deleteSelectedRegions();

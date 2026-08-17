@@ -291,8 +291,8 @@ before unattended publication would be appropriate.
   the CLI. A local NCNN executable was not run in this environment.
 - Optional Real-ESRGAN ONNX anime 4× provider with checksum-verified install, tiling, grayscale
   preservation, and a private classic-vs-AI comparison script.
-- Optional PP-OCRv3 polygon detector, `ppocr-v3+tesseract` union that keeps every proposal, and
-  explicit detection/OCR provider separation.
+- Optional PP-OCRv3 polygon detector, `ppocr-v3+tesseract` union that merges overlapping and nearby
+  aligned proposals then pads the box, and explicit detection/OCR provider separation.
 - Privacy-safe detection/OCR evaluation: IoU matching, CER, negative-page false positives, public
   synthetic ground truth, and ignored private detector-draft bootstrap. Sanitized reports omit
   transcriptions, filenames, checksums, and paths.

@@ -24,6 +24,7 @@ import {
   canonicalPoint,
   centeredNodeToRegionGeometry,
   frameRegions,
+  isKonvaRegionEditTarget,
   maskEditCapacity,
   regionToCenteredNodeGeometry,
 } from './canvasGeometry';
@@ -175,7 +176,7 @@ function RegionShape({
       transformerRef.current.nodes([shapeRef.current]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [editable, selected]);
+  }, [editable, region.height, region.rotation, region.width, region.x, region.y, selected]);
 
   const overflowing = regionHasTypesetOverflow(image, region.id);
   const stroke = selected
@@ -212,6 +213,10 @@ function RegionShape({
         strokeWidth={Math.max(1, 1.5 / viewportScale)}
         dash={region.ignored ? [8 / viewportScale, 5 / viewportScale] : overflowing ? [6 / viewportScale, 4 / viewportScale] : undefined}
         draggable={editable}
+        dragBoundFunc={(pos) => ({
+          x: clamp(pos.x, region.width / 2, Math.max(region.width / 2, image.width - region.width / 2)),
+          y: clamp(pos.y, region.height / 2, Math.max(region.height / 2, image.height - region.height / 2)),
+        })}
         onClick={select}
         onTap={select}
         onDragEnd={(event) => {
@@ -224,10 +229,7 @@ function RegionShape({
             scaleY: 1,
             rotation: event.target.rotation(),
           }, image);
-          updateRegion(region.id, {
-            x: geometry.x,
-            y: geometry.y,
-          });
+          updateRegion(region.id, geometry);
         }}
         onTransformEnd={() => {
           const node = shapeRef.current;
@@ -269,14 +271,27 @@ function RegionShape({
         <Transformer
           ref={transformerRef}
           rotateEnabled
+          keepRatio={false}
+          centeredScaling={false}
           flipEnabled={false}
+          ignoreStroke
+          enabledAnchors={[
+            'top-left',
+            'top-center',
+            'top-right',
+            'middle-right',
+            'middle-left',
+            'bottom-left',
+            'bottom-center',
+            'bottom-right',
+          ]}
           anchorCornerRadius={2}
           anchorFill="#dce9ff"
           anchorStroke="#286fdd"
           borderStroke="#5f9dff"
           borderStrokeWidth={1 / viewportScale}
           rotateAnchorOffset={24 / viewportScale}
-          anchorSize={8 / viewportScale}
+          anchorSize={Math.max(10, 12 / viewportScale)}
           boundBoxFunc={(oldBox, newBox) =>
             Math.abs(newBox.width) < 6 || Math.abs(newBox.height) < 6 ? oldBox : newBox
           }
@@ -461,7 +476,7 @@ function CanvasViewport({
       setDraft({ start: point, end: point });
       return;
     }
-    if (event.target.name() !== 'region') clearRegionSelection();
+    if (!isKonvaRegionEditTarget(event.target)) clearRegionSelection();
   }
 
   function handlePointerMove(event: KonvaEventObject<MouseEvent | TouchEvent>) {
@@ -584,6 +599,7 @@ function CanvasViewport({
     <div
       aria-label={`${mode === 'original' ? '原图' : mode === 'preprocessed' ? '增强' : mode === 'erased' ? '擦除' : '成品'}画布`}
       className={`canvas-viewport canvas-viewport--${spacePressed ? 'hand' : tool}`}
+      data-editable={editable ? 'true' : 'false'}
       data-testid="canvas-surface"
       ref={containerRef}
       role="application"
@@ -970,7 +986,7 @@ export function CanvasWorkspace() {
           <>
             <section className="compare-pane">
               <span className="compare-pane__label">原图</span>
-              <CanvasViewport editable={false} imageAsset={image} mode="original" zoomSignal={zoomSignal} />
+              <CanvasViewport editable imageAsset={image} mode="original" zoomSignal={zoomSignal} />
             </section>
             <section className="compare-pane">
               <span className="compare-pane__label">{resultMode === 'preprocessed' ? '增强结果' : resultMode === 'erased' ? '擦除结果' : resultMode === 'typeset' ? '嵌字成品' : '原图'}</span>

@@ -371,7 +371,11 @@ Semantic Versioning.
 - Round 60 adds photo-library import on the empty canvas and inspector after a project exists. Local
   gates passed 5 launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and
   frontend lint/typecheck/156 tests plus the production build. The release audit scanned 136
-  candidate files and 979 historical blobs. GitHub CI is pending after push.
+  candidate files and 979 historical blobs. GitHub CI run `31997919460` failed e2e on
+  `e7a7327ba7085db2d9b105c9692c388a10b6d9a1`.
+- Round 61 keeps inspector project settings available before images are imported. Local gates passed
+  5 launcher tests and frontend lint/typecheck/157 tests plus the production build. The release audit
+  scanned 136 candidate files and 988 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

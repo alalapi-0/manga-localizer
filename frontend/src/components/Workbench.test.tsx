@@ -241,6 +241,18 @@ describe('desktop workbench interactions', () => {
     expect(click).toHaveBeenCalledOnce();
   });
 
+  it('keeps project settings available before images are imported', () => {
+    seedWorkbench({ images: [] });
+    useWorkbenchStore.setState({ rightTab: 'project' });
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '检查', hidden: true }));
+    const inspector = document.querySelector('.inspector');
+    expect(inspector).not.toBeNull();
+    expect(within(inspector as HTMLElement).getByRole('tab', { name: '项目' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(inspector as HTMLElement).getByRole('combobox', { name: '翻译' })).toBeInTheDocument();
+  });
+
   it('shows the same-LAN companion URL when the Mac app exposes one', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -19,9 +19,10 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 60 adds photo-library import on the empty canvas and inspector after a project exists. The work
-is on `agent/manga-round7-governance-20260812`. Remote CI for Round 59 passed as run `31994257863` on
-`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 is locally verified and awaiting remote CI. Round
+Round 61 keeps project settings visible in the inspector before any images are imported. The work is
+on `agent/manga-round7-governance-20260812`. Remote CI for Round 59 passed as run `31994257863` on
+`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run `31997919460` failed e2e because the
+empty inspector hid the translator control. Round 61 is locally verified and awaiting remote CI. Round
 8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store /
 notarized release has occurred.
 
@@ -244,6 +245,8 @@ same through the Mac, or until a hard blocker.
 - [x] Round 59: first-run create-project actions on the empty canvas and inspector, with public
   regression, and complete CI.
 - [x] Round 60: photo-library import from the empty canvas and inspector, with public regression.
+  Remote e2e failed on run `31997919460`.
+- [x] Round 61: keep inspector project settings available before import, with public regression.
   Remote CI pending.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
@@ -732,6 +735,15 @@ same through the Mac, or until a hard blocker.
   release audit over 136 candidate files plus 979 historical blobs; and `git diff --check`. Playwright
   discovers both Chromium journeys; this environment lacks Playwright Chromium revision 1234, so live
   browser evidence remains the GitHub e2e job after push.
+- Round 60 remote verification: GitHub CI run `31997919460` failed at
+  `e7a7327ba7085db2d9b105c9692c388a10b6d9a1` on `main`. Backend and frontend jobs passed; e2e timed out
+  waiting for the inspector translator combobox because the empty-library inspector hid project
+  settings.
+- Round 61 local verification passed 5 launcher tests; frontend ESLint, TypeScript, 157 Vitest cases,
+  and the production build; release audit over 136 candidate files plus 988 historical blobs; and
+  `git diff --check`. Backend files were unchanged from Round 60. Playwright discovers both Chromium
+  journeys; this environment lacks Playwright Chromium revision 1234, so live browser evidence remains
+  the GitHub e2e job after push.
 
 ## Known limitations and blockers
 

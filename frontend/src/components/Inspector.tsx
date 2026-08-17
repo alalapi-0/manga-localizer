@@ -894,6 +894,17 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
   );
 }
 
+function EmptyLibraryState() {
+  return (
+    <EmptyState
+      icon="▧"
+      title="尚未导入图像"
+      description="手机请用「多图」从相册导入；处理仍在 Mac 上运行。"
+      action={<ImportPhotosButton />}
+    />
+  );
+}
+
 export function Inspector() {
   const project = useWorkbenchStore((state) => state.currentProject);
   const hasLibrary = useWorkbenchStore((state) => state.images.length > 0);
@@ -928,23 +939,28 @@ export function Inspector() {
             description="先创建本机项目，再用手机从相册导入。处理仍在 Mac 上运行。"
             action={<CreateLocalProjectButton />}
           />
-        ) : !hasLibrary ? (
-          <EmptyState
-            icon="▧"
-            title="尚未导入图像"
-            description="手机请用「多图」从相册导入；处理仍在 Mac 上运行。"
-            action={<ImportPhotosButton />}
-          />
         ) : (
           <>
-            <PageReviewControl regions={regions} />
-            <ProcessingErrorNotice />
-            <ProcessingActivityNotice />
-            <PreprocessSuggestionNotice />
-            <TypesetOverflowNotice regions={regions} />
-            {tab === 'text' ? <TextInspector regions={regions} selected={selected} /> : null}
-            {tab === 'typesetting' ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}
-            {tab === 'repair' ? <RepairInspector region={selected.length === 1 ? selected[0] : undefined} /> : null}
+            {hasLibrary ? (
+              <>
+                <PageReviewControl regions={regions} />
+                <ProcessingErrorNotice />
+                <ProcessingActivityNotice />
+                <PreprocessSuggestionNotice />
+                <TypesetOverflowNotice regions={regions} />
+              </>
+            ) : null}
+            {tab === 'text' ? (hasLibrary ? <TextInspector regions={regions} selected={selected} /> : <EmptyLibraryState />) : null}
+            {tab === 'typesetting' ? (
+              hasLibrary
+                ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} />
+                : <EmptyLibraryState />
+            ) : null}
+            {tab === 'repair' ? (
+              hasLibrary
+                ? <RepairInspector region={selected.length === 1 ? selected[0] : undefined} />
+                : <EmptyLibraryState />
+            ) : null}
             {tab === 'project' ? <ProjectInspector /> : null}
           </>
         )}

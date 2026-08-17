@@ -19,32 +19,35 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Combined real-data process/fix loop is active from `.agent/REALDATA_LOOP_PROMPT.md`
-on `agent/manga-realdata-20260817`. Round 61 closeout remains the published
-baseline on `origin/main` at `9b1add128ee8a00c6c40fd1f3b48480056234e96` with CI
-`32002551102`. Process/fix loop round 1 processed 7 of 69 `manga02` pages
-(0 import failures, 0 source-checksum failures, 0 mask-outside pixel changes,
-1 empty-recognized page left for a human). The evaluator's unattended export
-default is now `json`; generated-image export stays review-gated. Round 8
-remains a human visual gate and is not auto-accepted. 62 `manga02` pages and
-the `manga01` re-pass are still open.
+Combined real-data process/fix loop is **stopped** on
+`agent/manga-realdata-20260817` at `182a533` plus this closeout record.
+Round 61 closeout remains the published baseline on `origin/main` at
+`9b1add128ee8a00c6c40fd1f3b48480056234e96` with CI `32002551102`.
+A full 199-page pass (manga01 130 + manga02 69) found no new software
+defect after the round-1 evaluator JSON-export fix. Combined aggregates:
+0 import/processing failures, 1156 detected / 1000 recognized regions,
+30 empty-recognized pages left for a human, 0 source-checksum failures,
+0 mask-outside pixel changes. Safe unattended repair stayed at 0 mask
+coverage because automatic proposals remain untrusted.
+
+**NEEDS_USER:** unified visual check of both books. Do not auto-accept
+empty pages. Product Round 8 is not complete. Do not re-arm
+`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
 
 ## Active loop prompt
 
-Continue from `.agent/REALDATA_LOOP_PROMPT.md`. Sentinel
-`AGENT_LOOP_WAKE_manga_realdata`. Do not re-arm `AGENT_LOOP_WAKE_manga_app`.
-
-Process ignored `tests/real-data/manga01` and `manga02` as real material on the
-Mac, write a private problem report each round, then fix the highest-priority
-software defect with public tests. Never commit private manga. Never open
-private rasters with vision tools. Stop for the user's unified visual check
-only after a full combined pass finds no new software defects.
+Stopped. The process/fix loop in `.agent/REALDATA_LOOP_PROMPT.md` completed a
+full combined pass with no new software defects after the evaluator export
+fix. Do not re-arm `AGENT_LOOP_WAKE_manga_realdata` or
+`AGENT_LOOP_WAKE_manga_app`. Do not arm a 25-minute fallback sleeper.
+Late wakes skip rewrite and wait for the user's unified visual check.
 
 ## Automation closeout
 
 The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) remains stopped.
-Late wakes for that sentinel skip rewrite. The real-data process/fix loop above
-is a new, separately authorized loop.
+The 2026-08-17 real-data process/fix loop (`AGENT_LOOP_WAKE_manga_realdata`) is
+also stopped after a full combined pass. Late wakes for either sentinel skip
+rewrite and do not re-arm a sleeper.
 
 ## Environment evidence
 
@@ -249,19 +252,22 @@ is a new, separately authorized loop.
   Remote e2e failed on run `31997919460`.
 - [x] Round 61: keep inspector project settings available before import, with public regression, and
   complete CI.
-- [ ] Combined process/fix loop: 7/69 `manga02` pages processed; 62 `manga02` pages and the
-  `manga01` re-pass remain. Stop only after a full combined pass finds no new software
-  defects, then wait for the user's unified visual check.
+- [x] Combined process/fix loop: 199/199 pages processed on the current pipeline; one
+  public evaluator export-gate fix; no further software defect on the full pass.
+- [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
+  pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
-- Combined process/fix loop round 1: public evaluator export-gate tests passed locally
+- Combined process/fix loop: public evaluator export-gate tests passed locally
   (`backend/tests/test_evaluate_real_data.py`). Backend Ruff lint/format and 239 pytest
-  cases passed. A private 7-page `manga02` slice completed JSON export 7/7 after the
-  default changed from `both` to `json`. Generated-image export without review still
-  fails, as required.
+  cases passed. After that fix, private slices covering all 199 pages completed JSON
+  export with 0 import/processing failures, 0 source-checksum failures, and 0
+  mask-outside pixel changes. 30 empty-recognized pages were left for a human.
+  Generated-image export without review still fails, as required. The loop is
+  stopped for the user's unified visual check.
 - Prior Round 7 `npm run check` reproduced on 2026-08-12: 2 launcher tests; backend Ruff lint/format and
   130 pytest cases; frontend ESLint/TypeScript, 64 Vitest cases, and the production Vite build all passed.
 - End to end: 2 Playwright Chromium journeys passed, covering import, preprocessing, real local

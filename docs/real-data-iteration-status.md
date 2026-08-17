@@ -135,6 +135,9 @@ Last updated: 2026-08-17
   This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 61 — the inspector still shows project settings before images are imported. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Desktop application — `npm run package:app` builds a local `Manga Localizer.app`
+  that supervises the existing workbench API and copies checksum-verified optional
+  models at package time. Weights stay out of git. Product Round 8 is not complete.
 - Combined process/fix loop — stopped after a full 199-page Mac pass (130 + 69). The
   evaluator now defaults to JSON-only export so generated-image review gates are not
   treated as stage crashes. Combined aggregates: 0 import/processing failures, 1156

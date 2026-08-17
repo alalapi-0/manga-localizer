@@ -249,6 +249,65 @@ def test_setup_optional_models_prints_argos_translation_packs_without_download(
     assert "translate-en_zh-1_9.argosmodel" in output
 
 
+def test_setup_optional_models_copies_verified_files_and_rejects_checksum_mismatch(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    script = load_script("setup_optional_models.py")
+    payload = b"tiny-realesrgan"
+    source_dir = tmp_path / "source" / "models"
+    source_dir.mkdir(parents=True)
+    source = source_dir / "toy.onnx"
+    source.write_bytes(payload)
+    monkeypatch.setitem(
+        script.MODELS,
+        "realesrgan",
+        script.ModelSpec(
+            filename="toy.onnx",
+            url="https://example.invalid/toy.onnx",
+            sha256=__import__("hashlib").sha256(payload).hexdigest(),
+            license="BSD-3-Clause",
+        ),
+    )
+    dest = tmp_path / "bundle"
+    script.copy_named("realesrgan", source_dir, dest)
+    assert (dest / "toy.onnx").read_bytes() == payload
+    assert script.verify_named("realesrgan", dest)["available"] is True
+    (dest / "toy.onnx").write_bytes(b"tampered")
+    assert script.verify_named("realesrgan", dest)["error"] == "checksum mismatch"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "setup_optional_models.py",
+            "--data-dir",
+            str(tmp_path / "empty-data"),
+            "--bundle-dest",
+            str(tmp_path / "missing-bundle"),
+            "--no-download",
+            "realesrgan",
+        ],
+    )
+    try:
+        script.main()
+        raise AssertionError("missing models must not be downloaded")
+    except RuntimeError as error:
+        assert "downloads are disabled" in str(error)
+
+
+def test_macos_app_launcher_prefers_bundled_window_and_does_not_download() -> None:
+    script = load_script("macos_app_launcher.py")
+    command, kind = script.window_launch(
+        "http://127.0.0.1:8000",
+        window_helper=Path("/tmp/WorkbenchWindow"),
+        path_exists=lambda path: str(path) == "/tmp/WorkbenchWindow",
+    )
+    assert kind == "app-window"
+    assert command == ["/tmp/WorkbenchWindow", "http://127.0.0.1:8000"]
+    assert "setup_optional_models" not in script.__dict__
+    assert script.application_bind_host(lan_access=False, requested_host="127.0.0.1") == "127.0.0.1"
+
+
 def test_compare_upscale_writes_relative_metrics_without_source_mutation(
     tmp_path: Path,
     monkeypatch,

@@ -44,6 +44,7 @@ class Settings(BaseSettings):
         "http://127.0.0.1:8000",
     ]
     frontend_dist: Path | None = None
+    model_bundle: Path | None = None
     lan_access: bool = False
     tesseract_command: str = Field(
         default="tesseract",

@@ -50,7 +50,8 @@ that trust automatically. Human review remains required.
 
 The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, artistic
 sound-effect redraw, automatic font matching, reliable speech-bubble classification, PDF/EPUB import,
-native installers signed for the App Store, cloud sync, or collaboration. No model weights or fonts are bundled. See the
+native installers signed for the App Store, cloud sync, or collaboration. Local package-time copies
+of optional models stay out of git. See the
 [real-data iteration report](docs/real-data-iteration-status.md) for measured trade-offs rather than
 accuracy claims without ground truth.
 
@@ -116,10 +117,21 @@ npm run app
 ```
 
 On a Mac this starts the local API, serves the built workbench from the same origin, and opens a
-dedicated application window when Chrome, Edge, Chromium, or Brave is installed. That window is the
-current prototype; the next increment is a double-clickable `.app` that bundles checksum-verified
-models. The API still binds to `127.0.0.1:8000` and is not exposed to the network by default. Import
-images with **单图** / **多图** / **文件夹**, then run batch processing as before.
+dedicated application window when Chrome, Edge, Chromium, or Brave is installed. `npm run app` remains
+the developer prototype. To build a double-clickable local `Manga Localizer.app` that starts the API
+without a terminal and copies checksum-verified PP-OCR, LaMa, Real-ESRGAN anime, and Argos ja→zh
+weights into the bundle:
+
+```bash
+npm run package:app
+```
+
+That writes `dist/macos/Manga Localizer.app` and, on this Mac, also copies it to `~/Applications`.
+The packaged app binds `127.0.0.1:8000` by default, serves the built frontend from inside the bundle,
+and never downloads models at ordinary startup. Missing or checksum-failed bundled files stay
+unavailable. The API is not exposed to the network unless you start `npm run app:lan` or launch the
+app binary with `--lan`. Import images with **单图** / **多图** / **文件夹**, then run batch
+processing as before.
 
 To let an iPhone on the same Wi-Fi import photos while processing stays on the Mac:
 

@@ -15,6 +15,10 @@ Semantic Versioning.
 
 ### Added
 
+- Local `Manga Localizer.app` packager: `npm run package:app` builds a double-clickable Mac
+  application that supervises the existing workbench API, serves the bundled frontend, and copies
+  checksum-verified PP-OCR, LaMa, Real-ESRGAN anime, and Argos ja→zh weights at package time.
+  Ordinary startup never downloads models; missing or mismatched bundle files stay unavailable.
 - Review canvas box editing: drag, resize, rotate, inspector geometry, and modifier-arrow nudge.
 - Manual **整理本页选框** to merge overlapping fragments and expand boxes on the current page.
 - Manual **AI 重绘本页** that runs local Real-ESRGAN anime 4× on the current page only.

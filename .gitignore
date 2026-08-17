@@ -23,6 +23,7 @@ htmlcov/
 # Node
 node_modules/
 dist/
+*.app
 coverage/
 playwright-report/
 test-results/
@@ -44,6 +45,7 @@ output/
 *.db-shm
 *.traineddata
 *.onnx
+*.argosmodel
 *.pt
 *.pth
 *.ckpt

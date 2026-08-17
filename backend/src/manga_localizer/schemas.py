@@ -308,6 +308,7 @@ class HealthOut(APIModel):
     queue: str
     lan_access: bool = False
     companion_url: str | None = None
+    bundled_models: dict[str, Any] | None = None
 
 
 class ConfigOut(APIModel):

@@ -31,9 +31,12 @@ target automatically unless `VITE_DEV_API_TARGET` is set.
 ### Optional local models
 
 Developer bootstrap and ordinary application startup still do not download models.
-The desktop-application loop may download the same checksum-verified files at
-*package* time and copy them into the `.app` bundle; those weights stay out of
-git. To install the PP-OCR and LaMa models explicitly for a source checkout with
+`npm run package:app` may download the same checksum-verified files at *package*
+time and copy them into `Manga Localizer.app`; those weights stay out of git.
+The packaged app reads `Contents/Resources/models/manifest.json` and reports
+unavailable when a bundled file is missing or the SHA-256 does not match.
+
+To install the PP-OCR and LaMa models explicitly for a source checkout with
 fixed SHA-256 verification, target the same data directory used by the application:
 
 ```bash
@@ -98,7 +101,16 @@ uv run --project backend python scripts/review_detection_annotations.py \
 
 The 0.2.0 launcher was exercised through `npm run dev`: the root Web page, direct FastAPI
 health endpoint, and the Vite `/api` proxy all responded successfully. Launcher platform logic also has
-two Node tests in the unified `npm run check` gate.
+Node tests in the unified `npm run check` gate, including the macOS `.app` skeleton.
+
+```bash
+npm run package:app
+```
+
+builds `dist/macos/Manga Localizer.app`. On Darwin it also copies the app to `~/Applications`.
+Pass `--no-install-user` to keep the copy only under `dist/`. Pass `--skip-download` only when
+every required model is already verified in a `--copy-from` data directory. The `.app` and model
+weights are gitignored.
 
 ## Verify
 

@@ -81,11 +81,11 @@ not inferred from this tracked checklist.
 
 ## Unreleased local application
 
-- [ ] Double-clickable Mac application that starts the local API and window
+- [x] Double-clickable Mac application that starts the local API and window
       without a developer terminal
-- [ ] Package-time checksummed download of PP-OCR, LaMa, Real-ESRGAN anime, and
+- [x] Package-time checksummed download of PP-OCR, LaMa, Real-ESRGAN anime, and
       Argos ja→zh into the application bundle (weights stay out of git)
-- [ ] Running app selects bundled models so detect / AI redraw / LaMa / Argos
+- [x] Running app selects bundled models so detect / AI redraw / LaMa / Argos
       work offline after install
 - [ ] Remaining workbench gaps found in the local app are fixed iteratively
 

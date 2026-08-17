@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import shutil
 import tempfile
 import urllib.request
@@ -102,7 +103,18 @@ ALIASES = {
     "argos-ja-zh": ("argos-ja-en", "argos-en-zh"),
 }
 
+BUNDLE_SELECTION = ("ppocr", "lama", "realesrgan", "argos-ja-zh")
+
+SETTING_FOR = {
+    "ppocr": "ppocr_detection_model",
+    "lama": "lama_inpainting_model",
+    "realesrgan": "realesrgan_onnx_model",
+    "argos-ja-en": "argos_ja_en_model",
+    "argos-en-zh": "argos_en_zh_model",
+}
+
 CHOICES = tuple(sorted(MODELS) + sorted(ARCHIVES) + sorted(ALIASES))
+MANIFEST_NAME = "manifest.json"
 
 
 def file_sha256(path: Path) -> str:
@@ -111,6 +123,101 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def verify_file(path: Path, sha256: str) -> bool:
+    return path.is_file() and file_sha256(path) == sha256
+
+
+def copy_verified_file(source: Path, destination: Path, sha256: str) -> None:
+    if not verify_file(source, sha256):
+        raise RuntimeError(f"refusing to copy unverified file: {source}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(source, destination)
+    if not verify_file(destination, sha256):
+        destination.unlink(missing_ok=True)
+        raise RuntimeError(f"checksum mismatch after copy: {destination}")
+
+
+def manifest_entry(name: str) -> dict[str, str]:
+    if name in MODELS:
+        spec = MODELS[name]
+        return {
+            "name": name,
+            "kind": "file",
+            "path": spec.filename,
+            "sha256": spec.sha256,
+            "license": spec.license,
+            "setting": SETTING_FOR[name],
+        }
+    spec = ARCHIVES[name]
+    return {
+        "name": name,
+        "kind": "archive",
+        "path": spec.extract_dir,
+        "archive": spec.filename,
+        "sha256": spec.sha256,
+        "license": spec.license,
+        "setting": SETTING_FOR[name],
+    }
+
+
+def write_manifest(path: Path, names: list[str]) -> None:
+    payload = {
+        "schemaVersion": 1,
+        "downloadsAtStartup": False,
+        "models": [manifest_entry(name) for name in names],
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def verify_named(name: str, models_dir: Path) -> dict[str, str | bool | None]:
+    if name in MODELS:
+        spec = MODELS[name]
+        target = models_dir / spec.filename
+        if verify_file(target, spec.sha256):
+            return {"name": name, "available": True, "error": None}
+        if not target.is_file():
+            return {"name": name, "available": False, "error": "model file is missing"}
+        return {"name": name, "available": False, "error": "checksum mismatch"}
+    spec = ARCHIVES[name]
+    archive = models_dir / spec.filename
+    extract = models_dir / spec.extract_dir
+    if not verify_file(archive, spec.sha256):
+        if not archive.is_file():
+            return {"name": name, "available": False, "error": "archive is missing"}
+        return {"name": name, "available": False, "error": "checksum mismatch"}
+    if not archive_ready(extract):
+        return {
+            "name": name,
+            "available": False,
+            "error": "extracted package is incomplete",
+        }
+    return {"name": name, "available": True, "error": None}
+
+
+def copy_named(name: str, source_dir: Path, destination_dir: Path) -> None:
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    if name in MODELS:
+        spec = MODELS[name]
+        copy_verified_file(
+            source_dir / spec.filename, destination_dir / spec.filename, spec.sha256
+        )
+        return
+    spec = ARCHIVES[name]
+    copy_verified_file(
+        source_dir / spec.filename, destination_dir / spec.filename, spec.sha256
+    )
+    source_extract = source_dir / spec.extract_dir
+    destination_extract = destination_dir / spec.extract_dir
+    if not archive_ready(source_extract):
+        raise RuntimeError(f"{name} extracted package is missing required files")
+    if destination_extract.exists():
+        shutil.rmtree(destination_extract)
+    shutil.copytree(source_extract, destination_extract)
+    if not archive_ready(destination_extract):
+        raise RuntimeError(f"{name} extracted package is incomplete after copy")
 
 
 def expand_selection(names: list[str]) -> list[str]:
@@ -182,7 +289,33 @@ def package_root(extracted: Path) -> Path:
     raise RuntimeError("Argos archive did not contain metadata.json")
 
 
-def install_model(name: str, spec: ModelSpec, target_dir: Path, *, force: bool) -> None:
+def _copy_from_data_dirs(
+    name: str,
+    filename: str,
+    sha256: str,
+    target: Path,
+    copy_from: tuple[Path, ...],
+) -> bool:
+    for data_dir in copy_from:
+        source = data_dir.expanduser() / "models" / filename
+        if source.resolve() == target.resolve():
+            continue
+        if verify_file(source, sha256):
+            print(f"[{name}] copying verified {filename}")
+            copy_verified_file(source, target, sha256)
+            return True
+    return False
+
+
+def install_model(
+    name: str,
+    spec: ModelSpec,
+    target_dir: Path,
+    *,
+    force: bool,
+    copy_from: tuple[Path, ...] = (),
+    no_download: bool = False,
+) -> None:
     target = target_dir / spec.filename
     print(f"[{name}] license: {spec.license}")
     if spec.notes:
@@ -191,6 +324,16 @@ def install_model(name: str, spec: ModelSpec, target_dir: Path, *, force: bool) 
         print(f"[{name}] already verified: {target}")
         return
     target_dir.mkdir(parents=True, exist_ok=True)
+    if not force and _copy_from_data_dirs(
+        name, spec.filename, spec.sha256, target, copy_from
+    ):
+        print(f"[{name}] installed and verified: {target}")
+        print(f"[{name}] sha256: {spec.sha256}")
+        return
+    if no_download:
+        raise RuntimeError(
+            f"{name} is not available locally and downloads are disabled"
+        )
     with tempfile.NamedTemporaryFile(
         dir=target_dir,
         prefix=f".{spec.filename}.",
@@ -209,7 +352,13 @@ def install_model(name: str, spec: ModelSpec, target_dir: Path, *, force: bool) 
 
 
 def install_archive(
-    name: str, spec: ArchiveSpec, target_dir: Path, *, force: bool
+    name: str,
+    spec: ArchiveSpec,
+    target_dir: Path,
+    *,
+    force: bool,
+    copy_from: tuple[Path, ...] = (),
+    no_download: bool = False,
 ) -> None:
     archive_path = target_dir / spec.filename
     extract_path = target_dir / spec.extract_dir
@@ -221,6 +370,25 @@ def install_archive(
         print(f"[{name}] already verified: {extract_path}")
         return
     target_dir.mkdir(parents=True, exist_ok=True)
+    if not force:
+        for data_dir in copy_from:
+            source_models = data_dir.expanduser() / "models"
+            source_archive = source_models / spec.filename
+            source_extract = source_models / spec.extract_dir
+            if source_archive.resolve() == archive_path.resolve():
+                continue
+            if verify_file(source_archive, spec.sha256) and archive_ready(
+                source_extract
+            ):
+                print(f"[{name}] copying verified {spec.extract_dir}")
+                copy_named(name, source_models, target_dir)
+                print(f"[{name}] installed and verified: {extract_path}")
+                print(f"[{name}] sha256: {spec.sha256}")
+                return
+    if no_download:
+        raise RuntimeError(
+            f"{name} is not available locally and downloads are disabled"
+        )
     if not archive_ok or force:
         with tempfile.NamedTemporaryFile(
             dir=target_dir,
@@ -263,14 +431,37 @@ def parse_args() -> argparse.Namespace:
         "models",
         nargs="*",
         choices=CHOICES,
-        default=sorted(MODELS),
-        help="Model names. Defaults to ONNX vision models only.",
+        default=None,
+        help="Model names. Defaults to ONNX vision models, or the app bundle set with --bundle-dest.",
     )
     parser.add_argument(
         "--data-dir",
         type=Path,
         default=Path.home() / ".manga-localizer",
         help="Application data directory (models are written below its models/ folder)",
+    )
+    parser.add_argument(
+        "--copy-from",
+        action="append",
+        type=Path,
+        default=[],
+        help="Existing data directories to copy verified models from before downloading",
+    )
+    parser.add_argument(
+        "--bundle-dest",
+        type=Path,
+        default=None,
+        help="Copy verified models into this directory and write manifest.json",
+    )
+    parser.add_argument(
+        "--verify-only",
+        action="store_true",
+        help="verify files in --data-dir or --bundle-dest without downloading",
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help="copy or reuse verified files only; never download",
     )
     parser.add_argument(
         "--force", action="store_true", help="replace an already verified model"
@@ -292,19 +483,62 @@ def print_spec(name: str) -> None:
     print(f"{name}\t{spec.license}\t{spec.sha256}\t{spec.filename}")
 
 
+def selected_names(args: argparse.Namespace) -> list[str]:
+    if args.models:
+        return expand_selection(list(args.models))
+    if args.bundle_dest is not None:
+        return expand_selection(list(BUNDLE_SELECTION))
+    return sorted(MODELS)
+
+
 def main() -> int:
     args = parse_args()
-    selected = expand_selection(args.models or sorted(MODELS))
+    selected = selected_names(args)
     if args.print_specs:
         for name in selected:
             print_spec(name)
         return 0
-    target_dir = args.data_dir.expanduser().resolve() / "models"
+    target_dir = (
+        args.bundle_dest.expanduser().resolve()
+        if args.verify_only and args.bundle_dest is not None
+        else args.data_dir.expanduser().resolve() / "models"
+    )
+    if args.verify_only:
+        failed = 0
+        for name in selected:
+            result = verify_named(name, target_dir)
+            status = "ok" if result["available"] else "unavailable"
+            print(f"[{name}] {status}: {result['error'] or 'verified'}")
+            if not result["available"]:
+                failed += 1
+        return 1 if failed else 0
+    copy_from = tuple(path.expanduser() for path in args.copy_from)
     for name in selected:
         if name in MODELS:
-            install_model(name, MODELS[name], target_dir, force=args.force)
+            install_model(
+                name,
+                MODELS[name],
+                target_dir,
+                force=args.force,
+                copy_from=copy_from,
+                no_download=args.no_download,
+            )
             continue
-        install_archive(name, ARCHIVES[name], target_dir, force=args.force)
+        install_archive(
+            name,
+            ARCHIVES[name],
+            target_dir,
+            force=args.force,
+            copy_from=copy_from,
+            no_download=args.no_download,
+        )
+    if args.bundle_dest is not None:
+        destination = args.bundle_dest.expanduser().resolve()
+        if destination != target_dir:
+            for name in selected:
+                copy_named(name, target_dir, destination)
+        write_manifest(destination / MANIFEST_NAME, selected)
+        print(f"wrote bundle manifest: {destination / MANIFEST_NAME}")
     return 0
 
 

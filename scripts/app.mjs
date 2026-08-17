@@ -102,7 +102,9 @@ try {
   stop(1);
 }
 
-const windowLaunch = desktopWindowLaunch(appUrl);
+const windowLaunch = desktopWindowLaunch(appUrl, {
+  windowHelper: process.env.MANGA_LOCALIZER_WINDOW_HELPER || null,
+});
 windowProcess = spawn(windowLaunch.command, windowLaunch.args, {
   cwd: root,
   env: environment,

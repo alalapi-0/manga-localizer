@@ -2,11 +2,51 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  APP_BUNDLE_NAME,
   applicationBindHost,
+  appBundleLayout,
+  bundledRuntimeEnvironment,
   desktopWindowLaunch,
   firstPrivateLanIPv4,
+  infoPlistXml,
   isPrivateLanIPv4,
+  macosWrapperScript,
 } from './app-platform.mjs';
+
+test('bundled window helper is preferred over Chromium', () => {
+  const launch = desktopWindowLaunch('http://127.0.0.1:8000', {
+    platform: 'darwin',
+    windowHelper: '/tmp/WorkbenchWindow',
+    pathExists: (candidate) => candidate === '/tmp/WorkbenchWindow' || candidate.includes('Google Chrome.app'),
+  });
+
+  assert.equal(launch.kind, 'app-window');
+  assert.equal(launch.command, '/tmp/WorkbenchWindow');
+  assert.deepEqual(launch.args, ['http://127.0.0.1:8000']);
+});
+
+test('macOS app bundle layout and wrapper stay loopback by default', () => {
+  const layout = appBundleLayout('/tmp/macos-dist');
+  assert.equal(layout.app.endsWith(APP_BUNDLE_NAME), true);
+  assert.equal(layout.manifest.endsWith('models/manifest.json'), true);
+
+  const plist = infoPlistXml({ version: '0.2.0' });
+  assert.match(plist, /local.manga-localizer/);
+  assert.match(plist, /CFBundleExecutable/);
+  assert.match(plist, /Manga Localizer/);
+
+  const wrapper = macosWrapperScript();
+  assert.match(wrapper, /MANGA_LOCALIZER_MODEL_BUNDLE/);
+  assert.match(wrapper, /MANGA_LOCALIZER_FRONTEND_DIST/);
+  assert.match(wrapper, /macos_app_launcher.py/);
+  assert.doesNotMatch(wrapper, /huggingface|argos-net|setup_optional_models/);
+
+  const env = bundledRuntimeEnvironment(layout.resources);
+  assert.equal(env.MANGA_LOCALIZER_LAN_ACCESS, '0');
+  assert.equal(env.MANGA_LOCALIZER_HOST, '127.0.0.1');
+  assert.equal(env.MANGA_LOCALIZER_MODEL_BUNDLE, layout.models);
+  assert.equal(env.MANGA_LOCALIZER_FRONTEND_DIST, layout.frontend);
+});
 
 test('macOS prefers an installed Chromium app window', () => {
   const launch = desktopWindowLaunch('http://127.0.0.1:8000', {

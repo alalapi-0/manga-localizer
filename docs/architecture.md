@@ -2,10 +2,12 @@
 
 Manga Localizer is a local single-user client/server application. The workbench UI and FastAPI share
 one origin in application mode: loopback by default, or one private LAN IPv4 when `npm run app:lan`
-is started explicitly. The browser, Mac application window, or same-Wi-Fi phone Safari session owns
-interaction state and immediate canvas history. FastAPI owns durable state, safe filesystem
-operations, processing, and exports. `npm run app` launches that API, serves the built UI, and opens
-a dedicated Mac window.
+or the packaged app `--lan` flag is started explicitly. The browser, Mac application window, or
+same-Wi-Fi phone Safari session owns interaction state and immediate canvas history. FastAPI owns
+durable state, safe filesystem operations, processing, and exports. `npm run package:app` builds a
+local `Manga Localizer.app` that supervises that API, serves the built UI from the bundle, and
+selects checksum-verified models copied at package time. `npm run app` remains the source-tree
+prototype.
 
 ## Components
 

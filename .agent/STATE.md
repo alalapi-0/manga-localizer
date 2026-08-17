@@ -19,28 +19,30 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-`origin/main` is at `44d9adf` (review-canvas box editing, union merge/pad,
-manual AI redraw). The conversation workbench uvicorn on port 8000 was
-stopped. No `AGENT_LOOP_*` sleeper is armed.
+Desktop application increment: `npm run package:app` builds a local
+`Manga Localizer.app` that starts the existing FastAPI workbench on
+loopback, serves the bundled frontend, and selects checksum-verified
+PP-OCR, LaMa, Real-ESRGAN anime, and Argos ja→zh weights copied at
+package time. Ordinary startup does not download models. `npm run app`
+remains the source-tree prototype. LAN companion stays explicit
+(`app:lan` or the app binary `--lan`).
 
-The next product increment is a **double-clickable local Mac application**
-that bundles checksum-verified models. `npm run app` (uvicorn + Chromium
-`--app=`) remains the prototype only.
-
-**NEEDS_USER:** start the new desktop loop with `/loop` and
-`.agent/DESKTOP_LOOP_PROMPT.md`. Unified visual check of both private books
-is still outstanding. Do not auto-accept empty pages. Product Round 8 is
-not complete. Do not re-arm `AGENT_LOOP_WAKE_manga_realdata` or
-`AGENT_LOOP_WAKE_manga_app`.
+Local package smoke: the app wrapper reached `/api/health`; bundled
+PP-OCR, LaMa, Real-ESRGAN ONNX, Argos ja→zh, and Tesseract reported
+available. The `.app` and weights stay gitignored. Unified visual check
+of both private books is still outstanding. Do not auto-accept empty
+pages. Product Round 8 is not complete. Do not re-arm
+`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
 
 ## Active loop prompt
 
-Ready, not armed. Live prompt: `.agent/DESKTOP_LOOP_PROMPT.md`.
+Live prompt: `.agent/DESKTOP_LOOP_PROMPT.md`.
 Sentinel: `AGENT_LOOP_WAKE_manga_desktop`.
 `.agent/REALDATA_LOOP_PROMPT.md` is superseded. Do not re-arm
 `AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
 Do not arm a 25-minute fallback sleeper. Late wakes for the old sentinels
-skip rewrite and do not resume those loops.
+skip rewrite and do not resume those loops. After a public push, wake on
+CI completion only.
 
 ## Automation closeout
 
@@ -63,9 +65,9 @@ superseded. Late wakes for those sentinels skip rewrite.
 
 ## Decisions
 
-- The shipping form is a local Mac application, not a browser tab. `npm run app`
-  is the current prototype. The next increment is a double-clickable `.app` that
-  supervises the existing FastAPI workbench and bundles checksum-verified models.
+- The shipping form is a local Mac application, not a browser tab. `npm run
+  package:app` builds `Manga Localizer.app` with checksum-verified bundled
+  models. `npm run app` remains the source-tree prototype.
 - Repository/distribution name: `manga-localizer`; Python import package: `manga_localizer`.
 - Frontend: React, TypeScript, Vite, Zustand, React Konva, and dense custom CSS tokens.
 - Backend: FastAPI, Pydantic, SQLAlchemy/SQLite, Pillow, OpenCV, and background asyncio workers.
@@ -262,6 +264,9 @@ superseded. Late wakes for those sentinels skip rewrite.
   Remote e2e failed on run `31997919460`.
 - [x] Round 61: keep inspector project settings available before import, with public regression, and
   complete CI.
+- [x] Desktop app foundation: double-clickable local `Manga Localizer.app`,
+  package-time checksummed PP-OCR/LaMa/Real-ESRGAN/Argos copy, and launch-time
+  bundle selection with honest unavailable health.
 - [x] Combined process/fix loop: 199/199 pages processed on the current pipeline; one
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
@@ -271,6 +276,13 @@ superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-17 desktop app package: launcher 9/9 Node tests passed; backend Ruff
+  lint/format and 244 pytest cases passed, including checksum-mismatch
+  unavailable health and verified bundle copy. `npm run package:app` wrote
+  `dist/macos/Manga Localizer.app` with a native window helper; wrapper
+  `--no-window` reached `/api/health`; bundled PP-OCR, LaMa, Real-ESRGAN
+  ONNX, Argos ja→zh, and Tesseract were available. Private real-data trees
+  and model weights were not committed.
 - 2026-08-17 review-canvas/detection delivery: frontend lint, typecheck, 164 Vitest
   cases, and production build passed; backend Ruff lint/format and full pytest passed;
   launcher 5/5 passed. Private real-data trees were not committed.

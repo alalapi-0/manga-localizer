@@ -22,6 +22,7 @@ from manga_localizer.imaging import (
     typeset_overflow_from_status,
 )
 from manga_localizer.logging_utils import configure_logging, redact, without_secrets
+from manga_localizer.model_bundle import apply_model_bundle
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.queue import JobConflict, PersistentJobQueue
 from manga_localizer.schemas import (
@@ -419,7 +420,7 @@ def _decode_relative_paths(form: Any, files: list[UploadFile]) -> list[str]:
 
 
 def create_app(settings: Settings | None = None, *, start_worker: bool = True) -> FastAPI:
-    resolved_settings = settings or get_settings()
+    resolved_settings, bundled_models = apply_model_bundle(settings or get_settings())
     registry = ProjectRegistry(resolved_settings)
     providers = ProviderRegistry(resolved_settings)
     queue = PersistentJobQueue(registry, providers, resolved_settings)
@@ -446,6 +447,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     app.state.registry = registry
     app.state.providers = providers
     app.state.queue = queue
+    app.state.bundled_models = bundled_models
     app.state.ready = False
     app.add_middleware(
         CORSMiddleware,
@@ -510,6 +512,7 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             else ("disabled" if not start_worker else "stopped"),
             "lan_access": resolved_settings.lan_access,
             "companion_url": companion,
+            "bundled_models": getattr(app.state, "bundled_models", None),
         }
 
     @app.get("/health", include_in_schema=False)

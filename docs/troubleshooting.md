@@ -8,9 +8,18 @@ Run `tesseract --version` and `tesseract --list-langs`. Install both `jpn` and `
 
 ## The Mac application window did not open
 
-`npm run app` needs a built workbench (`frontend/dist`) and a loopback API. Install Chrome, Edge,
-Chromium, or Brave for a dedicated window; otherwise macOS opens the workbench URL in the default
-browser. The API remains on `127.0.0.1` unless you start `npm run app:lan`.
+Double-click `Manga Localizer.app` from `dist/macos` or `~/Applications` after `npm run package:app`.
+That starts the bundled API and a dedicated window. `npm run app` still needs a built workbench
+(`frontend/dist`) and a loopback API; it uses Chrome, Edge, Chromium, or Brave for a dedicated window
+when the native helper is not present. The API remains on `127.0.0.1` unless you start
+`npm run app:lan` or launch the app binary with `--lan`.
+
+## Bundled PP-OCR, LaMa, Real-ESRGAN, or Argos is unavailable
+
+The packaged app never downloads models at startup. Re-run `npm run package:app` so package-time
+checksum verification can copy the files into the bundle. `/api/health` reports `bundledModels`
+with `checksum mismatch` or `missing` when a bundled file is wrong. Developer checkouts can still
+use `npm run setup:models` into the data directory.
 
 ## The phone cannot open the Mac companion URL
 

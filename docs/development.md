@@ -30,7 +30,10 @@ target automatically unless `VITE_DEV_API_TARGET` is set.
 
 ### Optional local models
 
-No model is downloaded by bootstrap or startup. To install the PP-OCR and LaMa models explicitly with
+Developer bootstrap and ordinary application startup still do not download models.
+The desktop-application loop may download the same checksum-verified files at
+*package* time and copy them into the `.app` bundle; those weights stay out of
+git. To install the PP-OCR and LaMa models explicitly for a source checkout with
 fixed SHA-256 verification, target the same data directory used by the application:
 
 ```bash

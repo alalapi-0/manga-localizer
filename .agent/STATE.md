@@ -19,41 +19,36 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Combined real-data process/fix loop is **stopped** on
-`agent/manga-realdata-20260817` at `182a533` plus this closeout record.
-Round 61 closeout remains the published baseline on `origin/main` at
-`9b1add128ee8a00c6c40fd1f3b48480056234e96` with CI `32002551102`.
-A full 199-page pass (manga01 130 + manga02 69) found no new software
-defect after the round-1 evaluator JSON-export fix. Combined aggregates:
-0 import/processing failures, 1156 detected / 1000 recognized regions,
-30 empty-recognized pages left for a human, 0 source-checksum failures,
-0 mask-outside pixel changes. Safe unattended repair stayed at 0 mask
-coverage because automatic proposals remain untrusted.
+`origin/main` is at `44d9adf` (review-canvas box editing, union merge/pad,
+manual AI redraw). The conversation workbench uvicorn on port 8000 was
+stopped. No `AGENT_LOOP_*` sleeper is armed.
 
-**NEEDS_USER:** unified visual check of both books. Do not auto-accept
-empty pages. Product Round 8 is not complete. Do not re-arm
-`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
+The next product increment is a **double-clickable local Mac application**
+that bundles checksum-verified models. `npm run app` (uvicorn + Chromium
+`--app=`) remains the prototype only.
 
-Review-canvas delivery for main: drag/resize/rotate boxes; union detector
-merges overlaps and pads boxes; re-detect replaces stale empty auto boxes;
-manual **整理本页选框** and **AI 重绘本页** (local Real-ESRGAN 4×). Local
-verification: frontend lint/typecheck/164 tests/build, backend ruff plus
-full pytest, launcher 5/5. Private `tests/real-data/` is not included.
+**NEEDS_USER:** start the new desktop loop with `/loop` and
+`.agent/DESKTOP_LOOP_PROMPT.md`. Unified visual check of both private books
+is still outstanding. Do not auto-accept empty pages. Product Round 8 is
+not complete. Do not re-arm `AGENT_LOOP_WAKE_manga_realdata` or
+`AGENT_LOOP_WAKE_manga_app`.
 
 ## Active loop prompt
 
-Stopped. The process/fix loop in `.agent/REALDATA_LOOP_PROMPT.md` completed a
-full combined pass with no new software defects after the evaluator export
-fix. Do not re-arm `AGENT_LOOP_WAKE_manga_realdata` or
-`AGENT_LOOP_WAKE_manga_app`. Do not arm a 25-minute fallback sleeper.
-Late wakes skip rewrite and wait for the user's unified visual check.
+Ready, not armed. Live prompt: `.agent/DESKTOP_LOOP_PROMPT.md`.
+Sentinel: `AGENT_LOOP_WAKE_manga_desktop`.
+`.agent/REALDATA_LOOP_PROMPT.md` is superseded. Do not re-arm
+`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
+Do not arm a 25-minute fallback sleeper. Late wakes for the old sentinels
+skip rewrite and do not resume those loops.
 
 ## Automation closeout
 
-The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) remains stopped.
-The 2026-08-17 real-data process/fix loop (`AGENT_LOOP_WAKE_manga_realdata`) is
-also stopped after a full combined pass. Late wakes for either sentinel skip
-rewrite and do not re-arm a sleeper.
+This conversation's workbench API worker (uvicorn `127.0.0.1:8000`) was
+stopped. No live `AGENT_LOOP_*` watcher or sleeper remains.
+The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) and
+real-data process/fix loop (`AGENT_LOOP_WAKE_manga_realdata`) stay
+superseded. Late wakes for those sentinels skip rewrite.
 
 ## Environment evidence
 
@@ -68,6 +63,9 @@ rewrite and do not re-arm a sleeper.
 
 ## Decisions
 
+- The shipping form is a local Mac application, not a browser tab. `npm run app`
+  is the current prototype. The next increment is a double-clickable `.app` that
+  supervises the existing FastAPI workbench and bundles checksum-verified models.
 - Repository/distribution name: `manga-localizer`; Python import package: `manga_localizer`.
 - Frontend: React, TypeScript, Vite, Zustand, React Konva, and dense custom CSS tokens.
 - Backend: FastAPI, Pydantic, SQLAlchemy/SQLite, Pillow, OpenCV, and background asyncio workers.
@@ -75,7 +73,9 @@ rewrite and do not re-arm a sleeper.
   uses classic Lanczos (`aiUpscale: false`). `realesrgan-onnx` is the runnable local AI upscaler:
   explicit checksum/license install, no startup download, native 4×, 2×/3× downscale from that AI
   result, tile size 256 on this 16 GB M4, and grayscale preservation. `realesrgan-ncnn` remains optional
-  and never downloaded at application startup. Each imported page stores a local profile suggestion
+  and is never downloaded at ordinary application startup. Application packaging may download
+  checksum-verified weights and copy them into the `.app` bundle; git still must not store those
+  files. Each imported page stores a local profile suggestion
   from size plus a native-resolution contrast/sharpness sample. The editor may apply that hint to the
   current page or adopt it as the project default; it is never an automatic book-wide setting.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR

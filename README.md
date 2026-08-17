@@ -116,9 +116,10 @@ npm run app
 ```
 
 On a Mac this starts the local API, serves the built workbench from the same origin, and opens a
-dedicated application window when Chrome, Edge, Chromium, or Brave is installed. The API still binds
-to `127.0.0.1:8000` and is not exposed to the network by default. Import images with **单图** / **多图**
-/ **文件夹**, then run batch processing as before.
+dedicated application window when Chrome, Edge, Chromium, or Brave is installed. That window is the
+current prototype; the next increment is a double-clickable `.app` that bundles checksum-verified
+models. The API still binds to `127.0.0.1:8000` and is not exposed to the network by default. Import
+images with **单图** / **多图** / **文件夹**, then run batch processing as before.
 
 To let an iPhone on the same Wi-Fi import photos while processing stays on the Mac:
 

@@ -79,6 +79,16 @@ not inferred from this tracked checklist.
 - [x] Frame overflow boxes from the inspector overflow actions
 - [x] Jump to overflowing pages and frame their overflow boxes
 
+## Unreleased local application
+
+- [ ] Double-clickable Mac application that starts the local API and window
+      without a developer terminal
+- [ ] Package-time checksummed download of PP-OCR, LaMa, Real-ESRGAN anime, and
+      Argos ja→zh into the application bundle (weights stay out of git)
+- [ ] Running app selects bundled models so detect / AI redraw / LaMa / Argos
+      work offline after install
+- [ ] Remaining workbench gaps found in the local app are fixed iteratively
+
 ## Explicitly deferred
 
 - Deep-learning inpainting, artistic sound-effect redraw, automatic font matching

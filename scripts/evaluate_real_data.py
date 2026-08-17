@@ -27,7 +27,7 @@ SUPPORTED_STAGES = (
 )
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run the real-data pipeline locally and write a private aggregate report.",
     )
@@ -70,7 +70,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--ppocr-model", type=Path)
     parser.add_argument("--lama-model", type=Path)
-    return parser.parse_args()
+    parser.add_argument(
+        "--export-format",
+        default="json",
+        choices=("images", "json", "both"),
+        help=(
+            "Unattended default is json. Generated-image formats require current "
+            "accepted page and stage reviews and are not auto-accepted."
+        ),
+    )
+    return parser.parse_args(argv)
 
 
 def selected_stages(value: str) -> list[str]:
@@ -154,7 +163,7 @@ def job_options(stage: str, args: argparse.Namespace, output: Path) -> dict[str,
         return {
             **common,
             "outputPath": str(output / "export-bundle"),
-            "format": "both",
+            "format": args.export_format,
             "conflict": "rename",
             "preserveTree": True,
         }
@@ -175,6 +184,7 @@ def report_configuration(args: argparse.Namespace, stages: list[str]) -> dict[st
         "translatorProvider": "mock",
         "inpainterProvider": args.inpainter_provider,
         "repairPolicy": args.repair_policy,
+        "exportFormat": args.export_format,
         "optionalModelsProvided": {
             "ppocr": args.ppocr_model is not None,
             "lama": args.lama_model is not None,
@@ -367,6 +377,7 @@ def markdown_report(report: dict[str, Any]) -> str:
         f"- Detector / OCR: {configuration['detectorProvider']} / {configuration['ocrProvider']}",
         f"- Translator / inpainter: {configuration['translatorProvider']} / {configuration['inpainterProvider']}",
         f"- Repair policy: {configuration['repairPolicy']}",
+        f"- Export format: {configuration['exportFormat']}",
         "",
         "## Aggregate",
         "",

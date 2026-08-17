@@ -135,6 +135,10 @@ Last updated: 2026-08-17
   This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 61 — the inspector still shows project settings before images are imported. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Combined process/fix loop round 1 — 7 of 69 `manga02` pages completed an unattended Mac
+  pipeline. The evaluator now defaults to JSON-only export so generated-image review gates are
+  not treated as stage crashes. One empty-recognized page was left for a human. This does not
+  complete Round 8 or the remaining 62 `manga02` pages.
 
 ## Private data boundary
 
@@ -653,3 +657,10 @@ pages. Those files remain `detector-draft` until human review.
   lint/typecheck/157 tests/build. The release audit scanned 136 candidate files and 988 historical
   blobs.
   GitHub CI run `32002551102` passed at `5c3047251cbffe9332f04dbaf68b60c4c875e4c1`.
+- **Combined process/fix loop round 1:** a 7-page `manga02` slice (including the book's one PNG
+  page) imported with 0 failures. Detected / recognized regions were 47 / 45; 1 page had no
+  recognized region and was not auto-accepted. Source checksums and mask-outside pixels stayed
+  clean. Unattended `format=both` export failed 7/7 on the generated-image review gate. The
+  public evaluator now defaults to `--export-format json`; the same slice then exported 7/7
+  with no generated rasters. Generated-image export remains review-gated. 62 `manga02` pages
+  and the `manga01` re-pass remain. This does not complete Round 8.

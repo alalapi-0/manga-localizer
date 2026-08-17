@@ -19,18 +19,32 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 61 keeps project settings visible in the inspector before any images are imported. The work is
-on `agent/manga-round7-governance-20260812` and `main` at
-`5c3047251cbffe9332f04dbaf68b60c4c875e4c1`. Remote CI for Round 59 passed as run `31994257863` on
-`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run `31997919460` failed e2e. Round 61
-closeout CI run `32002551102` passed backend, frontend, and e2e. Round 8 remains 18/130 explicit visual
-reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has occurred.
+Combined real-data process/fix loop is active from `.agent/REALDATA_LOOP_PROMPT.md`
+on `agent/manga-realdata-20260817`. Round 61 closeout remains the published
+baseline on `origin/main` at `9b1add128ee8a00c6c40fd1f3b48480056234e96` with CI
+`32002551102`. Process/fix loop round 1 processed 7 of 69 `manga02` pages
+(0 import failures, 0 source-checksum failures, 0 mask-outside pixel changes,
+1 empty-recognized page left for a human). The evaluator's unattended export
+default is now `json`; generated-image export stays review-gated. Round 8
+remains a human visual gate and is not auto-accepted. 62 `manga02` pages and
+the `manga01` re-pass are still open.
+
+## Active loop prompt
+
+Continue from `.agent/REALDATA_LOOP_PROMPT.md`. Sentinel
+`AGENT_LOOP_WAKE_manga_realdata`. Do not re-arm `AGENT_LOOP_WAKE_manga_app`.
+
+Process ignored `tests/real-data/manga01` and `manga02` as real material on the
+Mac, write a private problem report each round, then fix the highest-priority
+software defect with public tests. Never commit private manga. Never open
+private rasters with vision tools. Stop for the user's unified visual check
+only after a full combined pass finds no new software defects.
 
 ## Automation closeout
 
-The user stopped all project workers and loops on 2026-08-17. The former Active loop prompt is no
-longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynamic `/loop`, or any
-25-minute fallback sleeper.
+The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) remains stopped.
+Late wakes for that sentinel skip rewrite. The real-data process/fix loop above
+is a new, separately authorized loop.
 
 ## Environment evidence
 
@@ -235,11 +249,19 @@ longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynami
   Remote e2e failed on run `31997919460`.
 - [x] Round 61: keep inspector project settings available before import, with public regression, and
   complete CI.
+- [ ] Combined process/fix loop: 7/69 `manga02` pages processed; 62 `manga02` pages and the
+  `manga01` re-pass remain. Stop only after a full combined pass finds no new software
+  defects, then wait for the user's unified visual check.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- Combined process/fix loop round 1: public evaluator export-gate tests passed locally
+  (`backend/tests/test_evaluate_real_data.py`). Backend Ruff lint/format and 239 pytest
+  cases passed. A private 7-page `manga02` slice completed JSON export 7/7 after the
+  default changed from `both` to `json`. Generated-image export without review still
+  fails, as required.
 - Prior Round 7 `npm run check` reproduced on 2026-08-12: 2 launcher tests; backend Ruff lint/format and
   130 pytest cases; frontend ESLint/TypeScript, 64 Vitest cases, and the production Vite build all passed.
 - End to end: 2 Playwright Chromium journeys passed, covering import, preprocessing, real local

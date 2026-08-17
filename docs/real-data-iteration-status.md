@@ -651,4 +651,5 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 61:** inspector project settings stay available before import. This does not complete the
   remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests and frontend
   lint/typecheck/157 tests/build. The release audit scanned 136 candidate files and 988 historical
-  blobs. GitHub CI is pending after push.
+  blobs.
+  GitHub CI run `32002551102` passed at `5c3047251cbffe9332f04dbaf68b60c4c875e4c1`.

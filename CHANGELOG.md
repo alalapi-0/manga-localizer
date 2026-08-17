@@ -375,7 +375,8 @@ Semantic Versioning.
   `e7a7327ba7085db2d9b105c9692c388a10b6d9a1`.
 - Round 61 keeps inspector project settings available before images are imported. Local gates passed
   5 launcher tests and frontend lint/typecheck/157 tests plus the production build. The release audit
-  scanned 136 candidate files and 988 historical blobs. GitHub CI is pending after push.
+  scanned 136 candidate files and 988 historical blobs. GitHub CI run `32002551102` passed on
+  `5c3047251cbffe9332f04dbaf68b60c4c875e4c1`.
 
 ### Known limitations
 

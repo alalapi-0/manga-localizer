@@ -3,7 +3,11 @@
 Created: 2026-08-17
 Lane: GOVERNED
 Governor: 10b45384-e406-4dc5-aa9e-4e8be02a016e
-Status: ACTIVE
+Status: COMPLETED
+Governor decide: APPROVE (903b0ad8-d65d-4743-850e-1396d4a9d18b)
+Judge: PASS (7014b5e4-5e9f-4e6a-a8d1-ffcad5d4e1ac)
+Delivered: `5c3047251cbffe9332f04dbaf68b60c4c875e4c1` on `origin/main`
+Remote CI: `32002551102` success (backend, frontend, e2e)
 
 This contract freezes only the four dimensions below. Plans, paths, tests, and
 cleanup remain adaptive candidate details.

@@ -19,13 +19,12 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 61 HEAD intent is `0376b6c`: project settings remain visible in the inspector before any images
-are imported. The work is on `agent/manga-round7-governance-20260812`. Remote CI for Round 59 passed as
-run `31994257863` on `9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run
-`31997919460` failed e2e because the empty inspector hid the translator control. Round 61 is locally
-verified and awaits closeout delivery to `origin/main` after Judge PASS. Round 8 remains 18/130
-explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has
-occurred.
+Round 61 keeps project settings visible in the inspector before any images are imported. The work is
+on `agent/manga-round7-governance-20260812` and `main` at
+`5c3047251cbffe9332f04dbaf68b60c4c875e4c1`. Remote CI for Round 59 passed as run `31994257863` on
+`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run `31997919460` failed e2e. Round 61
+closeout CI run `32002551102` passed backend, frontend, and e2e. Round 8 remains 18/130 explicit visual
+reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has occurred.
 
 ## Automation closeout
 
@@ -234,8 +233,8 @@ longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynami
   regression, and complete CI.
 - [x] Round 60: photo-library import from the empty canvas and inspector, with public regression.
   Remote e2e failed on run `31997919460`.
-- [x] Round 61: keep inspector project settings available before import, with public regression.
-  Remote CI pending.
+- [x] Round 61: keep inspector project settings available before import, with public regression, and
+  complete CI.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
@@ -732,6 +731,10 @@ longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynami
   `git diff --check`. Backend files were unchanged from Round 60. Playwright discovers both Chromium
   journeys; this environment lacks Playwright Chromium revision 1234, so live browser evidence remains
   the GitHub e2e job after push.
+- Round 61 authoritative remote verification: GitHub CI run `32002551102` passed at
+  `5c3047251cbffe9332f04dbaf68b60c4c875e4c1` on `main`. Backend Ruff lint/format, pytest, and the
+  release audit passed. Frontend lint/typecheck/157 tests/build passed. Both Playwright Chromium
+  journeys passed.
 
 ## Known limitations and blockers
 

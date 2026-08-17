@@ -19,31 +19,19 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 61 keeps project settings visible in the inspector before any images are imported. The work is
-on `agent/manga-round7-governance-20260812`. Remote CI for Round 59 passed as run `31994257863` on
-`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run `31997919460` failed e2e because the
-empty inspector hid the translator control. Round 61 is locally verified and awaiting remote CI. Round
-8 remains 18/130 explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store /
-notarized release has occurred.
+Round 61 HEAD intent is `0376b6c`: project settings remain visible in the inspector before any images
+are imported. The work is on `agent/manga-round7-governance-20260812`. Remote CI for Round 59 passed as
+run `31994257863` on `9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run
+`31997919460` failed e2e because the empty inspector hid the translator control. Round 61 is locally
+verified and awaits closeout delivery to `origin/main` after Judge PASS. Round 8 remains 18/130
+explicit visual reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has
+occurred.
 
-## Active loop prompt
+## Automation closeout
 
-Package Manga Localizer as a local-first Apple application. Do not wait for user review of reversible
-product choices. The user will verify in the workbench/app panel after functions exist.
-
-Ordered checkpoints:
-1. Mac application window: launch backend + built workbench inside a native Mac window, not only
-   Chrome at :5173. Import external image files/folders and run the existing process pipeline.
-2. Keep local-first: API stays loopback by default. Optional explicit same-LAN access so an iPhone on
-   the same Wi-Fi can open the workbench, import photos, and process via the Mac.
-3. Mobile-usable workbench: responsive panes, touch import, process current/selected pages. Do not
-   rewrite OCR/inpaint onto iOS. Do not claim App Store distribution until a later checkpoint.
-4. Never commit private manga, models, OCR text, or credentials. Do not force-push.
-5. After each complete checkpoint: local gates, commit, push. Record status in `.agent/STATE.md`.
-6. Skip rewriting Round 35-59 CI docs unless independently verifying a new green run.
-
-Continue until the Mac app can import images and process them, and a phone on the same LAN can do the
-same through the Mac, or until a hard blocker.
+The user stopped all project workers and loops on 2026-08-17. The former Active loop prompt is no
+longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynamic `/loop`, or any
+25-minute fallback sleeper.
 
 ## Environment evidence
 

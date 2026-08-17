@@ -4,7 +4,7 @@ This is the sanitized public real-data summary and round log routed from `.agent
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 ## Current phase
 
@@ -131,6 +131,8 @@ Last updated: 2026-08-16
   does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 59 — the empty canvas and inspector can create a local project. This does not complete the
   remaining 112/130 clean-plate visual reviews.
+- Round 60 — the empty canvas and inspector can import from the photo library after a project exists.
+  This does not complete the remaining 112/130 clean-plate visual reviews.
 
 ## Private data boundary
 
@@ -636,5 +638,10 @@ pages. Those files remain `detector-draft` until human review.
 - **Round 59:** the empty canvas and inspector can create a local project. This does not complete
   the remaining 112/130 clean-plate visual reviews. Local gates passed 5 launcher tests, backend
   lint/format/236 pytest (unchanged from Round 57), and frontend lint/typecheck/154 tests/build. The
-  release audit scanned 136 candidate files and 970 historical blobs. GitHub CI is pending after
-  push.
+  release audit scanned 136 candidate files and 970 historical blobs.
+  GitHub CI run `31994257863` passed at `9982fa7c441b95514a807066da0d3694cce976bc`.
+- **Round 60:** the empty canvas and inspector can import from the photo library after a project
+  exists. This does not complete the remaining 112/130 clean-plate visual reviews. Local gates passed
+  5 launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend
+  lint/typecheck/156 tests/build. The release audit scanned 136 candidate files and 979 historical
+  blobs. GitHub CI is pending after push.

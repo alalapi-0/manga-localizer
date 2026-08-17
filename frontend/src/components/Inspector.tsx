@@ -23,7 +23,7 @@ import type {
   TextDirection,
   RegionDisposition,
 } from '../types';
-import { CreateLocalProjectButton, EmptyState, Field, ProviderBadge, Toggle } from './Primitives';
+import { CreateLocalProjectButton, EmptyState, Field, ImportPhotosButton, ProviderBadge, Toggle } from './Primitives';
 
 const regionTypeLabels: Record<RegionType, string> = {
   dialogue: '对白',
@@ -896,6 +896,7 @@ function TypesetOverflowNotice({ regions }: { regions: Region[] }) {
 
 export function Inspector() {
   const project = useWorkbenchStore((state) => state.currentProject);
+  const hasLibrary = useWorkbenchStore((state) => state.images.length > 0);
   const tab = useWorkbenchStore((state) => state.rightTab);
   const setRightTab = useWorkbenchStore((state) => state.setRightTab);
   const activeImageId = useWorkbenchStore((state) => state.activeImageId);
@@ -926,6 +927,13 @@ export function Inspector() {
             title="未打开项目"
             description="先创建本机项目，再用手机从相册导入。处理仍在 Mac 上运行。"
             action={<CreateLocalProjectButton />}
+          />
+        ) : !hasLibrary ? (
+          <EmptyState
+            icon="▧"
+            title="尚未导入图像"
+            description="手机请用「多图」从相册导入；处理仍在 Mac 上运行。"
+            action={<ImportPhotosButton />}
           />
         ) : (
           <>

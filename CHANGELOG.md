@@ -366,7 +366,12 @@ Semantic Versioning.
 - Round 59 adds first-run create-project actions on the empty canvas and inspector. Local gates
   passed 5 launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and frontend
   lint/typecheck/154 tests plus the production build. The release audit scanned 136 candidate files
-  and 970 historical blobs. GitHub CI is pending after push.
+  and 970 historical blobs. GitHub CI run `31994257863` passed on
+  `9982fa7c441b95514a807066da0d3694cce976bc`.
+- Round 60 adds photo-library import on the empty canvas and inspector after a project exists. Local
+  gates passed 5 launcher tests, backend lint/format/236 pytest (unchanged from Round 57), and
+  frontend lint/typecheck/156 tests plus the production build. The release audit scanned 136
+  candidate files and 979 historical blobs. GitHub CI is pending after push.
 
 ### Known limitations
 

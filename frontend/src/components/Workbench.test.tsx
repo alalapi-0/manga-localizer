@@ -212,6 +212,35 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByRole('dialog', { name: '新建本地项目' })).toBeInTheDocument();
   });
 
+  it('opens photo import from the empty canvas', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ images: [] });
+    const { container } = render(<App />);
+
+    const canvas = document.querySelector('.canvas-panel');
+    expect(canvas).not.toBeNull();
+    const multiInput = container.querySelector<HTMLInputElement>('input[type="file"][multiple]:not([webkitdirectory])');
+    expect(multiInput).not.toBeNull();
+    const click = vi.spyOn(multiInput as HTMLInputElement, 'click');
+    await user.click(within(canvas as HTMLElement).getByRole('button', { name: '从相册导入' }));
+    expect(click).toHaveBeenCalledOnce();
+  });
+
+  it('opens photo import from the empty inspector pane', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ images: [] });
+    const { container } = render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: '检查', hidden: true }));
+    const inspector = document.querySelector('.inspector');
+    expect(inspector).not.toBeNull();
+    const multiInput = container.querySelector<HTMLInputElement>('input[type="file"][multiple]:not([webkitdirectory])');
+    expect(multiInput).not.toBeNull();
+    const click = vi.spyOn(multiInput as HTMLInputElement, 'click');
+    await user.click(within(inspector as HTMLElement).getByRole('button', { name: '从相册导入' }));
+    expect(click).toHaveBeenCalledOnce();
+  });
+
   it('shows the same-LAN companion URL when the Mac app exposes one', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);

@@ -10,7 +10,7 @@ import {
   visibleWorkbenchImages,
 } from '../store/workbench';
 import type { ImageAsset, ProviderCapability } from '../types';
-import { EmptyState, IconButton, ProviderBadge, StatusPill } from './Primitives';
+import { EmptyState, IconButton, ImportPhotosButton, ProviderBadge, StatusPill } from './Primitives';
 import { ProjectDialog } from './ProjectDialog';
 
 function folderName(path: string): string {
@@ -271,11 +271,7 @@ export function Sidebar() {
             icon="▧"
             title="尚未导入图像"
             description="手机请用「多图」从相册导入；处理仍在 Mac 上运行。"
-            action={(
-              <button className="button button--accent" onClick={() => multipleRef.current?.click()} type="button">
-                从相册导入
-              </button>
-            )}
+            action={<ImportPhotosButton />}
           />
         ) : visibleImages.length === 0 ? (
           <EmptyState icon="⌕" title="没有匹配的图像" description="调整搜索词或状态筛选。" />

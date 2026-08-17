@@ -137,6 +137,18 @@ export function CreateLocalProjectButton() {
   );
 }
 
+export function ImportPhotosButton() {
+  return (
+    <button
+      className="button button--accent"
+      onClick={() => window.dispatchEvent(new Event('manga-localizer:import'))}
+      type="button"
+    >
+      从相册导入
+    </button>
+  );
+}
+
 const stateLabels: Record<StageState, string> = {
   not_started: '未开始',
   queued: '排队中',

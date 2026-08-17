@@ -7,10 +7,13 @@ import {
   latestPageProcessingActivity,
   latestPageProcessingError,
   overflowingRegionIds,
+  AI_REDRAW_PREPROCESSING,
   preprocessingSettingsForProfile,
+  preferredAiRedrawProvider,
   regionHasTypesetOverflow,
   useWorkbenchStore,
 } from '../store/workbench';
+import { clampRegionGeometry } from './canvasGeometry';
 import type {
   ExportOptions,
   ImageAsset,
@@ -44,6 +47,49 @@ const directionLabels: Record<TextDirection, string> = {
   vertical: '竖排',
   horizontal: '横排',
 };
+
+function GeometryNumberField({
+  ariaLabel,
+  label,
+  min,
+  onCommit,
+  step,
+  value,
+}: {
+  ariaLabel: string;
+  label: string;
+  min?: number;
+  onCommit: (next: number) => void;
+  step?: number | string;
+  value: number;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  return (
+    <Field label={label}>
+      <input
+        aria-label={ariaLabel}
+        min={min}
+        onBlur={() => {
+          if (draft !== null) {
+            const next = Number(draft);
+            if (Number.isFinite(next)) onCommit(next);
+          }
+          setDraft(null);
+        }}
+        onChange={(event) => {
+          const raw = event.target.value;
+          setDraft(raw);
+          const next = Number(raw);
+          if (Number.isFinite(next)) onCommit(next);
+        }}
+        step={step}
+        type="number"
+        value={draft ?? value}
+      />
+    </Field>
+  );
+}
 
 const preprocessingProfileLabels: Record<PreprocessingSettings['profile'], string> = {
   off: '关闭',
@@ -260,6 +306,7 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
   const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const focusRegions = useWorkbenchStore((state) => state.focusRegions);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
+  const nudgeSelectedRegions = useWorkbenchStore((state) => state.nudgeSelectedRegions);
   const setRegionConfirmed = useWorkbenchStore((state) => state.setRegionConfirmed);
   const deleteSelectedRegions = useWorkbenchStore((state) => state.deleteSelectedRegions);
   const mergeSelectedRegions = useWorkbenchStore((state) => state.mergeSelectedRegions);
@@ -383,6 +430,58 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
         <span>{dispositionReason(region)}</span>
         <small>检测 {percent(region.detectorConfidence)} · OCR {percent(region.ocrConfidence)} · 策略 v{region.trustPolicyVersion}</small>
       </section>
+      {image ? (
+        <section className="form-stack" aria-label="选框几何">
+          <div className="field-grid">
+            <GeometryNumberField
+              key={`${region.id}-x`}
+              ariaLabel="选框 X"
+              label="X"
+              min={0}
+              onCommit={(x) => updateRegion(region.id, clampRegionGeometry({ ...region, x }, image))}
+              value={region.x}
+            />
+            <GeometryNumberField
+              key={`${region.id}-y`}
+              ariaLabel="选框 Y"
+              label="Y"
+              min={0}
+              onCommit={(y) => updateRegion(region.id, clampRegionGeometry({ ...region, y }, image))}
+              value={region.y}
+            />
+            <GeometryNumberField
+              key={`${region.id}-width`}
+              ariaLabel="选框宽度"
+              label="宽"
+              min={4}
+              onCommit={(width) => updateRegion(region.id, clampRegionGeometry({ ...region, width }, image))}
+              value={region.width}
+            />
+            <GeometryNumberField
+              key={`${region.id}-height`}
+              ariaLabel="选框高度"
+              label="高"
+              min={4}
+              onCommit={(height) => updateRegion(region.id, clampRegionGeometry({ ...region, height }, image))}
+              value={region.height}
+            />
+            <GeometryNumberField
+              key={`${region.id}-rotation`}
+              ariaLabel="选框旋转"
+              label="旋转 °"
+              onCommit={(rotation) => updateRegion(region.id, clampRegionGeometry({ ...region, rotation }, image))}
+              step="0.1"
+              value={region.rotation}
+            />
+          </div>
+          <div className="nudge-actions" aria-label="微调选框">
+            <button className="button button--compact" onClick={() => nudgeSelectedRegions(0, -1)} type="button">上移 1px</button>
+            <button className="button button--compact" onClick={() => nudgeSelectedRegions(0, 1)} type="button">下移 1px</button>
+            <button className="button button--compact" onClick={() => nudgeSelectedRegions(-1, 0)} type="button">左移 1px</button>
+            <button className="button button--compact" onClick={() => nudgeSelectedRegions(1, 0)} type="button">右移 1px</button>
+          </div>
+        </section>
+      ) : null}
       <Field label="日文原文">
         <textarea
           aria-label="日文原文"
@@ -789,6 +888,61 @@ function ProjectInspector() {
   );
 }
 
+function ReviewBoxTools() {
+  const image = useWorkbenchStore(activeImage);
+  const regionsByImage = useWorkbenchStore((state) => state.regionsByImage);
+  const consolidateActiveImageRegions = useWorkbenchStore((state) => state.consolidateActiveImageRegions);
+  const startBatch = useWorkbenchStore((state) => state.startBatch);
+  const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
+  const providers = useWorkbenchStore((state) => state.capabilities.providers);
+  if (!image) return null;
+  const regionCount = (regionsByImage[image.id] ?? []).length;
+  const aiProvider = preferredAiRedrawProvider(providers);
+  const lowRes = Math.min(image.width, image.height) < 1400;
+
+  return (
+    <div className={`notice ${lowRes ? 'notice--warning' : 'notice--local'}`} role="status">
+      <b>{lowRes ? '低分辨率页可人工 AI 重绘' : '本页选框与画质'}</b>
+      <span>
+        选框过多或没包住字时，先整理本页重叠碎片并外扩。扫描糊、分辨率低时，基础增强往往不够，可用本地 Real-ESRGAN 动漫 4× 重绘当前页；不会自动跑。
+      </span>
+      <div className="notice__actions">
+        <button
+          className="button button--compact"
+          disabled={!regionCount}
+          onClick={() => consolidateActiveImageRegions()}
+          type="button"
+        >
+          整理本页选框
+        </button>
+        <button
+          className="button button--compact"
+          disabled={!aiProvider}
+          onClick={() => {
+            if (!aiProvider) return;
+            setDrawerOpen(true);
+            void startBatch(
+              ['preprocess'],
+              [image.id],
+              defaultExportOptions,
+              1,
+              undefined,
+              AI_REDRAW_PREPROCESSING,
+              aiProvider,
+            );
+          }}
+          type="button"
+        >
+          AI 重绘本页
+        </button>
+      </div>
+      {aiProvider ? null : (
+        <span>本地 Real-ESRGAN 不可用。安装 `ai` extra 和动漫超分模型后即可重绘。</span>
+      )}
+    </div>
+  );
+}
+
 function PreprocessSuggestionNotice() {
   const image = useWorkbenchStore(activeImage);
   const project = useWorkbenchStore((state) => state.currentProject);
@@ -946,6 +1100,7 @@ export function Inspector() {
                 <PageReviewControl regions={regions} />
                 <ProcessingErrorNotice />
                 <ProcessingActivityNotice />
+                <ReviewBoxTools />
                 <PreprocessSuggestionNotice />
                 <TypesetOverflowNotice regions={regions} />
               </>

@@ -7,7 +7,10 @@ import { imageFixture, regionFixture, seedWorkbench } from '../test/fixtures';
 import {
   buildMaskStroke,
   centeredNodeToRegionGeometry,
+  clampRegionGeometry,
+  clusterRegionIds,
   frameRegions,
+  isKonvaRegionEditTarget,
   maskEditCapacity,
   MAX_MASK_BRUSH_RADIUS,
   MAX_MASK_EDIT_POINTS,
@@ -454,6 +457,59 @@ describe('canvas generated-image refresh', () => {
     ).toHaveLength(1));
     expect(maskRequests()).toHaveLength(1);
     expect(useWorkbenchStore.getState().showMask).toBe(true);
+  });
+
+  it('keeps transformer handles and region boxes as edit targets', () => {
+    const region = { name: () => 'region' };
+    const transformer = { name: () => '', getClassName: () => 'Transformer' };
+    const handle = {
+      name: () => 'top-left',
+      getClassName: () => 'Rect',
+      getParent: () => transformer,
+    };
+    const image = { name: () => '', getClassName: () => 'Image', getParent: () => null };
+    expect(isKonvaRegionEditTarget(region)).toBe(true);
+    expect(isKonvaRegionEditTarget(handle)).toBe(true);
+    expect(isKonvaRegionEditTarget(image)).toBe(false);
+    expect(clampRegionGeometry({
+      x: -20,
+      y: 1900,
+      width: 80,
+      height: 40,
+      rotation: 12.34,
+    }, { width: 1200, height: 1800 })).toEqual({
+      x: 0,
+      y: 1760,
+      width: 80,
+      height: 40,
+      rotation: 12.3,
+    });
+    expect(clusterRegionIds([
+      { id: 'a', x: 10, y: 10, width: 40, height: 40, rotation: 0, direction: 'horizontal' },
+      { id: 'b', x: 18, y: 16, width: 40, height: 40, rotation: 0, direction: 'horizontal' },
+      { id: 'c', x: 400, y: 400, width: 30, height: 30, rotation: 0, direction: 'vertical' },
+    ], { width: 1200, height: 1800 })).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('lets the original compare pane keep the same box editor', () => {
+    const image = imageFixture('image-1', {
+      status: {
+        ...imageFixture('image-1').status,
+        inpaint: 'done',
+        typeset: 'done',
+      },
+    });
+    seedWorkbench({
+      images: [image],
+      selectedRegionIds: ['region-1'],
+    });
+    useWorkbenchStore.setState({ canvasMode: 'typeset', compareMode: true });
+
+    render(<CanvasWorkspace />);
+
+    const surfaces = screen.getAllByTestId('canvas-surface');
+    expect(surfaces).toHaveLength(2);
+    expect(surfaces.every((surface) => surface.getAttribute('data-editable') === 'true')).toBe(true);
   });
 
   it('does not infer a review stage from original compare mode', () => {

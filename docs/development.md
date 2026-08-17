@@ -129,6 +129,10 @@ uv run --project backend --extra ai python scripts/evaluate_real_data.py \
   --inpainter-provider lama-onnx
 ```
 
+Unattended export defaults to `--export-format json`. Generated-image formats (`images` or
+`both`) still require a current accepted page review and matching stage reviews; the evaluator
+does not auto-accept empty or unreviewed pages.
+
 It refuses a non-empty run directory and records source-checksum preservation, generated dimensions,
 mask coverage, and changed pixels outside masks. These reports are stability/coverage evidence unless a
 private ground-truth transcription/box set is supplied; region count and OCR confidence are not accuracy.

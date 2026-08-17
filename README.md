@@ -263,9 +263,10 @@ provider health in Project Settings.
 
 `ppocr-v3` is an optional, local detection-only provider using OpenCV DNN and the official OpenCV Zoo
 PP-OCRv3 ONNX model. It returns polygon geometry; Tesseract then recognizes each detected region.
-`ppocr-v3+tesseract` concatenates both detectors' candidates without dropping or merging by
-confidence. A completed zero-detection page remains a valid empty result and is not silently
-re-detected by another provider. MangaOCR and PaddleOCR recognition adapters remain roadmap work. See
+`ppocr-v3+tesseract` merges overlapping and nearby aligned candidates from both detectors, then pads
+the box so the text is enclosed. Low-confidence text is not dropped. A completed zero-detection page
+remains a valid empty result and is not silently re-detected by another provider. MangaOCR and
+PaddleOCR recognition adapters remain roadmap work. See
 [Provider system](docs/provider-system.md).
 
 ## Image preprocessing
@@ -276,7 +277,8 @@ deliberately opt-in: on the private real-data set it amplified line-art false po
 can be overridden per project, and detection/OCR coordinates are mapped back to the original image.
 Each imported page also gets a local profile suggestion from its size and a sharpness/contrast sample.
 That hint can be applied to the current page or adopted as the project default; it is never auto-applied
-across the book.
+across the book. Very low-resolution scans can also be sent through a manual **AI 重绘本页** action that
+runs local Real-ESRGAN anime 4× on the current page only.
 
 `realesrgan-onnx` is the runnable local AI upscaler. It uses ONNX Runtime and the BSD-3-Clause
 `RealESRGAN_x4plus_anime_6B` graph, tiled on large pages. The model is native 4×; 2×/3× requests

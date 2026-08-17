@@ -841,6 +841,11 @@ describe('desktop workbench interactions', () => {
     await user.type(translation, '新的对白');
     await user.selectOptions(screen.getByRole('combobox', { name: '文本类型' }), 'ruby');
     await user.selectOptions(screen.getByRole('combobox', { name: '文本方向' }), 'horizontal');
+    await user.clear(screen.getByRole('spinbutton', { name: '选框 X' }));
+    await user.type(screen.getByRole('spinbutton', { name: '选框 X' }), '140');
+    await user.clear(screen.getByRole('spinbutton', { name: '选框宽度' }));
+    await user.type(screen.getByRole('spinbutton', { name: '选框宽度' }), '260');
+    await user.click(screen.getByRole('button', { name: '右移 1px' }));
     await user.clear(screen.getByRole('spinbutton', { name: '阅读顺序' }));
     await user.type(screen.getByRole('spinbutton', { name: '阅读顺序' }), '7');
     await user.click(screen.getByRole('checkbox', { name: /确认此文本框/ }));
@@ -854,6 +859,8 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
       sourceText: '新しい台詞',
       translationText: '新的对白',
+      x: 141,
+      width: 260,
       type: 'ruby',
       direction: 'horizontal',
       order: 7,
@@ -868,6 +875,21 @@ describe('desktop workbench interactions', () => {
     expect(typeOptions).toEqual(expect.arrayContaining([
       'dialogue', 'narration', 'sound_effect', 'title', 'ruby', 'background', 'unknown', 'speech',
     ]));
+  });
+
+  it('nudges the selected box from the inspector and modifier arrows', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '右移 1px' }));
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.x).toBe(101);
+
+    fireEvent.keyDown(window, { key: 'ArrowDown', ctrlKey: true, shiftKey: true });
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      x: 101,
+      y: 130,
+    });
   });
 
   it('presents OCR trust separately from page review and explains the batch gate accessibly', async () => {
@@ -1350,6 +1372,44 @@ describe('desktop workbench interactions', () => {
       enableUpscale: false,
       enableDenoise: false,
     });
+  });
+
+  it('lets the reviewer tidy overlapping boxes and queue a local AI redraw', async () => {
+    const user = userEvent.setup();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-ai-redraw',
+      kind: 'preprocess',
+    }));
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1'),
+        regionFixture('region-2', { x: 140, y: 140, width: 200, height: 100 }),
+      ],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: 'AI 重绘本页' }));
+    expect(startJob).toHaveBeenCalledWith('project-1', 'preprocess', {
+      imageIds: ['image-1'],
+      options: {
+        provider: 'realesrgan-onnx',
+        preprocessing: expect.objectContaining({
+          profile: 'visual-quality',
+          upscaleFactor: 4,
+        }),
+        concurrency: 1,
+      },
+    });
+
+    vi.spyOn(api, 'updateRegion').mockImplementation(async (regionId, patch) => ({
+      ...regionFixture(regionId),
+      ...patch,
+      revision: 6,
+    }));
+    vi.spyOn(api, 'createRegion').mockResolvedValue(regionFixture('region-merged'));
+    vi.spyOn(api, 'deleteRegion').mockResolvedValue();
+    await user.click(screen.getByRole('button', { name: '整理本页选框' }));
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']).toHaveLength(1);
   });
 
   it('stores a per-region inpainting provider override and exposes an explicit rebuild action', async () => {

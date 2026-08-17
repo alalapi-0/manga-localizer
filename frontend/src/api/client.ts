@@ -155,7 +155,7 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
     'realesrgan-onnx': 'Real-ESRGAN ONNX 动漫超分',
     'realesrgan-ncnn': 'Real-ESRGAN NCNN',
     'ppocr-v3': 'PP-OCRv3',
-    'ppocr-v3+tesseract': 'PP-OCRv3 + Tesseract 联合候选',
+    'ppocr-v3+tesseract': 'PP-OCRv3 + Tesseract 联合检测',
     'lama-onnx': 'LaMa ONNX',
     opencv: 'OpenCV',
     manual: '手动翻译',

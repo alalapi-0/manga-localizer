@@ -440,6 +440,73 @@ describe('workbench store', () => {
     expect(remove).toHaveBeenCalledWith('region-1', 5);
   });
 
+  it('consolidates overlapping page boxes and expands the survivor', () => {
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1'),
+        regionFixture('region-2', { x: 140, y: 140, width: 200, height: 100 }),
+      ],
+    });
+    expect(useWorkbenchStore.getState().consolidateActiveImageRegions()).toBeGreaterThan(0);
+    const regions = useWorkbenchStore.getState().regionsByImage['image-1'] ?? [];
+    expect(regions).toHaveLength(1);
+    expect(regions[0]?.width).toBeGreaterThan(220);
+    expect(regions[0]?.height).toBeGreaterThan(120);
+  });
+
+  it('queues a manual AI redraw with the local 4x upscaler', async () => {
+    seedWorkbench();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-ai-redraw',
+      kind: 'preprocess',
+    }));
+    expect(await useWorkbenchStore.getState().startBatch(
+      ['preprocess'],
+      ['image-1'],
+      { format: 'both', imageVariant: 'typeset', conflict: 'rename', preserveTree: true },
+      1,
+      undefined,
+      {
+        profile: 'visual-quality',
+        enableUpscale: true,
+        upscaleFactor: 4,
+        enableDenoise: true,
+        enableSharpen: true,
+        enableContrastEnhance: true,
+        enableEdgeOptimize: false,
+        enableBinarize: false,
+        threshold: 180,
+      },
+      'realesrgan-onnx',
+    )).toBe(true);
+    expect(startJob).toHaveBeenCalledWith('project-1', 'preprocess', {
+      imageIds: ['image-1'],
+      options: {
+        provider: 'realesrgan-onnx',
+        preprocessing: expect.objectContaining({
+          profile: 'visual-quality',
+          upscaleFactor: 4,
+          enableUpscale: true,
+        }),
+        concurrency: 1,
+      },
+    });
+  });
+
+  it('nudges selected boxes in image pixels and clamps to the page', () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.getState().nudgeSelectedRegions(12, -8);
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      x: regionFixture('region-1').x + 12,
+      y: regionFixture('region-1').y - 8,
+    });
+    useWorkbenchStore.getState().nudgeSelectedRegions(-10_000, 10_000);
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      x: 0,
+      y: 1800 - regionFixture('region-1').height,
+    });
+  });
+
   it('immediately clears stale confirmation for every substantive region edit and autosaves false', async () => {
     const confirmed = regionFixture('region-1', { confirmed: true });
     const cases: Array<[string, Partial<ReturnType<typeof regionFixture>>]> = [

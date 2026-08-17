@@ -264,7 +264,7 @@ def test_preprocess_artifact_drives_scaled_detection_and_ocr_fallback(
         assert revoked["recognition"]["ocr"]["attemptCount"] == 2
 
 
-def test_detection_rerun_retains_prior_candidates_and_appends_reading_order(
+def test_detection_rerun_keeps_trusted_boxes_and_skips_duplicates(
     tmp_path: Path,
 ) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
@@ -296,17 +296,40 @@ def test_detection_rerun_retains_prior_candidates_and_appends_reading_order(
         assert rerun_completed["status"] == "completed", rerun_completed
 
         regions = client.get(f"/api/images/{image['id']}/regions").json()
-        assert len(regions) == 2
-        assert [region["order"] for region in regions] == [0, 1]
-        assert len({region["id"] for region in regions}) == 2
-        prior = next(region for region in regions if region["id"] == first["id"])
-        appended = next(region for region in regions if region["id"] != first["id"])
+        assert len(regions) == 1
+        prior = regions[0]
+        assert prior["id"] == first["id"]
         assert prior["confirmed"] is True
         assert prior["trustDisposition"] == "trusted"
         assert prior["trustReason"] == "human-confirmed"
-        assert appended["confirmed"] is False
-        assert appended["trustDisposition"] == "review"
-        assert appended["trustReason"] == "automatic-proposal"
+
+
+def test_detection_rerun_replaces_stale_unconfirmed_auto_boxes(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    app.state.providers.ppocr = _ScaledDetector()
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        first_job = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, first_job.json()["id"])["status"] == "completed"
+        first = client.get(f"/api/images/{image['id']}/regions").json()
+        assert len(first) == 1
+
+        rerun = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, rerun.json()["id"])["status"] == "completed"
+        regions = client.get(f"/api/images/{image['id']}/regions").json()
+        assert len(regions) == 1
+        assert regions[0]["id"] != first[0]["id"]
+        assert regions[0]["trustDisposition"] == "review"
 
 
 def test_public_generated_content_classes_remain_reviewable_across_empty_rerun_and_reopen(

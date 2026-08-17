@@ -135,6 +135,12 @@ Last updated: 2026-08-17
   This does not complete the remaining 112/130 clean-plate visual reviews.
 - Round 61 — the inspector still shows project settings before images are imported. This does not
   complete the remaining 112/130 clean-plate visual reviews.
+- Combined process/fix loop — stopped after a full 199-page Mac pass (130 + 69). The
+  evaluator now defaults to JSON-only export so generated-image review gates are not
+  treated as stage crashes. Combined aggregates: 0 import/processing failures, 1156
+  detected / 1000 recognized regions, 30 empty-recognized pages left for a human, 0
+  source-checksum failures, 0 mask-outside pixel changes. This does not complete
+  Round 8. The next step is the user's unified visual check.
 
 ## Private data boundary
 
@@ -285,8 +291,8 @@ before unattended publication would be appropriate.
   the CLI. A local NCNN executable was not run in this environment.
 - Optional Real-ESRGAN ONNX anime 4× provider with checksum-verified install, tiling, grayscale
   preservation, and a private classic-vs-AI comparison script.
-- Optional PP-OCRv3 polygon detector, `ppocr-v3+tesseract` union that keeps every proposal, and
-  explicit detection/OCR provider separation.
+- Optional PP-OCRv3 polygon detector, `ppocr-v3+tesseract` union that merges overlapping and nearby
+  aligned proposals then pads the box, and explicit detection/OCR provider separation.
 - Privacy-safe detection/OCR evaluation: IoU matching, CER, negative-page false positives, public
   synthetic ground truth, and ignored private detector-draft bootstrap. Sanitized reports omit
   transcriptions, filenames, checksums, and paths.
@@ -653,3 +659,11 @@ pages. Those files remain `detector-draft` until human review.
   lint/typecheck/157 tests/build. The release audit scanned 136 candidate files and 988 historical
   blobs.
   GitHub CI run `32002551102` passed at `5c3047251cbffe9332f04dbaf68b60c4c875e4c1`.
+- **Combined process/fix loop:** a 7-page `manga02` slice first failed unattended
+  `format=both` export 7/7 on the generated-image review gate. The public evaluator now
+  defaults to `--export-format json`. After that fix, all 199 pages (69 + 130) completed
+  the current Mac pipeline with 0 import/processing failures, 1156 detected / 1000
+  recognized regions, 30 empty-recognized pages left for a human, 0 source-checksum
+  failures, and 0 mask-outside pixel changes. Generated-image export remains
+  review-gated. The loop is stopped for the user's unified visual check. This does not
+  complete Round 8.

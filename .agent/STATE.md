@@ -19,18 +19,41 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Round 61 keeps project settings visible in the inspector before any images are imported. The work is
-on `agent/manga-round7-governance-20260812` and `main` at
-`5c3047251cbffe9332f04dbaf68b60c4c875e4c1`. Remote CI for Round 59 passed as run `31994257863` on
-`9982fa7c441b95514a807066da0d3694cce976bc`. Round 60 remote CI run `31997919460` failed e2e. Round 61
-closeout CI run `32002551102` passed backend, frontend, and e2e. Round 8 remains 18/130 explicit visual
-reviews; detector drafts remain 130/0 reviewed. No App Store / notarized release has occurred.
+Combined real-data process/fix loop is **stopped** on
+`agent/manga-realdata-20260817` at `182a533` plus this closeout record.
+Round 61 closeout remains the published baseline on `origin/main` at
+`9b1add128ee8a00c6c40fd1f3b48480056234e96` with CI `32002551102`.
+A full 199-page pass (manga01 130 + manga02 69) found no new software
+defect after the round-1 evaluator JSON-export fix. Combined aggregates:
+0 import/processing failures, 1156 detected / 1000 recognized regions,
+30 empty-recognized pages left for a human, 0 source-checksum failures,
+0 mask-outside pixel changes. Safe unattended repair stayed at 0 mask
+coverage because automatic proposals remain untrusted.
+
+**NEEDS_USER:** unified visual check of both books. Do not auto-accept
+empty pages. Product Round 8 is not complete. Do not re-arm
+`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
+
+Review-canvas delivery for main: drag/resize/rotate boxes; union detector
+merges overlaps and pads boxes; re-detect replaces stale empty auto boxes;
+manual **整理本页选框** and **AI 重绘本页** (local Real-ESRGAN 4×). Local
+verification: frontend lint/typecheck/164 tests/build, backend ruff plus
+full pytest, launcher 5/5. Private `tests/real-data/` is not included.
+
+## Active loop prompt
+
+Stopped. The process/fix loop in `.agent/REALDATA_LOOP_PROMPT.md` completed a
+full combined pass with no new software defects after the evaluator export
+fix. Do not re-arm `AGENT_LOOP_WAKE_manga_realdata` or
+`AGENT_LOOP_WAKE_manga_app`. Do not arm a 25-minute fallback sleeper.
+Late wakes skip rewrite and wait for the user's unified visual check.
 
 ## Automation closeout
 
-The user stopped all project workers and loops on 2026-08-17. The former Active loop prompt is no
-longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynamic `/loop`, or any
-25-minute fallback sleeper.
+The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) remains stopped.
+The 2026-08-17 real-data process/fix loop (`AGENT_LOOP_WAKE_manga_realdata`) is
+also stopped after a full combined pass. Late wakes for either sentinel skip
+rewrite and do not re-arm a sleeper.
 
 ## Environment evidence
 
@@ -56,9 +79,13 @@ longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynami
   from size plus a native-resolution contrast/sharpness sample. The editor may apply that hint to the
   current page or adopt it as the project default; it is never an automatic book-wide setting.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
-  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` keeps every
-  candidate from both detectors as an editable proposal and does not NMS or drop by confidence.
-  A completed zero-detection result is authoritative and is not silently replaced during OCR.
+  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` merges
+  overlapping, contained, and nearby aligned proposals from both detectors, then pads the box so
+  glyphs are enclosed. It does not drop low-confidence text or grant trust. Re-running detection
+  replaces stale empty unconfirmed auto boxes and skips duplicates of kept regions. A completed
+  zero-detection result is authoritative and is not silently replaced during OCR.
+- Low-resolution pages can be manually AI-redrawn with the local Real-ESRGAN anime 4× preprocessor.
+  The workbench button never runs this automatically and does not change the project default.
 - Annotated detection/OCR evaluation is path-parameterized. Public reports store only anonymous page
   IDs and aggregate precision, recall, CER, and negative-page false positives. Transcriptions, image
   names, checksums, and absolute paths stay out of sanitized output. Private draft JSON remains under
@@ -235,11 +262,25 @@ longer a live instruction. Do not re-arm `AGENT_LOOP_WAKE_manga_app`, the dynami
   Remote e2e failed on run `31997919460`.
 - [x] Round 61: keep inspector project settings available before import, with public regression, and
   complete CI.
+- [x] Combined process/fix loop: 199/199 pages processed on the current pipeline; one
+  public evaluator export-gate fix; no further software defect on the full pass.
+- [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
+  pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
 - [ ] Next real-data checkpoint: remaining 112/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-17 review-canvas/detection delivery: frontend lint, typecheck, 164 Vitest
+  cases, and production build passed; backend Ruff lint/format and full pytest passed;
+  launcher 5/5 passed. Private real-data trees were not committed.
+- Combined process/fix loop: public evaluator export-gate tests passed locally
+  (`backend/tests/test_evaluate_real_data.py`). Backend Ruff lint/format and 239 pytest
+  cases passed. After that fix, private slices covering all 199 pages completed JSON
+  export with 0 import/processing failures, 0 source-checksum failures, and 0
+  mask-outside pixel changes. 30 empty-recognized pages were left for a human.
+  Generated-image export without review still fails, as required. The loop is
+  stopped for the user's unified visual check.
 - Prior Round 7 `npm run check` reproduced on 2026-08-12: 2 launcher tests; backend Ruff lint/format and
   130 pytest cases; frontend ESLint/TypeScript, 64 Vitest cases, and the production Vite build all passed.
 - End to end: 2 Playwright Chromium journeys passed, covering import, preprocessing, real local
@@ -780,4 +821,4 @@ full-book output quality.
   publication-quality restoration remain roadmap work. Local visual review of Real-ESRGAN contact
   sheets and inpaint candidate sheets is still required before treating AI output as publication-quality.
 - Tesseract TSV over-detects hatching/line art. Prefer `ppocr-v3` when precision on negatives matters;
-  use `ppocr-v3+tesseract` only when extra Tesseract proposals are wanted.
+  `ppocr-v3+tesseract` now merges those extra proposals instead of stacking them.

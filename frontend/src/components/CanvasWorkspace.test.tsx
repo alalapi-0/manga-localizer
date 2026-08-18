@@ -417,6 +417,29 @@ describe('canvas generated-image refresh', () => {
     ));
   });
 
+  it('shows the review mask when the operator opens the erased preview', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'original', showMask: false });
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'image/png' }),
+      arrayBuffer: async () => new Uint8Array([1]).buffer,
+    }) as unknown as Response));
+
+    render(<CanvasWorkspace />);
+    fireEvent.click(screen.getByRole('button', { name: '擦除' }));
+
+    expect(useWorkbenchStore.getState().showMask).toBe(true);
+    expect(screen.getByRole('checkbox', { name: '复核蒙版' })).toBeChecked();
+    await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('待复核'));
+    expect(screen.getByRole('button', { name: '接受' })).toBeEnabled();
+  });
+
   it('removes the mask overlay before presenting a typeset result for review', async () => {
     const image = imageFixture('image-1', {
       revision: 7,

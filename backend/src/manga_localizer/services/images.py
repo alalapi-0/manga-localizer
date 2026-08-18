@@ -655,7 +655,7 @@ def review_image_stage(
                 artifact_changed = False
             else:
                 previous_review = reviews.get(stage)
-                artifact_changed = previous_review is None or any(
+                artifact_changed = previous_review is not None and any(
                     previous_review.get(key) != value for key, value in checksums.items()
                 )
                 after = {

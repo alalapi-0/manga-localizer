@@ -2243,6 +2243,16 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
   });
 
+  it('shows the inpaint review mask when switching to the erased canvas', () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({ canvasMode: 'original', showMask: false });
+    useWorkbenchStore.getState().setCanvasMode('erased');
+    expect(useWorkbenchStore.getState().canvasMode).toBe('erased');
+    expect(useWorkbenchStore.getState().showMask).toBe(true);
+    useWorkbenchStore.getState().setCanvasMode('typeset');
+    expect(useWorkbenchStore.getState().showMask).toBe(true);
+  });
+
   it('switches to the erased preview and mask when an inpaint job for the active page completes', async () => {
     seedWorkbench();
     useWorkbenchStore.setState({

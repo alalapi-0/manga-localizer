@@ -5,6 +5,14 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+### Fixed
+
+- Switching the canvas to **擦除** now shows the inpaint review mask, and the
+  **复核蒙版** control stays visible in the review group below 1250px so accept
+  is not stuck on “请显示蒙版复核”.
+- First-time accept of an unchanged preprocess (or other upstream) visual
+  review no longer clears already-accepted inpaint/typeset reviews.
+
 ### Changed
 
 - Live `/loop` prompt is now `.agent/UI_LOOP_PROMPT.md` (computer-use UI

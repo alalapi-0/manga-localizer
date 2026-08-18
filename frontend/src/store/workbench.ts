@@ -2096,7 +2096,10 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
     }
   },
 
-  setCanvasMode: (canvasMode) => set({ canvasMode }),
+  setCanvasMode: (canvasMode) => set((state) => ({
+    canvasMode,
+    showMask: canvasMode === 'erased' ? true : state.showMask,
+  })),
   setCanvasTool: (canvasTool) => set({ canvasTool }),
   toggleCompareMode: () => set((state) => ({
     compareMode: hasGeneratedPreview(activeImage(state)) ? !state.compareMode : false,

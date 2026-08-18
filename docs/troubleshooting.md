@@ -103,15 +103,18 @@ still cannot invent missing line art, so some repairs may need an external edito
 
 ## Export says a visual-stage review is missing or stale
 
-Finish the page-level text review, switch the canvas to **擦除**, display and inspect **复核蒙版**, then
-accept the inpaint result. When an inpaint job for the current page finishes, the canvas switches to
+Finish the page-level text review, switch the canvas to **擦除**, inspect **复核蒙版**, then
+accept the inpaint result. Opening **擦除** shows that mask; the checkbox stays in the
+review group on narrower workbench widths. **修复 → 显示实际蒙版** is the same switch.
+When an inpaint job for the current page finishes, the canvas switches to
 **擦除** and shows the mask so that review can start without changing those controls by hand. When a
 preprocess job for the current page finishes, the canvas switches to **增强**. Those visual-stage
 completions also open **对比**. Accept
 **成品** as well when exporting a typeset image. The decision is bound
 to the exact bytes loaded by the canvas. A changed artifact or mask
-no longer matches the saved review and must be reloaded, rerun, or accepted again. Upstream changes clear
-dependent review state. JSON-only export intentionally does not require visual-stage acceptance.
+no longer matches the saved review and must be reloaded, rerun, or accepted again. Regenerating an
+upstream stage, or accepting a *changed* upstream artifact, still clears dependent reviews. First-time
+accept of the current unchanged preprocess bytes does not. JSON-only export intentionally does not require visual-stage acceptance.
 
 ## Port already in use
 

@@ -516,6 +516,63 @@ def test_accepting_changed_upstream_artifact_clears_dependent_review(
     assert set(changed.json()["stageReviews"]) == {"inpaint"}
 
 
+def test_accepting_unchanged_upstream_review_keeps_dependent_reviews(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "unchanged-upstream-stage-review"
+    project = create_project(client, project_root)
+    imported = upload_image(client, project["id"])
+    preprocess = project_root / "generated/preprocessed/第一章/ページ一.png"
+    inpaint = project_root / "generated/inpainted/第一章/ページ一.png"
+    mask = project_root / "generated/masks/第一章/ページ一.png"
+    typeset = project_root / "generated/typeset/第一章/ページ一.png"
+    generated_bytes = png_bytes()
+    for target in (preprocess, inpaint, mask, typeset):
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(generated_bytes)
+    store, _ = app.state.registry.find_image(imported["id"])
+    with store.session() as session:
+        image = session.get(ImageAsset, imported["id"])
+        assert image is not None
+        image.status = {
+            **image.status,
+            "preprocess": "done",
+            "inpaint": "done",
+            "typeset": "done",
+        }
+
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    current = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/inpaint",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+            "observedMaskChecksum": _checksum(generated_bytes),
+        },
+    ).json()
+    current = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/typeset",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+        },
+    ).json()
+    assert set(current["stageReviews"]) == {"inpaint", "typeset"}
+
+    accepted = client.patch(
+        f"/api/images/{imported['id']}/stage-reviews/preprocess",
+        json={
+            "state": "accepted",
+            "expectedRevision": current["revision"],
+            "observedArtifactChecksum": _checksum(generated_bytes),
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert set(accepted.json()["stageReviews"]) == {"preprocess", "inpaint", "typeset"}
+
+
 def test_visual_stage_review_requires_completed_stage(client: TestClient, tmp_path: Path) -> None:
     project = create_project(client, tmp_path / "unfinished-stage-review")
     image = upload_image(client, project["id"])

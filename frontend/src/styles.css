@@ -289,8 +289,10 @@ h1, h2, h3, p { margin: 0; }
 .toolbar-spacer { flex: 1; }
 .tool-buttons { display: flex; align-items: center; gap: 1px; }
 .tool-buttons .icon-button { height: 27px; min-width: 27px; font-size: 10px; }
-.toolbar-check { display: flex; align-items: center; gap: 3px; color: var(--text-soft); font-size: 9px; white-space: nowrap; }
-.toolbar-check input { width: 12px; min-height: 12px; }
+.toolbar-check,
+.stage-review-check { display: flex; align-items: center; gap: 3px; color: var(--text-soft); font-size: 9px; white-space: nowrap; }
+.toolbar-check input,
+.stage-review-check input { width: 12px; min-height: 12px; }
 .brush-radius { display: flex; align-items: center; gap: 6px; min-width: 126px; color: var(--text-soft); font-size: 9px; white-space: nowrap; }
 .brush-radius input { width: 72px; min-height: 20px; padding: 0; }
 .canvas-area { position: relative; display: flex; flex: 1; min-height: 0; overflow: hidden; background-color: #0c0f12; background-image: linear-gradient(45deg, rgba(255,255,255,.018) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,.018) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,.018) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.018) 75%); background-position: 0 0, 0 8px, 8px -8px, -8px 0; background-size: 16px 16px; }

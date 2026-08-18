@@ -19,12 +19,13 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Local `3ff043f` packages the double-clickable `Manga Localizer.app` with
-checksum-verified bundled models. The desktop packaging loop is stopped
-and superseded. The next increment is **computer-use UI evaluation**:
-operate the live workbench as the user, write defects into
-`.agent/UI_PROBLEM_REPORT.md`, and fix from that report until a pass
-finds no product defects.
+Local `746480a` is on `origin/main` with the computer-use UI loop prompt.
+GitHub CI run `32089117642` passed for that commit. The first computer-use
+pass completed the public synthetic offline path with workarounds and
+recorded UI-1/UI-2/UI-3 in `.agent/UI_PROBLEM_REPORT.md`. This increment
+fixes UI-1 (visible inpaint mask review) and UI-2 (unchanged preprocess
+accept no longer wipes downstream reviews). UI-3 remains open. Clear UI-1
+and UI-2 only after a later computer-use pass on the refreshed app/API.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -273,6 +274,19 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 UI-1/UI-2 public fix: `npm run check` passed (9 launcher tests;
+  backend Ruff lint/format and 245 pytest cases; frontend lint, typecheck,
+  166 Vitest cases, and production build). Private trees were not committed.
+- 2026-08-18 UI loop first computer-use pass on the live workbench: created a
+  public synthetic project, imported the public generator page, ran
+  preprocess/detect/OCR, switched to bundled PP-OCR/LaMa, confirmed boxes
+  (ignored one leftover Tesseract panel box), manual translate, LaMa inpaint,
+  typeset, visual accept, and safe export of translated image + JSON. Export
+  was blocked until inpaint/typeset were re-accepted after a late preprocess
+  accept. Did not auto-accept empty pages. Private books were not used as
+  the evaluation corpus.
+- 2026-08-18 UI-loop prompt CI: GitHub Actions run `32089117642` passed at
+  `746480a80d69556378c66c8ce9df1a6ceb6d1319` (frontend, backend, e2e).
 - 2026-08-17 desktop app package: launcher 9/9 Node tests passed; backend Ruff
   lint/format and 244 pytest cases passed, including checksum-mismatch
   unavailable health and verified bundle copy. `npm run package:app` wrote

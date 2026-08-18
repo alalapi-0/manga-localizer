@@ -828,8 +828,9 @@ function CanvasToolbar({
             {observationStatus}
           </span>
           {reviewStage === 'inpaint' ? (
-            <label className="toolbar-check">
+            <label className="stage-review-check">
               <input
+                aria-label="复核蒙版"
                 checked={showMask}
                 onChange={(event) => setShowMask(event.target.checked)}
                 type="checkbox"

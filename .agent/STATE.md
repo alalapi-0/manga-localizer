@@ -20,11 +20,11 @@ workbench/app panel; do not stop for reversible packaging review.
 ## Current round and candidate
 
 Real-page computer-use is on the 130-page manga01 full book.
-RP-1–RP-7 are cleared after the live rebuild recheck at 1100×800
-(CI `32118174494` green for `05ce7e4`; RP-7 fix is the next public
-commit). Next computer-use walk is confirm → local translate →
-inpaint → typeset → accept → export on a text page. Product Round 8
-is not complete.
+RP-1–RP-7 stay cleared. Independently rechecked CI `32118881008`
+(`ec695cb`, success) and `32119510667` (`cbce222`, success). Live
+walk confirmed one box with a manual translation and ignored two
+empty boxes; 8 unready boxes remain on that page before translate
+can queue. Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm

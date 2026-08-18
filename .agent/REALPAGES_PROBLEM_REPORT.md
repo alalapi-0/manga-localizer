@@ -60,11 +60,16 @@ None.
 
 ## Last computer-use pass
 
-- Status: CI-green follow-up on the 130-page manga01 full book
-  (viewport 1100×800, rebuilt bundle `index-BzEhPVG5.js`)
-- Path: reopen full book → skip 0-box first page → select a later text
-  page → open one box. Confirm/source/translation are on the first
-  screen. Did not confirm, ignore, auto-accept, or export this pass.
+- Status: docs CI `32118881008` and RP-7 CI `32119510667` both
+  independently rechecked success. Same 130-page book, 1100×800,
+  bundle `index-BzEhPVG5.js`.
+- Path: selected a text page → typed a manual **中文译文** →
+  **确认此文本框** (review 11→10, status **OCR 已信任**) →
+  **还需确认并信任** jumped to the next unready box → **忽略此文本框**
+  on two empty boxes (review now 8). Confirm switch is the visible
+  toggle, not the `opacity: 0` input. Did not auto-accept empty
+  pages. Translate / inpaint / typeset / export not started; trust
+  gate still blocks them while 8 boxes are unready.
 - Empty pages skipped: 1 this pass (plus prior zero-box pages left untouched)
 - Product Round 8 is not complete
 - Private trees were not committed

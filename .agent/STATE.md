@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-17
+Updated: 2026-08-18
 
 ## Authority and purpose
 
@@ -19,38 +19,35 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Desktop application increment: `npm run package:app` builds a local
-`Manga Localizer.app` that starts the existing FastAPI workbench on
-loopback, serves the bundled frontend, and selects checksum-verified
-PP-OCR, LaMa, Real-ESRGAN anime, and Argos ja→zh weights copied at
-package time. Ordinary startup does not download models. `npm run app`
-remains the source-tree prototype. LAN companion stays explicit
-(`app:lan` or the app binary `--lan`).
+Local `3ff043f` packages the double-clickable `Manga Localizer.app` with
+checksum-verified bundled models. The desktop packaging loop is stopped
+and superseded. The next increment is **computer-use UI evaluation**:
+operate the live workbench as the user, write defects into
+`.agent/UI_PROBLEM_REPORT.md`, and fix from that report until a pass
+finds no product defects.
 
-Local package smoke: the app wrapper reached `/api/health`; bundled
-PP-OCR, LaMa, Real-ESRGAN ONNX, Argos ja→zh, and Tesseract reported
-available. The `.app` and weights stay gitignored. Unified visual check
-of both private books is still outstanding. Do not auto-accept empty
-pages. Product Round 8 is not complete. Do not re-arm
-`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
+Unified visual check of both private books is still outstanding. Do not
+auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
+`AGENT_LOOP_WAKE_manga_desktop`, `AGENT_LOOP_WAKE_manga_realdata`, or
+`AGENT_LOOP_WAKE_manga_app`.
 
 ## Active loop prompt
 
-Live prompt: `.agent/DESKTOP_LOOP_PROMPT.md`.
-Sentinel: `AGENT_LOOP_WAKE_manga_desktop`.
-`.agent/REALDATA_LOOP_PROMPT.md` is superseded. Do not re-arm
-`AGENT_LOOP_WAKE_manga_realdata` or `AGENT_LOOP_WAKE_manga_app`.
+Live prompt: `.agent/UI_LOOP_PROMPT.md`.
+Sentinel: `AGENT_LOOP_WAKE_manga_ui`.
+`.agent/DESKTOP_LOOP_PROMPT.md` and `.agent/REALDATA_LOOP_PROMPT.md` are
+superseded. Do not re-arm `AGENT_LOOP_WAKE_manga_desktop`,
+`AGENT_LOOP_WAKE_manga_realdata`, or `AGENT_LOOP_WAKE_manga_app`.
 Do not arm a 25-minute fallback sleeper. Late wakes for the old sentinels
-skip rewrite and do not resume those loops. After a public push, wake on
-CI completion only.
+skip rewrite and do not resume those loops.
 
 ## Automation closeout
 
-This conversation's workbench API worker (uvicorn `127.0.0.1:8000`) was
-stopped. No live `AGENT_LOOP_*` watcher or sleeper remains.
-The 2026-08-17 packaging/app loop (`AGENT_LOOP_WAKE_manga_app`) and
-real-data process/fix loop (`AGENT_LOOP_WAKE_manga_realdata`) stay
-superseded. Late wakes for those sentinels skip rewrite.
+The 2026-08-17 desktop packaging watcher (`AGENT_LOOP_WAKE_manga_desktop`)
+was stopped on user request (2026-08-18). No desktop/app/realdata
+sleeper should be re-armed. The 2026-08-17 packaging/app loop and
+real-data process/fix loop stay superseded. Late wakes for those
+sentinels skip rewrite.
 
 ## Environment evidence
 

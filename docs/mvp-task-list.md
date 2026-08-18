@@ -87,7 +87,8 @@ not inferred from this tracked checklist.
       Argos ja→zh into the application bundle (weights stay out of git)
 - [x] Running app selects bundled models so detect / AI redraw / LaMa / Argos
       work offline after install
-- [ ] Remaining workbench gaps found in the local app are fixed iteratively
+- [ ] Remaining workbench gaps found by computer-use operation of the local
+      app are written to `.agent/UI_PROBLEM_REPORT.md` and fixed iteratively
 
 ## Explicitly deferred
 

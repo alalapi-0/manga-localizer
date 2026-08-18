@@ -7,8 +7,9 @@ Semantic Versioning.
 
 ### Changed
 
-- Live `/loop` prompt is now `.agent/DESKTOP_LOOP_PROMPT.md` (local Mac app +
-  bundled models). The real-data process/fix loop is superseded.
+- Live `/loop` prompt is now `.agent/UI_LOOP_PROMPT.md` (computer-use UI
+  evaluation of the local app). The desktop packaging loop and the real-data
+  process/fix loop are superseded.
 - `ppocr-v3+tesseract` now merges overlapping, contained, and nearby aligned proposals, then pads the
   surviving box so glyphs are enclosed. Re-running detection replaces stale empty unconfirmed auto
   boxes and skips duplicates of kept regions.

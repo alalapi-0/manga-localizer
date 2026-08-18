@@ -180,6 +180,8 @@ function percent(value: number | null): string {
 function PageReviewControl({ regions }: { regions: Region[] }) {
   const image = useWorkbenchStore(activeImage);
   const reviewActiveImage = useWorkbenchStore((state) => state.reviewActiveImage);
+  const setRightTab = useWorkbenchStore((state) => state.setRightTab);
+  const selectRegion = useWorkbenchStore((state) => state.selectRegion);
   const regionsLoading = useWorkbenchStore((state) =>
     state.activeImageId ? Boolean(state.regionsLoading[state.activeImageId]) : false,
   );
@@ -205,7 +207,16 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
           ? '本页没有活动文本框，可确认无文字'
           : `${activeRegions.length} 个活动文本框均已信任，可完成页面检查`;
 
+  const firstUnready = regions.find(
+    (region) => !region.ignored && (!region.confirmed || region.trustDisposition !== 'trusted'),
+  );
+
   async function submit() {
+    if (!reviewed && unreadyCount > 0) {
+      setRightTab('text');
+      if (firstUnready) selectRegion(firstUnready.id);
+      return;
+    }
     setSubmitting(true);
     await reviewActiveImage(reviewed ? 'pending' : actionState);
     setSubmitting(false);
@@ -219,7 +230,7 @@ function PageReviewControl({ regions }: { regions: Region[] }) {
       </div>
       <button
         className={`button button--compact ${reviewed ? '' : 'button--accent'}`}
-        disabled={submitting || regionsLoading || (!reviewed && unreadyCount > 0)}
+        disabled={submitting || regionsLoading || (!reviewed && unreadyCount > 0 && !firstUnready)}
         onClick={() => void submit()}
         type="button"
       >
@@ -430,6 +441,30 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
         <span>{dispositionReason(region)}</span>
         <small>检测 {percent(region.detectorConfidence)} · OCR {percent(region.ocrConfidence)} · 策略 v{region.trustPolicyVersion}</small>
       </section>
+      <Toggle checked={region.confirmed && !region.ignored && region.trustDisposition === 'trusted'} description={region.trustDisposition === 'trusted' ? 'OCR 已由人工信任；修改或翻译后还需再确认当前内容，才可完成页面复核' : '明确确认后才允许翻译和安全图像处理，并获得页面复核资格'} label="确认此文本框" onChange={(event) => {
+        void setRegionConfirmed(region.id, event.target.checked);
+      }} />
+      <Toggle checked={region.ignored} description="图像处理会跳过；导出 JSON 仍保留此记录" label="忽略此文本框" onChange={(event) => updateRegion(region.id, { ignored: event.target.checked })} />
+      <Field label="日文原文">
+        <textarea
+          aria-label="日文原文"
+          onChange={(event) => updateRegion(region.id, { sourceText: event.target.value })}
+          rows={5}
+          spellCheck={false}
+          value={region.sourceText}
+        />
+      </Field>
+      <div className="text-meta"><span>{region.sourceText.length} 字符</span><span>兼容评分 {confidencePercent === '' ? '未评分' : `${confidencePercent}%`}</span></div>
+      <Field label="中文译文">
+        <textarea
+          aria-label="中文译文"
+          lang="zh-CN"
+          onChange={(event) => updateRegion(region.id, { translationText: event.target.value })}
+          rows={6}
+          value={region.translationText}
+        />
+      </Field>
+      <div className="text-meta"><span>{region.translationText.length} 字符</span><span>{region.style.autoFit ? '自动适配字号' : '固定字号'}</span></div>
       {image ? (
         <section className="form-stack" aria-label="选框几何">
           <div className="field-grid">
@@ -482,26 +517,6 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           </div>
         </section>
       ) : null}
-      <Field label="日文原文">
-        <textarea
-          aria-label="日文原文"
-          onChange={(event) => updateRegion(region.id, { sourceText: event.target.value })}
-          rows={5}
-          spellCheck={false}
-          value={region.sourceText}
-        />
-      </Field>
-      <div className="text-meta"><span>{region.sourceText.length} 字符</span><span>兼容评分 {confidencePercent === '' ? '未评分' : `${confidencePercent}%`}</span></div>
-      <Field label="中文译文">
-        <textarea
-          aria-label="中文译文"
-          lang="zh-CN"
-          onChange={(event) => updateRegion(region.id, { translationText: event.target.value })}
-          rows={6}
-          value={region.translationText}
-        />
-      </Field>
-      <div className="text-meta"><span>{region.translationText.length} 字符</span><span>{region.style.autoFit ? '自动适配字号' : '固定字号'}</span></div>
       <div className="field-grid">
         <Field label="类型">
           <select aria-label="文本类型" onChange={(event) => updateRegion(region.id, { type: event.target.value as RegionType })} value={region.type}>
@@ -534,10 +549,6 @@ function TextInspector({ regions, selected }: { regions: Region[]; selected: Reg
           />
         </Field>
       </div>
-      <Toggle checked={region.confirmed && !region.ignored && region.trustDisposition === 'trusted'} description={region.trustDisposition === 'trusted' ? 'OCR 已由人工信任；修改或翻译后还需再确认当前内容，才可完成页面复核' : '明确确认后才允许翻译和安全图像处理，并获得页面复核资格'} label="确认此文本框" onChange={(event) => {
-        void setRegionConfirmed(region.id, event.target.checked);
-      }} />
-      <Toggle checked={region.ignored} description="图像处理会跳过；导出 JSON 仍保留此记录" label="忽略此文本框" onChange={(event) => updateRegion(region.id, { ignored: event.target.checked })} />
       <button className="button" onClick={rerunSelectedOcr} type="button">重新 OCR 选中区域</button>
       <div className="split-actions" aria-label="拆分文本框">
         <button className="button" onClick={() => splitSelectedRegion('horizontal')} type="button">水平中线拆分</button>

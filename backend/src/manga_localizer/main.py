@@ -90,8 +90,6 @@ from manga_localizer.services.regions import (
 from manga_localizer.services.trust import (
     invalidate_trust,
     is_region_trusted,
-    recognition_has_detection_evidence,
-    recognition_has_ocr_evidence,
     recognition_payload,
     recognition_uses_input_variant,
     region_disposition,
@@ -139,10 +137,6 @@ def _settings_invalidation(before: dict[str, Any], after: dict[str, Any]) -> set
                 "export",
             )
         )
-    if changed & {"detectorProvider"}:
-        stages.update(("detection", "ocr", "translation", "inpaint", "typeset", "export"))
-    if changed & {"ocrProvider", "sourceLanguage"}:
-        stages.update(("ocr", "translation", "inpaint", "typeset", "export"))
     if changed & {
         "translatorProvider",
         "targetLanguage",
@@ -608,30 +602,12 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
                         if changed_settings & {
                             "preprocessorProvider",
                             "preprocessing",
-                            "detectorProvider",
-                            "ocrProvider",
-                            "sourceLanguage",
                         }:
                             for region in image.regions:
                                 if region.ignored:
                                     continue
                                 evidence = recognition_payload(region)
-                                detection_changed = (
-                                    "detectorProvider" in changed_settings
-                                    and recognition_has_detection_evidence(evidence)
-                                )
-                                ocr_changed = bool(
-                                    changed_settings & {"ocrProvider", "sourceLanguage"}
-                                    and recognition_has_ocr_evidence(evidence)
-                                )
-                                preprocessing_changed = bool(
-                                    changed_settings & {"preprocessorProvider", "preprocessing"}
-                                    and recognition_uses_input_variant(
-                                        evidence,
-                                        "preprocessed",
-                                    )
-                                )
-                                if not (detection_changed or ocr_changed or preprocessing_changed):
+                                if not recognition_uses_input_variant(evidence, "preprocessed"):
                                     continue
                                 if not (is_region_trusted(region) or region.confirmed):
                                     continue

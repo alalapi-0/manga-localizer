@@ -754,7 +754,8 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().images[0]?.status.reviewState).toBe('no-text-reviewed');
   });
 
-  it('only enables page review after every active region is confirmed and trusted', () => {
+  it('only enables page review after every active region is confirmed and trusted', async () => {
+    const user = userEvent.setup();
     seedWorkbench({
       images: [imageFixture('image-1', { trustReviewCount: 2 })],
       regions: [
@@ -763,10 +764,15 @@ describe('desktop workbench interactions', () => {
         regionFixture('region-3', { ignored: true }),
       ],
     });
+    useWorkbenchStore.setState({ rightTab: 'project', selectedRegionIds: [] });
     render(<App />);
 
     expect(screen.getByText('还有 2 个活动文本框尚未确认并信任')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '还需确认并信任 2 个文本框' })).toBeDisabled();
+    const focusUnready = screen.getByRole('button', { name: '还需确认并信任 2 个文本框' });
+    expect(focusUnready).toBeEnabled();
+    await user.click(focusUnready);
+    expect(useWorkbenchStore.getState().rightTab).toBe('text');
+    expect(useWorkbenchStore.getState().selectedRegionIds).toEqual(['region-1']);
 
     act(() => useWorkbenchStore.setState((state) => ({
       images: state.images.map((image) => image.id === 'image-1'
@@ -783,6 +789,7 @@ describe('desktop workbench interactions', () => {
         ),
       },
     })));
+
     expect(screen.getByRole('button', { name: '标记本页已检查' })).toBeEnabled();
 
     act(() => {
@@ -1668,5 +1675,51 @@ describe('desktop workbench interactions', () => {
     expect(screen.getByRole('button', { name: '对比' })).toBeDisabled();
     expect(screen.queryByText('嵌字成品')).not.toBeInTheDocument();
     expect(screen.getByRole('application', { name: '原图画布' })).toBeVisible();
+  });
+
+  it('queues the viewed page from the batch drawer even when another page stays checkbox-selected', async () => {
+    const user = userEvent.setup();
+    const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
+      id: 'job-current-page',
+      kind: 'detect',
+    }));
+    vi.spyOn(api, 'getProject').mockImplementation(async () =>
+      useWorkbenchStore.getState().currentProject ?? projectFixture(),
+    );
+    vi.spyOn(api, 'listImages').mockImplementation(async () =>
+      useWorkbenchStore.getState().images,
+    );
+    vi.spyOn(api, 'listJobs').mockImplementation(async () =>
+      useWorkbenchStore.getState().jobs,
+    );
+    seedWorkbench({ images: [imageFixture('image-1'), imageFixture('image-2')] });
+    useWorkbenchStore.setState({
+      activeImageId: 'image-2',
+      selectedImageIds: ['image-1'],
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
+    expect(within(drawer).getByRole('radio', { name: /当前页/ })).toBeChecked();
+    expect(within(drawer).getByRole('button', { name: /加入队列 · 1 张 · 2 步/ })).toBeEnabled();
+    await user.click(within(drawer).getByRole('button', { name: /加入队列/ }));
+
+    await waitFor(() => expect(startJob).toHaveBeenCalled());
+    expect(startJob).toHaveBeenCalledWith(
+      'project-1',
+      'detect',
+      expect.objectContaining({ imageIds: ['image-2'] }),
+    );
+    expect(startJob).toHaveBeenCalledWith(
+      'project-1',
+      'ocr',
+      expect.objectContaining({ imageIds: ['image-2'] }),
+    );
+    expect(startJob).not.toHaveBeenCalledWith(
+      'project-1',
+      expect.anything(),
+      expect.objectContaining({ imageIds: ['image-1'] }),
+    );
   });
 });

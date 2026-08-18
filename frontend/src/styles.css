@@ -259,8 +259,9 @@ h1, h2, h3, p { margin: 0; }
 .provider-badge--mock { color: var(--purple); background: var(--purple-soft); border-color: rgba(191,140,255,.25); }
 .provider-badge--mock b { color: var(--purple); background: rgba(191,140,255,.18); }
 .provider-badge--missing { color: var(--red); background: var(--red-soft); border-color: rgba(255,107,107,.28); }
-.sidebar__footer { display: flex; justify-content: center; align-items: center; flex: 0 0 38px; gap: 6px; background: var(--surface-0); border-top: 1px solid var(--border); }
-.sidebar__footer span { min-width: 48px; color: var(--muted); font-size: 10px; text-align: center; }
+.sidebar__footer { display: flex; justify-content: center; align-items: center; flex: 0 0 38px; gap: 2px; padding-inline: 4px; background: var(--surface-0); border-top: 1px solid var(--border); }
+.sidebar__footer .icon-button { min-width: 26px; height: 26px; padding: 0; }
+.sidebar__footer span { min-width: 36px; color: var(--muted); font-size: 10px; text-align: center; }
 
 .status-pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; color: var(--muted); background: var(--surface-3); border-radius: 8px; font-size: 8px; font-weight: 650; }
 .status-pill > span { width: 5px; height: 5px; background: currentColor; border-radius: 50%; }
@@ -528,7 +529,6 @@ kbd { display: inline-block; padding: 3px 6px; color: var(--text-soft); backgrou
   .topbar__brand { flex-basis: 224px; }
   .toolbar-check { display: none; }
   .sidebar__search { grid-template-columns: 1fr; }
-  .sidebar__search select { display: none; }
 }
 
 @media (max-width: 900px) {

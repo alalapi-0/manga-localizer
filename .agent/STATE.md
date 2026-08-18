@@ -19,10 +19,12 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Local `954521f` is one commit ahead of `origin/main` (UI-3 leftover
-replacement). Independent CI recheck of run `32101553739` at `30d27a5`
-passed. The synthetic UI loop is stopped. The live loop is now real-page
-computer-use evaluation. Product Round 8 is not complete.
+Real-page computer-use restarted on the 130-page manga01 full book
+(not the 30-page slice; leftover synthetic catalog entries were not
+used). RP-1/RP-2/RP-3/RP-5 cleared on that pass. RP-4 auto-tab after
+OCR is still partial. RP-6: batch **加入队列** defaulted to leftover
+checkbox selection and processed the wrong page; public fix defaults
+the drawer to **当前页**. Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -274,6 +276,21 @@ loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 real-page pass 2 (130-page manga01 full book, viewport
+  1100×800, workbench origin without a test query): reopened the full
+  book from the catalog, skipped a 0-box first page, and found RP-6
+  (batch **加入队列** defaulted to leftover checkbox selection). After
+  choosing **当前页**, detect+OCR completed 1/1 with 4 boxes. RP-1/RP-2
+  layout and RP-3/RP-5 provider checks held.   Local frontend lint, typecheck, 170 Vitest cases, and production
+  build passed. Private trees were not committed.
+- 2026-08-18 real-page pass 1 (30-page catalog slice, viewport 1100×800):
+  reopened from **切换项目**, PP-OCRv3 detect+OCR on one selected page
+  completed 1/1 with 3 balloon boxes. Switching the project detector
+  had already wiped the other 29 pages. **按状态筛选** was `display:none`
+  below 1250px; **上一张图** sat at x=-9. Findings: RP-1–RP-5 in
+  `.agent/REALPAGES_PROBLEM_REPORT.md`. Local public gates after the
+  RP-1–RP-4 fix: frontend lint/typecheck/168 Vitest/build; backend Ruff
+  and 249 pytest. Private trees were not committed.
 - 2026-08-18 user stop: killed the loopback API and all loop watchers;
   replaced the live prompt with `.agent/REALPAGES_LOOP_PROMPT.md`
   (`AGENT_LOOP_WAKE_manga_realpages`). Real-page function + layout

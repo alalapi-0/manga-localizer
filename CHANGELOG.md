@@ -7,6 +7,20 @@ Semantic Versioning.
 
 ### Fixed
 
+- Typical 1100px workbench widths keep **按状态筛选** stacked under search
+  instead of hiding it, and the sidebar page-nav footer no longer clips
+  **上一张图**.
+- Changing the project detector or OCR default no longer marks every page
+  pending or deletes existing inpaint/typeset plates. Those defaults apply
+  to the next job; re-run still replaces stale unconfirmed boxes.
+- After detect/OCR on the current page the inspector opens **文本**,
+  including when a fast job is first seen already completed.
+  **还需确认并信任** jumps to the first unready box, and confirm/ignore plus
+  source/translation sit above geometry so the next action is on the first
+  screen.
+- **批处理与导出** now defaults the scope radio to **当前页**, so
+  leftover sidebar checkboxes do not silently queue a different page.
+
 - Switching the canvas to **擦除** now shows the inpaint review mask, and the
   **复核蒙版** control stays visible in the review group below 1250px so accept
   is not stuck on “请显示蒙版复核”.

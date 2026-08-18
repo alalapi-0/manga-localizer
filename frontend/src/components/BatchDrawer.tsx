@@ -188,7 +188,7 @@ export function BatchDrawer() {
   const jobs = useWorkbenchStore((state) => state.jobs);
   const currentImage = useWorkbenchStore(activeImage);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
-  const [target, setTarget] = useState<'selected' | 'current' | 'all'>('selected');
+  const [target, setTarget] = useState<'selected' | 'current' | 'all'>('current');
   const [steps, setSteps] = useState<Record<JobKind, boolean>>({
     preprocess: false,
     detect: true,

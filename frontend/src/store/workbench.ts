@@ -719,21 +719,6 @@ function projectSettingsInvalidatedStages(
     stages.add('typeset');
     stages.add('export');
   }
-  if (changed(['detectorProvider'])) {
-    stages.add('detection');
-    stages.add('ocr');
-    stages.add('translation');
-    stages.add('inpaint');
-    stages.add('typeset');
-    stages.add('export');
-  }
-  if (changed(['ocrProvider', 'sourceLanguage'])) {
-    stages.add('ocr');
-    stages.add('translation');
-    stages.add('inpaint');
-    stages.add('typeset');
-    stages.add('export');
-  }
   if (changed([
     'translatorProvider',
     'targetLanguage',
@@ -2384,7 +2369,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         jobs.flatMap((job) => {
           if (job.kind !== kind || job.status !== 'completed') return [];
           const previous = previousJobs.find((entry) => entry.id === job.id);
-          if (!previous || previous.status === 'completed') return [];
+          if (previous?.status === 'completed') return [];
+          // First poll after load sees the whole history as completed; ignore
+          // those. A job that appears already-done on a later poll still counts
+          // — detect/OCR can finish between two refreshes.
+          if (!previous && previousJobs.length === 0) return [];
           return job.items
             .map((item) => item.imageId)
             .filter((imageId): imageId is string => Boolean(imageId));
@@ -2392,6 +2381,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
       );
       const completedTypesetImageIds = newlyCompletedImageIds('typeset');
       const completedInpaintImageIds = newlyCompletedImageIds('inpaint');
+      const completedOcrImageIds = newlyCompletedImageIds('ocr');
+      const completedDetectImageIds = newlyCompletedImageIds('detect');
       const completedPreprocessImageIds = newlyCompletedImageIds('preprocess');
       const refreshedImages = imageResponse.map((image) =>
         hydrateImage(image, project.settings),
@@ -2456,6 +2447,11 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         && get().images.find((entry) => entry.id === activeImageId)?.status.inpaint === 'done'
       ) {
         set({ canvasMode: 'erased', showMask: true, rightTab: 'repair', compareMode: true });
+      } else if (
+        activeImageId
+        && (completedOcrImageIds.has(activeImageId) || completedDetectImageIds.has(activeImageId))
+      ) {
+        set({ rightTab: 'text' });
       } else if (
         activeImageId
         && completedPreprocessImageIds.has(activeImageId)

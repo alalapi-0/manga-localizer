@@ -1641,7 +1641,7 @@ def test_trusted_import_across_drives_uses_exact_boundaries_without_a_common_roo
         ("sourceLanguage", "en", "ocr", "detection"),
     ),
 )
-def test_recognition_provider_settings_revoke_only_matching_nonignored_trust(
+def test_recognition_provider_defaults_do_not_wipe_existing_pages(
     client: TestClient,
     app,
     tmp_path: Path,
@@ -1739,9 +1739,9 @@ def test_recognition_provider_settings_revoke_only_matching_nonignored_trust(
     regions = {
         region["id"]: region for region in client.get(f"/api/images/{image['id']}/regions").json()
     }
-    assert regions[affected["id"]]["confirmed"] is False
-    assert regions[affected["id"]]["trustDisposition"] == "review"
-    assert regions[affected["id"]]["trustReason"] == "trust-input-changed"
+    assert regions[affected["id"]]["confirmed"] is True
+    assert regions[affected["id"]]["trustDisposition"] == "trusted"
+    assert regions[affected["id"]]["trustReason"] == "human-confirmed"
     assert regions[unaffected["id"]]["confirmed"] is True
     assert regions[unaffected["id"]]["trustDisposition"] == "trusted"
     assert regions[unaffected["id"]]["trustReason"] == "human-confirmed"
@@ -1750,7 +1750,45 @@ def test_recognition_provider_settings_revoke_only_matching_nonignored_trust(
     assert regions[ignored["id"]]["trustReason"] == "human-ignored"
     status = client.get(f"/api/projects/{project['id']}/images").json()[0]["status"]
     for stage in ("translation", "inpaint", "typeset", "export"):
-        assert status[stage] == "pending"
+        assert status[stage] == "done"
+
+
+def test_detector_default_change_does_not_pending_other_pages(
+    client: TestClient,
+    app,
+    tmp_path: Path,
+) -> None:
+    project = create_project(client, tmp_path / "detector-default-keeps-pages")
+    first = upload_image(client, project["id"])
+    second = upload_image(client, project["id"])
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        other = session.get(ImageAsset, second["id"])
+        assert other is not None
+        other.status = {
+            **other.status,
+            "detection": "done",
+            "ocr": "done",
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+        }
+
+    current_project = client.get(f"/api/projects/{project['id']}").json()
+    changed = client.patch(
+        f"/api/projects/{project['id']}",
+        json={
+            "settings": {"detectorProvider": "ppocr-v3"},
+            "expectedRevision": current_project["revision"],
+        },
+    )
+    assert changed.status_code == 200, changed.text
+    listed = client.get(f"/api/projects/{project['id']}/images").json()
+    images = {item["id"]: item for item in listed}
+    assert images[first["id"]]["status"]["detection"] != "failed"
+    for stage in ("detection", "ocr", "translation", "inpaint", "typeset", "export"):
+        assert images[second["id"]]["status"][stage] == "done"
 
 
 def test_preprocessing_setting_revokes_only_trust_using_preprocessed_evidence(

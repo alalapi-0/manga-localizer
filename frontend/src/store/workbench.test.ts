@@ -859,6 +859,34 @@ describe('workbench store', () => {
     });
   });
 
+  it('does not wipe page pipeline status when only the detector default changes', () => {
+    const initial = imageFixture('image-1', {
+      status: {
+        ...imageFixture('image-1').status,
+        detection: 'done',
+        ocr: 'done',
+        inpaint: 'done',
+        typeset: 'done',
+      },
+      stageReviews: {
+        inpaint: {
+          state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'b'.repeat(64), maskChecksum: 'c'.repeat(64),
+        },
+      },
+    });
+    seedWorkbench({ images: [initial] });
+
+    useWorkbenchStore.getState().updateProjectSettings({ detectorProvider: 'ppocr-v3' });
+
+    expect(useWorkbenchStore.getState().images[0]?.status).toMatchObject({
+      detection: 'done',
+      ocr: 'done',
+      inpaint: 'done',
+      typeset: 'done',
+    });
+    expect(useWorkbenchStore.getState().images[0]?.stageReviews).toEqual(initial.stageReviews);
+  });
+
   it('reconciles image revision and invalidated render status after a region save', async () => {
     const rendered = imageFixture('image-1', {
       revision: 10,
@@ -2070,6 +2098,90 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().selectedRegionIds).toEqual([]);
     expect(useWorkbenchStore.getState().rightTab).toBe('text');
     expect(useWorkbenchStore.getState().focusRegionIds).toEqual([]);
+  });
+
+  it('opens the text inspector when a detect or OCR job for the active page completes', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      rightTab: 'project',
+      jobs: [jobFixture({
+        id: 'job-ocr',
+        kind: 'ocr',
+        status: 'running',
+        items: [{
+          id: 'item-ocr',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'running',
+          progress: 0.4,
+        }],
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-ocr',
+        kind: 'ocr',
+        status: 'completed',
+        items: [{
+          id: 'item-ocr',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, ocr: 'done', detection: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().rightTab).toBe('text');
+  });
+
+  it('opens the text inspector when a fast detect or OCR job is first seen already completed', async () => {
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      rightTab: 'project',
+      jobs: [jobFixture({
+        id: 'job-older',
+        kind: 'inpaint',
+        status: 'completed',
+      })],
+    });
+    vi.spyOn(api, 'listJobs').mockResolvedValue([
+      jobFixture({
+        id: 'job-older',
+        kind: 'inpaint',
+        status: 'completed',
+      }),
+      jobFixture({
+        id: 'job-ocr-fast',
+        kind: 'ocr',
+        status: 'completed',
+        items: [{
+          id: 'item-ocr-fast',
+          imageId: 'image-1',
+          label: 'page',
+          status: 'completed',
+          progress: 1,
+        }],
+      }),
+    ]);
+    vi.mocked(api.listImages).mockResolvedValue([
+      imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, ocr: 'done', detection: 'done' },
+      }),
+      imageFixture('image-2'),
+    ]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([regionFixture('region-1')]);
+
+    await useWorkbenchStore.getState().refreshJobs();
+    expect(useWorkbenchStore.getState().rightTab).toBe('text');
   });
 
   it('selects overflowing boxes when a typeset job for the active page completes', async () => {

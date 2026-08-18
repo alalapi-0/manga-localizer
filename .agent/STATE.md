@@ -19,11 +19,10 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Local WIP after `30d27a5` replaces oversized low-confidence unconfirmed
-auto leftovers on re-detect. Independent CI recheck of run `32101553739`
-at `30d27a5` passed. A later computer-use pass cleared UI-1, UI-2, and
-UI-3. `.agent/UI_PROBLEM_REPORT.md` has no open findings. Product Round 8
-is not complete.
+Local `954521f` is one commit ahead of `origin/main` (UI-3 leftover
+replacement). Independent CI recheck of run `32101553739` at `30d27a5`
+passed. The synthetic UI loop is stopped. The live loop is now real-page
+computer-use evaluation. Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -32,21 +31,22 @@ auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
 
 ## Active loop prompt
 
-Live prompt: `.agent/UI_LOOP_PROMPT.md`.
-Sentinel: `AGENT_LOOP_WAKE_manga_ui`.
-`.agent/DESKTOP_LOOP_PROMPT.md` and `.agent/REALDATA_LOOP_PROMPT.md` are
-superseded. Do not re-arm `AGENT_LOOP_WAKE_manga_desktop`,
+Live prompt: `.agent/REALPAGES_LOOP_PROMPT.md`.
+Sentinel: `AGENT_LOOP_WAKE_manga_realpages`.
+`.agent/UI_LOOP_PROMPT.md`, `.agent/DESKTOP_LOOP_PROMPT.md`, and
+`.agent/REALDATA_LOOP_PROMPT.md` are superseded. Do not re-arm
+`AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
 `AGENT_LOOP_WAKE_manga_realdata`, or `AGENT_LOOP_WAKE_manga_app`.
 Do not arm a 25-minute fallback sleeper. Late wakes for the old sentinels
 skip rewrite and do not resume those loops.
 
 ## Automation closeout
 
-The 2026-08-17 desktop packaging watcher (`AGENT_LOOP_WAKE_manga_desktop`)
-was stopped on user request (2026-08-18). No desktop/app/realdata
-sleeper should be re-armed. The 2026-08-17 packaging/app loop and
-real-data process/fix loop stay superseded. Late wakes for those
-sentinels skip rewrite.
+On 2026-08-18 the user stopped every project worker and loop. The
+loopback API on `:8000` was killed. `AGENT_LOOP_WAKE_manga_ui` and the
+older desktop/app/realdata sentinels must not be re-armed. The 2026-08-17
+packaging/app loop, the real-data process/fix loop, and the synthetic UI
+loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Environment evidence
 
@@ -274,6 +274,10 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 user stop: killed the loopback API and all loop watchers;
+  replaced the live prompt with `.agent/REALPAGES_LOOP_PROMPT.md`
+  (`AGENT_LOOP_WAKE_manga_realpages`). Real-page function + layout
+  evaluation has not started.
 - 2026-08-18 UI-3 computer-use recheck: Tesseract detect+OCR on a fresh
   public synthetic page left two panel-sized unconfirmed boxes; PP-OCR
   re-detect replaced them with three small balloon boxes. `npm run

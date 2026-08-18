@@ -19,9 +19,9 @@ Semantic Versioning.
 
 ### Changed
 
-- Live `/loop` prompt is now `.agent/UI_LOOP_PROMPT.md` (computer-use UI
-  evaluation of the local app). The desktop packaging loop and the real-data
-  process/fix loop are superseded.
+- Live `/loop` prompt is now `.agent/REALPAGES_LOOP_PROMPT.md` (computer-use
+  evaluation of real manga pages for function and layout). The synthetic UI
+  loop, desktop packaging loop, and real-data process/fix loop are superseded.
 - `ppocr-v3+tesseract` now merges overlapping, contained, and nearby aligned proposals, then pads the
   surviving box so glyphs are enclosed. Re-running detection replaces stale empty unconfirmed auto
   boxes and oversized low-confidence unconfirmed auto leftovers, then skips duplicates of kept

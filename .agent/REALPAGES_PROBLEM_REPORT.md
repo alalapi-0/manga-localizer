@@ -30,9 +30,8 @@ None.
 - Cleared: closing the drawer unmounts it, so the next open remounts
   on **当前页** with detect+OCR. Vitest covers close → select
   **全部图像** → reopen. CI `32127229143` failed frontend lint on an
-  earlier `useEffect` reset; remount replaces that.
-
-### RP-1 — Status filter hidden on typical workbench widths
+  earlier `useEffect` reset; remount replaces that. Independently
+  rechecked CI `32127805767` (`35e3017`) frontend/backend/e2e success.
 
 ### RP-1 — Status filter hidden on typical workbench widths
 
@@ -83,9 +82,10 @@ None.
 
 ## Last computer-use pass
 
-- Status: docs CI `32120142568` (`c5ebb68`) independently rechecked
-  success. Same 130-page book, 1100×800, bundle `index-BzEhPVG5.js`.
-  Operator continued without waiting for approval cards.
+- Status: RP-8/RP-9 CI `32127805767` (`35e3017`) independently
+  rechecked success (frontend/backend/e2e). Same 130-page book,
+  1100×800, bundle `index-CXF4WJMl.js`. Operator continued without
+  waiting for approval cards.
 - Path on the 340×594 text page: confirm/ignore finished (4 trusted
   boxes); Argos translate 1/1; LaMa inpaint 1/1 (修复 4 · 跳过 0);
   Pillow typeset 1/1 (整页重排); **成品** already **已接受** after
@@ -94,8 +94,14 @@ None.
   the remaining CJK box, Argos translate 1/1, LaMa inpaint 1/1
   (修复 1 · 跳过 0), Pillow typeset 1/1, **成品** accepted after
   visual review, **标记本页已检查**, JSON **安全导出** 1/1.
+- Third text page (332×572): leftover empty boxes; current-page
+  detect+OCR filled 5 CJK sources; confirmed all 5; Argos translate
+  1/1 (2 boxes needed re-confirm); LaMa inpaint 1/1 (修复 5);
+  Pillow typeset 1/1; **成品** accepted after visual review;
+  **标记本页已检查**; JSON **安全导出** 1/1.
 - Found and fixed RP-8 (blank translator overwrite) and RP-9
-  (reopened drawer leftover **全部图像** + all steps).
+  (reopened drawer leftover **全部图像** + all steps). Live remount
+  still defaults to **当前页** · 1 张 · 2 步.
 - Did not click **确认本页无文字** on a wide strip that had only
   empty leftover boxes. Did not auto-accept empty pages.
 - Empty / leftover-empty pages skipped this pass: 1 zero-box page

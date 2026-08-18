@@ -245,6 +245,7 @@ export default function App() {
   const dirty = useWorkbenchStore(hasPendingChanges);
   const flushAutosave = useWorkbenchStore((state) => state.flushAutosave);
   const [shellPane, setShellPane] = useState<'pages' | 'canvas' | 'inspect'>('canvas');
+  const drawerOpen = useWorkbenchStore((state) => state.drawerOpen);
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   useGlobalShortcuts();
 
@@ -330,7 +331,7 @@ export default function App() {
         </Suspense>
         <Inspector />
       </div>
-      <BatchDrawer />
+      {drawerOpen ? <BatchDrawer /> : null}
       <ShortcutsDialog />
     </div>
   );

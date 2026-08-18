@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { activeImage, imageHasTypesetOverflow, useWorkbenchStore } from '../store/workbench';
 import type { ExportOptions, Job, JobKind, ProviderCapability } from '../types';
@@ -208,12 +208,6 @@ export function BatchDrawer() {
   });
   const [concurrency, setConcurrency] = useState(2);
   const [starting, setStarting] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    setTarget('current');
-    setSteps(defaultBatchSteps);
-  }, [open]);
 
   const imageIds = useMemo(() => {
     if (target === 'all') return images.map((image) => image.id);

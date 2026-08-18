@@ -27,8 +27,10 @@ None.
   **加入队列 · 130 张 · 7 步** was blocked by mixed pipeline + export
   gates. An operator looking for current-page JSON export had to undo
   that leftover by hand.
-- Cleared: opening the drawer resets scope to **当前页** and steps to
-  detect+OCR. Vitest covers close → select **全部图像** → reopen.
+- Cleared: closing the drawer unmounts it, so the next open remounts
+  on **当前页** with detect+OCR. Vitest covers close → select
+  **全部图像** → reopen. CI `32127229143` failed frontend lint on an
+  earlier `useEffect` reset; remount replaces that.
 
 ### RP-1 — Status filter hidden on typical workbench widths
 

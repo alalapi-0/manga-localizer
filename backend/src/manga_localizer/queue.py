@@ -878,8 +878,42 @@ class PersistentJobQueue:
             raise ProjectError("Text region is outside the image after coordinate normalization")
         return {"x": left, "y": top, "width": right - left, "height": bottom - top}
 
+    _STALE_OVERSIZED_COVERAGE = 0.15
+    _STALE_OVERSIZED_MAX_CONFIDENCE = 0.5
+    _STALE_PANEL_COVERAGE = 0.30
+
+    @classmethod
+    def _region_page_coverage(
+        cls,
+        region: TextRegion,
+        image_width: int,
+        image_height: int,
+    ) -> float:
+        page_area = float(image_width) * float(image_height)
+        if page_area <= 0:
+            return 0.0
+        return (float(region.width) * float(region.height)) / page_area
+
     @staticmethod
-    def _is_stale_auto_detection(region: TextRegion) -> bool:
+    def _region_effective_confidence(region: TextRegion) -> float | None:
+        if region.confidence is not None:
+            return float(region.confidence)
+        recognition = recognition_payload(region)
+        ocr = recognition.get("ocr")
+        if isinstance(ocr, dict) and ocr.get("confidence") is not None:
+            return float(ocr["confidence"])
+        detection = recognition.get("detection")
+        if isinstance(detection, dict) and detection.get("confidence") is not None:
+            return float(detection["confidence"])
+        return None
+
+    @classmethod
+    def _is_stale_auto_detection(
+        cls,
+        region: TextRegion,
+        image_width: int,
+        image_height: int,
+    ) -> bool:
         repair = region.repair if isinstance(region.repair, dict) else {}
         if repair.get("detectorGenerated") is not True:
             return False
@@ -887,9 +921,21 @@ class PersistentJobQueue:
             return False
         if region_trust(region).get("disposition") in {"trusted", "ignored"}:
             return False
-        if (region.source_text or "").strip() or (region.translation_text or "").strip():
+        if (region.region_type or "unknown") != "unknown":
             return False
-        return (region.region_type or "unknown") == "unknown"
+        if (region.translation_text or "").strip():
+            return False
+        if not (region.source_text or "").strip():
+            return True
+        coverage = cls._region_page_coverage(region, image_width, image_height)
+        confidence = cls._region_effective_confidence(region)
+        if coverage >= cls._STALE_PANEL_COVERAGE and confidence is None:
+            return True
+        return (
+            coverage >= cls._STALE_OVERSIZED_COVERAGE
+            and confidence is not None
+            and confidence < cls._STALE_OVERSIZED_MAX_CONFIDENCE
+        )
 
     @staticmethod
     def _detection_overlaps_kept(detection: OCRRegion, kept: OCRRegion) -> bool:
@@ -1149,7 +1195,7 @@ class PersistentJobQueue:
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
             for region in list(existing):
-                if not self._is_stale_auto_detection(region):
+                if not self._is_stale_auto_detection(region, image.width, image.height):
                     continue
                 add_revision(
                     session,

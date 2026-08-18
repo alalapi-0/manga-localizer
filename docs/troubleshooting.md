@@ -43,6 +43,15 @@ parent, especially across Windows drives. Exact file/directory import boundaries
 cumulatively, including selections that failed image validation, so original-overwrite protection is
 unchanged.
 
+## A leftover Tesseract box covers most of a panel
+
+Tesseract can propose a near-full-panel box and then OCR it into junk. That leftover used to
+survive a later PP-OCR run because it was not empty, and it swallowed the smaller balloons
+inside. Re-run **文字检测** after switching to PP-OCRv3; unconfirmed oversized low-confidence
+auto leftovers are replaced. Confirmed, ignored, translated, and ordinary-sized OCR boxes stay.
+**整理本页选框** only merges and expands fragments; it does not drop those leftovers. Do not
+auto-accept an empty page.
+
 ## Chinese text overflows a balloon
 
 Open the overflowing page from the sidebar **排版溢出** filter or the inspector warning. Click the

@@ -11,8 +11,10 @@ from fastapi.testclient import TestClient
 from PIL import Image, ImageChops, ImageDraw
 
 from manga_localizer.config import Settings
+from manga_localizer.database import TextRegion
 from manga_localizer.main import create_app
 from manga_localizer.providers.ocr import OCRRegion
+from manga_localizer.queue import PersistentJobQueue
 
 from .conftest import create_project, png_bytes, upload_image
 
@@ -304,6 +306,74 @@ def test_detection_rerun_keeps_trusted_boxes_and_skips_duplicates(
         assert prior["trustReason"] == "human-confirmed"
 
 
+def _auto_region(**overrides: Any) -> TextRegion:
+    values: dict[str, Any] = {
+        "x": 10,
+        "y": 10,
+        "width": 40,
+        "height": 50,
+        "source_text": "",
+        "translation_text": "",
+        "region_type": "unknown",
+        "confirmed": False,
+        "ignored": False,
+        "confidence": 0.2,
+        "repair": {"detectorGenerated": True},
+        "recognition": {},
+    }
+    values.update(overrides)
+    return TextRegion(**values)
+
+
+def test_stale_auto_detection_keeps_reviewed_work_and_drops_panel_leftovers() -> None:
+    page = (240, 320)
+    assert PersistentJobQueue._is_stale_auto_detection(_auto_region(), *page)
+    assert PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(width=200, height=280, source_text="junk", confidence=0.2),
+        *page,
+    )
+    assert not PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(source_text="こんにちは", confidence=0.2),
+        *page,
+    )
+    assert not PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(width=200, height=280, source_text="タイトル", confidence=0.9),
+        *page,
+    )
+    assert not PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(
+            width=200,
+            height=280,
+            source_text="junk",
+            translation_text="标题",
+            confidence=0.2,
+        ),
+        *page,
+    )
+    assert not PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(width=200, height=280, source_text="junk", confidence=0.2, confirmed=True),
+        *page,
+    )
+    assert not PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(
+            width=200,
+            height=280,
+            source_text="junk",
+            confidence=0.2,
+            repair={"detectorGenerated": False},
+        ),
+        *page,
+    )
+
+
+class _ScriptedDetector:
+    def __init__(self) -> None:
+        self.regions: list[OCRRegion] = []
+
+    def detect_text_regions(self, image: Path, **_options: Any) -> list[OCRRegion]:
+        return list(self.regions)
+
+
 def test_detection_rerun_replaces_stale_unconfirmed_auto_boxes(
     tmp_path: Path,
 ) -> None:
@@ -330,6 +400,89 @@ def test_detection_rerun_replaces_stale_unconfirmed_auto_boxes(
         assert len(regions) == 1
         assert regions[0]["id"] != first[0]["id"]
         assert regions[0]["trustDisposition"] == "review"
+
+
+def test_detection_rerun_replaces_oversized_low_confidence_ocr_leftover(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    detector = _ScriptedDetector()
+    detector.regions = [
+        OCRRegion(8, 8, 210, 290, "", 0.18, "vertical"),
+    ]
+    app.state.providers.ppocr = detector
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        first_job = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, first_job.json()["id"])["status"] == "completed"
+        leftover = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        patched = client.patch(
+            f"/api/regions/{leftover['id']}",
+            json={"sourceText": "junk", "expectedRevision": leftover["revision"]},
+        )
+        assert patched.status_code == 200, patched.text
+        leftover = patched.json()
+        assert leftover["sourceText"] == "junk"
+
+        detector.regions = [
+            OCRRegion(40, 60, 48, 70, "", 0.92, "vertical"),
+        ]
+        rerun = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, rerun.json()["id"])["status"] == "completed"
+        regions = client.get(f"/api/images/{image['id']}/regions").json()
+        assert len(regions) == 1
+        assert regions[0]["id"] != leftover["id"]
+        assert regions[0]["width"] == 48
+        assert regions[0]["height"] == 70
+        assert regions[0]["trustDisposition"] == "review"
+
+
+def test_detection_rerun_keeps_normal_unconfirmed_ocr_boxes(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    detector = _ScriptedDetector()
+    detector.regions = [
+        OCRRegion(40, 60, 48, 70, "", 0.92, "vertical"),
+    ]
+    app.state.providers.ppocr = detector
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        first_job = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, first_job.json()["id"])["status"] == "completed"
+        kept = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        patched = client.patch(
+            f"/api/regions/{kept['id']}",
+            json={"sourceText": "こんにちは", "expectedRevision": kept["revision"]},
+        )
+        assert patched.status_code == 200, patched.text
+        kept = patched.json()
+
+        detector.regions = [
+            OCRRegion(42, 62, 46, 66, "", 0.95, "vertical"),
+        ]
+        rerun = client.post(
+            f"/api/projects/{project['id']}/detect",
+            json={"imageIds": [image["id"]], "options": {"provider": "ppocr-v3"}},
+        )
+        assert _wait_job(client, rerun.json()["id"])["status"] == "completed"
+        regions = client.get(f"/api/images/{image['id']}/regions").json()
+        assert len(regions) == 1
+        assert regions[0]["id"] == kept["id"]
+        assert regions[0]["sourceText"] == "こんにちは"
 
 
 def test_public_generated_content_classes_remain_reviewable_across_empty_rerun_and_reopen(

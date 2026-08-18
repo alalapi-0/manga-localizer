@@ -19,13 +19,11 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Local `746480a` is on `origin/main` with the computer-use UI loop prompt.
-GitHub CI run `32089117642` passed for that commit. The first computer-use
-pass completed the public synthetic offline path with workarounds and
-recorded UI-1/UI-2/UI-3 in `.agent/UI_PROBLEM_REPORT.md`. This increment
-fixes UI-1 (visible inpaint mask review) and UI-2 (unchanged preprocess
-accept no longer wipes downstream reviews). UI-3 remains open. Clear UI-1
-and UI-2 only after a later computer-use pass on the refreshed app/API.
+Local WIP after `30d27a5` replaces oversized low-confidence unconfirmed
+auto leftovers on re-detect. Independent CI recheck of run `32101553739`
+at `30d27a5` passed. A later computer-use pass cleared UI-1, UI-2, and
+UI-3. `.agent/UI_PROBLEM_REPORT.md` has no open findings. Product Round 8
+is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -82,7 +80,9 @@ sentinels skip rewrite.
   baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` merges
   overlapping, contained, and nearby aligned proposals from both detectors, then pads the box so
   glyphs are enclosed. It does not drop low-confidence text or grant trust. Re-running detection
-  replaces stale empty unconfirmed auto boxes and skips duplicates of kept regions. A completed
+  replaces stale empty unconfirmed auto boxes and oversized low-confidence unconfirmed auto
+  leftovers (even when OCR filled garbage text), then skips duplicates of kept regions.
+  Confirmed, ignored, translated, and ordinary-sized OCR boxes stay. A completed
   zero-detection result is authoritative and is not silently replaced during OCR.
 - Low-resolution pages can be manually AI-redrawn with the local Real-ESRGAN anime 4× preprocessor.
   The workbench button never runs this automatically and does not change the project default.
@@ -274,6 +274,15 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 UI-3 computer-use recheck: Tesseract detect+OCR on a fresh
+  public synthetic page left two panel-sized unconfirmed boxes; PP-OCR
+  re-detect replaced them with three small balloon boxes. `npm run
+  check:backend` passed (Ruff + 248 pytest). Private trees were not
+  committed.
+- 2026-08-18 UI-1/UI-2 computer-use recheck on refreshed loopback workbench:
+  viewport 1100px showed **复核蒙版**; first-accept preprocess after
+  typeset/inpaint kept all three `stageReviews` accepted. Independent CI
+  recheck: GitHub Actions run `32101553739` at `30d27a5` succeeded.
 - 2026-08-18 UI-1/UI-2 public fix: `npm run check` passed (9 launcher tests;
   backend Ruff lint/format and 245 pytest cases; frontend lint, typecheck,
   166 Vitest cases, and production build). Private trees were not committed.

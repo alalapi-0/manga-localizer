@@ -12,6 +12,10 @@ Semantic Versioning.
   is not stuck on “请显示蒙版复核”.
 - First-time accept of an unchanged preprocess (or other upstream) visual
   review no longer clears already-accepted inpaint/typeset reviews.
+- Re-running detection now replaces oversized low-confidence unconfirmed auto
+  leftovers even when OCR filled garbage text, so a later detector can recover
+  the balloons those panel-sized boxes were swallowing. Confirmed, ignored,
+  translated, or ordinary-sized OCR boxes stay.
 
 ### Changed
 
@@ -20,7 +24,8 @@ Semantic Versioning.
   process/fix loop are superseded.
 - `ppocr-v3+tesseract` now merges overlapping, contained, and nearby aligned proposals, then pads the
   surviving box so glyphs are enclosed. Re-running detection replaces stale empty unconfirmed auto
-  boxes and skips duplicates of kept regions.
+  boxes and oversized low-confidence unconfirmed auto leftovers, then skips duplicates of kept
+  regions.
 
 ### Added
 

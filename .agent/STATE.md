@@ -19,12 +19,11 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Real-page computer-use restarted on the 130-page manga01 full book
-(not the 30-page slice; leftover synthetic catalog entries were not
-used). RP-1/RP-2/RP-3/RP-5 cleared on that pass. RP-4 auto-tab after
-OCR is still partial. RP-6: batch **加入队列** defaulted to leftover
-checkbox selection and processed the wrong page; public fix defaults
-the drawer to **当前页**. Product Round 8 is not complete.
+Real-page computer-use is on the 130-page manga01 full book.
+RP-1–RP-6 are cleared after the live rebuild recheck at `05ce7e4`
+(CI `32118174494` green). Next computer-use walk is confirm → local
+translate → inpaint → typeset → accept → export on a text page.
+Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -276,13 +275,17 @@ loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 real-page pass 2 CI: GitHub Actions run `32118174494`
+  succeeded at `05ce7e435c6c4d0f4e94c7a03fcf6207900e3b64` (frontend,
+  backend, e2e).
 - 2026-08-18 real-page pass 2 (130-page manga01 full book, viewport
   1100×800, workbench origin without a test query): reopened the full
   book from the catalog, skipped a 0-box first page, and found RP-6
   (batch **加入队列** defaulted to leftover checkbox selection). After
   choosing **当前页**, detect+OCR completed 1/1 with 4 boxes. RP-1/RP-2
-  layout and RP-3/RP-5 provider checks held.   Local frontend lint, typecheck, 170 Vitest cases, and production
-  build passed. Private trees were not committed.
+  layout and RP-3/RP-5 provider checks held. Local frontend lint,
+  typecheck, 170 Vitest cases, and production build passed. Private
+  trees were not committed.
 - 2026-08-18 real-page pass 1 (30-page catalog slice, viewport 1100×800):
   reopened from **切换项目**, PP-OCRv3 detect+OCR on one selected page
   completed 1/1 with 3 balloon boxes. Switching the project detector

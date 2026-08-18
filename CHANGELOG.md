@@ -22,6 +22,12 @@ Semantic Versioning.
   leftover sidebar checkboxes do not silently queue a different page.
 - Selecting a text box keeps **中文译文** above the helper notices, and
   the inspector body scrolls at 1100×800 so translation is reachable.
+- A non-manual translator that returns blank text no longer erases a
+  **中文译文** the operator already wrote, and does not clear that box's
+  confirmation.
+- Reopening **批处理与导出** resets the scope to **当前页** and the
+  steps to detect+OCR, so a leftover **全部图像** plus mixed pipeline
+  checkboxes cannot silently target the whole book.
 
 - Switching the canvas to **擦除** now shows the inpaint review mask, and the
   **复核蒙版** control stays visible in the review group below 1250px so accept

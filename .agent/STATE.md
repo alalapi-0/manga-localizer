@@ -20,11 +20,10 @@ workbench/app panel; do not stop for reversible packaging review.
 ## Current round and candidate
 
 Real-page computer-use is on the 130-page manga01 full book.
-RP-1–RP-7 stay cleared. Independently rechecked CI `32118881008`
-(`ec695cb`, success) and `32119510667` (`cbce222`, success). Live
-walk confirmed one box with a manual translation and ignored two
-empty boxes; 8 unready boxes remain on that page before translate
-can queue. Product Round 8 is not complete.
+RP-1–RP-9 stay cleared (RP-8 blank translator overwrite; RP-9
+reopened batch drawer leftover whole-book scope). Independently
+rechecked CI `32120142568` (`c5ebb68`, success). Two OCR-done text pages finished confirm → translate → inpaint →
+typeset → accept → JSON export. Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -276,6 +275,12 @@ loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 real-page pass: operator finished one 340×594 text page
+  through accept + JSON export, then confirmed a second OCR-done page
+  and queued translate/inpaint/typeset. RP-8/RP-9 fixes are in the
+  public tree; targeted pytest and the drawer-reset Vitest passed.
+  Docs CI `32120142568` (`c5ebb68`) was independently rechecked
+  success. Private trees were not committed.
 - 2026-08-18 real-page pass 2 CI: GitHub Actions run `32118174494`
   succeeded at `05ce7e435c6c4d0f4e94c7a03fcf6207900e3b64` (frontend,
   backend, e2e).

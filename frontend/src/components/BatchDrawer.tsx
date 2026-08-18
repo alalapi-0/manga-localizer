@@ -1,8 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { activeImage, imageHasTypesetOverflow, useWorkbenchStore } from '../store/workbench';
 import type { ExportOptions, Job, JobKind, ProviderCapability } from '../types';
 import { Field, IconButton } from './Primitives';
+
+const defaultBatchSteps: Record<JobKind, boolean> = {
+  preprocess: false,
+  detect: true,
+  ocr: true,
+  translate: false,
+  inpaint: false,
+  typeset: false,
+  export: false,
+};
 
 const kindLabels: Record<JobKind, string> = {
   preprocess: '图片增强',
@@ -189,15 +199,7 @@ export function BatchDrawer() {
   const currentImage = useWorkbenchStore(activeImage);
   const startBatch = useWorkbenchStore((state) => state.startBatch);
   const [target, setTarget] = useState<'selected' | 'current' | 'all'>('current');
-  const [steps, setSteps] = useState<Record<JobKind, boolean>>({
-    preprocess: false,
-    detect: true,
-    ocr: true,
-    translate: false,
-    inpaint: false,
-    typeset: false,
-    export: false,
-  });
+  const [steps, setSteps] = useState<Record<JobKind, boolean>>(defaultBatchSteps);
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     format: 'both',
     imageVariant: 'typeset',
@@ -206,6 +208,12 @@ export function BatchDrawer() {
   });
   const [concurrency, setConcurrency] = useState(2);
   const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTarget('current');
+    setSteps(defaultBatchSteps);
+  }, [open]);
 
   const imageIds = useMemo(() => {
     if (target === 'all') return images.map((image) => image.id);

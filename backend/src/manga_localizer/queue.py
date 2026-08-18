@@ -1614,6 +1614,10 @@ class PersistentJobQueue:
                         or "zh-CN"
                     ),
                 )
+                existing = target.translation_text or ""
+                # A blank provider result must not erase a translation the operator already wrote.
+                if not (value or "").strip() and existing.strip():
+                    value = existing
             translated.append((target.id, value))
         with store.session() as session:
             current_image = self._assert_image_unchanged(

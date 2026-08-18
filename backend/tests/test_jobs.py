@@ -374,6 +374,27 @@ def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path)
         assert image_state["status"]["translation"] == "done"
 
 
+def test_blank_provider_translation_keeps_existing_reviewed_text(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], translation="阳光", confirmed=True)
+        monkeypatch.setattr(app.state.providers.mock, "translate_text", lambda *args, **kwargs: "")
+
+        job = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+        ).json()
+        assert _wait_job(client, job["id"])["status"] == "completed"
+        kept = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert kept["translationText"] == "阳光"
+        assert kept["confirmed"] is True
+
+
 def test_argos_translation_job_uses_local_pivot_without_mock_prefix(tmp_path: Path) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     app = create_app(settings, start_worker=True)

@@ -11,6 +11,27 @@ None.
 
 ## Cleared findings
 
+### RP-8 — Blank Argos output erased a written translation
+
+- Found: 2026-08-18 on the 130-page book. After a trusted box already
+  had a manual **中文译文**, **翻译 (Argos 本地日→中)** completed 1/1
+  and wrote an empty translation, then cleared `confirmed`.
+- Cleared: persist keeps the existing non-empty translation when the
+  provider returns blank, and leaves confirmation unchanged. Pytest
+  `test_blank_provider_translation_keeps_existing_reviewed_text` passed.
+
+### RP-9 — Reopened batch drawer kept leftover whole-book scope
+
+- Found: 2026-08-18 after queuing the current page. Reopening
+  **批处理与导出** showed **全部图像** and all 7 steps checked;
+  **加入队列 · 130 张 · 7 步** was blocked by mixed pipeline + export
+  gates. An operator looking for current-page JSON export had to undo
+  that leftover by hand.
+- Cleared: opening the drawer resets scope to **当前页** and steps to
+  detect+OCR. Vitest covers close → select **全部图像** → reopen.
+
+### RP-1 — Status filter hidden on typical workbench widths
+
 ### RP-1 — Status filter hidden on typical workbench widths
 
 - Cleared: 2026-08-18 full-book pass, viewport 1100×800. **按状态筛选** is
@@ -60,16 +81,22 @@ None.
 
 ## Last computer-use pass
 
-- Status: docs CI `32118881008` and RP-7 CI `32119510667` both
-  independently rechecked success. Same 130-page book, 1100×800,
-  bundle `index-BzEhPVG5.js`.
-- Path: selected a text page → typed a manual **中文译文** →
-  **确认此文本框** (review 11→10, status **OCR 已信任**) →
-  **还需确认并信任** jumped to the next unready box → **忽略此文本框**
-  on two empty boxes (review now 8). Confirm switch is the visible
-  toggle, not the `opacity: 0` input. Did not auto-accept empty
-  pages. Translate / inpaint / typeset / export not started; trust
-  gate still blocks them while 8 boxes are unready.
-- Empty pages skipped: 1 this pass (plus prior zero-box pages left untouched)
+- Status: docs CI `32120142568` (`c5ebb68`) independently rechecked
+  success. Same 130-page book, 1100×800, bundle `index-BzEhPVG5.js`.
+  Operator continued without waiting for approval cards.
+- Path on the 340×594 text page: confirm/ignore finished (4 trusted
+  boxes); Argos translate 1/1; LaMa inpaint 1/1 (修复 4 · 跳过 0);
+  Pillow typeset 1/1 (整页重排); **成品** already **已接受** after
+  visual review; **标记本页已检查**; JSON **安全导出** 1/1.
+- Next OCR-done text page (1166×540): ignored empty boxes, confirmed
+  the remaining CJK box, Argos translate 1/1, LaMa inpaint 1/1
+  (修复 1 · 跳过 0), Pillow typeset 1/1, **成品** accepted after
+  visual review, **标记本页已检查**, JSON **安全导出** 1/1.
+- Found and fixed RP-8 (blank translator overwrite) and RP-9
+  (reopened drawer leftover **全部图像** + all steps).
+- Did not click **确认本页无文字** on a wide strip that had only
+  empty leftover boxes. Did not auto-accept empty pages.
+- Empty / leftover-empty pages skipped this pass: 1 zero-box page
+  plus 1 empty-OCR strip (15 ignored empty boxes, page left 待检查).
 - Product Round 8 is not complete
 - Private trees were not committed

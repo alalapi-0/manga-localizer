@@ -1731,4 +1731,22 @@ describe('desktop workbench interactions', () => {
       expect.objectContaining({ imageIds: ['image-1'] }),
     );
   });
+
+  it('resets the batch drawer to the current page when it is reopened', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ images: [imageFixture('image-1'), imageFixture('image-2')] });
+    useWorkbenchStore.setState({ activeImageId: 'image-2' });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    const firstDrawer = screen.getByRole('dialog', { name: '批处理与导出' });
+    await user.click(within(firstDrawer).getByRole('radio', { name: /全部图像/ }));
+    expect(within(firstDrawer).getByRole('radio', { name: /全部图像/ })).toBeChecked();
+    await user.click(within(firstDrawer).getByRole('button', { name: '关闭批处理抽屉' }));
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
+    expect(within(drawer).getByRole('radio', { name: /当前页/ })).toBeChecked();
+    expect(within(drawer).getByRole('button', { name: /加入队列 · 1 张 · 2 步/ })).toBeEnabled();
+  });
 });

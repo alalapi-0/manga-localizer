@@ -23,11 +23,10 @@ Real-page computer-use is on the 130-page manga01 full book.
 RP-1–RP-9 stay cleared (RP-8 blank translator overwrite; RP-9
 reopened batch drawer leftover whole-book scope). Independently
 rechecked CI `32128671541` (`6e979e0`, frontend/backend/e2e success)
-and `32127805767` (`35e3017`, success). Four text pages finished
-confirm → translate → inpaint → typeset → accept → JSON export.
-The user paused the live loop after this round. Do not re-arm
-`AGENT_LOOP_WAKE_manga_realpages` until they resume. Product
-Round 8 is not complete.
+and `32127805767` (`35e3017`, success). The user resumed the live
+loop. Six text pages have now finished confirm → translate →
+inpaint → typeset → accept → JSON export. No new function or
+ux-layout finding this resume. Product Round 8 is not complete.
 
 Unified visual check of both private books is still outstanding. Do not
 auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
@@ -279,12 +278,19 @@ loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-18 resume pass: the user said continue. Same 130-page book
+  at 1100×800. A fifth text page (1190×661) finished after the first
+  typeset was rejected (text on artwork) and two remaining boxes were
+  re-inpainted. A sixth text page (1178×537) finished after a blank
+  Argos result was filled by the operator. A tall leftover page
+  (1187×1244) had one clothing-print false box ignored; **确认本页无文字**
+  was not clicked. RP-9 remount still defaults to **当前页** · 1 张 ·
+  2 步. Open findings remain none. Private trees were not committed.
 - 2026-08-18 docs CI: GitHub Actions run `32128671541` succeeded at
   `6e979e093d2029e2cf93880c50a284d7805ffcb2` (frontend, backend, e2e).
   A fourth text page (1073×482) finished detect/OCR → confirm →
-  translate → inpaint → typeset → accept → JSON export. The user
-  paused the live loop after this round. Private trees were not
-  committed.
+  translate → inpaint → typeset → accept → JSON export. Private
+  trees were not committed.
 - 2026-08-18 RP-8/RP-9 CI: GitHub Actions run `32127805767` succeeded
   at `35e3017e1602a6f66af1eb75857050bc36c17582` (frontend, backend,
   e2e). Live remount of **批处理与导出** still defaults to **当前页**

@@ -82,10 +82,10 @@ None.
 
 ## Last computer-use pass
 
-- Status: docs CI `32128671541` (`6e979e0`) independently rechecked
-  success (frontend/backend/e2e). Same 130-page book, 1100×800,
-  bundle `index-CXF4WJMl.js`. User paused the live loop after this
-  round; do not re-arm the realpages watcher until they resume.
+- Status: user resumed the live loop. Same 130-page book, 1100×800,
+  bundle `index-CXF4WJMl.js`. No new function or ux-layout finding.
+  Re-arm `AGENT_LOOP_WAKE_manga_realpages` after this public docs
+  push. Do not arm a 25-minute sleeper.
 - Path on the 340×594 text page: confirm/ignore finished (4 trusted
   boxes); Argos translate 1/1; LaMa inpaint 1/1 (修复 4 · 跳过 0);
   Pillow typeset 1/1 (整页重排); **成品** already **已接受** after
@@ -103,12 +103,24 @@ None.
   sources; confirmed all 3; Argos translate 1/1 (1 box re-confirm);
   LaMa inpaint 1/1 (修复 3); Pillow typeset 1/1; **成品** accepted
   after visual review; **标记本页已检查**; JSON **安全导出** 1/1.
+- Fifth text page (1190×661): current-page detect+OCR filled 18 boxes
+  (11 CJK confirmed, empty/non-text ignored). First **成品** was
+  rejected because typeset sat on artwork. After ignoring oversized
+  and empty-translation boxes, LaMa inpaint 1/1 (修复 2) and Pillow
+  typeset 1/1 were accepted; **标记本页已检查**; JSON **安全导出** 1/1.
+- Sixth text page (1178×537): detect+OCR left 1 small CJK box; Argos
+  translate 1/1 wrote blank; operator entered a short SFX; LaMa
+  inpaint 1/1 (修复 1); Pillow typeset 1/1; **成品** accepted;
+  **标记本页已检查**; JSON **安全导出** 1/1.
+- Tall leftover page (1187×1244): detect+OCR produced one clothing-
+  print false box; ignored; did not click **确认本页无文字**.
 - Found and fixed RP-8 (blank translator overwrite) and RP-9
   (reopened drawer leftover **全部图像** + all steps). Live remount
   still defaults to **当前页** · 1 张 · 2 步.
 - Did not click **确认本页无文字** on a wide strip that had only
   empty leftover boxes. Did not auto-accept empty pages.
-- Empty / leftover-empty pages skipped this pass: 1 zero-box page
-  plus 1 empty-OCR strip (15 ignored empty boxes, page left 待检查).
+- Empty / leftover-empty pages skipped this pass: 1 zero-box page,
+  1 empty-OCR strip (15 ignored empty boxes), and 1 tall page with a
+  clothing-print false box. Those pages stay 待检查.
 - Product Round 8 is not complete
 - Private trees were not committed

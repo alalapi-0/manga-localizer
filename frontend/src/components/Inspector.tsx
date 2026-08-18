@@ -1084,6 +1084,15 @@ export function Inspector() {
     return regions.filter((region) => ids.has(region.id));
   }, [regions, selectedRegionIds]);
 
+  const helperNotices = hasLibrary ? (
+    <>
+      <ReviewBoxTools />
+      <PreprocessSuggestionNotice />
+      <TypesetOverflowNotice regions={regions} />
+    </>
+  ) : null;
+  const editingSelectedText = tab === 'text' && selected.length > 0;
+
   return (
     <aside className="inspector panel" aria-label="属性检查器">
       <nav className="inspector-tabs" aria-label="属性标签">
@@ -1111,12 +1120,11 @@ export function Inspector() {
                 <PageReviewControl regions={regions} />
                 <ProcessingErrorNotice />
                 <ProcessingActivityNotice />
-                <ReviewBoxTools />
-                <PreprocessSuggestionNotice />
-                <TypesetOverflowNotice regions={regions} />
+                {editingSelectedText ? null : helperNotices}
               </>
             ) : null}
             {tab === 'text' ? (hasLibrary ? <TextInspector regions={regions} selected={selected} /> : <EmptyLibraryState />) : null}
+            {editingSelectedText ? helperNotices : null}
             {tab === 'typesetting' ? (
               hasLibrary
                 ? <TypesettingInspector region={selected.length === 1 ? selected[0] : undefined} />

@@ -814,6 +814,15 @@ describe('desktop workbench interactions', () => {
     expect(screen.queryByRole('button', { name: '确认本页无文字' })).not.toBeInTheDocument();
   });
 
+  it('keeps translation above helper notices when a box is selected', () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    render(<App />);
+
+    const translation = screen.getByRole('textbox', { name: '中文译文' });
+    const helper = screen.getByRole('button', { name: '整理本页选框' });
+    expect(translation.compareDocumentPosition(helper) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('edits source, translation, type, direction, order, and keeps review flags exclusive', async () => {
     const user = userEvent.setup();
     seedWorkbench({ selectedRegionIds: ['region-1'] });

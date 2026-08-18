@@ -49,14 +49,22 @@ None.
   (checked) and **加入队列 · 1 张** ran detect+OCR on the viewed page
   (340×594, 11 boxes), not the leftover first page.
 
+### RP-7 — Translation field is below the fold and the inspector cannot scroll
+
+- Cleared: 2026-08-18 live rebuild recheck at 1100×800 after the inspector
+  scroll + notice-order fix. Selecting a box with source text put
+  **确认此文本框** at `y=285` and **中文译文** at `y=595–755` (above the
+  fold). Helper notices sit after the form. `.inspector__content` is
+  `overflow-y: auto` and can scroll (`scrollHeight` 1469 / `clientHeight`
+  701).
+
 ## Last computer-use pass
 
-- Status: CI-green recheck on the 130-page manga01 full book after
-  `05ce7e4` (viewport 1100×800, rebuilt bundle `index-9PY3iyNg.js`)
-- Path: reopen full book → leftover checkbox still present → drawer
-  defaults to **当前页** → skip 0-box first page → detect+OCR on a later
-  pending page from **项目** → inspector opens **文本**. Did not
-  auto-accept empty pages.
+- Status: CI-green follow-up on the 130-page manga01 full book
+  (viewport 1100×800, rebuilt bundle `index-BzEhPVG5.js`)
+- Path: reopen full book → skip 0-box first page → select a later text
+  page → open one box. Confirm/source/translation are on the first
+  screen. Did not confirm, ignore, auto-accept, or export this pass.
 - Empty pages skipped: 1 this pass (plus prior zero-box pages left untouched)
 - Product Round 8 is not complete
 - Private trees were not committed

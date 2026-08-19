@@ -19,12 +19,13 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-The user stopped every leftover project task and replaced the live
-loop. Live work is now one-page full reprocess: every real uploaded
-image, one image per round, quality pass first, then text pipeline
-only when the page has text. Earlier realpages “已检查” counts are
-not a skip. Next page after `/loop` starts: sidebar 1 of the
-130-page book. Product Round 8 is not complete.
+Live work is one-page full reprocess: every real uploaded image, one
+image per round, quality pass first, then text pipeline only when
+the page has text. Earlier realpages “已检查” counts are not a skip.
+Sidebar 1 of the 130-page book (1184×701) finished this loop: AI
+超分 / AI 重绘 accepted, enhanced-image detect+OCR found 0 boxes,
+then 确认本页无文字. Next page: sidebar 2. Product Round 8 is not
+complete.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -161,7 +162,8 @@ sentinels skip rewrite.
   typesetting, profile precedence, repair defaults, zero-effect feedback, and preview/compare guards.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
-- [ ] Round 8: full-book clean-plate visual review is partial at 18/130 explicitly completed pages.
+- [ ] Round 8: full-book clean-plate visual review is partial; this
+  loop reprocesses from sidebar 1 and has finished 1/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -278,6 +280,14 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 1 (1184×701): leftover API/watchers
+  were stopped, then a fresh loopback API was started. Suggested
+  OpenCV/Pillow enhance still looked like a low-quality capture;
+  Real-ESRGAN ONNX AI 重绘 produced a 4× plate (4736×2804) and was
+  accepted. Current-page detect+OCR on the enhanced plate returned
+  0 boxes. Visual check found no balloon/SFX text; **确认本页无文字**
+  set `no-text-reviewed`. Open findings remain none. Private trees
+  were not committed.
 - 2026-08-19 user stop + loop replace: leftover API/watchers were
   stopped (`:8000` free). Live prompt is now
   `.agent/PAGE_LOOP_PROMPT.md` (`AGENT_LOOP_WAKE_manga_page`): one

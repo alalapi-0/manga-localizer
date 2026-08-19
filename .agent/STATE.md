@@ -27,8 +27,8 @@ This loop finished sidebar 1 (1184×701, no-text), sidebar 2
 sidebar 4 (340×594, text), sidebar 5 (1110×312, text after
 P-2), sidebar 6 (1068×811, text), sidebar 7 (1084×749,
 text), sidebar 8 (1190×666, text), sidebar 9 (1185×551,
-no-text), and sidebar 10 (1185×1095, text). Next page:
-sidebar 11.
+no-text), sidebar 10 (1185×1095, text), and sidebar 11
+(1188×435, text). Next page: sidebar 12.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -173,7 +173,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 10/130.
+  loop reprocesses from sidebar 1 and has finished 11/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -290,6 +290,13 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 11 (1188×435): Real-ESRGAN ONNX 4×
+  (4752×1740) accepted, current-page detect+OCR returned 2 boxes
+  with 0 sub-minimum fragments. Visual review kept 1 dialogue box
+  and ignored a speed-line fragment. Operator translation; LaMa
+  inpaint and Pillow typeset accepted; **标记本页已检查** and
+  current-page **仅文本 JSON**. Open findings remain none.
+  Private trees were not committed.
 - 2026-08-19 page-loop sidebar 10 (1185×1095): Real-ESRGAN ONNX 4×
   (4740×4380) accepted, current-page detect+OCR returned 9 boxes
   with 0 sub-minimum fragments. Visual review kept 3 text clusters.

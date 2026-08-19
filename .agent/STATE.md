@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-18
+Updated: 2026-08-19
 
 ## Authority and purpose
 
@@ -19,38 +19,38 @@ workbench/app panel; do not stop for reversible packaging review.
 
 ## Current round and candidate
 
-Real-page computer-use is on the 130-page manga01 full book.
-RP-1–RP-9 stay cleared (RP-8 blank translator overwrite; RP-9
-reopened batch drawer leftover whole-book scope). Independently
-rechecked CI `32128671541` (`6e979e0`, frontend/backend/e2e success)
-and `32127805767` (`35e3017`, success). The user resumed the live
-loop. Six text pages have now finished confirm → translate →
-inpaint → typeset → accept → JSON export. No new function or
-ux-layout finding this resume. Product Round 8 is not complete.
+The user stopped every leftover project task and replaced the live
+loop. Live work is now one-page full reprocess: every real uploaded
+image, one image per round, quality pass first, then text pipeline
+only when the page has text. Earlier realpages “已检查” counts are
+not a skip. Next page after `/loop` starts: sidebar 1 of the
+130-page book. Product Round 8 is not complete.
 
-Unified visual check of both private books is still outstanding. Do not
-auto-accept empty pages. Product Round 8 is not complete. Do not re-arm
-`AGENT_LOOP_WAKE_manga_desktop`, `AGENT_LOOP_WAKE_manga_realdata`, or
-`AGENT_LOOP_WAKE_manga_app`.
+Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
+`AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
+`AGENT_LOOP_WAKE_manga_realdata`, or `AGENT_LOOP_WAKE_manga_app`.
 
 ## Active loop prompt
 
-Live prompt: `.agent/REALPAGES_LOOP_PROMPT.md`.
-Sentinel: `AGENT_LOOP_WAKE_manga_realpages`.
-`.agent/UI_LOOP_PROMPT.md`, `.agent/DESKTOP_LOOP_PROMPT.md`, and
-`.agent/REALDATA_LOOP_PROMPT.md` are superseded. Do not re-arm
+Live prompt: `.agent/PAGE_LOOP_PROMPT.md`.
+Sentinel: `AGENT_LOOP_WAKE_manga_page`.
+`.agent/REALPAGES_LOOP_PROMPT.md`, `.agent/UI_LOOP_PROMPT.md`,
+`.agent/DESKTOP_LOOP_PROMPT.md`, and `.agent/REALDATA_LOOP_PROMPT.md`
+are superseded. Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
 `AGENT_LOOP_WAKE_manga_realdata`, or `AGENT_LOOP_WAKE_manga_app`.
-Do not arm a 25-minute fallback sleeper. Late wakes for the old sentinels
-skip rewrite and do not resume those loops.
+Do not arm a 25-minute fallback sleeper. Late wakes for the old
+sentinels skip rewrite and do not resume those loops.
 
 ## Automation closeout
 
-On 2026-08-18 the user stopped every project worker and loop. The
-loopback API on `:8000` was killed. `AGENT_LOOP_WAKE_manga_ui` and the
-older desktop/app/realdata sentinels must not be re-armed. The 2026-08-17
-packaging/app loop, the real-data process/fix loop, and the synthetic UI
-loop stay superseded. Late wakes for those sentinels skip rewrite.
+On 2026-08-19 the user stopped every leftover project worker, queue,
+watcher, and loopback API, then replaced the live prompt with
+`.agent/PAGE_LOOP_PROMPT.md`. Port `:8000` is free. Do not re-arm
+the superseded sentinels. The 2026-08-18 realpages loop, the
+2026-08-17 packaging/app loop, the real-data process/fix loop, and
+the synthetic UI loop stay superseded. Late wakes for those
+sentinels skip rewrite.
 
 ## Environment evidence
 
@@ -278,6 +278,13 @@ loop stay superseded. Late wakes for those sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 user stop + loop replace: leftover API/watchers were
+  stopped (`:8000` free). Live prompt is now
+  `.agent/PAGE_LOOP_PROMPT.md` (`AGENT_LOOP_WAKE_manga_page`): one
+  real page per round, AI 超分 + AI 重绘 first, no-text pages stop
+  there, text pages then 扣字/翻译/嵌字, report-then-fix, push
+  `origin/main` after each finished page. Private trees were not
+  committed.
 - 2026-08-18 resume pass: the user said continue. Same 130-page book
   at 1100×800. A fifth text page (1190×661) finished after the first
   typeset was rejected (text on artwork) and two remaining boxes were

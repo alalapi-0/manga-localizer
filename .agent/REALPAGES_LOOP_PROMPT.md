@@ -1,3 +1,12 @@
+# Manga Localizer — real-page computer-use evaluation loop (superseded)
+
+**Superseded on 2026-08-19.** Do not use this file as a live `/loop`
+prompt. Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`. Late wakes
+skip rewrite and do not resume this loop.
+
+The live loop is `.agent/PAGE_LOOP_PROMPT.md` with sentinel
+`AGENT_LOOP_WAKE_manga_page`.
+
 # Manga Localizer — real-page computer-use evaluation loop
 
 把下面整段粘进 `/loop`（动态节奏，不要写 `25m`）：

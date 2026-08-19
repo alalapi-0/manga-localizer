@@ -4,8 +4,8 @@
 prompt. Do not re-arm `AGENT_LOOP_WAKE_manga_ui`. Late wakes skip rewrite
 and do not resume this loop.
 
-The live loop is `.agent/REALPAGES_LOOP_PROMPT.md` with sentinel
-`AGENT_LOOP_WAKE_manga_realpages`.
+The live loop is `.agent/PAGE_LOOP_PROMPT.md` with sentinel
+`AGENT_LOOP_WAKE_manga_page`.
 
 # Manga Localizer — computer-use UI evaluation loop
 

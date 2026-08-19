@@ -22,9 +22,9 @@ workbench/app panel; do not stop for reversible packaging review.
 Live work is one-page full reprocess: every real uploaded image, one
 image per round, quality pass first, then text pipeline only when
 the page has text. Earlier realpages “已检查” counts are not a skip.
-This loop finished sidebar 1 (1184×701, no-text) and sidebar 2
-(1166×540, text). Next page: sidebar 3. Product Round 8 is not
-complete.
+This loop finished sidebar 1 (1184×701, no-text), sidebar 2
+(1166×540, text), and sidebar 3 (627×1843, no-text after P-1).
+Next page: sidebar 4. Product Round 8 is not complete.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -81,7 +81,9 @@ sentinels skip rewrite.
   from size plus a native-resolution contrast/sharpness sample. The editor may apply that hint to the
   current page or adopt it as the project default; it is never an automatic book-wide setting.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
-  baseline; optional PP-OCRv3 supplies bounded detector polygons. `ppocr-v3+tesseract` merges
+  baseline; optional PP-OCRv3 supplies bounded detector polygons. PP-OCR letterboxes each tile
+  instead of stretching a full page to 736×736; tall or large plates use overlapping
+  input-sized tiles and NMS. `ppocr-v3+tesseract` merges
   overlapping, contained, and nearby aligned proposals from both detectors, then pads the box so
   glyphs are enclosed. It does not drop low-confidence text or grant trust. Re-running detection
   replaces stale empty unconfirmed auto boxes and oversized low-confidence unconfirmed auto
@@ -162,7 +164,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 2/130.
+  loop reprocesses from sidebar 1 and has finished 3/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -279,6 +281,14 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 3 (627×1843): leftover API was
+  stopped and restarted. P-1: PP-OCR 736 stretch/letterbox on the
+  accepted 4× plate (2508×7372) returned 0 boxes; overlapping 736
+  tiles found 10. Public letterbox/tile/NMS regression passed.
+  Same-page detect+OCR then returned 10 boxes; visual review put
+  them on artwork, not balloons/SFX. All 10 ignored;
+  **确认本页无文字** set `no-text-reviewed`. P-1 cleared. Private
+  trees were not committed.
 - 2026-08-19 page-loop sidebar 2 (1166×540): quality pass accepted
   Real-ESRGAN ONNX 4× (4664×2160). Enhanced detect+OCR left one
   real box and four ignored empty/false boxes. Argos ja→zh wrote

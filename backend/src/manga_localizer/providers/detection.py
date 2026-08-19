@@ -33,6 +33,160 @@ class TextDetectionProvider(Protocol):
     def get_capabilities(self) -> dict[str, Any]: ...
 
 
+PPOCR_PAD_BGR = (122.67891434, 116.66876762, 104.00698793)
+
+
+def letterbox_detection_image(
+    source: np.ndarray,
+    input_size: tuple[int, int],
+    *,
+    pad_bgr: tuple[float, float, float] = PPOCR_PAD_BGR,
+) -> tuple[np.ndarray, float, float, float]:
+    """Fit ``source`` into ``input_size`` without stretching, then pad."""
+    target_width, target_height = (int(input_size[0]), int(input_size[1]))
+    source_height, source_width = source.shape[:2]
+    if source_width < 1 or source_height < 1 or target_width < 1 or target_height < 1:
+        raise TextDetectionError("Text detector received an empty image")
+    scale = min(target_width / source_width, target_height / source_height)
+    resized_width = max(1, min(target_width, round(source_width * scale)))
+    resized_height = max(1, min(target_height, round(source_height * scale)))
+    interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+    resized = cv2.resize(source, (resized_width, resized_height), interpolation=interpolation)
+    pad = np.array(pad_bgr, dtype=np.float32)
+    canvas = np.full((target_height, target_width, 3), pad, dtype=np.float32)
+    pad_x = (target_width - resized_width) // 2
+    pad_y = (target_height - resized_height) // 2
+    canvas[pad_y : pad_y + resized_height, pad_x : pad_x + resized_width] = resized
+    return canvas.astype(np.uint8), float(scale), float(pad_x), float(pad_y)
+
+
+def unletterbox_detection_points(
+    points: np.ndarray,
+    *,
+    scale: float,
+    pad_x: float,
+    pad_y: float,
+    image_width: int,
+    image_height: int,
+) -> np.ndarray:
+    if scale <= 0:
+        raise TextDetectionError("Text detector letterbox scale must be positive")
+    mapped = np.asarray(points, dtype=np.float32).reshape(-1, 2).copy()
+    mapped[:, 0] = (mapped[:, 0] - pad_x) / scale
+    mapped[:, 1] = (mapped[:, 1] - pad_y) / scale
+    mapped[:, 0] = np.clip(mapped[:, 0], 0, max(0, image_width - 1))
+    mapped[:, 1] = np.clip(mapped[:, 1], 0, max(0, image_height - 1))
+    return mapped
+
+
+def detection_tile_origins(
+    image_width: int,
+    image_height: int,
+    tile_width: int,
+    tile_height: int,
+    *,
+    overlap: int,
+) -> list[tuple[int, int, int, int]]:
+    """Cover the image with overlapping tiles that never exceed the source."""
+    if image_width < 1 or image_height < 1 or tile_width < 1 or tile_height < 1:
+        raise TextDetectionError("Text detector received an empty image")
+    window_width = min(tile_width, image_width)
+    window_height = min(tile_height, image_height)
+    stride_x = max(1, window_width - min(max(0, overlap), window_width - 1))
+    stride_y = max(1, window_height - min(max(0, overlap), window_height - 1))
+
+    def _axis(length: int, window: int, stride: int) -> list[int]:
+        if length <= window:
+            return [0]
+        origins = list(range(0, length - window, stride))
+        last = length - window
+        if not origins or origins[-1] != last:
+            origins.append(last)
+        return origins
+
+    return [
+        (x, y, min(window_width, image_width - x), min(window_height, image_height - y))
+        for y in _axis(image_height, window_height, stride_y)
+        for x in _axis(image_width, window_width, stride_x)
+    ]
+
+
+def suppress_overlapping_detections(
+    regions: list[OCRRegion],
+    *,
+    iou_threshold: float = 0.5,
+) -> list[OCRRegion]:
+    kept: list[OCRRegion] = []
+    for region in sorted(regions, key=lambda item: item.confidence, reverse=True):
+        if all(_box_iou(region, existing) < iou_threshold for existing in kept):
+            kept.append(region)
+    return kept
+
+
+def _region_from_letterboxed_polygon(
+    raw_polygon: Any,
+    raw_confidence: Any,
+    *,
+    scale: float,
+    pad_x: float,
+    pad_y: float,
+    image_width: int,
+    image_height: int,
+    direction: str,
+) -> OCRRegion | None:
+    polygon_array = unletterbox_detection_points(
+        np.asarray(raw_polygon, dtype=np.float32),
+        scale=scale,
+        pad_x=pad_x,
+        pad_y=pad_y,
+        image_width=image_width,
+        image_height=image_height,
+    )
+    if len(polygon_array) < 3:
+        return None
+    x, y, width, height = cv2.boundingRect(polygon_array)
+    right = min(image_width, max(0, x + width))
+    bottom = min(image_height, max(0, y + height))
+    x = max(0, min(image_width, x))
+    y = max(0, min(image_height, y))
+    width = right - x
+    height = bottom - y
+    if width <= 1 or height <= 1:
+        return None
+    inferred_direction = "vertical" if height > width * 1.2 else "horizontal"
+    if direction != "auto" and inferred_direction != direction:
+        return None
+    polygon = tuple((float(point[0]), float(point[1])) for point in polygon_array)
+    return OCRRegion(
+        x=int(x),
+        y=int(y),
+        width=int(width),
+        height=int(height),
+        text="",
+        confidence=max(0.0, min(1.0, float(raw_confidence))),
+        direction=inferred_direction,
+        polygon=polygon,
+    )
+
+
+def _offset_region(region: OCRRegion, pad_x: int, pad_y: int) -> OCRRegion:
+    polygon = (
+        tuple((point[0] + pad_x, point[1] + pad_y) for point in region.polygon)
+        if region.polygon is not None
+        else None
+    )
+    return OCRRegion(
+        x=region.x + pad_x,
+        y=region.y + pad_y,
+        width=region.width,
+        height=region.height,
+        text=region.text,
+        confidence=region.confidence,
+        direction=region.direction,
+        polygon=polygon,
+    )
+
+
 def _bgr_image(image: Path | Image.Image | np.ndarray) -> np.ndarray:
     if isinstance(image, Path):
         try:
@@ -127,47 +281,43 @@ class PPOCRTextDetectionProvider:
         if direction not in {"auto", "horizontal", "vertical"}:
             raise ValueError("Text direction must be auto, horizontal, or vertical")
         source = _bgr_image(image)
+        image_height, image_width = source.shape[:2]
+        tiles = detection_tile_origins(
+            image_width,
+            image_height,
+            self.input_size[0],
+            self.input_size[1],
+            overlap=max(1, min(self.input_size) // 4),
+        )
+        regions: list[OCRRegion] = []
         with self._lock:
             detector = self._load()
-            try:
-                polygons, confidences = detector.detect(source)
-            except cv2.error as error:
-                raise TextDetectionError("PP-OCR text detection failed") from error
-        regions: list[OCRRegion] = []
-        image_height, image_width = source.shape[:2]
-        for raw_polygon, raw_confidence in zip(polygons, confidences, strict=True):
-            polygon_array = np.asarray(raw_polygon, dtype=np.float32).reshape(-1, 2)
-            if len(polygon_array) < 3:
-                continue
-            polygon_array[:, 0] = np.clip(polygon_array[:, 0], 0, image_width - 1)
-            polygon_array[:, 1] = np.clip(polygon_array[:, 1], 0, image_height - 1)
-            x, y, width, height = cv2.boundingRect(polygon_array)
-            right = min(image_width, max(0, x + width))
-            bottom = min(image_height, max(0, y + height))
-            x = max(0, min(image_width, x))
-            y = max(0, min(image_height, y))
-            width = right - x
-            height = bottom - y
-            if width <= 1 or height <= 1:
-                continue
-            inferred_direction = "vertical" if height > width * 1.2 else "horizontal"
-            if direction != "auto" and inferred_direction != direction:
-                continue
-            polygon = tuple((float(point[0]), float(point[1])) for point in polygon_array)
-            regions.append(
-                OCRRegion(
-                    x=int(x),
-                    y=int(y),
-                    width=int(width),
-                    height=int(height),
-                    text="",
-                    confidence=max(0.0, min(1.0, float(raw_confidence))),
-                    direction=inferred_direction,
-                    polygon=polygon,
+            for tile_x, tile_y, tile_width, tile_height in tiles:
+                crop = source[tile_y : tile_y + tile_height, tile_x : tile_x + tile_width]
+                letterboxed, scale, pad_x, pad_y = letterbox_detection_image(
+                    crop,
+                    self.input_size,
                 )
-            )
+                try:
+                    polygons, confidences = detector.detect(letterboxed)
+                except cv2.error as error:
+                    raise TextDetectionError("PP-OCR text detection failed") from error
+                for raw_polygon, raw_confidence in zip(polygons, confidences, strict=True):
+                    region = _region_from_letterboxed_polygon(
+                        raw_polygon,
+                        raw_confidence,
+                        scale=scale,
+                        pad_x=pad_x,
+                        pad_y=pad_y,
+                        image_width=tile_width,
+                        image_height=tile_height,
+                        direction=direction,
+                    )
+                    if region is None:
+                        continue
+                    regions.append(_offset_region(region, tile_x, tile_y))
         return sorted(
-            regions,
+            suppress_overlapping_detections(regions),
             key=lambda region: (
                 -(region.x + region.width / 2) if direction in {"auto", "vertical"} else region.y,
                 region.y if direction in {"auto", "vertical"} else region.x,

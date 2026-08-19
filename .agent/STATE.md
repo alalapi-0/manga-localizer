@@ -22,9 +22,8 @@ workbench/app panel; do not stop for reversible packaging review.
 Live work is one-page full reprocess: every real uploaded image, one
 image per round, quality pass first, then text pipeline only when
 the page has text. Earlier realpages “已检查” counts are not a skip.
-Sidebar 1 of the 130-page book (1184×701) finished this loop: AI
-超分 / AI 重绘 accepted, enhanced-image detect+OCR found 0 boxes,
-then 确认本页无文字. Next page: sidebar 2. Product Round 8 is not
+This loop finished sidebar 1 (1184×701, no-text) and sidebar 2
+(1166×540, text). Next page: sidebar 3. Product Round 8 is not
 complete.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -163,7 +162,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 1/130.
+  loop reprocesses from sidebar 1 and has finished 2/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -280,6 +279,14 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 2 (1166×540): quality pass accepted
+  Real-ESRGAN ONNX 4× (4664×2160). Enhanced detect+OCR left one
+  real box and four ignored empty/false boxes. Argos ja→zh wrote
+  nonempty text; the box was reconfirmed after translate, then
+  LaMa inpaint and Pillow typeset were accepted. One overflow box
+  stayed in the balloon (font-fit only). **标记本页已检查** and
+  current-page **仅文本 JSON** export completed. Open findings
+  remain none. Private trees were not committed.
 - 2026-08-19 page-loop sidebar 1 (1184×701): leftover API/watchers
   were stopped, then a fresh loopback API was started. Suggested
   OpenCV/Pillow enhance still looked like a low-quality capture;

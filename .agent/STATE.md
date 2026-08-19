@@ -23,8 +23,9 @@ Live work is one-page full reprocess: every real uploaded image, one
 image per round, quality pass first, then text pipeline only when
 the page has text. Earlier realpages “已检查” counts are not a skip.
 This loop finished sidebar 1 (1184×701, no-text), sidebar 2
-(1166×540, text), and sidebar 3 (627×1843, no-text after P-1).
-Next page: sidebar 4. Product Round 8 is not complete.
+(1166×540, text), sidebar 3 (627×1843, no-text after P-1), and
+sidebar 4 (340×594, text). Next page: sidebar 5. Product Round 8
+is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -164,7 +165,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 3/130.
+  loop reprocesses from sidebar 1 and has finished 4/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -281,6 +282,14 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop stall fix: waiting for the previous page’s
+  CI was incorrectly treated as a hard stop. The live prompt now
+  says CI is a wake only; the next page starts in the same turn.
+  Sidebar 4 (340×594) then finished: Real-ESRGAN ONNX 4×
+  (1360×2376) accepted, current-page detect+OCR, 2 real boxes
+  confirmed after ignore, Argos ja→zh, LaMa inpaint and Pillow
+  typeset accepted, **标记本页已检查**, current-page **仅文本 JSON**.
+  Open findings remain none. Private trees were not committed.
 - 2026-08-19 page-loop sidebar 3 (627×1843): leftover API was
   stopped and restarted. P-1: PP-OCR 736 stretch/letterbox on the
   accepted 4× plate (2508×7372) returned 0 boxes; overlapping 736

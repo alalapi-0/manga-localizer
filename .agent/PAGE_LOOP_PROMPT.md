@@ -162,6 +162,9 @@ These are not stop signals:
 - Cursor approval cards for `git push` or a single operator click
 - Font-fit taste on one balloon after a usable typeset
 - Reversible naming nits
+- A public push’s CI still running. Arm the CI wake, then open
+  the next page in the same turn. Do not wait for green CI before
+  starting the next image.
 
 If an auto-review card appears, request approval once and keep doing
 other unblocked work on **this** page. Do not idle on the card.
@@ -218,15 +221,17 @@ same control.
    the finished sidebar index / size and the next page.
 7. Run the closest public tests for any code change.
 8. Commit **public** files only. Push `origin/main`.
-9. Re-arm **only** `AGENT_LOOP_WAKE_manga_page` on that public
-   push’s CI, or immediately continue the next page if no public
-   code change was needed and CI is not the gate. Do not arm old
-   sentinels. Do not arm a 25-minute sleeper.
+9. Immediately open the next unfinished real page in this same
+   turn. Also re-arm **only** `AGENT_LOOP_WAKE_manga_page` on that
+   public push’s CI as a wake, not as a page gate. Do not wait for
+   CI before starting the next image. Do not arm old sentinels.
+   Do not arm a 25-minute sleeper.
 
 ## Wake / stop
 
-- Primary wake: the current page finished and was pushed, or that
-  push’s CI completed. Use `AGENT_LOOP_WAKE_manga_page` and
+- Primary wake: the current page finished and was pushed. CI
+  completion is an extra wake, not a reason to delay the next
+  page. Use `AGENT_LOOP_WAKE_manga_page` and
   `json.loads(..., strict=False)`.
 - On user stop: kill watcher PIDs and the loopback API this loop
   started; do not re-arm.

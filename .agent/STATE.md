@@ -26,7 +26,8 @@ This loop finished sidebar 1 (1184×701, no-text), sidebar 2
 (1166×540, text), sidebar 3 (627×1843, no-text after P-1),
 sidebar 4 (340×594, text), sidebar 5 (1110×312, text after
 P-2), sidebar 6 (1068×811, text), sidebar 7 (1084×749,
-text), and sidebar 8 (1190×666, text). Next page: sidebar 9.
+text), sidebar 8 (1190×666, text), and sidebar 9 (1185×551,
+no-text). Next page: sidebar 10.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -171,7 +172,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 8/130.
+  loop reprocesses from sidebar 1 and has finished 9/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -288,6 +289,11 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 9 (1185×551): Real-ESRGAN ONNX 4×
+  (4740×2204) accepted, current-page detect+OCR returned 0 boxes.
+  Visual review found action/SFX artwork, not unread balloons;
+  **确认本页无文字** set `no-text-reviewed`. Open findings remain none.
+  Private trees were not committed.
 - 2026-08-19 page-loop sidebar 8 (1190×666): Real-ESRGAN ONNX 4×
   (4760×2664) accepted, current-page detect+OCR, then visual
   review kept 4 text clusters from 37 boxes (0 sub-minimum

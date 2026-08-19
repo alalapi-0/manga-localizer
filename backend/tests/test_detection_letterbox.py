@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 
 from manga_localizer.providers.detection import (
+    detection_min_side_for_image,
+    detection_region_is_usable,
     detection_tile_origins,
     letterbox_detection_image,
     suppress_overlapping_detections,
@@ -62,6 +64,21 @@ def test_detection_tiles_cover_a_tall_narrow_page() -> None:
         cover[y : y + height, x : x + width] = 1
     assert bool(cover.all())
     assert len(tiles) > 1
+
+
+def test_detection_min_side_drops_tile_fragments_on_a_wide_plate() -> None:
+    wide_plate = detection_min_side_for_image(4440, 1248)
+    original_page = detection_min_side_for_image(1110, 312)
+    small_page = detection_min_side_for_image(340, 594)
+    assert wide_plate == 32
+    assert original_page == 13
+    assert small_page == 14
+    assert not detection_region_is_usable(6, 7, min_side=original_page)
+    assert not detection_region_is_usable(8, 25, min_side=original_page)
+    assert detection_region_is_usable(15, 40, min_side=original_page)
+    assert detection_region_is_usable(42, 74, min_side=original_page)
+    assert not detection_region_is_usable(20, 20, min_side=wide_plate)
+    assert detection_region_is_usable(60, 160, min_side=wide_plate)
 
 
 def test_suppress_overlapping_detections_keeps_the_stronger_box() -> None:

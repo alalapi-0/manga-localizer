@@ -34,6 +34,26 @@ class TextDetectionProvider(Protocol):
 
 
 PPOCR_PAD_BGR = (122.67891434, 116.66876762, 104.00698793)
+DETECTION_MIN_SIDE_FLOOR = 8
+DETECTION_MIN_SIDE_CAP = 32
+
+
+def detection_min_side_for_image(image_width: int, image_height: int) -> int:
+    """Smallest usable box on the plate the detector actually sees.
+
+    Tile noise on a 4x plate is a few pixels after mapping back to the
+    original page. The threshold scales with the short side so an
+    unenhanced small page still keeps compact SFX, while a wide 4x
+    plate drops 3-8 px fragments.
+    """
+    short = min(max(0, int(image_width)), max(0, int(image_height)))
+    if short < 1:
+        return DETECTION_MIN_SIDE_FLOOR
+    return max(DETECTION_MIN_SIDE_FLOOR, min(DETECTION_MIN_SIDE_CAP, short // 24))
+
+
+def detection_region_is_usable(width: int, height: int, *, min_side: int) -> bool:
+    return int(width) >= min_side and int(height) >= min_side
 
 
 def letterbox_detection_image(
@@ -151,7 +171,11 @@ def _region_from_letterboxed_polygon(
     y = max(0, min(image_height, y))
     width = right - x
     height = bottom - y
-    if width <= 1 or height <= 1:
+    if not detection_region_is_usable(
+        width,
+        height,
+        min_side=detection_min_side_for_image(image_width, image_height),
+    ):
         return None
     inferred_direction = "vertical" if height > width * 1.2 else "horizontal"
     if direction != "auto" and inferred_direction != direction:
@@ -290,6 +314,7 @@ class PPOCRTextDetectionProvider:
             overlap=max(1, min(self.input_size) // 4),
         )
         regions: list[OCRRegion] = []
+        source_min_side = detection_min_side_for_image(image_width, image_height)
         with self._lock:
             detector = self._load()
             for tile_x, tile_y, tile_width, tile_height in tiles:
@@ -315,7 +340,14 @@ class PPOCRTextDetectionProvider:
                     )
                     if region is None:
                         continue
-                    regions.append(_offset_region(region, tile_x, tile_y))
+                    offset = _offset_region(region, tile_x, tile_y)
+                    if not detection_region_is_usable(
+                        offset.width,
+                        offset.height,
+                        min_side=source_min_side,
+                    ):
+                        continue
+                    regions.append(offset)
         return sorted(
             suppress_overlapping_detections(regions),
             key=lambda region: (

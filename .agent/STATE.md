@@ -23,9 +23,10 @@ Live work is one-page full reprocess: every real uploaded image, one
 image per round, quality pass first, then text pipeline only when
 the page has text. Earlier realpages “已检查” counts are not a skip.
 This loop finished sidebar 1 (1184×701, no-text), sidebar 2
-(1166×540, text), sidebar 3 (627×1843, no-text after P-1), and
-sidebar 4 (340×594, text). Next page: sidebar 5. Product Round 8
-is not complete. CI in progress is not a page gate.
+(1166×540, text), sidebar 3 (627×1843, no-text after P-1),
+sidebar 4 (340×594, text), and sidebar 5 (1110×312, text after
+P-2). Next page: sidebar 6. Product Round 8 is not complete.
+CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -84,11 +85,15 @@ sentinels skip rewrite.
 - Detection and recognition are separate selections. Tesseract remains the zero-model detector/OCR
   baseline; optional PP-OCRv3 supplies bounded detector polygons. PP-OCR letterboxes each tile
   instead of stretching a full page to 736×736; tall or large plates use overlapping
-  input-sized tiles and NMS. `ppocr-v3+tesseract` merges
+  input-sized tiles and NMS. Boxes smaller than a short-side-scaled
+  minimum are dropped on the detector plate and after mapping back to
+  the page, so a wide 4× plate does not flood the inspector with 3-8 px
+  fragments. `ppocr-v3+tesseract` merges
   overlapping, contained, and nearby aligned proposals from both detectors, then pads the box so
   glyphs are enclosed. It does not drop low-confidence text or grant trust. Re-running detection
-  replaces stale empty unconfirmed auto boxes and oversized low-confidence unconfirmed auto
-  leftovers (even when OCR filled garbage text), then skips duplicates of kept regions.
+  replaces stale empty unconfirmed auto boxes, leftover tiny unconfirmed auto
+  boxes, and oversized low-confidence unconfirmed auto leftovers (even when OCR
+  filled garbage text), then skips duplicates of kept regions.
   Confirmed, ignored, translated, and ordinary-sized OCR boxes stay. A completed
   zero-detection result is authoritative and is not silently replaced during OCR.
 - Low-resolution pages can be manually AI-redrawn with the local Real-ESRGAN anime 4× preprocessor.
@@ -165,7 +170,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 4/130.
+  loop reprocesses from sidebar 1 and has finished 5/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -282,6 +287,15 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-19 page-loop sidebar 5 (1110×312): waiting for CI was
+  the stall, not a page defect. P-2: tiled detect on the accepted
+  4× plate (4440×1248) returned 58 boxes, mostly 3-8 px fragments.
+  Public min-side filter plus stale-tiny replace passed targeted
+  pytest. Same-page detect+OCR then returned 26 boxes with 0
+  sub-minimum fragments. Visual review kept 2 real boxes; LaMa
+  inpaint and Pillow typeset were accepted; **标记本页已检查** and
+  current-page **仅文本 JSON**. P-2 cleared. Private trees were not
+  committed.
 - 2026-08-19 page-loop stall fix: waiting for the previous page’s
   CI was incorrectly treated as a hard stop. The live prompt now
   says CI is a wake only; the next page starts in the same turn.

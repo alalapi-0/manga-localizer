@@ -332,6 +332,10 @@ def test_stale_auto_detection_keeps_reviewed_work_and_drops_panel_leftovers() ->
         _auto_region(width=200, height=280, source_text="junk", confidence=0.2),
         *page,
     )
+    assert PersistentJobQueue._is_stale_auto_detection(
+        _auto_region(width=5, height=6, source_text="こんにちは", confidence=0.2),
+        *page,
+    )
     assert not PersistentJobQueue._is_stale_auto_detection(
         _auto_region(source_text="こんにちは", confidence=0.2),
         *page,

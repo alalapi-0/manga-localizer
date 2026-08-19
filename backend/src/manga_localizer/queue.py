@@ -23,7 +23,11 @@ from manga_localizer.imaging import (
     typeset_image,
 )
 from manga_localizer.logging_utils import without_secrets
-from manga_localizer.providers.detection import consolidate_text_regions
+from manga_localizer.providers.detection import (
+    consolidate_text_regions,
+    detection_min_side_for_image,
+    detection_region_is_usable,
+)
 from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.security import (
@@ -927,6 +931,12 @@ class PersistentJobQueue:
             return False
         if not (region.source_text or "").strip():
             return True
+        if not detection_region_is_usable(
+            int(region.width),
+            int(region.height),
+            min_side=detection_min_side_for_image(image_width, image_height),
+        ):
+            return True
         coverage = cls._region_page_coverage(region, image_width, image_height)
         confidence = cls._region_effective_confidence(region)
         if coverage >= cls._STALE_PANEL_COVERAGE and confidence is None:
@@ -1150,7 +1160,11 @@ class PersistentJobQueue:
                 top,
                 min(image_height, math.ceil((detection.y + detection.height) / scale_y)),
             )
-            if right - left < 1 or bottom - top < 1:
+            if not detection_region_is_usable(
+                right - left,
+                bottom - top,
+                min_side=detection_min_side_for_image(image_width, image_height),
+            ):
                 continue
             polygon = (
                 tuple(

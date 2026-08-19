@@ -11,6 +11,28 @@ None.
 
 ## Cleared findings
 
+### P-2 — tiled detect on a wide 4× plate floods the page with tiny boxes
+
+- Kind: `function`
+- Page: sidebar 5, 1110×312
+- Clicked: accepted Real-ESRGAN ONNX 4× (enhanced 4440×1248), then
+  current-page **文字检测** + **日文 OCR**
+- Expected: a small set of balloon / SFX boxes so confirm / ignore
+  can finish the text path
+- What happened: detect+OCR completed 1/1 with 58 boxes (15 leftover
+  ignored). Most new boxes are 3–8 px fragments. **整理本页选框**
+  left 55. The inspector asks to confirm dozens of leftovers.
+- Why it blocked: confirm / translate / inpaint / typeset could not
+  finish while fragment boxes buried the real text.
+- Fix: drop boxes smaller than a short-side-scaled minimum on the
+  detector plate and after mapping back to the page. Re-detect also
+  replaces leftover tiny unconfirmed auto boxes even when OCR filled
+  them. Same-page detect+OCR then returned 26 boxes with 0 sub-minimum
+  fragments; visual review kept 2 real boxes and ignored the rest.
+- Repro: on a wide short photographed page, accept a 4× plate, then
+  current-page detect+OCR only. Do not include image bytes, OCR
+  text, or personal paths.
+
 ### P-1 — enhanced detect+OCR returns zero boxes on a tall page
 
 - Kind: `function`
@@ -36,12 +58,14 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 4.
+- Finished pages this loop: 5.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
   (P-1 tiled detect, then ignored artwork false boxes).
 - Finished: sidebar 4, 340×594, text path after quality pass.
-- Next page: sidebar 5 of the 130-page book.
+- Finished: sidebar 5, 1110×312, text path after quality pass
+  (P-2 min-size filter, then 2 real boxes).
+- Next page: sidebar 6 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

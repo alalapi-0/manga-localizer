@@ -40,8 +40,9 @@ text), sidebar 28 (1064×628, text after P-3/P-4/P-5), sidebar 29
 (1174×1161, text), sidebar 30 (1189×699, no-text), and sidebar 31
 (1175×1815, text after P-6), and sidebar 32 (441×1827, text).
 Sidebar 33 (717×1818, no-text) and sidebar 34 (1181×1262, no-text)
-are also finished, followed by sidebar 35 (1185×384, text after P-7)
-and sidebar 36 (1187×571, text). Next page: sidebar 37.
+are also finished, followed by sidebar 35 (1185×384, text after P-7),
+sidebar 36 (1187×571, text), and sidebar 37 (1178×1267, text).
+Next page: sidebar 38.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -298,11 +299,30 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 94/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 93/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 37 (1178×1267): Real-ESRGAN ONNX 4×
+  (4712×5068) was compared with the original and accepted. Current-page
+  detect+OCR produced 12 proposals; cleanup consolidated them to 2. Visual
+  review retained one complete vertical dialogue region and explicitly ignored
+  one overlapping duplicate. The retained region was operator-corrected,
+  confirmed, trusted, and translated locally. Its first repair mask covered all
+  glyphs but also touched the left balloon outline, so that result was rejected.
+  The same region was narrowed, re-OCRed, reconfirmed, retranslated, and rebuilt
+  before any page advance. The second mask enclosed only text; all four repair
+  candidates were compared with the mask hidden, and the primary LaMa result
+  removed the complete dialogue while preserving the balloon border and nearby
+  line art. A 60 px fixed vertical Pillow typeset reproduced the original
+  three-column visual weight and was checked for right-to-left order,
+  punctuation, centering, legibility, and containment before acceptance with
+  zero overflow. Page review and current-page **仅文本 JSON** completed. All
+  seven stages are done; preprocess/inpaint/typeset are accepted; the active
+  region is confirmed and trusted; the duplicate is ignored; no review-needed
+  regions, processing errors, overflow, or active jobs remain. Open findings
+  remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 36 (1187×571): Real-ESRGAN ONNX 4×
   (4748×2284) was compared with the original and accepted. Current-page
   detect+OCR produced 21 proposals; cleanup left 3. Visual review retained one

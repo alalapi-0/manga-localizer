@@ -79,9 +79,13 @@ def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[st
                 }
             )
         )
-        if not layout_only_unconfirm:
+        trusted_layout_reconfirm = (
+            region.confirmed and "recognition" not in keys and is_region_trusted(region)
+        )
+        if not layout_only_unconfirm and not trusted_layout_reconfirm:
             # Confirmation changes which boxes enter safe repair. Auto-unconfirm
-            # after a translation or style edit must not discard a still-valid plate.
+            # after a translation or style edit, and reconfirming that same
+            # already-trusted region, must not discard a still-valid plate.
             stages.add("inpaint")
     if keys & {
         "translation_text",

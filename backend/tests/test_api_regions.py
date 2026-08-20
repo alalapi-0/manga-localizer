@@ -186,6 +186,66 @@ def test_recognition_trust_is_read_only_and_has_fail_closed_transitions(
     assert unignored.json()["trustReason"] == "trust-input-changed"
 
 
+def test_reconfirming_translation_only_edit_preserves_accepted_inpaint(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "translation-layout-reconfirm")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    inpaint_review = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-20T00:00:00+00:00",
+        "resultRevision": 1,
+        "artifactChecksum": "a" * 64,
+        "maskChecksum": "b" * 64,
+    }
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        asset = session.get(ImageAsset, image["id"])
+        assert asset is not None
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "stageReviews": {"inpaint": inpaint_review},
+        }
+
+    translated = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "translationText": "下游译文",
+            "expectedRevision": confirmed.json()["revision"],
+        },
+    )
+    assert translated.status_code == 200, translated.text
+    assert translated.json()["confirmed"] is False
+    after_translation = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_translation["status"]["inpaint"] == "done"
+    assert after_translation["status"]["typeset"] == "pending"
+    assert after_translation["stageReviews"]["inpaint"] == inpaint_review
+
+    reconfirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "confirmed": True,
+            "expectedRevision": translated.json()["revision"],
+        },
+    )
+    assert reconfirmed.status_code == 200, reconfirmed.text
+    assert reconfirmed.json()["confirmed"] is True
+    after_reconfirm = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_reconfirm["status"]["inpaint"] == "done"
+    assert after_reconfirm["status"]["typeset"] == "pending"
+    assert after_reconfirm["stageReviews"]["inpaint"] == inpaint_review
+
+
 def test_policy_change_preserves_readable_detection_and_ocr_evidence(
     client: TestClient, app, tmp_path: Path
 ) -> None:

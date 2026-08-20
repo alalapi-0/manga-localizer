@@ -23,6 +23,7 @@ test('bundled window helper is preferred over Chromium', () => {
   assert.equal(launch.kind, 'app-window');
   assert.equal(launch.command, '/tmp/WorkbenchWindow');
   assert.deepEqual(launch.args, ['http://127.0.0.1:8000']);
+  assert.equal(launch.tracksWindowLifetime, true);
 });
 
 test('macOS app bundle layout and wrapper stay loopback by default', () => {
@@ -57,6 +58,7 @@ test('macOS prefers an installed Chromium app window', () => {
   assert.equal(launch.kind, 'app-window');
   assert.equal(launch.command, '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
   assert.deepEqual(launch.args, ['--app=http://127.0.0.1:8000']);
+  assert.equal(launch.tracksWindowLifetime, false);
 });
 
 test('macOS falls back to opening the loopback workbench URL', () => {
@@ -68,6 +70,7 @@ test('macOS falls back to opening the loopback workbench URL', () => {
   assert.equal(launch.kind, 'browser-tab');
   assert.equal(launch.command, 'open');
   assert.deepEqual(launch.args, ['http://127.0.0.1:8000']);
+  assert.equal(launch.tracksWindowLifetime, false);
 });
 
 test('LAN companion binds a private IPv4 only when explicitly enabled', () => {

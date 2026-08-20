@@ -163,17 +163,42 @@ export function desktopWindowLaunch(
   } = {},
 ) {
   if (windowHelper && pathExists(windowHelper)) {
-    return { command: windowHelper, args: [url], kind: 'app-window' };
+    return {
+      command: windowHelper,
+      args: [url],
+      kind: 'app-window',
+      tracksWindowLifetime: true,
+    };
   }
   if (platform === 'darwin') {
     const command = DARWIN_APP_BROWSERS.find((candidate) => pathExists(candidate));
     if (command) {
-      return { command, args: [`--app=${url}`], kind: 'app-window' };
+      return {
+        command,
+        args: [`--app=${url}`],
+        kind: 'app-window',
+        tracksWindowLifetime: false,
+      };
     }
-    return { command: 'open', args: [url], kind: 'browser-tab' };
+    return {
+      command: 'open',
+      args: [url],
+      kind: 'browser-tab',
+      tracksWindowLifetime: false,
+    };
   }
   if (platform === 'win32') {
-    return { command: 'cmd', args: ['/c', 'start', '', url], kind: 'browser-tab' };
+    return {
+      command: 'cmd',
+      args: ['/c', 'start', '', url],
+      kind: 'browser-tab',
+      tracksWindowLifetime: false,
+    };
   }
-  return { command: 'xdg-open', args: [url], kind: 'browser-tab' };
+  return {
+    command: 'xdg-open',
+    args: [url],
+    kind: 'browser-tab',
+    tracksWindowLifetime: false,
+  };
 }

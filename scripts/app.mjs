@@ -114,9 +114,11 @@ windowProcess.on('error', (error) => {
   console.error(error.message);
   stop(1);
 });
-windowProcess.on('exit', (code) => {
-  if (!shuttingDown) stop(code ?? 0);
-});
+if (windowLaunch.tracksWindowLifetime) {
+  windowProcess.on('exit', (code) => {
+    if (!shuttingDown) stop(code ?? 0);
+  });
+}
 
 if (lanAccess) {
   console.log(`Phone companion enabled. On the same Wi-Fi, open ${appUrl} and import photos with 多图.`);

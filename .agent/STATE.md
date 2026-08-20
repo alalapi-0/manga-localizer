@@ -36,7 +36,8 @@ no-text), sidebar 20 (1187×1244, text), sidebar 21 (958×228,
 no-text), sidebar 22 (1284×777, no-text), sidebar 23 (1072×564,
 no-text), sidebar 24 (1074×358, text), sidebar 25 (1074×793,
 text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
-text). Next page: sidebar 28.
+text), and sidebar 28 (1064×628, text after P-3/P-4/P-5). Next page:
+sidebar 29.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -181,7 +182,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 14/130.
+  loop reprocesses from sidebar 1 and has finished 28/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -293,11 +294,33 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 103/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 102/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 28 (1064×628): P-3 recorded before
+  changing code; external Chromium launchers no longer own source-tree API
+  lifetime, while the bundled helper still does. Repaired `npm run app`
+  remained live for the full same-page recheck. Real-ESRGAN ONNX 4×
+  (4256×2512) accepted; current-page detect+OCR returned 20 boxes.
+  Visual review consolidated fragments, kept 2 complete balloons, and
+  ignored 10 replaced fragments / drawn-SFX boxes. Both balloons were
+  re-OCRed and confirmed; local translation used one operator correction.
+  The first clean plate exposed P-5 at the lower balloon boundary, so the
+  affected manual region was shortened before the outline and routed through
+  a local OpenCV solid text mask while the other region remained on LaMa.
+  Direct clean-plate comparison then showed both text groups removed, the
+  balloon outline intact, and surrounding art unchanged. The first Pillow
+  typeset was rejected for wording. P-4 then exposed that reconfirming this
+  translation-only correction discarded the unchanged inpaint review; the
+  invalidation rule was fixed and covered by regression. The live same-page
+  retry preserved the accepted inpaint review, produced accepted typeset with
+  no overflow, and finished **标记本页已检查** plus current-page **仅文本
+  JSON**. All seven pipeline stages are done; preprocess/inpaint/typeset are
+  accepted; both active regions are confirmed and trusted; no review-needed
+  regions, processing errors, overflow, or active jobs remain. P-3/P-4/P-5
+  cleared. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 27 (1068×619): Real-ESRGAN ONNX 4×
   (4272×2476) accepted, current-page detect+OCR returned 22 boxes
   with 0 sub-minimum fragments. Visual review kept 2 balloons and

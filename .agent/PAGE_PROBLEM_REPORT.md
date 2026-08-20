@@ -11,6 +11,82 @@ None.
 
 ## Cleared findings
 
+### P-5 — full-balloon repair mask creates a visible background patch
+
+- Kind: `quality`
+- Page: sidebar 28, 1064×628
+- Clicked: compared the final clean plate against the original with the review
+  mask hidden
+- Expected: both balloon interiors remain visually continuous after text removal
+- What happened: the large manually drawn left balloon region let LaMa replace
+  part of the balloon interior with a white rectangular patch at its lower edge
+- Why it blocks: the defect is visible at normal workbench zoom and would remain
+  under the translated overlay; the clean plate and final page cannot be accepted
+- Fix: keep the manually verified text inside the left region while shortening
+  its lower edge before the balloon outline, and route that white-background
+  region through a local OpenCV solid text mask. The other balloon remains on
+  LaMa, so repair stays region-specific rather than changing project defaults.
+- Same-page verification: direct original/clean comparisons showed both text
+  groups removed, the left balloon outline preserved, and surrounding artwork
+  unchanged. The mixed-provider clean plate and subsequent Pillow typeset were
+  accepted with no overflow.
+- Repro: create one repair region spanning the full tall balloon, run current-page
+  LaMa, hide the review mask, and compare the balloon's lower edge with the
+  original. Do not include page pixels, source text, project names, or paths.
+
+### P-4 — reconfirming a translation-only edit invalidates the accepted clean plate
+
+- Kind: `interaction`
+- Page: sidebar 28, 1064×628
+- Clicked: rejected the first typeset result, edited only translated text,
+  reconfirmed that already-trusted region, reran current-page typeset, accepted
+  the corrected result, and exported current-page JSON
+- Expected: a translation-only correction and its reconfirmation invalidate the
+  typeset result, but preserve the unchanged accepted inpaint artifact
+- What happened: the reconfirmation marked inpaint pending, so the typeset job
+  rebuilt the clean plate and silently cleared its accepted visual review. The
+  page and JSON export still showed done, but the persisted inpaint review gate
+  was open.
+- Why it blocks: sidebar 28 cannot count as passed until the clean plate is
+  explicitly accepted after the final typeset run; proceeding would violate the
+  one-image gate.
+- Fix: reconfirming an already-trusted region after a translation- or style-only
+  edit now invalidates typeset/export only; it does not discard an unchanged
+  accepted inpaint artifact. Trust-changing confirmations still invalidate the
+  clean plate.
+- Same-page verification: the new regression passed. In the repaired live app,
+  the operator translation correction and reconfirmation preserved the accepted
+  inpaint review; full typeset completed without rebuilding the clean plate, and
+  all final stage reviews remained accepted through page review and JSON export.
+- Repro: on a trusted, confirmed region with accepted inpaint, edit only its
+  translated text, reconfirm the region, rerun current-page typeset, and inspect
+  the persisted inpaint stage review. Do not include private text, page pixels,
+  project names, or paths.
+
+### P-3 — application-mode launcher exits immediately after opening its window
+
+- Kind: `function`
+- Page: sidebar 28, 1064×628
+- Clicked: started the documented loopback application with `npm run app`
+- Expected: the dedicated application window and `127.0.0.1:8000`
+  workbench remain available so the current page can be opened and processed
+- What happened: the window launcher child exited successfully immediately
+  after opening the window, and `scripts/app.mjs` treated that helper exit as
+  the application closing, so it terminated the API too
+- Why it blocked: the real workbench disappeared before sidebar 28 could be
+  opened or visually processed
+- Fix: distinguish the bundled window helper, whose lifetime owns the packaged
+  application, from one-shot external Chromium / browser launchers. Source-tree
+  application mode now keeps the API alive when an external launcher returns,
+  while the bundled helper still closes the API with its real window.
+- Same-page verification: launcher tests passed; repaired `npm run app` kept
+  `127.0.0.1:8000` and the queue running while sidebar 28 completed its full
+  quality, text, visual-review, page-review, and JSON-export path.
+- Repro: on macOS with a supported browser/application-window launcher,
+  start `npm run app` and observe whether the loopback health endpoint remains
+  available after the launcher helper returns. Do not include private project
+  names, image bytes, OCR text, or personal paths.
+
 ### P-2 — tiled detect on a wide 4× plate floods the page with tiny boxes
 
 - Kind: `function`
@@ -58,7 +134,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 27.
+- Finished pages this loop: 28.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -110,6 +186,9 @@ None.
   (2 landscape-line false boxes ignored).
 - Finished: sidebar 27, 1068×619, text path after quality pass
   (2 balloons from 22 boxes; drawn SFX left as artwork).
-- Next page: sidebar 28 of the 130-page book.
+- Finished: sidebar 28, 1064×628, text path after quality pass
+  (2 balloons from 20 detections; P-3 launcher lifetime, P-4 review
+  invalidation, and P-5 clean-plate boundary issues fixed and reverified).
+- Next page: sidebar 29 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

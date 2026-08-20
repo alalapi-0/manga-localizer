@@ -33,7 +33,8 @@ no-text), sidebar 10 (1185×1095, text), sidebar 11
 text), sidebar 16 (332×572, text), sidebar 17 (1073×482,
 text), sidebar 18 (1190×661, text), sidebar 19 (1178×537,
 no-text), sidebar 20 (1187×1244, text), sidebar 21 (958×228,
-no-text), and sidebar 22 (1284×777, no-text). Next page: sidebar 23.
+no-text), sidebar 22 (1284×777, no-text), and sidebar 23 (1072×564,
+no-text). Next page: sidebar 24.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -290,11 +291,16 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 108/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 107/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 23 (1072×564): Real-ESRGAN ONNX 4×
+  (4288×2256) accepted, current-page detect+OCR returned 1 box with
+  0 sub-minimum fragments. Visual review put it on debris, not
+  balloons; ignored; **确认本页无文字** set `no-text-reviewed`. Open
+  findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 22 (1284×777): Real-ESRGAN ONNX 4×
   (5136×3108) accepted, current-page detect+OCR returned 1 box with
   0 sub-minimum fragments. Visual review put it on drawn SFX, not

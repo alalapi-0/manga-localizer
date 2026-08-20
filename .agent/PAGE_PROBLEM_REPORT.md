@@ -11,6 +11,33 @@ None.
 
 ## Cleared findings
 
+### P-6 — text-only repair leaves punctuation remnants on the clean plate
+
+- Kind: `quality`
+- Page: sidebar 31, 1175×1815
+- Clicked: compared the primary current-provider clean plate with the enhanced
+  page after current-page LaMa repair
+- Expected: both verified dialogue strings, including their punctuation, are
+  completely removed while nearby line art remains intact
+- What happened: the main glyphs disappeared, but a visible punctuation remnant
+  remained at each repaired location at normal workbench zoom
+- Why it blocks: the clean plate is visibly incomplete and cannot be accepted or
+  used for final typesetting
+- Fix: extend both verified regions far enough to include their punctuation,
+  then tighten the horizontal bounds back to the actual glyph columns so the
+  text mask does not absorb adjacent hair and shadow. Re-run OCR and explicitly
+  reconfirm both regions before rebuilding the current page.
+- Same-page verification: all four repair candidates were compared at fit and
+  enlarged zoom. The primary LaMa result removed both complete strings without
+  the original punctuation remnants and preserved the nearby panel art better
+  than the OpenCV and line-guided alternatives. The accepted result survived a
+  final local-translation refresh, fixed-size typeset, page review, and JSON
+  export with zero overflow or open review gates.
+- Repro: run text-mask repair on two short vertical exclamations whose punctuation
+  sits near the lower edge of the detected regions, hide the review mask, and
+  compare the clean plate at fit-to-page zoom. Do not include private text, page
+  pixels, project names, or paths.
+
 ### P-5 — full-balloon repair mask creates a visible background patch
 
 - Kind: `quality`
@@ -134,7 +161,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 30.
+- Finished pages this loop: 31.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -194,6 +221,9 @@ None.
   typeset rejected as too small, then corrected and reverified).
 - Finished: sidebar 30, 1189×699, no-text path after quality pass
   (1 shadow-stroke false positive ignored).
-- Next page: sidebar 31 of the 130-page book.
+- Finished: sidebar 31, 1175×1815, text path after quality pass
+  (2 vertical exclamations from 11 detections; 5 artwork false positives
+  ignored; P-6 punctuation-mask boundary fixed and reverified).
+- Next page: sidebar 32 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

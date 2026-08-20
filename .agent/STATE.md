@@ -37,8 +37,8 @@ no-text), sidebar 22 (1284×777, no-text), sidebar 23 (1072×564,
 no-text), sidebar 24 (1074×358, text), sidebar 25 (1074×793,
 text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
 text), sidebar 28 (1064×628, text after P-3/P-4/P-5), sidebar 29
-(1174×1161, text), and sidebar 30 (1189×699, no-text). Next page:
-sidebar 31.
+(1174×1161, text), sidebar 30 (1189×699, no-text), and sidebar 31
+(1175×1815, text after P-6). Next page: sidebar 32.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -183,7 +183,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 30/130.
+  loop reprocesses from sidebar 1 and has finished 31/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -295,11 +295,30 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 100/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 99/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 31 (1175×1815): Real-ESRGAN ONNX 4×
+  (4700×7260) accepted. Current-page detect+OCR produced 11 proposals;
+  cleanup left 7, visual review kept 2 short vertical exclamations and ignored
+  5 artwork false positives while leaving the large drawn sound effect as art.
+  Both retained regions were re-OCRed, operator-corrected, confirmed, and
+  translated locally with concise operator wording. P-6 was recorded when the
+  first text masks omitted terminal punctuation. Extending the lower bounds
+  removed the remnants but initially absorbed nearby hair/shadow, so both boxes
+  were tightened back to their glyph columns, re-OCRed, and reconfirmed. Four
+  repair candidates were compared at fit and enlarged zoom; the primary LaMa
+  result best preserved nearby art and was accepted. The first Pillow typeset
+  was rejected as too small, the next as persistently overflowing, and fixed
+  44 px vertical styles passed with zero overflow. A final translation-stage
+  refresh, operator wording restoration, typeset rerun, page review, and
+  current-page **仅文本 JSON** closed every invalidated stage. All seven stages
+  are done; preprocess/inpaint/typeset are accepted; 2 active regions are
+  confirmed and trusted; 5 false positives are ignored; no review-needed
+  regions, processing errors, overflow, or active jobs remain. P-6 cleared.
+  Private trees were not committed.
 - 2026-08-20 page-loop sidebar 30 (1189×699): Real-ESRGAN ONNX 4×
   (4756×2796) accepted after original/result comparison preserved line art,
   gray fills, and motion strokes. Current-page detect+OCR produced one

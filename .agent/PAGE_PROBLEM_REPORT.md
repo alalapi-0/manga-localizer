@@ -315,6 +315,10 @@ None.
 - Finished: sidebar 41, 1190×765, no-text path after quality pass
   (1 back-shadow and line-art false positive ignored; visible lettering kept as
   drawn effect artwork; full-page scan confirmed no translatable text).
-- Next page: sidebar 42 of the 130-page book.
+- Finished: sidebar 42, 1109×319, no-text path after quality pass
+  (1 large drawn-effect-lettering false positive ignored; punctuation-only
+  bubble and effect lettering kept as artwork; full-page scan confirmed no
+  translatable text).
+- Next page: sidebar 43 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

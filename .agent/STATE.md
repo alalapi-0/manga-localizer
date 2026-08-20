@@ -38,7 +38,8 @@ no-text), sidebar 24 (1074×358, text), sidebar 25 (1074×793,
 text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
 text), sidebar 28 (1064×628, text after P-3/P-4/P-5), sidebar 29
 (1174×1161, text), sidebar 30 (1189×699, no-text), and sidebar 31
-(1175×1815, text after P-6). Next page: sidebar 32.
+(1175×1815, text after P-6), and sidebar 32 (441×1827, text).
+Next page: sidebar 33.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -183,7 +184,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 31/130.
+  loop reprocesses from sidebar 1 and has finished 32/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -295,11 +296,29 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 99/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 98/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 32 (441×1827): Real-ESRGAN ONNX 4×
+  (1764×7308) accepted after fit and enlarged comparisons preserved the narrow
+  page's panel lines, tones, and drawn effects. Current-page detect+OCR produced
+  30 proposals; cleanup left 16. Visual review kept 3 dialogue regions, ignored
+  13 artwork false positives, and left the large drawn sound effects as art.
+  The retained regions were bounded to their complete glyph groups, re-OCRed,
+  operator-corrected, confirmed, trusted, and translated locally. All four
+  repair candidates were compared with the mask shown and hidden at fit and
+  selected-region zoom. The primary LaMa result removed all three text groups
+  most cleanly while preserving balloon borders and surrounding line art, so it
+  was accepted. The 28 px auto-fit vertical Pillow result remained legible,
+  centered, and correctly columned in all three balloons at fit and enlarged
+  zoom, with zero overflow, and was accepted. Page review and current-page
+  **仅文本 JSON** export completed. All seven stages are done;
+  preprocess/inpaint/typeset are accepted; 3 active regions are confirmed and
+  trusted; 13 false positives are ignored; no review-needed regions,
+  processing errors, overflow, or active jobs remain. Open findings remain
+  none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 31 (1175×1815): Real-ESRGAN ONNX 4×
   (4700×7260) accepted. Current-page detect+OCR produced 11 proposals;
   cleanup left 7, visual review kept 2 short vertical exclamations and ignored

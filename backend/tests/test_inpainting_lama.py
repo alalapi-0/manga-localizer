@@ -82,6 +82,7 @@ def test_health_and_capabilities_are_lazy_and_never_download(tmp_path: Path) -> 
     assert capabilities["inputNames"] == ["image", "mask"]
     assert capabilities["preservesAlpha"] is True
     assert capabilities["softMaskComposite"] is True
+    assert capabilities["textPolarities"] == ["auto", "dark", "light"]
     assert capabilities["downloadsModelsAtStartup"] is False
     assert capabilities["executionProviders"] == ["CPUExecutionProvider"]
     assert created == []

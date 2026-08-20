@@ -1,6 +1,6 @@
 # Manga Localizer — one-page reprocess problem report
 
-Updated: 2026-08-20
+Updated: 2026-08-21
 
 Public operator log for the one-page full-reprocess loop. No private
 page images, OCR text, or personal paths.
@@ -10,6 +10,41 @@ page images, OCR text, or personal paths.
 None.
 
 ## Cleared findings
+
+### P-9 — text-contour mask absorbs border-connected artwork
+
+- Kind: `function`
+- Page: sidebar 45, 516×694
+- Clicked: ran current-page LaMa repair after consolidating the visible vertical
+  dialogue, then split the same content into eight tight trusted regions and
+  rebuilt all four candidates with per-region text-contour masks reduced from
+  4/2/2 padding/dilation/feather to 1/0/1
+- Expected: the text-contour mask includes only glyph strokes and their narrow
+  outline, while dark blade, clothing, and speed-line components touching a
+  region boundary remain outside the mask
+- What happened: dark artwork connected to the region boundary is classified
+  as text. The primary, Navier-Stokes, Telea, and line-guided candidates replace
+  large high-contrast structures with blurred or solid patches; the tightest
+  masks also leave visible glyph remnants.
+- Why it blocks: no current repair candidate preserves the artwork and removes
+  the complete text, so the clean plate cannot be accepted and sidebar 45
+  cannot proceed to typesetting.
+- Fix: segment dark and light text candidates independently through a guard band,
+  reject components connected to its real boundary, require local morphology to
+  corroborate adaptive thresholds, expose `auto` / `dark` / `light` polarity per
+  region, and remove the dense full-region fallback. Explicit polarity never
+  writes the opposite-polarity support pixels into the mask.
+- Same-page verification: the actual mask was inspected shown and hidden after
+  rebuilding the same eight trusted regions. Explicit dark polarity with a
+  narrow hard fill removed the complete glyph cores while leaving the outlined
+  backing and excluding the connected blade, clothing, and speed-line art. The
+  accepted clean plate then completed local translation, reconfirmation, final
+  vertical typesetting, page review, and current-page text-only JSON export with
+  no current overflow or active job.
+- Repro: on a text page where outlined vertical glyphs overlap dark line art,
+  use **文本轮廓** masks on tight trusted regions, show the actual mask, then
+  compare all four clean-plate candidates with the mask hidden. Do not include
+  private text, page pixels, project names, or paths.
 
 ### P-8 — text-only repair leaves the terminal long dash
 
@@ -215,7 +250,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 41.
+- Finished pages this loop: 45.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -326,6 +361,10 @@ None.
   (Real-ESRGAN result rejected because it removed intended foreground
   screentone; original retained; 2 hair-contour/screentone false positives
   ignored; full-page scan confirmed no translatable text).
-- Next page: sidebar 45 of the 130-page book.
+- Finished: sidebar 45, 516×694, text path after quality pass
+  (P-9 guard-band/polarity text mask fixed and reverified; eight trusted
+  fragments translated and typeset; clean plate, final page review, and
+  current-page text-only JSON export completed).
+- Next page: sidebar 46 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

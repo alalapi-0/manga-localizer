@@ -1439,9 +1439,13 @@ describe('desktop workbench interactions', () => {
     expect(within(provider).getByRole('option', { name: /继承项目设置/ })).toBeInTheDocument();
 
     await user.selectOptions(provider, 'lama-onnx');
+    const textPolarity = screen.getByRole('combobox', { name: '文字极性' });
+    expect(textPolarity).toHaveValue('auto');
+    await user.selectOptions(textPolarity, 'dark');
 
     expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair).toMatchObject({
       inpainterProvider: 'lama-onnx',
+      textPolarity: 'dark',
     });
     expect(screen.getByRole('button', { name: '重建当前页' })).toBeEnabled();
     expect(screen.getByText('LaMa AI 背景修复')).toBeInTheDocument();

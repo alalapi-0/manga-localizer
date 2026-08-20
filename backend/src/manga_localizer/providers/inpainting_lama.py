@@ -301,6 +301,7 @@ class LaMaONNXInpaintingProvider:
             "modifiesSource": False,
             "contextCrop": True,
             "softMaskComposite": True,
+            "textPolarities": ["auto", "dark", "light"],
             "downloadsModelsAtStartup": False,
             "executionProviders": list(self.execution_providers or ()),
             "error": health["error"],

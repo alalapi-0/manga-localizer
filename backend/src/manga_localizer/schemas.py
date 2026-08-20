@@ -341,6 +341,7 @@ def _validate_repair(value: dict[str, Any]) -> dict[str, Any]:
         "ocrInputVariant",
         "padding",
         "radius",
+        "textPolarity",
     }
     unknown_fields = sorted(set(value) - allowed_fields)
     if unknown_fields:
@@ -373,6 +374,14 @@ def _validate_repair(value: dict[str, Any]) -> dict[str, Any]:
         mask_mode = normalized["maskMode"]
         if not isinstance(mask_mode, str) or mask_mode not in {"region", "text"}:
             raise ValueError("maskMode must be region or text")
+    if "textPolarity" in normalized:
+        text_polarity = normalized["textPolarity"]
+        if not isinstance(text_polarity, str) or text_polarity not in {
+            "auto",
+            "dark",
+            "light",
+        }:
+            raise ValueError("textPolarity must be auto, dark, or light")
     if "method" in normalized:
         method = normalized["method"]
         aliases = {

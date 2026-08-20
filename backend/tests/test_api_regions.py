@@ -385,6 +385,7 @@ def test_geometry_edit_discards_stale_detector_mask_polygon(
     assert region["repair"]["detectorGenerated"] is True
     assert "maskPolygon" in region["repair"]
     assert region["repair"]["maskMode"] == "text"
+    assert region["repair"]["textPolarity"] == "auto"
     assert region["repair"]["maskPadding"] == 4
     assert region["repair"]["dilation"] == 2
     assert region["repair"]["feather"] == 2
@@ -679,6 +680,8 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
 
     invalid_repairs = (
         {"maskMode": "polygon"},
+        {"textPolarity": "mixed"},
+        {"textPolarity": 1},
         {"maskPadding": -1},
         {"maskPadding": 513},
         {"dilation": 129},

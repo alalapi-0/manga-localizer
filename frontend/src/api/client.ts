@@ -174,6 +174,13 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
     for (const [providerId, raw] of Object.entries(group)) {
       const detail = capabilityRecord(raw);
       const available = Boolean(detail.available);
+      const textPolarities = Array.isArray(detail.textPolarities)
+        ? detail.textPolarities.filter(
+            (value): value is 'auto' | 'dark' | 'light' => (
+              value === 'auto' || value === 'dark' || value === 'light'
+            ),
+          )
+        : undefined;
       providers.push({
         id: providerId,
         label: labels[providerId] ?? providerId,
@@ -182,6 +189,7 @@ function normalizeCapabilities(payload: unknown): AppCapabilities {
         configurable: Boolean(detail.configurable),
         local: detail.remote !== true,
         isMock: providerId === 'mock',
+        textPolarities,
         reason: available
           ? undefined
           : typeof detail.error === 'string'

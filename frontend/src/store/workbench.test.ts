@@ -180,6 +180,7 @@ describe('workbench store', () => {
         dilation: 3,
         radius: 5,
         fillColor: '#eeeeee',
+        textPolarity: 'unsupported',
       },
     } as unknown as ReturnType<typeof regionFixture>]);
 
@@ -190,6 +191,7 @@ describe('workbench store', () => {
       maskPadding: 7,
       dilation: 3,
       radius: 5,
+      textPolarity: 'auto',
     });
   });
 

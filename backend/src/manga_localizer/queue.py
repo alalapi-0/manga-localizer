@@ -1908,6 +1908,13 @@ class PersistentJobQueue:
                 )
                 default_mask_mode = str(DEFAULT_REPAIR_SETTINGS["maskMode"])
                 mask_mode = str(options.get("maskMode", repair.get("maskMode", default_mask_mode)))
+                default_text_polarity = str(DEFAULT_REPAIR_SETTINGS["textPolarity"])
+                text_polarity = str(
+                    options.get(
+                        "textPolarity",
+                        repair.get("textPolarity", default_text_polarity),
+                    )
+                )
                 mask_region = {
                     "x": region["x"],
                     "y": region["y"],
@@ -1916,6 +1923,7 @@ class PersistentJobQueue:
                     "rotation": region.get("rotation", 0),
                     "padding": padding,
                     "maskMode": mask_mode,
+                    "textPolarity": text_polarity,
                 }
                 if repair.get("maskPolygon"):
                     mask_region["maskPolygon"] = repair["maskPolygon"]
@@ -1928,6 +1936,7 @@ class PersistentJobQueue:
                     dilation=dilation,
                     feather=feather,
                     mask_mode=mask_mode,
+                    text_polarity=text_polarity,
                 )
                 if not np.any(region_mask):
                     continue

@@ -718,6 +718,18 @@ function RepairInspector({ region }: { region: Region | undefined }) {
           <option value="region">完整区域</option>
         </select>
       </Field>
+      <Field label="文字极性" hint="仅文本轮廓模式生效；描边字可只移除字芯并保留反色衬底。">
+        <select
+          aria-label="文字极性"
+          disabled={repair.maskMode !== 'text'}
+          onChange={(event) => updateRepair({ textPolarity: event.target.value as Region['repair']['textPolarity'] })}
+          value={repair.textPolarity}
+        >
+          <option value="auto">自动（推荐）</option>
+          <option value="dark">深色文字（保留浅色衬底）</option>
+          <option value="light">浅色文字（保留深色衬底）</option>
+        </select>
+      </Field>
       {isLama ? (
         <div className="notice notice--local"><b>LaMa AI 背景修复</b><span>使用当前蒙版的局部上下文推理，并保持灰度页不被染色。复杂线稿可在修复完成后比较 Navier–Stokes 与线稿引导候选。</span></div>
       ) : (

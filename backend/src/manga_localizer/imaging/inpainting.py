@@ -13,6 +13,7 @@ from PIL import Image, ImageColor
 DEFAULT_REPAIR_SETTINGS: dict[str, Any] = {
     "method": "telea",
     "maskMode": "text",
+    "textPolarity": "auto",
     "maskPadding": 4,
     "dilation": 2,
     "feather": 2,
@@ -162,6 +163,7 @@ def create_mask(
     dilation: int = 1,
     feather: int = 0,
     mask_mode: str = "region",
+    text_polarity: str = "auto",
 ) -> np.ndarray:
     """Create a region or locally segmented text mask in canonical image coordinates."""
     width, height = _dimensions(image)
@@ -174,6 +176,9 @@ def create_mask(
     normalized_default_mode = mask_mode.lower().replace("_", "-")
     if normalized_default_mode not in {"region", "text"}:
         raise ValueError("Mask mode must be 'region' or 'text'")
+    normalized_default_polarity = text_polarity.lower().replace("_", "-")
+    if normalized_default_polarity not in {"auto", "dark", "light"}:
+        raise ValueError("Text polarity must be 'auto', 'dark', or 'light'")
     grayscale: np.ndarray | None = None
     if not isinstance(image, tuple):
         grayscale = np.asarray(_pil_image(image).convert("L"), dtype=np.uint8)
@@ -185,6 +190,18 @@ def create_mask(
         )
         if selected_mode not in {"region", "text"}:
             raise ValueError("Mask mode must be 'region' or 'text'")
+        selected_polarity = (
+            str(
+                region.get(
+                    "textPolarity",
+                    region.get("text_polarity", normalized_default_polarity),
+                )
+            )
+            .lower()
+            .replace("_", "-")
+        )
+        if selected_polarity not in {"auto", "dark", "light"}:
+            raise ValueError("Text polarity must be 'auto', 'dark', or 'light'")
         region_mask = np.zeros_like(mask)
         # Full-region mode is an explicit escape hatch from detector geometry.
         # A persisted detection polygon only constrains text-aware mode.
@@ -237,7 +254,7 @@ def create_mask(
             _MAX_MASK_PADDING,
         )
         if selected_mode == "text" and grayscale is not None:
-            region_mask = _text_pixels(grayscale, region_mask)
+            region_mask = _text_pixels(grayscale, region_mask, selected_polarity)
             if region_padding > 0 and np.any(region_mask):
                 size = region_padding * 2 + 1
                 region_mask = cv2.dilate(
@@ -266,14 +283,42 @@ def create_mask(
     return mask
 
 
-def _text_pixels(grayscale: np.ndarray, geometric_mask: np.ndarray) -> np.ndarray:
+def _text_pixels(
+    grayscale: np.ndarray,
+    geometric_mask: np.ndarray,
+    text_polarity: str = "auto",
+) -> np.ndarray:
     rows, columns = np.nonzero(geometric_mask)
     if not len(rows):
         return geometric_mask
-    left, right = int(columns.min()), int(columns.max()) + 1
-    top, bottom = int(rows.min()), int(rows.max()) + 1
+    height, width = geometric_mask.shape
+    region_left, region_right = int(columns.min()), int(columns.max()) + 1
+    region_top, region_bottom = int(rows.min()), int(rows.max()) + 1
+    region_short_edge = min(region_right - region_left, region_bottom - region_top)
+    morphology_size = max(3, region_short_edge // 7)
+    if morphology_size % 2 == 0:
+        morphology_size += 1
+    # Segment through a guard band wider than the largest local morphology
+    # radius. A glyph may legitimately touch a tight detector box, while
+    # artwork that enters the box continues through this band to its boundary.
+    guard = max(8, min(31, morphology_size))
+    left = max(0, region_left - guard)
+    right = min(width, region_right + guard)
+    top = max(0, region_top - guard)
+    bottom = min(height, region_bottom + guard)
     crop = grayscale[top:bottom, left:right]
-    allowed = geometric_mask[top:bottom, left:right] > 0
+    target = geometric_mask[top:bottom, left:right] > 0
+    guard_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (guard * 2 + 1, guard * 2 + 1),
+    )
+    allowed = cv2.dilate(
+        target.astype(np.uint8),
+        guard_kernel,
+        iterations=1,
+        borderType=cv2.BORDER_CONSTANT,
+        borderValue=0,
+    ).astype(bool)
     short_edge = max(3, min(crop.shape) // 7)
     kernel_size = min(31, short_edge if short_edge % 2 else short_edge + 1)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kernel_size, kernel_size))
@@ -298,7 +343,7 @@ def _text_pixels(grayscale: np.ndarray, geometric_mask: np.ndarray) -> np.ndarra
     adaptive_size = min(51, max(3, min(crop.shape) // 3))
     if adaptive_size % 2 == 0:
         adaptive_size += 1
-    dark_strokes = cv2.adaptiveThreshold(
+    adaptive_dark = cv2.adaptiveThreshold(
         crop,
         255,
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
@@ -306,41 +351,114 @@ def _text_pixels(grayscale: np.ndarray, geometric_mask: np.ndarray) -> np.ndarra
         adaptive_size,
         7,
     )
-    candidate = np.where(
-        allowed
-        & (
-            (black_hat >= max(6, black_threshold))
-            | (top_hat >= max(6, white_threshold))
-            | (dark_strokes > 0)
-        ),
+    adaptive_light = cv2.adaptiveThreshold(
+        255 - crop,
         255,
-        0,
-    ).astype(np.uint8)
-    candidate = cv2.morphologyEx(
-        candidate,
-        cv2.MORPH_CLOSE,
-        np.ones((3, 3), dtype=np.uint8),
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        adaptive_size,
+        7,
     )
-    if np.count_nonzero(candidate) / max(1, int(np.count_nonzero(allowed))) >= 0.7:
+    eroded_allowed = cv2.erode(
+        allowed.astype(np.uint8),
+        np.ones((3, 3), dtype=np.uint8),
+        iterations=1,
+        borderType=cv2.BORDER_CONSTANT,
+        borderValue=0,
+    ).astype(bool)
+    analysis_boundary = allowed & ~eroded_allowed
+    # A clipped page edge is not evidence that a component entered the region
+    # from surrounding artwork; there are no pixels beyond that image edge.
+    if top == 0:
+        analysis_boundary[0, :] = False
+    if bottom == height:
+        analysis_boundary[-1, :] = False
+    if left == 0:
+        analysis_boundary[:, 0] = False
+    if right == width:
+        analysis_boundary[:, -1] = False
+
+    target_area = int(np.count_nonzero(target))
+    safe_components_by_stream: list[list[np.ndarray]] = []
+    exterior_by_stream: list[list[np.ndarray]] = []
+    # Adaptive thresholding is only corroborating evidence. Requiring a small
+    # local black/top-hat response prevents flat screentone and slow gradients
+    # from becoming text solely because they are locally darker or lighter.
+    candidate_streams = (
+        (black_hat >= max(6, black_threshold)) | ((adaptive_dark > 0) & (black_hat >= 3)),
+        (top_hat >= max(6, white_threshold)) | ((adaptive_light > 0) & (top_hat >= 3)),
+    )
+    for raw_candidate in candidate_streams:
+        safe_components: list[np.ndarray] = []
+        exterior_components: list[np.ndarray] = []
+        candidate = np.where(allowed & raw_candidate, 255, 0).astype(np.uint8)
+        candidate = cv2.morphologyEx(
+            candidate,
+            cv2.MORPH_CLOSE,
+            np.ones((3, 3), dtype=np.uint8),
+        )
+        candidate = np.where(allowed, candidate, 0).astype(np.uint8)
+        component_count, labels, _, _ = cv2.connectedComponentsWithStats(candidate, 8)
+        for index in range(1, component_count):
+            component = labels == index
+            inside = component & target
+            if not np.any(inside):
+                continue
+            if np.any(component & analysis_boundary):
+                exterior_components.append(inside)
+                continue
+            safe_components.append(inside)
+        safe_components_by_stream.append(safe_components)
+        exterior_by_stream.append(exterior_components)
+
+    # An outlined glyph can reach the analysis boundary. Rescue only a bounded
+    # collar of the selected-polarity component next to opposite-polarity text
+    # evidence. The opposite pixels support the decision but are never written
+    # into a single-polarity mask.
+    rescue_radius = max(2, min(7, (kernel_size - 1) // 2 + 1))
+    rescue_kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (rescue_radius * 2 + 1, rescue_radius * 2 + 1),
+    )
+    raw_stream_masks = [
+        np.where(allowed & stream, 255, 0).astype(np.uint8) for stream in candidate_streams
+    ]
+
+    def filtered_stream(stream_index: int) -> np.ndarray:
+        opposite_zone = (
+            cv2.dilate(
+                raw_stream_masks[1 - stream_index],
+                rescue_kernel,
+                iterations=1,
+            )
+            > 0
+        )
+        pieces = list(safe_components_by_stream[stream_index])
+        for inside in exterior_by_stream[stream_index]:
+            rescued = inside & opposite_zone
+            if np.any(rescued):
+                pieces.append(rescued)
+        filtered = np.zeros_like(crop, dtype=np.uint8)
+        for piece in pieces:
+            area = int(np.count_nonzero(piece))
+            if area >= 2 and area <= max(8, target_area * 0.9):
+                filtered[piece] = 255
+        return filtered
+
+    polarity_masks = [filtered_stream(0), filtered_stream(1)]
+    if text_polarity in {"dark", "light"}:
+        selected = polarity_masks[0 if text_polarity == "dark" else 1]
         result = np.zeros_like(geometric_mask)
-        result[top:bottom, left:right] = np.where(allowed, 255, 0).astype(np.uint8)
+        result[top:bottom, left:right] = selected
         return result
-    component_count, labels, stats, _ = cv2.connectedComponentsWithStats(candidate, 8)
-    filtered = np.zeros_like(candidate)
-    allowed_area = int(np.count_nonzero(allowed))
-    for index in range(1, component_count):
-        area = int(stats[index, cv2.CC_STAT_AREA])
-        component_width = int(stats[index, cv2.CC_STAT_WIDTH])
-        component_height = int(stats[index, cv2.CC_STAT_HEIGHT])
-        if (
-            area >= 2
-            and area <= max(8, allowed_area * 0.9)
-            and component_width <= crop.shape[1]
-            and component_height <= crop.shape[0]
-        ):
-            filtered[labels == index] = 255
+
+    # Dense lettering is still segmented as the union of its two polarity
+    # streams. Never replace that union with the complete detector geometry:
+    # real outlined captions often overlap artwork, so a full-region fallback
+    # destroys the very line art that text-aware mode promises to preserve.
+    combined = np.maximum(polarity_masks[0], polarity_masks[1])
     result = np.zeros_like(geometric_mask)
-    result[top:bottom, left:right] = filtered
+    result[top:bottom, left:right] = combined
     return result
 
 
@@ -453,5 +571,6 @@ class OpenCVInpaintingProvider:
             "editableMask": True,
             "maskEditVersion": 1,
             "maskModes": ["text", "region"],
+            "textPolarities": ["auto", "dark", "light"],
             "softMaskComposite": True,
         }

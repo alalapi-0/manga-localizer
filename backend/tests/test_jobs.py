@@ -587,8 +587,12 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
             self.calls = 0
             self.inpaint_options: list[dict[str, Any]] = []
             self.masks: list[np.ndarray] = []
+            self.mask_options: list[dict[str, Any]] = []
+            self.mask_regions: list[list[dict[str, Any]]] = []
 
         def create_mask(self, image, regions, **options):
+            self.mask_options.append(dict(options))
+            self.mask_regions.append([dict(region) for region in regions])
             return create_mask(image, regions, **options)
 
         def inpaint(self, image, mask, **options):
@@ -613,7 +617,10 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"], data=png_bytes((120, 80), color="white"))
         regions = []
-        for x, provider in ((10, "opencv"), (70, "lama-onnx")):
+        for x, provider, text_polarity in (
+            (10, "opencv", "dark"),
+            (70, "lama-onnx", "light"),
+        ):
             response = client.post(
                 f"/api/images/{image['id']}/regions",
                 json={
@@ -625,6 +632,7 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
                     "confirmed": True,
                     "repair": {
                         "maskMode": "region",
+                        "textPolarity": text_polarity,
                         "maskPadding": 0,
                         "dilation": 0,
                         "feather": 3,
@@ -659,6 +667,10 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         assert opencv.calls == 1
         assert lama.calls == 1
         assert lama.inpaint_options == [{"context_padding": 64, "feather": 0}]
+        assert opencv.mask_options[-1]["text_polarity"] == "dark"
+        assert lama.mask_options[-1]["text_polarity"] == "light"
+        assert opencv.mask_regions[-1][0]["textPolarity"] == "dark"
+        assert lama.mask_regions[-1][0]["textPolarity"] == "light"
         for provider, region in ((opencv, regions[0]), (lama, regions[1])):
             expected_mask = create_mask(
                 (120, 80),

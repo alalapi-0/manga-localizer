@@ -580,6 +580,9 @@ function hydrateRegion(region: Region): Region {
           : 'telea',
       maskPadding: Number(rawRepair.maskPadding ?? rawRepair.padding ?? DEFAULT_REPAIR_SETTINGS.maskPadding),
       maskMode: rawRepair.maskMode === 'region' ? 'region' : 'text',
+      textPolarity: rawRepair.textPolarity === 'dark' || rawRepair.textPolarity === 'light'
+        ? rawRepair.textPolarity
+        : 'auto',
       feather: Number(rawRepair.feather ?? DEFAULT_REPAIR_SETTINGS.feather),
     },
     revision: Number(region.revision ?? 0),

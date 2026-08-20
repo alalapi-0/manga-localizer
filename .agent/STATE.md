@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-20
+Updated: 2026-08-21
 
 ## Authority and purpose
 
@@ -46,8 +46,9 @@ sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 (1185×713, text), sidebar 40 (1076×487, no-text), and sidebar 41
 (1190×765, no-text), followed by sidebar 42 (1109×319, no-text).
 Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
-after rejecting enhancement) are also finished. Next page: sidebar 45.
-Product Round 8 is not complete. CI in progress is not a page gate.
+after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
+after P-9) is finished. Next page: sidebar 46. Product Round 8 is not
+complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -191,7 +192,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 35/130.
+  loop reprocesses from sidebar 1 and has finished 45/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -308,6 +309,18 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 45 (516×694), P-9 cleared: the shared
+  text-contour mask now segments through a guard band, rejects components that
+  enter from its boundary, uses symmetric corroborated dark/light candidates,
+  supports an explicit per-region text polarity, and never falls back to the
+  complete detector rectangle for dense lettering. The live same-page mask was
+  inspected both shown and hidden. Explicit dark polarity with a narrow hard
+  fill removed the complete glyph cores and retained the outlined backing while
+  excluding the connected blade, clothing, and speed-line structures. Eight
+  trusted fragments were locally translated and reconfirmed; the clean plate
+  and final vertical typeset were accepted, the page was marked checked, and
+  current-page text-only JSON export completed without an active job or current
+  overflow. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 44 (472×1157): Real-ESRGAN ONNX 4×
   (1888×4628) was compared with the original at fit and enlarged views. The
   result sharpened line work but removed a large intended foreground screentone,

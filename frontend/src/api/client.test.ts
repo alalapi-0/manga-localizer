@@ -27,7 +27,13 @@ describe('api client contract', () => {
             detectTextRegions: true,
           },
         },
-        inpainting: { opencv: { provider: 'opencv', available: true } },
+        inpainting: {
+          opencv: {
+            provider: 'opencv',
+            available: true,
+            textPolarities: ['auto', 'dark', 'light', 'unsupported'],
+          },
+        },
         translation: {
           manual: { provider: 'manual', available: true, remote: false },
           mock: { provider: 'mock', available: true, deterministic: true, remote: false },
@@ -65,6 +71,11 @@ describe('api client contract', () => {
       expect.objectContaining({ id: 'tesseract', kind: 'detector', available: true }),
       expect.objectContaining({ id: 'tesseract', kind: 'ocr', available: true }),
       expect.objectContaining({ id: 'mock', kind: 'translator', isMock: true }),
+      expect.objectContaining({
+        id: 'opencv',
+        kind: 'inpainter',
+        textPolarities: ['auto', 'dark', 'light'],
+      }),
       expect.objectContaining({
         id: 'argos-ja-zh',
         kind: 'translator',
@@ -122,6 +133,7 @@ describe('api client contract', () => {
     expect(body.repair).toMatchObject({
       method: 'navier_stokes',
       maskPadding: 6,
+      textPolarity: draft.repair.textPolarity,
       dilation: draft.repair.dilation,
       radius: draft.repair.radius,
     });

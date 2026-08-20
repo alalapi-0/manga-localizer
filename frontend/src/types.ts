@@ -56,6 +56,7 @@ export interface ProviderCapability {
   local: boolean;
   isMock: boolean;
   reason?: string;
+  textPolarities?: Array<'auto' | 'dark' | 'light'>;
 }
 
 export interface AppCapabilities {
@@ -194,6 +195,7 @@ export interface RegionStyle {
 export interface RepairSettings {
   method: 'telea' | 'navier_stokes' | 'solid';
   maskMode: 'region' | 'text';
+  textPolarity: 'auto' | 'dark' | 'light';
   maskPadding: number;
   dilation: number;
   feather: number;
@@ -347,6 +349,7 @@ export const DEFAULT_REGION_STYLE: RegionStyle = {
 export const DEFAULT_REPAIR_SETTINGS: RepairSettings = {
   method: 'telea',
   maskMode: 'text',
+  textPolarity: 'auto',
   maskPadding: 4,
   dilation: 2,
   feather: 2,

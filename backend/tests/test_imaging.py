@@ -40,9 +40,10 @@ def test_opencv_mask_inpaint_and_exact_provider_interface() -> None:
     assert provider.health_check()["available"] is True
     assert "telea" in provider.get_capabilities()["methods"]
     assert "solid" in provider.get_capabilities()["methods"]
+    assert provider.get_capabilities()["textPolarities"] == ["auto", "dark", "light"]
 
 
-def test_text_mask_keeps_sparse_strokes_but_closes_dense_outlined_lettering() -> None:
+def test_text_mask_keeps_sparse_and_dense_strokes_without_filling_geometry() -> None:
     sparse = np.full((100, 140, 3), 255, dtype=np.uint8)
     sparse[30:70, 65:72] = 0
     sparse_region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
@@ -73,7 +74,169 @@ def test_text_mask_keeps_sparse_strokes_but_closes_dense_outlined_lettering() ->
         dilation=0,
         mask_mode="text",
     )
-    assert np.array_equal(dense_mask, sparse_geometry)
+    assert 0 < np.count_nonzero(dense_mask) < np.count_nonzero(sparse_geometry)
+    assert np.count_nonzero(dense_mask) > np.count_nonzero(sparse_mask)
+
+
+@pytest.mark.parametrize(("background", "ink"), ((255, 0), (0, 255)))
+def test_text_mask_rejects_border_connected_artwork_and_keeps_inner_glyphs(
+    background: int,
+    ink: int,
+) -> None:
+    pixels = np.full((100, 140, 3), background, dtype=np.uint8)
+    pixels[46:54, 8:56] = ink
+    pixels[30:39, 65:75] = ink
+    pixels[39:64, 65:69] = ink
+    pixels[55:64, 65:75] = ink
+    region = [{"x": 30, "y": 20, "width": 70, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+
+    assert np.count_nonzero(mask[46:54, 30:48]) == 0
+    assert np.count_nonzero(mask[46:54, 30:56]) <= 64
+    assert np.count_nonzero(mask[30:64, 65:75]) > 0
+
+
+def test_text_mask_guard_keeps_a_glyph_touching_the_original_region_boundary() -> None:
+    pixels = np.full((100, 140, 3), 255, dtype=np.uint8)
+    pixels[34:66, 29:36] = 0
+    region = [{"x": 30, "y": 20, "width": 70, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+
+    assert np.count_nonzero(mask[34:66, 30:36]) > 0
+    assert np.count_nonzero(mask[:, :30]) == 0
+
+
+def test_text_mask_does_not_treat_a_clipped_page_edge_as_external_artwork() -> None:
+    pixels = np.full((80, 100, 3), 255, dtype=np.uint8)
+    pixels[25:55, 0:7] = 0
+    region = [{"x": 0, "y": 15, "width": 50, "height": 50}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+
+    assert np.count_nonzero(mask[25:55, 0:7]) > 0
+
+
+def test_text_mask_rescues_an_outlined_glyph_without_following_border_artwork() -> None:
+    pixels = np.zeros((100, 140, 3), dtype=np.uint8)
+    pixels[:, 50:80] = 255
+    pixels[34:66, 61:70] = 0
+    pixels[46:54, 5:36] = 255
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+
+    assert np.count_nonzero(mask[34:66, 61:70]) > 0
+    assert np.count_nonzero(mask[34:66, 55:76]) > np.count_nonzero(mask[34:66, 61:70])
+    assert np.count_nonzero(mask[46:54, 40:50]) == 0
+
+
+@pytest.mark.parametrize(
+    ("text_polarity", "plate", "glyph"),
+    (("dark", 255, 0), ("light", 0, 255)),
+)
+def test_explicit_text_polarity_removes_only_the_glyph_and_keeps_its_plate(
+    text_polarity: str,
+    plate: int,
+    glyph: int,
+) -> None:
+    pixels = np.full((100, 140, 3), 128, dtype=np.uint8)
+    pixels[28:72, 55:85] = plate
+    pixels[35:65, 66:74] = glyph
+    pixels[46:54, 5:42] = glyph
+    region = [{"x": 30, "y": 20, "width": 80, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity=text_polarity,
+    )
+
+    assert np.count_nonzero(mask[35:65, 66:74]) > 0
+    assert np.count_nonzero(mask[28:35, 55:85]) == 0
+    assert np.count_nonzero(mask[35:65, 55:66]) == 0
+    assert np.count_nonzero(mask[35:65, 74:85]) == 0
+    assert np.count_nonzero(mask[46:54, 30:40]) == 0
+
+
+def test_explicit_text_polarity_never_uses_the_dense_full_region_fallback() -> None:
+    pixels = np.full((100, 140, 3), 245, dtype=np.uint8)
+    rows, columns = np.indices((60, 60))
+    pixels[20:80, 40:100] = (((columns // 3 + rows // 3) % 2) * 230 + 15)[..., np.newaxis]
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity="dark",
+    )
+    geometry = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="region",
+    )
+
+    assert 0 < np.count_nonzero(mask) < np.count_nonzero(geometry)
+
+
+def test_region_text_polarity_overrides_the_create_mask_default_and_is_validated() -> None:
+    pixels = np.full((80, 100, 3), 128, dtype=np.uint8)
+    pixels[20:60, 35:65] = 255
+    pixels[28:52, 46:54] = 0
+    region = {
+        "x": 25,
+        "y": 15,
+        "width": 50,
+        "height": 50,
+        "textPolarity": "dark",
+    }
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        [region],
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity="light",
+    )
+
+    assert np.count_nonzero(mask[28:52, 46:54]) > 0
+    assert np.count_nonzero(mask[20:28, 35:65]) == 0
+    with pytest.raises(ValueError, match="Text polarity"):
+        create_mask(Image.fromarray(pixels), [region], text_polarity="mixed")
 
 
 def test_full_region_mask_ignores_a_stale_detector_polygon() -> None:

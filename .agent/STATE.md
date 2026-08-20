@@ -45,7 +45,8 @@ sidebar 36 (1187×571, text), sidebar 37 (1178×1267, text), and
 sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 (1185×713, text), sidebar 40 (1076×487, no-text), and sidebar 41
 (1190×765, no-text), followed by sidebar 42 (1109×319, no-text).
-Sidebar 43 (1190×644, no-text) is also finished. Next page: sidebar 44.
+Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
+after rejecting enhancement) are also finished. Next page: sidebar 45.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -302,11 +303,26 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 87/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 86/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 44 (472×1157): Real-ESRGAN ONNX 4×
+  (1888×4628) was compared with the original at fit and enlarged views. The
+  result sharpened line work but removed a large intended foreground screentone,
+  so it failed the visual gate and was explicitly rejected; the original was
+  retained. Current-page detect+OCR produced two proposals. Enlarged
+  selected-region review placed both on foreground hair contours and screentone
+  rather than text, so both were explicitly ignored. A final full-page scan of
+  the retained original found no dialogue, caption, title, effect lettering, or
+  other translatable text. The page was marked **确认本页无文字** and
+  current-page **仅文本 JSON** completed; no rejected image was exported.
+  Preprocess/detection/OCR/export are done; the preprocess review remains
+  `rejected` by design; `no-text-reviewed` is persisted; the text-only stages
+  remain intentionally unrun; both false positives are ignored; no
+  review-needed regions, processing errors, overflow, or active jobs remain.
+  Open findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 43 (1190×644): Real-ESRGAN ONNX 4×
   (4760×2576) was compared with the original and accepted. It preserved the
   wide action composition, character silhouettes, speed lines, grayscale

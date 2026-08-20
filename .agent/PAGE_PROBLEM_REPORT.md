@@ -322,6 +322,10 @@ None.
 - Finished: sidebar 43, 1190×644, no-text path after quality pass
   (1 small drawn-effect-lettering false positive ignored; remaining large marks
   kept as artwork; full-page scan confirmed no translatable text).
-- Next page: sidebar 44 of the 130-page book.
+- Finished: sidebar 44, 472×1157, no-text path after quality pass
+  (Real-ESRGAN result rejected because it removed intended foreground
+  screentone; original retained; 2 hair-contour/screentone false positives
+  ignored; full-page scan confirmed no translatable text).
+- Next page: sidebar 45 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

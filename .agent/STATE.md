@@ -43,7 +43,8 @@ Sidebar 33 (717×1818, no-text) and sidebar 34 (1181×1262, no-text)
 are also finished, followed by sidebar 35 (1185×384, text after P-7),
 sidebar 36 (1187×571, text), sidebar 37 (1178×1267, text), and
 sidebar 38 (1106×410, text after P-8), followed by sidebar 39
-(1185×713, text). Next page: sidebar 40.
+(1185×713, text) and sidebar 40 (1076×487, no-text).
+Next page: sidebar 41.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -300,11 +301,24 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 91/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 90/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 40 (1076×487): Real-ESRGAN ONNX 4×
+  (4304×1948) was compared with the original and accepted. It preserved the
+  foreground figure, distant group, skyline, clouds, ground contours, and
+  grayscale tones while improving line clarity. Current-page detect+OCR
+  produced one proposal. Enlarged selected-region review placed it on an arm
+  contour and image texture rather than text, so it was explicitly ignored. A
+  final full-page scan found no dialogue, caption, title, effect, or other
+  translatable text. The page was marked **确认本页无文字** and
+  current-page **仅文本 JSON** completed. Preprocess/detection/OCR/export
+  are done; preprocess is accepted; `no-text-reviewed` is persisted; the
+  text-only stages remain intentionally unrun; the sole false positive is
+  ignored; no review-needed regions, processing errors, overflow, or active
+  jobs remain. Open findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 39 (1185×713): Real-ESRGAN ONNX 4×
   (4740×2852) was compared with the original and accepted. Current-page
   detect+OCR produced 13 proposals; cleanup left 5. Visual review consolidated

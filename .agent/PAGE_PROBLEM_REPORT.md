@@ -215,7 +215,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 39.
+- Finished pages this loop: 40.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -309,6 +309,9 @@ None.
   4 overlapping fragments ignored; first mask touching the cloud line rejected,
   then shortened and rebuilt; all repair candidates compared and fixed-size
   vertical typeset accepted with zero overflow).
-- Next page: sidebar 40 of the 130-page book.
+- Finished: sidebar 40, 1076×487, no-text path after quality pass
+  (1 arm-contour and texture false positive ignored; full-page scan confirmed
+  no translatable text).
+- Next page: sidebar 41 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

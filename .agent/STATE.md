@@ -48,7 +48,8 @@ sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
 after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
 after P-9), sidebar 46 (646×447, no-text), and sidebar 47 (1282×1708,
-text after P-10/P-11/P-12) are finished. Next page: sidebar 48. Product Round 8 is not
+text after P-10/P-11/P-12), followed by sidebar 48 (1175×1189, no-text
+after rejecting enhancement), are finished. Next page: sidebar 49. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -310,11 +311,19 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 83/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 82/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 48 (1175×1189): Real-ESRGAN ONNX 4× was
+  compared against the original and rejected because it introduced broken
+  contours and oversharpening artifacts. Fresh current-page detect+OCR produced
+  five artwork-only false boxes; each was visually checked and explicitly
+  ignored. A final full-page scan found no dialogue, caption, title, or other
+  translatable text, so **确认本页无文字** completed the no-text path. Reloading
+  the production UI preserved all five ignore decisions and the reviewed state;
+  no downstream text job or private export was run, and no active job remained.
 - 2026-08-21 page-loop sidebar 47 (1282×1708), P-10/P-11/P-12 cleared:
   four detected regions were reduced to three trusted text regions and one
   ignored false positive. The optional union-mask LaMa full-context candidate

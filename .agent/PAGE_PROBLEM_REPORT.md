@@ -11,6 +11,33 @@ None.
 
 ## Cleared findings
 
+### P-8 — text-only repair leaves the terminal long dash
+
+- Kind: `quality`
+- Page: sidebar 38, 1106×410
+- Clicked: compared the current-provider and line-guided clean plates with the
+  review mask hidden at enlarged whole-page zoom
+- Expected: the complete short floating dialogue, including its terminal long
+  dash, is removed while the nearby face contour and panel art stay intact
+- What happened: both inspected candidates removed the main glyphs but left the
+  final vertical dash clearly visible
+- Why it blocks: the clean plate is visibly incomplete and cannot be accepted or
+  used for final typesetting
+- Fix: extend the verified region's lower boundary far enough to include the
+  complete dash, then re-run OCR, restore the operator text, reconfirm,
+  retranslate, and rebuild the same page
+- Same-page verification: the rebuilt review mask enclosed the complete long
+  dash. All four repair candidates were compared again with the mask hidden;
+  the primary LaMa result removed both complete dialogue groups without the
+  terminal remnant while preserving the nearby face contour, figure texture,
+  panel borders, and drawn effect. The final two-region vertical typeset, page
+  review, and current-page JSON export completed with zero overflow or open
+  review gates.
+- Repro: run text-mask repair on a short vertical floating dialogue whose final
+  long dash reaches below the detected region, hide the review mask, and inspect
+  the clean plate at enlarged zoom. Do not include private text, page pixels,
+  project names, or paths.
+
 ### P-7 — text-only repair leaves one terminal ellipsis dot
 
 - Kind: `quality`
@@ -188,7 +215,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 37.
+- Finished pages this loop: 38.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -272,6 +299,11 @@ None.
   overlapping duplicate ignored; first mask touching the balloon outline was
   rejected, then narrowed and rebuilt on the same page; all repair candidates
   compared and fixed-size three-column typeset accepted with zero overflow).
-- Next page: sidebar 38 of the 130-page book.
+- Finished: sidebar 38, 1106×410, text path after quality pass
+  (2 vertical dialogue regions from 24 detections after cleanup; 10 duplicates,
+  drawn effects, or line-art false positives ignored; first unsafe mask rejected;
+  P-8 terminal long-dash remnant fixed and reverified before the two-region
+  typeset was accepted with zero overflow).
+- Next page: sidebar 39 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

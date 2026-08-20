@@ -11,6 +11,33 @@ None.
 
 ## Cleared findings
 
+### P-7 — text-only repair leaves one terminal ellipsis dot
+
+- Kind: `quality`
+- Page: sidebar 35, 1185×384
+- Clicked: compared all four current-page repair candidates with the review
+  mask hidden at enlarged selected-region zoom
+- Expected: the complete short dialogue string, including every terminal
+  ellipsis dot, is removed while the small balloon outline stays intact
+- What happened: every candidate removed the main glyphs and most punctuation,
+  but one final ellipsis dot remained clearly visible inside the balloon
+- Why it blocks: the clean plate was visibly incomplete and could not be
+  accepted or used for final typesetting
+- Fix: extend the verified region's lower boundary beyond the final
+  punctuation, re-run OCR, restore the operator text, reconfirm the region,
+  rerun local translation, and rebuild the same page
+- Same-page verification: the new text mask enclosed every ellipsis dot without
+  touching the balloon outline. All four candidates were compared again at
+  enlarged selected-region zoom; the remnant was gone from each, and the
+  primary LaMa result kept all three balloon borders and nearby art intact.
+  After correcting the wide dialogue to vertical flow, the final three-region
+  typeset, page review, and current-page JSON export completed with zero
+  overflow or open review gates.
+- Repro: run text-mask repair on a short vertical dialogue whose ellipsis ends
+  close to the lower edge of its verified region, hide the review mask, and
+  inspect the clean plate at selected-region zoom. Do not include private text,
+  page pixels, project names, or paths.
+
 ### P-6 — text-only repair leaves punctuation remnants on the clean plate
 
 - Kind: `quality`
@@ -161,7 +188,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 34.
+- Finished pages this loop: 35.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -232,6 +259,9 @@ None.
   explicitly ignored; latest enhancement reaccepted before final export).
 - Finished: sidebar 34, 1181×1262, no-text path after quality pass
   (0 detections on the accepted enhanced plate; drawn effects left as art).
-- Next page: sidebar 35 of the 130-page book.
+- Finished: sidebar 35, 1185×384, text path after quality pass
+  (3 vertical dialogue regions from 20 detections after cleanup; 5 false
+  positives ignored; P-7 ellipsis-mask boundary fixed and reverified).
+- Next page: sidebar 36 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

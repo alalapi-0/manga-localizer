@@ -36,8 +36,8 @@ no-text), sidebar 20 (1187×1244, text), sidebar 21 (958×228,
 no-text), sidebar 22 (1284×777, no-text), sidebar 23 (1072×564,
 no-text), sidebar 24 (1074×358, text), sidebar 25 (1074×793,
 text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
-text), and sidebar 28 (1064×628, text after P-3/P-4/P-5). Next page:
-sidebar 29.
+text), sidebar 28 (1064×628, text after P-3/P-4/P-5), and sidebar 29
+(1174×1161, text). Next page: sidebar 30.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -46,8 +46,8 @@ Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 
 ## Active loop prompt
 
-Live prompt: `.agent/PAGE_LOOP_PROMPT.md`.
-Sentinel: `AGENT_LOOP_WAKE_manga_page`.
+Rule reference: `.agent/PAGE_LOOP_PROMPT.md`.
+No `/loop`, watcher, sleeper, or sentinel is armed for the current goal.
 `.agent/REALPAGES_LOOP_PROMPT.md`, `.agent/UI_LOOP_PROMPT.md`,
 `.agent/DESKTOP_LOOP_PROMPT.md`, and `.agent/REALDATA_LOOP_PROMPT.md`
 are superseded. Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -182,7 +182,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 28/130.
+  loop reprocesses from sidebar 1 and has finished 29/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -294,11 +294,25 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 102/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 101/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 29 (1174×1161): Real-ESRGAN ONNX 4×
+  (4696×4644) accepted. Current-page detect+OCR produced three proposals;
+  cleanup left two artwork false positives, both explicitly ignored, and one
+  complete dialogue region was drawn manually, re-OCRed, confirmed, and
+  translated locally with one operator wording correction. The primary LaMa
+  clean plate and its text-only mask removed the lettering while preserving the
+  balloon edge and surrounding art. The first Pillow typeset was rejected as too
+  small; a style-only correction and reconfirmation preserved the accepted
+  inpaint review, and the second result was readable, centered, and accepted with
+  no overflow. **标记本页已检查** and current-page **仅文本 JSON** completed.
+  All seven pipeline stages are done; preprocess/inpaint/typeset are accepted;
+  the one active region is confirmed and trusted; two false positives are
+  ignored; no review-needed regions, processing errors, overflow, or active jobs
+  remain. Open findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 28 (1064×628): P-3 recorded before
   changing code; external Chromium launchers no longer own source-tree API
   lifetime, while the bundled helper still does. Repaired `npm run app`

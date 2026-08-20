@@ -58,7 +58,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 19.
+- Finished pages this loop: 20.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -94,6 +94,8 @@ None.
   (3 floating text clusters from 19 boxes).
 - Finished: sidebar 19, 1178×537, no-text path after quality pass
   (3 artwork false boxes ignored).
-- Next page: sidebar 20 of the 130-page book.
+- Finished: sidebar 20, 1187×1244, text path after quality pass
+  (1 shout from 2 boxes; drawn SFX left as artwork).
+- Next page: sidebar 21 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

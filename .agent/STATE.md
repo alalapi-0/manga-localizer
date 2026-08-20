@@ -39,7 +39,8 @@ text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
 text), sidebar 28 (1064×628, text after P-3/P-4/P-5), sidebar 29
 (1174×1161, text), sidebar 30 (1189×699, no-text), and sidebar 31
 (1175×1815, text after P-6), and sidebar 32 (441×1827, text).
-Sidebar 33 (717×1818, no-text) is also finished. Next page: sidebar 34.
+Sidebar 33 (717×1818, no-text) and sidebar 34 (1181×1262, no-text)
+are also finished. Next page: sidebar 35.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -184,7 +185,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 33/130.
+  loop reprocesses from sidebar 1 and has finished 34/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -296,11 +297,24 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 97/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 96/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 34 (1181×1262): Real-ESRGAN ONNX 4×
+  (4724×5048) was compared with the original at fit-to-page zoom and
+  accepted. It preserved the central figure, cloud and debris contours,
+  grayscale tone, and the large drawn effects while improving line clarity.
+  Current-page detect+OCR returned 0 regions on the accepted enhanced plate.
+  A complete visual scan confirmed that the visible lettering is part of the
+  drawn effect artwork and that no dialogue, caption, title, or other
+  translatable text is present. The page was marked **确认本页无文字** and
+  current-page **仅文本 JSON** completed. Preprocess/detection/OCR/export are
+  done; preprocess is accepted; `no-text-reviewed` is persisted;
+  translation/inpaint/typeset are correctly skipped; no regions,
+  review-needed items, processing errors, overflow, or active jobs remain.
+  Open findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 33 (717×1818): the latest Real-ESRGAN
   ONNX 4× result (2868×7272) was compared with the original at fit-to-page
   zoom and accepted after its final same-page rerun. It sharpened the narrow

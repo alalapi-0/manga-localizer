@@ -79,11 +79,18 @@ def prepare_page_inpaint_candidates(
     primary: Image.Image,
     used_only_lama: bool,
     radius: float = 3.0,
+    full_context: Image.Image | None = None,
 ) -> tuple[str | None, bytes, list[dict[str, Any]], list[tuple[str, bytes]], list[dict[str, Any]]]:
     primary_bytes = _png_bytes(primary)
     if not np.any(mask):
         return None, primary_bytes, [], [], []
-    built = build_inpaint_candidates(source, mask, primary, radius=radius)
+    built = build_inpaint_candidates(
+        source,
+        mask,
+        primary,
+        radius=radius,
+        full_context=full_context,
+    )
     if not built:
         return None, primary_bytes, [], [], []
     selected_id = choose_default_candidate(built, used_only_lama=used_only_lama)

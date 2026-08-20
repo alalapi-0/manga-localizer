@@ -55,38 +55,9 @@ def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[st
         stages.update(("translation", "inpaint", "typeset"))
     if "confidence" in keys:
         stages.update(("inpaint", "typeset"))
-    if "confirmed" in keys:
-        stages.add("typeset")
-        layout_only_unconfirm = (
-            not region.confirmed
-            and bool(keys & {"translation_text", "style"})
-            and not (
-                keys
-                & {
-                    "x",
-                    "y",
-                    "width",
-                    "height",
-                    "rotation",
-                    "repair",
-                    "source_text",
-                    "recognition",
-                    "type",
-                    "direction",
-                    "order",
-                    "ignored",
-                    "confidence",
-                }
-            )
-        )
-        trusted_layout_reconfirm = (
-            region.confirmed and "recognition" not in keys and is_region_trusted(region)
-        )
-        if not layout_only_unconfirm and not trusted_layout_reconfirm:
-            # Confirmation changes which boxes enter safe repair. Auto-unconfirm
-            # after a translation or style edit, and reconfirming that same
-            # already-trusted region, must not discard a still-valid plate.
-            stages.add("inpaint")
+    # ``confirmed`` controls the page-review gate, not render eligibility.
+    # A new trust decision also changes ``recognition`` and is invalidated by
+    # that branch; every pixel-affecting edit is owned by its key below.
     if keys & {
         "translation_text",
         "style",

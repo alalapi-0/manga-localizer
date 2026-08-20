@@ -1843,6 +1843,7 @@ class PersistentJobQueue:
         pending_candidate_files: list[tuple[str, bytes]] = []
         pending_candidate_manifest: list[dict[str, Any]] = []
         region_inpainting_providers: dict[str, str] = {}
+        full_context_provider_name: str | None = None
         effective_inpainting_provider_name = str(
             recorded_inpainting_provider or page_inpainting_provider_name
         )
@@ -1942,6 +1943,8 @@ class PersistentJobQueue:
                     continue
                 mask = np.maximum(mask, region_mask)
                 if inpainting_provider_name in {"lama", "lama-onnx"}:
+                    if full_context_provider_name is None:
+                        full_context_provider_name = inpainting_provider_name
                     generated = inpainting_provider.inpaint(
                         cleaned,
                         region_mask,
@@ -1991,6 +1994,22 @@ class PersistentJobQueue:
             with Image.open(source) as opened:
                 opened.load()
                 original = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
+            full_context_candidate: Image.Image | None = None
+            if full_context_provider_name is not None and np.any(mask):
+                full_context_provider = self.providers.inpainter(full_context_provider_name)
+                try:
+                    full_context_candidate = full_context_provider.inpaint(
+                        original,
+                        mask,
+                        context_padding=128,
+                        feather=0,
+                    )
+                except Exception:
+                    # The extra whole-union pass is a comparison aid. Primary
+                    # per-region repair already succeeded, so an optional
+                    # candidate must never fail the page or expose provider
+                    # exception details in public job output.
+                    logger.warning("Optional full-context inpaint candidate was skipped")
             used_only_lama = bool(region_inpainting_providers) and all(
                 name in {"lama", "lama-onnx"} for name in region_inpainting_providers.values()
             )
@@ -2006,6 +2025,7 @@ class PersistentJobQueue:
                 primary=cleaned,
                 used_only_lama=used_only_lama,
                 radius=float(DEFAULT_REPAIR_SETTINGS["radius"]),
+                full_context=full_context_candidate,
             )
             with Image.open(io.BytesIO(inpainted_bytes)) as selected_image:
                 selected_image.load()

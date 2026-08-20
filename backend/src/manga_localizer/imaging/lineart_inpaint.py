@@ -14,12 +14,14 @@ CANDIDATE_PRIMARY = "primary"
 CANDIDATE_OPENCV_NS = "opencv-ns"
 CANDIDATE_OPENCV_TELEA = "opencv-telea"
 CANDIDATE_LINEART = "lineart-guided"
+CANDIDATE_LAMA_FULL_CONTEXT = "lama-full-context"
 CANDIDATE_IDS = frozenset(
     {
         CANDIDATE_PRIMARY,
         CANDIDATE_OPENCV_NS,
         CANDIDATE_OPENCV_TELEA,
         CANDIDATE_LINEART,
+        CANDIDATE_LAMA_FULL_CONTEXT,
     }
 )
 CANDIDATE_LABELS = {
@@ -27,6 +29,7 @@ CANDIDATE_LABELS = {
     CANDIDATE_OPENCV_NS: "OpenCV Navier-Stokes",
     CANDIDATE_OPENCV_TELEA: "OpenCV Telea",
     CANDIDATE_LINEART: "线稿引导(结构+纹理)",
+    CANDIDATE_LAMA_FULL_CONTEXT: "LaMa 全局上下文(连续边界)",
 }
 ANOMALY_MASK_OUTSIDE = "mask-outside-changed"
 ANOMALY_CHROMA = "chroma-introduced"
@@ -239,6 +242,7 @@ def build_inpaint_candidates(
     primary: Image.Image,
     *,
     radius: float = 3.0,
+    full_context: Image.Image | None = None,
 ) -> list[dict[str, Any]]:
     source_image = _as_image(source)
     mask_array = _as_mask(mask)
@@ -252,13 +256,16 @@ def build_inpaint_candidates(
         texture=primary,
         radius=radius,
     )
-    built: list[dict[str, Any]] = []
-    for candidate_id, image in (
+    candidate_images: list[tuple[str, Image.Image]] = [
         (CANDIDATE_PRIMARY, primary),
         (CANDIDATE_OPENCV_NS, ns),
         (CANDIDATE_OPENCV_TELEA, telea),
         (CANDIDATE_LINEART, guided),
-    ):
+    ]
+    if full_context is not None:
+        candidate_images.append((CANDIDATE_LAMA_FULL_CONTEXT, full_context))
+    built: list[dict[str, Any]] = []
+    for candidate_id, image in candidate_images:
         restored = image
         if candidate_id != CANDIDATE_PRIMARY:
             restored = preserve_grayscale(image, source_image)

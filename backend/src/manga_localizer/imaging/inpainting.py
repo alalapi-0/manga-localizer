@@ -10,6 +10,11 @@ import cv2
 import numpy as np
 from PIL import Image, ImageColor
 
+from manga_localizer.imaging.boundary_inpaint import (
+    directional_background_consensus,
+    two_tone_background_model,
+)
+
 DEFAULT_REPAIR_SETTINGS: dict[str, Any] = {
     "method": "telea",
     "maskMode": "text",
@@ -457,9 +462,117 @@ def _text_pixels(
     # real outlined captions often overlap artwork, so a full-region fallback
     # destroys the very line art that text-aware mode promises to preserve.
     combined = np.maximum(polarity_masks[0], polarity_masks[1])
+    combined = _complete_mixed_background_outline(
+        crop,
+        target=target,
+        allowed=allowed,
+        raw_dark=candidate_streams[0],
+        raw_light=candidate_streams[1],
+        dark_mask=polarity_masks[0],
+        light_mask=polarity_masks[1],
+        combined=combined,
+        radius=rescue_radius,
+    )
+    combined = _refine_mixed_background_text(
+        crop,
+        target=target,
+        allowed=allowed,
+        combined=combined,
+    )
     result = np.zeros_like(geometric_mask)
     result[top:bottom, left:right] = combined
     return result
+
+
+def _complete_mixed_background_outline(
+    grayscale: np.ndarray,
+    *,
+    target: np.ndarray,
+    allowed: np.ndarray,
+    raw_dark: np.ndarray,
+    raw_light: np.ndarray,
+    dark_mask: np.ndarray,
+    light_mask: np.ndarray,
+    combined: np.ndarray,
+    radius: int,
+) -> np.ndarray:
+    """Complete only the visible half of an outlined glyph across a tone boundary.
+
+    A light outline connected to light paper (and its inverse on dark art) can
+    legitimately reach the analysis boundary. The guard-band filter keeps only
+    a small collar next to the opposite-polarity core, which otherwise leaves a
+    scalloped remnant. Use two-sided local background agreement to extend that
+    collar, but only through raw opposite-polarity evidence close to the mask.
+    Explicit dark/light modes never call this helper.
+    """
+    if not np.any(combined):
+        return combined
+    completion_radius = max(2, min(7, int(radius)))
+    kernel = cv2.getStructuringElement(
+        cv2.MORPH_ELLIPSE,
+        (completion_radius * 2 + 1, completion_radius * 2 + 1),
+    )
+    dark_support = cv2.dilate((dark_mask > 0).astype(np.uint8), kernel) > 0
+    light_support = cv2.dilate((light_mask > 0).astype(np.uint8), kernel) > 0
+    near_mask = cv2.dilate((combined > 0).astype(np.uint8), kernel) > 0
+    candidates = target & near_mask & (combined == 0) & dark_support & light_support
+    if not np.any(candidates):
+        return combined
+
+    # Do not sample from any raw text-like pixel inside the repair geometry.
+    # A narrow dilation skips antialiasing and the existing truncated collar;
+    # samples in the surrounding guard remain available as true context.
+    raw_inside = target & (raw_dark | raw_light)
+    blocked = cv2.dilate(
+        raw_inside.astype(np.uint8),
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+        iterations=1,
+    ).astype(bool)
+    prediction, confident = directional_background_consensus(
+        grayscale,
+        blocked=blocked,
+        query=candidates,
+        allowed=allowed,
+        max_distance=96,
+        max_endpoint_gap=40,
+    )
+    completed = combined.copy()
+    residual = np.abs(grayscale.astype(np.float32) - prediction) >= 20
+    completed[candidates & confident & residual] = 255
+    return completed
+
+
+def _refine_mixed_background_text(
+    grayscale: np.ndarray,
+    *,
+    target: np.ndarray,
+    allowed: np.ndarray,
+    combined: np.ndarray,
+) -> np.ndarray:
+    """Reject background pixels from dense auto masks on two-tone artwork.
+
+    Outlined lettering may use the same two tones as the artwork below it. In
+    that case the per-polarity union can be almost the whole detector box even
+    though only pixels that disagree with the background need repair. Infer
+    that background from opposing samples outside the box and retain only
+    corroborated text-like residuals. Low-confidence, one-sided, and textured
+    cases keep the existing conservative mask.
+    """
+    target_area = int(np.count_nonzero(target))
+    if target_area < 8 or np.count_nonzero(combined) / target_area < 0.2:
+        return combined
+    model = two_tone_background_model(
+        grayscale,
+        target=target,
+        allowed=allowed,
+    )
+    if model is None:
+        return combined
+    _, context_mask = model
+    context_area = int(np.count_nonzero(context_mask))
+    if context_area < 8:
+        return combined
+    return np.where(context_mask, 255, 0).astype(np.uint8)
 
 
 def _pil_image(image: Path | Image.Image | np.ndarray) -> Image.Image:

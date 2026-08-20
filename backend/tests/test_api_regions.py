@@ -186,7 +186,7 @@ def test_recognition_trust_is_read_only_and_has_fail_closed_transitions(
     assert unignored.json()["trustReason"] == "trust-input-changed"
 
 
-def test_reconfirming_translation_only_edit_preserves_accepted_inpaint(
+def test_reconfirming_translation_only_edit_preserves_current_visual_reviews(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     project = create_project(client, tmp_path / "translation-layout-reconfirm")
@@ -204,6 +204,12 @@ def test_reconfirming_translation_only_edit_preserves_accepted_inpaint(
         "resultRevision": 1,
         "artifactChecksum": "a" * 64,
         "maskChecksum": "b" * 64,
+    }
+    typeset_review = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-20T00:01:00+00:00",
+        "resultRevision": 2,
+        "artifactChecksum": "c" * 64,
     }
     store = app.state.registry.get(project["id"])
     with store.session() as session:
@@ -231,6 +237,21 @@ def test_reconfirming_translation_only_edit_preserves_accepted_inpaint(
     assert after_translation["status"]["typeset"] == "pending"
     assert after_translation["stageReviews"]["inpaint"] == inpaint_review
 
+    # The operator may generate and accept the current typeset result before
+    # closing the separate page-review confirmation gate.
+    with store.session() as session:
+        asset = session.get(ImageAsset, image["id"])
+        assert asset is not None
+        asset.status = {
+            **asset.status,
+            "typeset": "done",
+            "export": "done",
+            "stageReviews": {
+                "inpaint": inpaint_review,
+                "typeset": typeset_review,
+            },
+        }
+
     reconfirmed = client.patch(
         f"/api/regions/{region['id']}",
         json={
@@ -242,8 +263,57 @@ def test_reconfirming_translation_only_edit_preserves_accepted_inpaint(
     assert reconfirmed.json()["confirmed"] is True
     after_reconfirm = client.get(f"/api/projects/{project['id']}/images").json()[0]
     assert after_reconfirm["status"]["inpaint"] == "done"
-    assert after_reconfirm["status"]["typeset"] == "pending"
+    assert after_reconfirm["status"]["typeset"] == "done"
+    assert after_reconfirm["status"]["export"] == "pending"
     assert after_reconfirm["stageReviews"]["inpaint"] == inpaint_review
+    assert after_reconfirm["stageReviews"]["typeset"] == typeset_review
+
+
+def test_initial_trust_confirmation_invalidates_visual_artifacts(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "initial-trust-confirmation")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        asset = session.get(ImageAsset, image["id"])
+        assert asset is not None
+        asset.status = {
+            **asset.status,
+            "translation": "done",
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-20T00:00:00+00:00",
+                    "resultRevision": 1,
+                    "artifactChecksum": "a" * 64,
+                    "maskChecksum": "b" * 64,
+                },
+                "typeset": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-20T00:01:00+00:00",
+                    "resultRevision": 2,
+                    "artifactChecksum": "c" * 64,
+                },
+            },
+        }
+
+    confirmed = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"confirmed": True, "expectedRevision": region["revision"]},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["trustDisposition"] == "trusted"
+    current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert current["status"]["translation"] == "pending"
+    assert current["status"]["inpaint"] == "pending"
+    assert current["status"]["typeset"] == "pending"
+    assert current["status"]["export"] == "pending"
+    assert current["stageReviews"] == {}
 
 
 def test_policy_change_preserves_readable_detection_and_ocr_evidence(

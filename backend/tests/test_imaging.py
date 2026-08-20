@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import cv2
 import numpy as np
 import pytest
 from PIL import Image
 
 from manga_localizer.imaging import OpenCVInpaintingProvider, create_mask, inpaint, typeset_image
+from manga_localizer.imaging.boundary_inpaint import directional_background_consensus
 from manga_localizer.imaging.typesetting import (
     cluster_fragment_regions,
     expand_typeset_region_ids,
@@ -154,6 +156,94 @@ def test_text_mask_rescues_an_outlined_glyph_without_following_border_artwork() 
     assert np.count_nonzero(mask[34:66, 61:70]) > 0
     assert np.count_nonzero(mask[34:66, 55:76]) > np.count_nonzero(mask[34:66, 61:70])
     assert np.count_nonzero(mask[46:54, 40:50]) == 0
+
+
+def test_auto_text_mask_completes_an_outline_across_a_light_dark_boundary() -> None:
+    pixels = np.full((120, 180, 3), 245, dtype=np.uint8)
+    pixels[:, 90:] = 12
+    background = pixels.copy()
+    cv2.putText(
+        pixels,
+        "AB",
+        (45, 78),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.35,
+        (250, 250, 250),
+        7,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        pixels,
+        "AB",
+        (45, 78),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        1.35,
+        (5, 5, 5),
+        2,
+        cv2.LINE_AA,
+    )
+    region = [{"x": 35, "y": 30, "width": 100, "height": 60}]
+    image = Image.fromarray(pixels)
+    auto = create_mask(
+        image,
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+    )
+    dark = create_mask(
+        image,
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity="dark",
+    )
+    light = create_mask(
+        image,
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity="light",
+    )
+    visible_overlay = (
+        np.abs(pixels[..., 0].astype(np.int16) - background[..., 0].astype(np.int16)) >= 20
+    )
+    geometry = (
+        create_mask(
+            image,
+            region,
+            padding=0,
+            dilation=0,
+            mask_mode="region",
+        )
+        > 0
+    )
+    explicit_union = np.maximum(dark, light)
+
+    assert np.mean(auto[visible_overlay] > 0) >= 0.99
+    assert np.mean(auto[geometry & ~visible_overlay] > 0) <= 0.02
+    assert np.count_nonzero(auto[visible_overlay]) > np.count_nonzero(
+        explicit_union[visible_overlay]
+    )
+    assert np.count_nonzero(auto[:, :35]) == 0
+    assert np.count_nonzero(auto[:, 135:]) == 0
+
+
+def test_directional_background_refinement_declines_an_oversized_dense_query() -> None:
+    pixels = np.full((129, 129), 240, dtype=np.uint8)
+    query = np.ones((129, 129), dtype=bool)
+
+    prediction, confidence = directional_background_consensus(
+        pixels,
+        blocked=np.zeros_like(query),
+        query=query,
+        max_distance=10_000,
+    )
+
+    assert not np.any(prediction)
+    assert not np.any(confidence)
 
 
 @pytest.mark.parametrize(

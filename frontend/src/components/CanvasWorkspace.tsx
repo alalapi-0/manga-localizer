@@ -100,13 +100,11 @@ function useCanvasImage(
     if (!src) return;
     const controller = new AbortController();
     let disposed = false;
-    let decoded: ImageBitmap | null = null;
     void loadCanonicalCanvasImage(src, {
       width: expectedWidth,
       height: expectedHeight,
     }, controller.signal, allowCanonicalScale)
       .then((loaded) => {
-        decoded = loaded.image;
         if (disposed) loaded.image.close();
         else setResult({ src, image: loaded.image, checksum: loaded.checksum, state: 'ready' });
       })
@@ -116,9 +114,13 @@ function useCanvasImage(
     return () => {
       disposed = true;
       controller.abort();
-      decoded?.close();
     };
   }, [allowCanonicalScale, expectedHeight, expectedWidth, src]);
+
+  useEffect(() => {
+    const loadedImage = result.image;
+    return () => loadedImage?.close();
+  }, [result.image]);
 
   if (!src) return { src: '', image: null, checksum: null, state: 'ready' as const };
   return result.src === src

@@ -7,6 +7,7 @@ from PIL import Image
 
 from manga_localizer.imaging.lineart_inpaint import (
     ANOMALY_MASK_OUTSIDE,
+    CANDIDATE_LAMA_FULL_CONTEXT,
     CANDIDATE_LINEART,
     CANDIDATE_PRIMARY,
     build_inpaint_candidates,
@@ -73,11 +74,44 @@ def test_lama_only_pages_default_to_lineart_guided_candidates() -> None:
     primary = Image.new("RGB", source.size, (230, 230, 230))
     candidates = build_inpaint_candidates(source, mask, primary)
     ids = [item["id"] for item in candidates]
-    assert ids == ["primary", "opencv-ns", "opencv-telea", "lineart-guided"]
+    assert ids == [
+        "primary",
+        "opencv-ns",
+        "opencv-telea",
+        "lineart-guided",
+    ]
     assert choose_default_candidate(candidates, used_only_lama=True) == CANDIDATE_LINEART
     assert choose_default_candidate(candidates, used_only_lama=False) == CANDIDATE_PRIMARY
     for item in candidates:
         assert item["changedPixelsOutsideMask"] == 0
+
+
+def test_full_context_lama_candidate_is_optional_and_keeps_mask_outside_exact() -> None:
+    source, mask = _broken_line_page()
+    primary = Image.new("RGB", source.size, (230, 230, 230))
+    generated = np.asarray(source).copy()
+    generated[:] = (91, 91, 91)
+
+    candidates = build_inpaint_candidates(
+        source,
+        mask,
+        primary,
+        full_context=Image.fromarray(generated),
+    )
+
+    ids = [item["id"] for item in candidates]
+    assert ids == [
+        "primary",
+        "opencv-ns",
+        "opencv-telea",
+        "lineart-guided",
+        "lama-full-context",
+    ]
+    candidate = next(item for item in candidates if item["id"] == CANDIDATE_LAMA_FULL_CONTEXT)
+    pixels = np.asarray(candidate["image"].convert("RGB"))
+    assert np.array_equal(pixels[mask == 0], np.asarray(source)[mask == 0])
+    assert np.all(pixels[mask > 0] == 91)
+    assert candidate["changedPixelsOutsideMask"] == 0
 
 
 def test_lama_preserves_grayscale_manga_pages(tmp_path: Path) -> None:

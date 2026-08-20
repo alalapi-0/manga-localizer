@@ -574,16 +574,18 @@ def test_region_repair_settings_drive_the_inpainting_job(tmp_path: Path) -> None
             assert result.convert("RGB").getpixel((50, 60)) == (239, 35, 60)
 
 
+@pytest.mark.parametrize("fail_full_context", [False, True])
 def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_outside(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_full_context: bool
 ) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     app = create_app(settings, start_worker=True)
 
     class RecordingInpainter:
-        def __init__(self, name: str, color: str) -> None:
+        def __init__(self, name: str, color: str, *, fail_optional: bool = False) -> None:
             self.name = name
             self.color = color
+            self.fail_optional = fail_optional
             self.calls = 0
             self.inpaint_options: list[dict[str, Any]] = []
             self.masks: list[np.ndarray] = []
@@ -599,6 +601,8 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
             self.calls += 1
             self.inpaint_options.append(options)
             self.masks.append(np.asarray(mask, dtype=np.uint8).copy())
+            if self.fail_optional and options.get("context_padding") == 128:
+                raise RuntimeError("optional full-context failure")
             if isinstance(image, Path):
                 with Image.open(image) as opened:
                     size = opened.size
@@ -607,7 +611,11 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
             return Image.new("RGB", size, self.color)
 
     opencv = RecordingInpainter("opencv", "#ff0000")
-    lama = RecordingInpainter("lama-onnx", "#0000ff")
+    lama = RecordingInpainter(
+        "lama-onnx",
+        "#0000ff",
+        fail_optional=fail_full_context,
+    )
 
     def routed_provider(name: str):
         return {"opencv": opencv, "lama-onnx": lama}[name]
@@ -665,8 +673,23 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         assert output["inpaintingProviders"] == ["lama-onnx", "opencv"]
         assert "regionInpaintingProviders" not in output
         assert opencv.calls == 1
-        assert lama.calls == 1
-        assert lama.inpaint_options == [{"context_padding": 64, "feather": 0}]
+        assert lama.calls == 2
+        assert lama.inpaint_options == [
+            {"context_padding": 64, "feather": 0},
+            {"context_padding": 128, "feather": 0},
+        ]
+        assert output["inpaintCandidateCount"] == (4 if fail_full_context else 5)
+        listed = client.get(f"/api/projects/{project['id']}/images").json()
+        current = next(item for item in listed if item["id"] == image["id"])
+        expected_candidates = [
+            "primary",
+            "opencv-ns",
+            "opencv-telea",
+            "lineart-guided",
+        ]
+        if not fail_full_context:
+            expected_candidates.append("lama-full-context")
+        assert [item["id"] for item in current["inpaintCandidates"]] == expected_candidates
         assert opencv.mask_options[-1]["text_polarity"] == "dark"
         assert lama.mask_options[-1]["text_polarity"] == "light"
         assert opencv.mask_regions[-1][0]["textPolarity"] == "dark"
@@ -722,7 +745,12 @@ def test_inpaint_stores_comparison_candidates_and_selection_keeps_mask_outside(
         current = next(item for item in listed if item["id"] == image["id"])
         assert current["inpaintCandidate"] == "primary"
         ids = [item["id"] for item in current["inpaintCandidates"]]
-        assert ids == ["primary", "opencv-ns", "opencv-telea", "lineart-guided"]
+        assert ids == [
+            "primary",
+            "opencv-ns",
+            "opencv-telea",
+            "lineart-guided",
+        ]
         primary = client.get(f"/api/images/{image['id']}/generated/inpaint-candidates/primary")
         assert primary.status_code == 200, primary.text
         assert primary.headers.get("cache-control") == "private, no-store"

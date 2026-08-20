@@ -7,9 +7,97 @@ page images, OCR text, or personal paths.
 
 ## Open findings
 
-None.
+- None.
 
 ## Cleared findings
+
+### P-12 — confirming unchanged trusted text disables the accepted typeset artifact
+
+- Kind: `interaction`
+- Page: sidebar 47, 1282×1708
+- Clicked: after accepting the final clean plate and typeset preview, used the
+  page-review prompt to confirm each already-trusted active region without
+  changing its geometry, source text, translation, or typesetting style
+- Expected: confirmation closes the current-content review gate while preserving
+  the already-generated and accepted clean plate and typeset artifacts
+- What happened: all three confirmation saves returned success, the accepted
+  clean plate remained available, but the **成品** preview immediately became
+  disabled as though typesetting had never been generated
+- Why it blocks: the current page cannot be marked reviewed while its accepted
+  final artifact is unavailable, and regenerating it after every confirmation
+  would conceal an invalidation bug in the required one-page workflow
+- Fix: treat `confirmed` as page-review metadata rather than render eligibility.
+  A new human trust decision still invalidates translation, repair, and typeset
+  through its `recognition` change, while confirmation-only toggles now invalidate
+  export only and preserve current visual artifacts and their accepted reviews.
+- Same-page verification: after rebuilding and accepting the byte-identical final
+  preview, an already-trusted region was unconfirmed and reconfirmed through the
+  production UI. Both saves returned success; **成品** stayed enabled and accepted,
+  the accepted clean plate and selected repair candidate were preserved, and the
+  focused safety regressions passed.
+- Repro: on a page with trusted regions and accepted inpaint and typeset reviews,
+  confirm each unchanged region through the page-review prompt, then inspect the
+  **成品** preview availability. Do not include private text, page pixels, project
+  names, or paths.
+
+### P-11 — preview switching can detach the canvas image and blank the page
+
+- Kind: `interaction`
+- Page: sidebar 47, 1282×1708
+- Clicked: selected the optional full-context repair candidate, framed a repair
+  region at 138%, switched **擦除 → 原图 → 擦除**, enabled region overlays,
+  then clicked the canvas with the selection tool.
+- Expected: the current preview remains drawable so each repair region can be
+  selected and visually reviewed at the same zoom.
+- What happened: the canvas became blank and the browser logged
+  `InvalidStateError: Failed to execute 'drawImage' ... image source is detached`.
+- Why it blocked: the current page cannot complete its required region-by-region
+  visual acceptance while the preview disappears during ordinary comparison.
+- Fix: keep the last decoded bitmap alive while a replacement is loading, then
+  release it only after the replacement commits or the viewport unmounts. This
+  prevents a same-URL preview cycle from rendering a previously closed bitmap.
+- Same-page verification: the new production bundle completed the same
+  **擦除 → 原图 → 擦除** path with the page still visible and zero console
+  errors; the focused lifecycle regression, typecheck, lint, and build passed.
+- Repro: cycle **擦除 → 原图 → 擦除** on the same generated artifact, then
+  select a region. Do not include image bytes, OCR text, private filenames,
+  project names, or personal paths in the report.
+
+### P-10 — outlined text across a high-contrast boundary leaves repair blocks
+
+- Kind: `quality`
+- Page: sidebar 47, 1282×1708
+- Clicked: compared the current-provider, Navier–Stokes, Telea, and
+  line-guided clean plates after rebuilding two trusted outlined vertical
+  captions; then split the mixed-background caption at its horizontal midpoint,
+  reconfirmed both halves, rebuilt, and compared all candidates again with the
+  actual mask shown and hidden
+- Expected: the complete dark core and light outline disappear while the
+  underlying light texture, dark figure edge, and their boundary remain
+  visually continuous
+- What happened: every candidate leaves a conspicuous solid, jagged, or
+  scalloped vertical remnant where the outlined glyphs cross from a light area
+  into dark artwork. Splitting by character height reduces the repair area but
+  does not reconstruct the mixed-polarity boundary.
+- Why it blocks: the defect is visible at normal fit-to-page zoom and becomes
+  unmistakable at selected-region zoom, so neither the clean plate nor the
+  final page can be accepted.
+- Fix: add a conservative mixed-boundary mask refinement and an optional fifth
+  LaMa candidate that performs one union-mask pass against the original page with
+  wider local context. The existing regional candidates remain available; the
+  full-context result is selected only after explicit visual comparison. If that
+  optional pass fails, the already-successful four candidates remain usable.
+- Same-page verification: the selected full-context candidate was inspected at
+  page fit and enlarged region zoom with the actual mask shown and hidden. All
+  repaired areas lost the complete outlined glyphs without the previous solid,
+  scalloped, or striped remnants; the high-contrast boundary and nearby artwork
+  remained visually continuous. The selected candidate persisted through the
+  accepted clean plate, exact final-preview rebuild, page review, and current-page
+  text-only JSON export with no overflow or active job.
+- Repro: on a trusted outlined text region crossing a light/dark artwork
+  boundary, use a text-contour mask with zero or narrow dilation, show the
+  actual mask, and compare all four clean-plate candidates at fit and enlarged
+  zoom. Do not include private text, page pixels, project names, or paths.
 
 ### P-9 — text-contour mask absorbs border-connected artwork
 
@@ -250,7 +338,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 46.
+- Finished pages this loop: 47.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -368,6 +456,11 @@ None.
 - Finished: sidebar 46, 646×447, no-text path after quality pass
   (Real-ESRGAN ONNX 4× accepted; one empty drawn-effect fragment ignored;
   full-page scan confirmed no translatable text).
-- Next page: sidebar 47 of the 130-page book.
+- Finished: sidebar 47, 1282×1708, text path after quality pass
+  (four detected regions reduced to three trusted text regions and one ignored
+  false positive; P-10 mixed-boundary repair, P-11 preview lifecycle, and P-12
+  confirmation invalidation fixed and reverified; clean plate, final typeset,
+  page review, and current-page text-only JSON export completed).
+- Next page: sidebar 48 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

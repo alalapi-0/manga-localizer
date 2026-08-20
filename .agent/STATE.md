@@ -47,8 +47,8 @@ sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 (1190×765, no-text), followed by sidebar 42 (1109×319, no-text).
 Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
 after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
-after P-9) and sidebar 46 (646×447, no-text) are finished. Next page:
-sidebar 47. Product Round 8 is not
+after P-9), sidebar 46 (646×447, no-text), and sidebar 47 (1282×1708,
+text after P-10/P-11/P-12) are finished. Next page: sidebar 48. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -71,7 +71,8 @@ sentinels skip rewrite and do not resume those loops.
 
 On 2026-08-19 the user stopped every leftover project worker, queue,
 watcher, and loopback API, then replaced the live prompt with
-`.agent/PAGE_LOOP_PROMPT.md`. Port `:8000` is free. Do not re-arm
+`.agent/PAGE_LOOP_PROMPT.md`. That stale API was stopped; the current page loop
+may run a bounded real-app session on `:8000`. Do not re-arm
 the superseded sentinels. The 2026-08-18 realpages loop, the
 2026-08-17 packaging/app loop, the real-data process/fix loop, and
 the synthetic UI loop stay superseded. Late wakes for those
@@ -139,12 +140,14 @@ sentinels skip rewrite.
 - Inpainting uses exact provider routing. OpenCV is the guaranteed fallback; optional LaMa ONNX is lazy,
   local, context-cropped, and composites with exact mask-outside preservation. Grayscale manga pages
   keep chroma suppressed after RGB LaMa inference. Each nonempty repair also stores comparison
-  candidates (provider, Navier-Stokes, Telea, line-art-guided); LaMa-only pages default to the
-  line-art-guided plate. Switching a candidate replaces the canonical inpainted bytes and clears
+  candidates (provider, Navier-Stokes, Telea, line-art-guided); eligible LaMa pages also store an
+  optional union-mask full-context candidate for mixed high-contrast boundaries. Candidate choice
+  remains explicit; an optional-pass failure falls back to the four successful candidates. Switching a candidate replaces the canonical inpainted bytes and clears
   dependent reviews.
 - Repair defaults to the `safe` eligibility policy. Canonical repair settings are persisted across API,
   queue, and UI; text/full-region masks support padding, dilation, feathering, editable geometry, and an
-  actual-mask preview. Bounded add/erase strokes are persisted per region. Typesetting requires safe
+  actual-mask preview. Text-contour masks support `auto`, `dark`, and `light` polarity; explicit
+  polarity masks only the selected glyph core. Bounded add/erase strokes are persisted per region. Typesetting requires safe
   eligibility and intersection with the generated mask, and cannot reuse an inpaint cache made under a
   different repair policy. Completed typesetting persists overflowing region IDs as review hints; they
   are cleared when typesetting is invalidated and are not an export hard gate.
@@ -152,7 +155,9 @@ sentinels skip rewrite.
   exact response bytes decoded in the review canvas; inpaint also binds and visibly reviews its mask.
   Regeneration, changed bytes, or an upstream change clears or conflicts with affected reviews.
   Generated-image export and portable generated assets require current accepted results; JSON-only
-  export remains independent.
+  export remains independent. The per-region `confirmed` flag controls the page-review gate only;
+  toggling it on an already-trusted region preserves current visual artifacts and accepted reviews,
+  while a new trust decision or any pixel-affecting edit still invalidates its owning stages.
 - Moving, resizing, merging, or splitting a detector region removes its stale polygon while preserving
   the remaining repair provenance. Generated preview/compare controls are gated by current artifacts.
 - Projects remain portable: each output root contains `project/project.sqlite3` and a sanitized
@@ -193,7 +198,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 46/130.
+  loop reprocesses from sidebar 1 and has finished 47/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -305,11 +310,29 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 86/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 83/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 47 (1282×1708), P-10/P-11/P-12 cleared:
+  four detected regions were reduced to three trusted text regions and one
+  ignored false positive. The optional union-mask LaMa full-context candidate
+  was compared with the regional candidates at fit and enlarged views with its
+  actual mask shown and hidden; all repair areas removed the complete outlined
+  lettering without the former blocks, stripes, or scalloped remnants while the
+  mixed boundary and nearby artwork remained continuous. The first undersized
+  typeset was rejected; fixed-size outlined vertical typesetting was rebuilt and
+  accepted with zero overflow. The production bundle then passed the same-URL
+  preview cycle with a visible canvas and no new console errors. After the
+  confirmation-invalidation fix, unconfirming and reconfirming a trusted region
+  preserved both accepted visual stages; the rebuilt final PNG exactly matched
+  the previously accepted checksum. The page was marked checked and a one-page,
+  JSON-only, serial export completed and finalized with no active job. Full local
+  verification passed 9 launcher tests, backend Ruff lint/format and 270 pytest
+  cases, frontend ESLint/TypeScript and 173 Vitest cases, the production build,
+  `git diff --check`, and the release/privacy audit over 154 candidate files and
+  1231 historical blobs. Private trees remain untracked.
 - 2026-08-21 page-loop sidebar 46 (646×447): Real-ESRGAN ONNX 4× was
   compared with the original and accepted after sharpening the speed lines,
   figure contours, and screentone without changing the composition. Fresh

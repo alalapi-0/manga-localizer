@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { api } from '../api/client';
@@ -438,6 +438,70 @@ describe('canvas generated-image refresh', () => {
     expect(screen.getByRole('checkbox', { name: '复核蒙版' })).toBeChecked();
     await waitFor(() => expect(screen.getByLabelText('当前视觉阶段复核')).toHaveTextContent('待复核'));
     expect(screen.getByRole('button', { name: '接受' })).toBeEnabled();
+  });
+
+  it('keeps a reusable mask bitmap alive while preview modes cycle', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'erased', showMask: true });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const source = String(input);
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => new TextEncoder().encode(source).buffer,
+      } as unknown as Response;
+    }));
+    const decoded = new Map<string, Array<ImageBitmap & { close: ReturnType<typeof vi.fn> }>>();
+    const pending: Array<{
+      resolve: (bitmap: ImageBitmap) => void;
+      source: string;
+    }> = [];
+    let deferGeneratedReload = false;
+    function bitmapFor(source: string) {
+      const bitmap = {
+        width: 1200,
+        height: 1800,
+        close: vi.fn(),
+      } as unknown as ImageBitmap & { close: ReturnType<typeof vi.fn> };
+      decoded.set(source, [...(decoded.get(source) ?? []), bitmap]);
+      return bitmap;
+    }
+    vi.stubGlobal('createImageBitmap', vi.fn(async (blob: Blob) => {
+      const source = await blob.text();
+      if (deferGeneratedReload && source.includes('/generated/')) {
+        return await new Promise<ImageBitmap>((resolve) => pending.push({ resolve, source }));
+      }
+      return bitmapFor(source);
+    }));
+
+    const { container } = render(<CanvasWorkspace />);
+    await waitFor(() => expect(container.querySelectorAll('[data-konva="Image"]')).toHaveLength(2));
+    const maskSource = [...decoded.keys()].find((source) => source.includes('/generated/mask'));
+    expect(maskSource).toBeDefined();
+    const initialMask = maskSource ? decoded.get(maskSource)?.[0] : undefined;
+    expect(initialMask).toBeDefined();
+    if (!initialMask) throw new Error('Expected the initial mask bitmap to be decoded');
+
+    fireEvent.click(screen.getByRole('button', { name: '原图' }));
+    await waitFor(() => expect(screen.getByRole('application', { name: '原图画布' })).toBeVisible());
+    await waitFor(() => expect(container.querySelectorAll('[data-konva="Image"]')).toHaveLength(1));
+    expect(initialMask.close).not.toHaveBeenCalled();
+
+    deferGeneratedReload = true;
+    fireEvent.click(screen.getByRole('button', { name: '擦除' }));
+    expect(initialMask.close).not.toHaveBeenCalled();
+    await waitFor(() => expect(pending).toHaveLength(2));
+
+    await act(async () => {
+      for (const request of pending.splice(0)) request.resolve(bitmapFor(request.source));
+    });
+    await waitFor(() => expect(container.querySelectorAll('[data-konva="Image"]')).toHaveLength(2));
+    await waitFor(() => expect(initialMask.close).toHaveBeenCalledOnce());
   });
 
   it('removes the mask overlay before presenting a typeset result for review', async () => {

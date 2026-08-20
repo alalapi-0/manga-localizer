@@ -1,6 +1,6 @@
 # Manga Localizer — one-page reprocess problem report
 
-Updated: 2026-08-19
+Updated: 2026-08-20
 
 Public operator log for the one-page full-reprocess loop. No private
 page images, OCR text, or personal paths.
@@ -58,7 +58,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 20.
+- Finished pages this loop: 21.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -96,6 +96,8 @@ None.
   (3 artwork false boxes ignored).
 - Finished: sidebar 20, 1187×1244, text path after quality pass
   (1 shout from 2 boxes; drawn SFX left as artwork).
-- Next page: sidebar 21 of the 130-page book.
+- Finished: sidebar 21, 958×228, no-text path after quality pass
+  (1 artwork false box ignored).
+- Next page: sidebar 22 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

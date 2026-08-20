@@ -36,8 +36,9 @@ no-text), sidebar 20 (1187×1244, text), sidebar 21 (958×228,
 no-text), sidebar 22 (1284×777, no-text), sidebar 23 (1072×564,
 no-text), sidebar 24 (1074×358, text), sidebar 25 (1074×793,
 text), sidebar 26 (1089×334, no-text), and sidebar 27 (1068×619,
-text), sidebar 28 (1064×628, text after P-3/P-4/P-5), and sidebar 29
-(1174×1161, text). Next page: sidebar 30.
+text), sidebar 28 (1064×628, text after P-3/P-4/P-5), sidebar 29
+(1174×1161, text), and sidebar 30 (1189×699, no-text). Next page:
+sidebar 31.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -182,7 +183,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 29/130.
+  loop reprocesses from sidebar 1 and has finished 30/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -294,11 +295,23 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 101/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 100/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 30 (1189×699): Real-ESRGAN ONNX 4×
+  (4756×2796) accepted after original/result comparison preserved line art,
+  gray fills, and motion strokes. Current-page detect+OCR produced one
+  nonempty proposal; close visual inspection placed it entirely on drawn
+  shadow strokes, so it was explicitly ignored. No dialogue, caption, title,
+  or translatable drawn text remained anywhere on the page. The page was
+  marked **确认本页无文字** and current-page **仅文本 JSON** completed.
+  Preprocess/detection/OCR/export are done; the accepted preprocess review and
+  `no-text-reviewed` state are persisted; translation/inpaint/typeset were
+  correctly skipped; no review-needed regions, processing errors, overflow,
+  or active jobs remain. Open findings remain none. Private trees were not
+  committed.
 - 2026-08-20 page-loop sidebar 29 (1174×1161): Real-ESRGAN ONNX 4×
   (4696×4644) accepted. Current-page detect+OCR produced three proposals;
   cleanup left two artwork false positives, both explicitly ignored, and one

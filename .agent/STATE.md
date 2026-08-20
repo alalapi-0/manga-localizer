@@ -47,7 +47,8 @@ sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 (1190×765, no-text), followed by sidebar 42 (1109×319, no-text).
 Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
 after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
-after P-9) is finished. Next page: sidebar 46. Product Round 8 is not
+after P-9) and sidebar 46 (646×447, no-text) are finished. Next page:
+sidebar 47. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -192,7 +193,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 45/130.
+  loop reprocesses from sidebar 1 and has finished 46/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -309,6 +310,13 @@ sentinels skip rewrite.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 46 (646×447): Real-ESRGAN ONNX 4× was
+  compared with the original and accepted after sharpening the speed lines,
+  figure contours, and screentone without changing the composition. Fresh
+  current-page detect+OCR produced one empty fragment on drawn effect line art;
+  it was explicitly ignored. A final full-page scan found no dialogue,
+  caption, title, or other translatable text, so **确认本页无文字** completed
+  the no-text path. No downstream text job or private export was run.
 - 2026-08-21 page-loop sidebar 45 (516×694), P-9 cleared: the shared
   text-contour mask now segments through a guard band, rejects components that
   enter from its boundary, uses symmetric corroborated dark/light candidates,

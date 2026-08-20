@@ -250,7 +250,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 45.
+- Finished pages this loop: 46.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -365,6 +365,9 @@ None.
   (P-9 guard-band/polarity text mask fixed and reverified; eight trusted
   fragments translated and typeset; clean plate, final page review, and
   current-page text-only JSON export completed).
-- Next page: sidebar 46 of the 130-page book.
+- Finished: sidebar 46, 646×447, no-text path after quality pass
+  (Real-ESRGAN ONNX 4× accepted; one empty drawn-effect fragment ignored;
+  full-page scan confirmed no translatable text).
+- Next page: sidebar 47 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

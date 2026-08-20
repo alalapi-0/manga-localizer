@@ -45,7 +45,7 @@ sidebar 36 (1187×571, text), sidebar 37 (1178×1267, text), and
 sidebar 38 (1106×410, text after P-8), followed by sidebar 39
 (1185×713, text), sidebar 40 (1076×487, no-text), and sidebar 41
 (1190×765, no-text), followed by sidebar 42 (1109×319, no-text).
-Next page: sidebar 43.
+Sidebar 43 (1190×644, no-text) is also finished. Next page: sidebar 44.
 Product Round 8 is not complete. CI in progress is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -302,11 +302,25 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 88/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 87/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-20 page-loop sidebar 43 (1190×644): Real-ESRGAN ONNX 4×
+  (4760×2576) was compared with the original and accepted. It preserved the
+  wide action composition, character silhouettes, speed lines, grayscale
+  tones, and drawn effect lettering while improving line clarity. Current-page
+  detect+OCR produced one small proposal. Enlarged selected-region review
+  placed it on drawn effect lettering inside an action mark rather than
+  dialogue, caption, title, or other translatable text, so it was explicitly
+  ignored. A final full-page scan confirmed that the remaining large marks are
+  effect artwork. The page was marked **确认本页无文字** and current-page
+  **仅文本 JSON** completed. Preprocess/detection/OCR/export are done;
+  preprocess is accepted; `no-text-reviewed` is persisted; the text-only stages
+  remain intentionally unrun; the sole false positive is ignored; no
+  review-needed regions, processing errors, overflow, or active jobs remain.
+  Open findings remain none. Private trees were not committed.
 - 2026-08-20 page-loop sidebar 42 (1109×319): Real-ESRGAN ONNX 4×
   (4436×1276) was compared with the original and accepted. It preserved the
   horizontal two-panel composition, figures, speed lines, grayscale tones,

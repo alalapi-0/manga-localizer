@@ -49,7 +49,8 @@ Sidebar 43 (1190×644, no-text) and sidebar 44 (472×1157, no-text
 after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
 after P-9), sidebar 46 (646×447, no-text), and sidebar 47 (1282×1708,
 text after P-10/P-11/P-12), followed by sidebar 48 (1175×1189, no-text
-after rejecting enhancement), are finished. Next page: sidebar 49. Product Round 8 is not
+after rejecting enhancement) and sidebar 49 (1166×566, text after rejecting
+enhancement), are finished. Next page: sidebar 50. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -311,11 +312,25 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 82/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 81/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 49 (1166×566): Real-ESRGAN ONNX 4× was
+  rejected after comparison because it broke speed lines and distant contours.
+  Fresh detect+OCR produced five fragments. Three artwork-only false boxes were
+  ignored; the two real overlapping fragments were merged, extended to cover the
+  complete vertical lettering, manually corrected, locally translated, and
+  confirmed. A dark-text contour mask with increased padding and dilation removed
+  the last residual speck; the OpenCV Telea candidate preserved the white balloon
+  and surrounding line art and was accepted after actual-mask review at fit and
+  130%. Two undersized regular-font layouts were rejected. The final fixed-size
+  vertical layout used a local medium CJK face with same-color stroke, matched the
+  original visual weight, had zero overflow, and was accepted. Page review and
+  current-page JSON-only serial export completed 1/1 with no active job or console
+  error; reload preserved the ignored regions, selected repair candidate, both
+  accepted visual reviews, and reviewed state.
 - 2026-08-21 page-loop sidebar 48 (1175×1189): Real-ESRGAN ONNX 4× was
   compared against the original and rejected because it introduced broken
   contours and oversharpening artifacts. Fresh current-page detect+OCR produced

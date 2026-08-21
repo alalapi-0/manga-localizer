@@ -7,9 +7,77 @@ page images, OCR text, or personal paths.
 
 ## Open findings
 
-- None.
+None.
 
 ## Cleared findings
+
+### P-14 — large connected manual text mask leaves glyph-shaped repair remnants
+
+- Kind: `quality`
+- Page: sidebar 50, 1064×473
+- Clicked: after the explicit light-text safety gate rejected an unsafe automatic
+  mask, drew a persisted add-mask over the complete missed sound effect, filled
+  the remaining holes, rebuilt the current page, hid the mask-edit overlay, and
+  compared all five generated repair candidates at enlarged region zoom
+- Expected: the manually verified glyph support disappears while the surrounding
+  dark backing, the adjacent light edge, and the lower textured boundary remain
+  visually continuous
+- What happened: the current-provider and line-guided candidates leave soft
+  glyph-shaped light remnants, both OpenCV candidates create large polygonal
+  blocks, and the optional full-context candidate leaves broad light patches.
+- Why it blocks: every clean-plate candidate remains visibly defective at normal
+  page fit and enlarged zoom, so repair and final-page review cannot be accepted.
+- Fix: remove the experimental background-prefill candidate after it failed real
+  visual review, then avoid the unsafe single connected hole in persisted page
+  state. Split the effect into two non-overlapping repair regions, use a verified
+  solid fill for the uniform component and local LaMa repair for the textured
+  component, and keep each manual add mask inside its own backing area. The
+  reading-order primary result remains the canonical page candidate.
+- Same-page verification: at enlarged region zoom and normal page fit, both
+  repaired components are free of glyph remnants and block artifacts, the tone
+  transition is continuous, adjacent line art is unchanged, and the persisted
+  actual mask stays inside the intended backing. The primary repair and final
+  typeset were accepted, all active regions were reconfirmed without losing the
+  accepted artifacts, the page was marked checked, JSON-only export completed,
+  and a full reload preserved those states.
+- Repro: on a large connected light-on-dark glyph, use a conservative automatic
+  text mask plus persisted manual add strokes covering the complete glyph, rebuild,
+  hide all mask overlays, and compare every candidate. Do not include private
+  text, page pixels, project names, filenames, or paths.
+
+### P-13 — explicit light-text mask absorbs adjacent light artwork
+
+- Kind: `function`
+- Page: sidebar 50, 1064×473
+- Clicked: created one tight manual region around a large light-on-dark sound
+  effect, selected **文本轮廓** with explicit **浅色文字**, rebuilt the current
+  page, then framed that region and displayed the persisted actual mask
+- Expected: the explicit-polarity mask includes only the light glyph core and
+  its narrow configured expansion while preserving the dark backing and nearby
+  light artwork
+- What happened: the actual mask expands through most of the glyph region and
+  includes a connected strip of surrounding artwork. Every generated repair
+  candidate therefore leaves a conspicuous flat or block-shaped replacement.
+- Why it blocks: the clean plate visibly destroys original art at normal page
+  fit and enlarged region zoom, so neither repair nor the final page can be
+  accepted.
+- Fix: explicit dark/light modes no longer rescue selected-polarity components
+  that continue through the analysis guard boundary. Before applying configured
+  padding, dilation, and feathering, the text-mask path now measures aggregate
+  expansion risk; a dense result is intersected with conservative mixed-background
+  evidence and fails closed when it would still approximate the detector region.
+  Persisted manual add strokes remain the explicit recovery path.
+- Same-page verification: the unsafe automatic mask was rejected instead of
+  absorbing adjacent artwork. A bounded manual mask then covered the intended
+  glyph support, the rebuilt primary candidate preserved surrounding line art,
+  and focused explicit-polarity regressions cover dense texture, sparse fragments
+  that merge under expansion, ordinary narrow glyphs, and opposite-polarity
+  boundary artwork.
+- Repro: on a tight region containing a large light glyph over dark artwork
+  beside similarly light line art, use explicit light polarity with a modest
+  mask expansion, rebuild, and inspect the persisted actual mask shown and
+  hidden. Do not include private text, page pixels, project names, filenames,
+  or paths.
 
 ### P-12 — confirming unchanged trusted text disables the accepted typeset artifact
 

@@ -302,6 +302,124 @@ def test_explicit_text_polarity_never_uses_the_dense_full_region_fallback() -> N
     assert 0 < np.count_nonzero(mask) < np.count_nonzero(geometry)
 
 
+@pytest.mark.parametrize(
+    ("text_polarity", "background", "foreground"),
+    (("dark", 245, 15), ("light", 15, 245)),
+)
+def test_explicit_text_polarity_fails_closed_before_expansion_fills_geometry(
+    text_polarity: str,
+    background: int,
+    foreground: int,
+) -> None:
+    pixels = np.full((100, 140, 3), background, dtype=np.uint8)
+    rows, columns = np.indices((60, 60))
+    texture = np.where((columns // 3 + rows // 3) % 2, foreground, background)
+    pixels[20:80, 40:100] = texture[..., np.newaxis]
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=3,
+        dilation=2,
+        feather=1,
+        mask_mode="text",
+        text_polarity=text_polarity,
+    )
+
+    assert np.count_nonzero(mask) == 0
+
+
+@pytest.mark.parametrize(
+    ("text_polarity", "background", "foreground"),
+    (("dark", 245, 15), ("light", 15, 245)),
+)
+def test_explicit_text_polarity_fails_closed_when_sparse_stripes_merge_under_expansion(
+    text_polarity: str,
+    background: int,
+    foreground: int,
+) -> None:
+    pixels = np.full((100, 140, 3), background, dtype=np.uint8)
+    for column in range(40, 100, 10):
+        pixels[20:80, column] = foreground
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=3,
+        dilation=2,
+        feather=1,
+        mask_mode="text",
+        text_polarity=text_polarity,
+    )
+
+    assert np.count_nonzero(mask) == 0
+
+
+@pytest.mark.parametrize(
+    ("text_polarity", "background", "foreground"),
+    (("dark", 245, 15), ("light", 15, 245)),
+)
+def test_explicit_text_polarity_keeps_a_narrow_glyph_with_production_expansion(
+    text_polarity: str,
+    background: int,
+    foreground: int,
+) -> None:
+    pixels = np.full((100, 140, 3), background, dtype=np.uint8)
+    pixels[30:70, 66:74] = foreground
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=3,
+        dilation=2,
+        feather=1,
+        mask_mode="text",
+        text_polarity=text_polarity,
+    )
+    geometry = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=6,
+        dilation=0,
+        mask_mode="region",
+    )
+
+    assert np.count_nonzero(mask[30:70, 66:74]) > 0
+    assert 0 < np.count_nonzero(mask) < np.count_nonzero(geometry) * 0.8
+
+
+@pytest.mark.parametrize(
+    ("text_polarity", "background", "foreground", "outline"),
+    (("light", 128, 245, 10), ("dark", 128, 10, 245)),
+)
+def test_explicit_text_polarity_does_not_rescue_boundary_art_with_opposite_support(
+    text_polarity: str,
+    background: int,
+    foreground: int,
+    outline: int,
+) -> None:
+    pixels = np.full((100, 140, 3), background, dtype=np.uint8)
+    pixels[40:60, 0:56] = foreground
+    pixels[44:56, 0:56] = outline
+    pixels[30:65, 70:78] = foreground
+    region = [{"x": 40, "y": 20, "width": 60, "height": 60}]
+
+    mask = create_mask(
+        Image.fromarray(pixels),
+        region,
+        padding=0,
+        dilation=0,
+        mask_mode="text",
+        text_polarity=text_polarity,
+    )
+
+    assert np.count_nonzero(mask[40:60, 40:56]) == 0
+    assert np.count_nonzero(mask[30:65, 70:78]) > 0
+
+
 def test_region_text_polarity_overrides_the_create_mask_default_and_is_validated() -> None:
     pixels = np.full((80, 100, 3), 128, dtype=np.uint8)
     pixels[20:60, 35:65] = 255

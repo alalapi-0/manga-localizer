@@ -50,7 +50,8 @@ after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
 after P-9), sidebar 46 (646×447, no-text), and sidebar 47 (1282×1708,
 text after P-10/P-11/P-12), followed by sidebar 48 (1175×1189, no-text
 after rejecting enhancement) and sidebar 49 (1166×566, text after rejecting
-enhancement), are finished. Next page: sidebar 50. Product Round 8 is not
+enhancement), are finished. Sidebar 50 (1064×473, text after P-13/P-14) is also
+finished. Next page: sidebar 51. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -200,7 +201,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 47/130.
+  loop reprocesses from sidebar 1 and has finished 50/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch

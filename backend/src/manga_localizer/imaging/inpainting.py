@@ -33,6 +33,7 @@ _MAX_MASK_STROKES = 256
 _MAX_STROKE_POINTS = 4096
 _MAX_TOTAL_STROKE_POINTS = 16384
 _MAX_STROKE_RADIUS = 512.0
+_MAX_EXPLICIT_TEXT_MASK_COVERAGE = 0.8
 
 
 def _validate_mask_integer(name: str, value: Any, maximum: int) -> int:
@@ -259,7 +260,12 @@ def create_mask(
             _MAX_MASK_PADDING,
         )
         if selected_mode == "text" and grayscale is not None:
-            region_mask = _text_pixels(grayscale, region_mask, selected_polarity)
+            region_mask = _text_pixels(
+                grayscale,
+                region_mask,
+                selected_polarity,
+                planned_expansion=region_padding + dilation + feather,
+            )
             if region_padding > 0 and np.any(region_mask):
                 size = region_padding * 2 + 1
                 region_mask = cv2.dilate(
@@ -292,6 +298,8 @@ def _text_pixels(
     grayscale: np.ndarray,
     geometric_mask: np.ndarray,
     text_polarity: str = "auto",
+    *,
+    planned_expansion: int = 0,
 ) -> np.ndarray:
     rows, columns = np.nonzero(geometric_mask)
     if not len(rows):
@@ -429,20 +437,21 @@ def _text_pixels(
         np.where(allowed & stream, 255, 0).astype(np.uint8) for stream in candidate_streams
     ]
 
-    def filtered_stream(stream_index: int) -> np.ndarray:
-        opposite_zone = (
-            cv2.dilate(
-                raw_stream_masks[1 - stream_index],
-                rescue_kernel,
-                iterations=1,
-            )
-            > 0
-        )
+    def filtered_stream(stream_index: int, *, rescue_exterior: bool) -> np.ndarray:
         pieces = list(safe_components_by_stream[stream_index])
-        for inside in exterior_by_stream[stream_index]:
-            rescued = inside & opposite_zone
-            if np.any(rescued):
-                pieces.append(rescued)
+        if rescue_exterior:
+            opposite_zone = (
+                cv2.dilate(
+                    raw_stream_masks[1 - stream_index],
+                    rescue_kernel,
+                    iterations=1,
+                )
+                > 0
+            )
+            for inside in exterior_by_stream[stream_index]:
+                rescued = inside & opposite_zone
+                if np.any(rescued):
+                    pieces.append(rescued)
         filtered = np.zeros_like(crop, dtype=np.uint8)
         for piece in pieces:
             area = int(np.count_nonzero(piece))
@@ -450,13 +459,44 @@ def _text_pixels(
                 filtered[piece] = 255
         return filtered
 
-    polarity_masks = [filtered_stream(0), filtered_stream(1)]
     if text_polarity in {"dark", "light"}:
-        selected = polarity_masks[0 if text_polarity == "dark" else 1]
+        # A forced polarity is intentionally strict. Opposite-polarity pixels
+        # can support auto-mode outline rescue, but on a dark/light artwork
+        # edge they also surround every exterior art component. Never rescue
+        # a component that reaches the analysis boundary in explicit mode.
+        selected = filtered_stream(
+            0 if text_polarity == "dark" else 1,
+            rescue_exterior=False,
+        )
+        expanded_coverage = _expanded_mask_coverage(selected, target, planned_expansion)
+        if expanded_coverage >= _MAX_EXPLICIT_TEXT_MASK_COVERAGE:
+            # Explicit polarity is a safety control, not permission to replace
+            # a nearly complete detector box. Dense tone/texture fragments can
+            # be individually valid components and then merge under ordinary
+            # padding, dilation, and feathering. Try the conservative
+            # two-tone background residual model, keeping only pixels already
+            # present in the requested polarity. If the model declines or the
+            # planned expansion remains dense, fail closed; persisted manual
+            # add strokes remain the operator-controlled recovery path.
+            refined = _refine_mixed_background_text(
+                crop,
+                target=target,
+                allowed=allowed,
+                combined=selected,
+            )
+            selected = np.where((selected > 0) & (refined > 0), 255, 0).astype(np.uint8)
+            if _expanded_mask_coverage(selected, target, planned_expansion) >= (
+                _MAX_EXPLICIT_TEXT_MASK_COVERAGE
+            ):
+                selected = np.zeros_like(selected)
         result = np.zeros_like(geometric_mask)
         result[top:bottom, left:right] = selected
         return result
 
+    polarity_masks = [
+        filtered_stream(0, rescue_exterior=True),
+        filtered_stream(1, rescue_exterior=True),
+    ]
     # Dense lettering is still segmented as the union of its two polarity
     # streams. Never replace that union with the complete detector geometry:
     # real outlined captions often overlap artwork, so a full-region fallback
@@ -482,6 +522,31 @@ def _text_pixels(
     result = np.zeros_like(geometric_mask)
     result[top:bottom, left:right] = combined
     return result
+
+
+def _expanded_mask_coverage(
+    mask: np.ndarray,
+    target: np.ndarray,
+    expansion: int,
+) -> float:
+    """Measure whether planned morphology would approximate full geometry."""
+    if not np.any(mask) or not np.any(target):
+        return 0.0
+    expanded_mask = (mask > 0).astype(np.uint8)
+    if expansion > 0:
+        # Any nonempty pixel reaches the whole crop once the Chebyshev radius
+        # spans its longest edge. Short-circuit before constructing a kernel
+        # from the independently bounded padding/dilation/feather totals.
+        if expansion >= max(mask.shape):
+            return 1.0
+        size = int(expansion) * 2 + 1
+        kernel = np.ones((size, size), dtype=np.uint8)
+        expanded_mask = cv2.dilate(expanded_mask, kernel, iterations=1)
+    support_area = int(np.count_nonzero(target))
+    if support_area == 0:
+        return 0.0
+    covered = np.count_nonzero((expanded_mask > 0) & target)
+    return float(covered) / float(support_area)
 
 
 def _complete_mixed_background_outline(

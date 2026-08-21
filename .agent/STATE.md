@@ -50,8 +50,9 @@ after rejecting enhancement) are also finished. Sidebar 45 (516×694, text
 after P-9), sidebar 46 (646×447, no-text), and sidebar 47 (1282×1708,
 text after P-10/P-11/P-12), followed by sidebar 48 (1175×1189, no-text
 after rejecting enhancement) and sidebar 49 (1166×566, text after rejecting
-enhancement), are finished. Sidebar 50 (1064×473, text after P-13/P-14) is also
-finished. Next page: sidebar 51. Product Round 8 is not
+enhancement), are finished. Sidebar 50 (1064×473, text after P-13/P-14) and
+sidebar 51 (1060×721, no-text after rejecting enhancement) are also finished.
+Next page: sidebar 52. Product Round 8 is not
 complete. No open finding blocks the next page; CI is not a page gate.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
@@ -201,7 +202,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 50/130.
+  loop reprocesses from sidebar 1 and has finished 51/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -313,11 +314,20 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 81/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 79/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence
 
+- 2026-08-21 page-loop sidebar 51 (1060×721): Real-ESRGAN ONNX 4× was
+  compared against the original and rejected because it broke screentone and
+  gray transitions and introduced blocky, jagged line artifacts. Fresh
+  current-page detect+OCR produced four artwork-only false boxes; each was
+  inspected at enlarged selected-region zoom and explicitly ignored. A final
+  full-page scan found no dialogue, caption, title, or other translatable text,
+  so **确认本页无文字** completed the no-text path. Reloading preserved all four
+  ignore decisions, the rejected preprocess review, and the reviewed page state;
+  no downstream text job or private export was run, and no active job remained.
 - 2026-08-21 page-loop sidebar 49 (1166×566): Real-ESRGAN ONNX 4× was
   rejected after comparison because it broke speed lines and distant contours.
   Fresh detect+OCR produced five fragments. Three artwork-only false boxes were

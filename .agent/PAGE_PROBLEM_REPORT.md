@@ -406,7 +406,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 47.
+- Finished pages this loop: 51.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -529,6 +529,25 @@ None.
   false positive; P-10 mixed-boundary repair, P-11 preview lifecycle, and P-12
   confirmation invalidation fixed and reverified; clean plate, final typeset,
   page review, and current-page text-only JSON export completed).
-- Next page: sidebar 48 of the 130-page book.
+- Finished: sidebar 48, 1175×1189, no-text path after quality pass
+  (Real-ESRGAN result rejected for broken contours and oversharpening; original
+  retained; 5 artwork-only false positives ignored; full-page scan confirmed no
+  translatable text, and no downstream text job or private export was run).
+- Finished: sidebar 49, 1166×566, text path after quality pass
+  (Real-ESRGAN result rejected; 5 detections reduced to 2 merged real-text
+  fragments and 3 ignored artwork false positives; the Telea clean plate and
+  fixed-size vertical typeset were accepted, followed by page review and
+  current-page text-only JSON export).
+- Finished: sidebar 50, 1064×473, text path after quality pass
+  (5 regions reduced to 4 trusted text regions and 1 ignored false positive;
+  P-13 explicit-polarity mask expansion and P-14 large connected-mask repair
+  were fixed and reverified; clean plate, final typeset, page review, and
+  current-page text-only JSON export completed).
+- Finished: sidebar 51, 1060×721, no-text path after quality pass
+  (Real-ESRGAN result rejected because it damaged screentone, gray transitions,
+  and line continuity; original retained; 4 artwork-only false positives were
+  enlarged and ignored; reload preserved the rejected review, ignore decisions,
+  and no-text page confirmation; no downstream text job or private export ran).
+- Next page: sidebar 52 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

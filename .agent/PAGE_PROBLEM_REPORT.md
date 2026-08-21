@@ -548,6 +548,11 @@ None.
   and line continuity; original retained; 4 artwork-only false positives were
   enlarged and ignored; reload preserved the rejected review, ignore decisions,
   and no-text page confirmation; no downstream text job or private export ran).
-- Next page: sidebar 52 of the 130-page book.
+- Finished: sidebar 52, 706×491, text path after quality pass
+  (10 fragments reduced to 2 merged trusted vertical regions and 6 ignored
+  duplicates; Real-ESRGAN, bounded manual-mask LaMa full-context repair, and
+  zero-overflow vertical typeset were accepted; page review, current-page
+  text-only JSON export, reload persistence, and zero active jobs verified).
+- Next page: sidebar 53 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

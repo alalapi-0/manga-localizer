@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import io
+import json
+import math
 import os
 import re
 import shutil
@@ -33,6 +35,10 @@ from manga_localizer.services.projects import (
 from manga_localizer.services.trust import is_region_trusted
 
 SUPPORTED_FORMATS = {"JPEG", "PNG", "WEBP", "TIFF", "BMP", "GIF"}
+AI_INPAINT_PROVIDERS = frozenset({"lama", "lama-onnx"})
+INPAINT_ORIGIN_KINDS = frozenset(
+    {"direct-ai", "ai-derived", "classical", "deterministic-postprocess", "mixed", "no-op"}
+)
 
 
 class InvalidImage(ProjectError):
@@ -52,6 +58,24 @@ class StageReviewObservationConflict(ProjectError):
         self.resource = resource
         self.stage = stage
         self.mismatches = mismatches
+
+
+class StagePrerequisiteConflict(ProjectError):
+    def __init__(
+        self,
+        message: str,
+        *,
+        resource: str,
+        stage: str,
+        reason: str,
+        mismatches: list[str] | None = None,
+    ):
+        super().__init__(message)
+        self.resource = resource
+        self.stage = stage
+        self.required_state = "accepted"
+        self.reason = reason
+        self.mismatches = list(mismatches or [])
 
 
 _PROVIDER_STATUS_KEYS = {
@@ -84,6 +108,189 @@ VISUAL_REVIEW_DEPENDENTS = {
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
+def normalize_inpaint_provenance(value: object) -> dict[str, object] | None:
+    """Return the canonical internal clean-plate provenance record."""
+    if not isinstance(value, dict) or type(value.get("version")) is not int:
+        return None
+    if value.get("version") != 1:
+        return None
+    artifact_checksum = value.get("artifactChecksum")
+    mask_checksum = value.get("maskChecksum")
+    candidate_id = value.get("candidateId")
+    origin_kind = value.get("originKind")
+    generation_id = value.get("generationId")
+    candidate_manifest_digest = value.get("candidateManifestDigest")
+    provider_ids = value.get("providerIds")
+    if (
+        not isinstance(artifact_checksum, str)
+        or not _SHA256_RE.fullmatch(artifact_checksum)
+        or not isinstance(mask_checksum, str)
+        or not _SHA256_RE.fullmatch(mask_checksum)
+        or not isinstance(candidate_id, str)
+        or not candidate_id
+        or len(candidate_id) > 80
+        or origin_kind not in INPAINT_ORIGIN_KINDS
+        or not isinstance(generation_id, str)
+        or not generation_id
+        or len(generation_id) > 128
+        or not isinstance(candidate_manifest_digest, str)
+        or not _SHA256_RE.fullmatch(candidate_manifest_digest)
+        or not isinstance(provider_ids, list)
+        or any(
+            not isinstance(provider_id, str) or not provider_id or len(provider_id) > 80
+            for provider_id in provider_ids
+        )
+    ):
+        return None
+    normalized_provider_ids = sorted(set(provider_ids))
+    if origin_kind in {"direct-ai", "ai-derived"} and not normalized_provider_ids:
+        return None
+    if origin_kind == "no-op" and normalized_provider_ids:
+        return None
+    return {
+        "version": 1,
+        "artifactChecksum": artifact_checksum,
+        "maskChecksum": mask_checksum,
+        "candidateId": candidate_id,
+        "originKind": origin_kind,
+        "providerIds": normalized_provider_ids,
+        "generationId": generation_id,
+        "candidateManifestDigest": candidate_manifest_digest,
+    }
+
+
+def make_inpaint_provenance(
+    *,
+    artifact_checksum: str,
+    mask_checksum: str,
+    candidate_id: str,
+    origin_kind: str,
+    provider_ids: Iterable[str],
+    generation_id: str,
+    candidate_manifest_digest: str,
+) -> dict[str, object]:
+    normalized = normalize_inpaint_provenance(
+        {
+            "version": 1,
+            "artifactChecksum": artifact_checksum,
+            "maskChecksum": mask_checksum,
+            "candidateId": candidate_id,
+            "originKind": origin_kind,
+            "providerIds": list(provider_ids),
+            "generationId": generation_id,
+            "candidateManifestDigest": candidate_manifest_digest,
+        }
+    )
+    if normalized is None:
+        raise ProjectError("Inpainting provenance is invalid")
+    return normalized
+
+
+def inpaint_provenance_digest(value: object) -> str | None:
+    normalized = normalize_inpaint_provenance(value)
+    if normalized is None:
+        return None
+    encoded = json.dumps(
+        normalized,
+        ensure_ascii=True,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def current_inpaint_provenance(
+    store: ProjectStore,
+    image: ImageAsset,
+    checksums: dict[str, str],
+) -> tuple[dict[str, object], str] | None:
+    normalized = normalize_inpaint_provenance(image.inpaint_provenance)
+    if normalized is None:
+        return None
+    if normalized["artifactChecksum"] != checksums.get("artifactChecksum") or normalized[
+        "maskChecksum"
+    ] != checksums.get("maskChecksum"):
+        return None
+    if not _inpaint_provenance_matches_candidate_evidence(store, image, normalized):
+        return None
+    digest = inpaint_provenance_digest(normalized)
+    if digest is None:
+        return None
+    return normalized, digest
+
+
+def _inpaint_provenance_matches_candidate_evidence(
+    store: ProjectStore,
+    image: ImageAsset,
+    provenance: dict[str, object],
+) -> bool:
+    """Bind mutable database provenance to the immutable candidate-set evidence."""
+    from manga_localizer.services.inpaint_candidates import (
+        _read_internal_candidate_manifest,
+        inpaint_candidate_manifest_digest,
+        validate_inpaint_candidate_evidence,
+    )
+
+    generation_id = provenance["generationId"]
+    mask_checksum = provenance["maskChecksum"]
+    candidate_id = provenance["candidateId"]
+    origin_kind = provenance["originKind"]
+    provider_ids = provenance["providerIds"]
+    manifest_digest = provenance["candidateManifestDigest"]
+    if origin_kind == "no-op":
+        try:
+            empty_manifest_digest = inpaint_candidate_manifest_digest(
+                generation_id=str(generation_id),
+                mask_checksum=str(mask_checksum),
+                candidates=[],
+            )
+        except ProjectError:
+            return False
+        return (
+            candidate_id == "primary"
+            and provider_ids == []
+            and manifest_digest == empty_manifest_digest
+        )
+
+    try:
+        relative = safe_relative_path(image.relative_path).with_suffix(".png")
+        manifest = _read_internal_candidate_manifest(store, relative)
+        candidates = manifest["candidates"]
+        anchored_digest = validate_inpaint_candidate_evidence(store, relative, manifest)
+    except (OSError, ProjectError, TypeError, ValueError, UnsafePathError):
+        return False
+    if (
+        manifest["generationId"] != generation_id
+        or manifest["maskChecksum"] != mask_checksum
+        or manifest.get("selectedId") != candidate_id
+        or anchored_digest != manifest_digest
+    ):
+        return False
+    matching_records = [
+        record
+        for record in candidates
+        if isinstance(record, dict) and record.get("id") == candidate_id
+    ]
+    if len(matching_records) != 1:
+        return False
+    selected_record = matching_records[0]
+    record_provider_ids = selected_record.get("providerIds")
+    if (
+        not isinstance(record_provider_ids, list)
+        or any(
+            not isinstance(provider_id, str) or not provider_id or len(provider_id) > 80
+            for provider_id in record_provider_ids
+        )
+        or record_provider_ids != sorted(set(record_provider_ids))
+    ):
+        return False
+    return (
+        selected_record.get("artifactChecksum") == provenance["artifactChecksum"]
+        and selected_record.get("originKind") == origin_kind
+        and record_provider_ids == provider_ids
+    )
+
+
 def _generated_stage_path(
     store: ProjectStore,
     image: ImageAsset,
@@ -102,6 +309,15 @@ def _generated_stage_path(
     )
 
 
+def _generated_mask_path(store: ProjectStore, image: ImageAsset) -> Path:
+    relative = safe_relative_path(image.relative_path).with_suffix(".png")
+    return resolve_write_target(
+        store.root,
+        Path("generated") / "masks" / relative,
+        protected_roots=(store.source_root,),
+    )
+
+
 def _sha256_file(path: Path) -> str:
     try:
         if not path.is_file():
@@ -114,19 +330,50 @@ def _sha256_file(path: Path) -> str:
         ) from error
 
 
+def _generated_image_size(path: Path) -> tuple[int, int]:
+    try:
+        with Image.open(path) as opened:
+            opened.verify()
+        with Image.open(path) as opened:
+            return opened.size
+    except (OSError, ValueError) as error:
+        raise ProjectError(
+            "Generated visual-stage artifact could not be decoded; rerun the stage"
+        ) from error
+
+
+def _validate_generated_grid(image: ImageAsset, size: tuple[int, int]) -> None:
+    width, height = size
+    if image.width <= 0 or image.height <= 0:
+        raise ProjectError("Source image has an invalid canonical grid")
+    scale_x = width / image.width
+    scale_y = height / image.height
+    rounded = round(scale_x)
+    if (
+        not math.isclose(scale_x, scale_y, rel_tol=1e-6, abs_tol=1e-6)
+        or not math.isclose(scale_x, rounded, rel_tol=1e-6, abs_tol=1e-6)
+        or not 1 <= rounded <= 4
+    ):
+        raise ProjectError(
+            "Generated visual-stage artifact does not use a supported canonical scale"
+        )
+
+
 def stage_artifact_checksums(
     store: ProjectStore,
     image: ImageAsset,
     stage: str,
 ) -> dict[str, str]:
-    checksums = {"artifactChecksum": _sha256_file(_generated_stage_path(store, image, stage))}
+    artifact_path = _generated_stage_path(store, image, stage)
+    artifact_size = _generated_image_size(artifact_path)
+    _validate_generated_grid(image, artifact_size)
+    checksums = {"artifactChecksum": _sha256_file(artifact_path)}
     if stage == "inpaint":
-        relative = safe_relative_path(image.relative_path).with_suffix(".png")
-        mask_path = resolve_write_target(
-            store.root,
-            Path("generated") / "masks" / relative,
-            protected_roots=(store.source_root,),
-        )
+        mask_path = _generated_mask_path(store, image)
+        mask_size = _generated_image_size(mask_path)
+        _validate_generated_grid(image, mask_size)
+        if mask_size != artifact_size:
+            raise ProjectError("Inpainted artifact and mask use different pixel grids")
         checksums["maskChecksum"] = _sha256_file(mask_path)
     return checksums
 
@@ -145,6 +392,7 @@ def stage_reviews(image: ImageAsset) -> dict[str, dict[str, str | int]]:
         result_revision = record.get("resultRevision")
         artifact_checksum = record.get("artifactChecksum")
         mask_checksum = record.get("maskChecksum")
+        provenance_digest = record.get("provenanceDigest")
         if (
             not isinstance(reviewed_at, str)
             or not reviewed_at
@@ -167,7 +415,100 @@ def stage_reviews(image: ImageAsset) -> dict[str, dict[str, str | int]]:
         }
         if stage == "inpaint":
             normalized[stage]["maskChecksum"] = str(mask_checksum)
+            if isinstance(provenance_digest, str) and _SHA256_RE.fullmatch(provenance_digest):
+                normalized[stage]["provenanceDigest"] = provenance_digest
     return normalized
+
+
+def require_current_accepted_stage_review(
+    store: ProjectStore,
+    image: ImageAsset,
+    stage: str,
+    *,
+    require_ai: bool = False,
+) -> dict[str, str]:
+    """Require an accepted visual review that still matches the current files."""
+    resource = f"image:{image.id}"
+    if stage not in VISUAL_REVIEW_STAGES:
+        raise ProjectError("Visual stage prerequisite is not supported")
+    if (image.status or {}).get(stage) != "done":
+        raise StagePrerequisiteConflict(
+            f"{stage} must be completed and accepted before this operation",
+            resource=resource,
+            stage=stage,
+            reason="stage-not-done",
+        )
+    review = stage_reviews(image).get(stage)
+    if review is None:
+        raise StagePrerequisiteConflict(
+            f"{stage} must be accepted before this operation",
+            resource=resource,
+            stage=stage,
+            reason="review-required",
+        )
+    if review.get("state") != "accepted":
+        raise StagePrerequisiteConflict(
+            f"{stage} was rejected and must be rebuilt and accepted",
+            resource=resource,
+            stage=stage,
+            reason="review-rejected",
+        )
+    try:
+        checksums = stage_artifact_checksums(store, image, stage)
+    except ProjectError as error:
+        raise StagePrerequisiteConflict(
+            f"The accepted {stage} output is unavailable and must be rebuilt",
+            resource=resource,
+            stage=stage,
+            reason="artifact-unavailable",
+        ) from error
+    mismatches = [key for key, checksum in checksums.items() if review.get(key) != checksum]
+    if mismatches:
+        raise StagePrerequisiteConflict(
+            f"The accepted {stage} output changed and must be reviewed again",
+            resource=resource,
+            stage=stage,
+            reason="checksum-mismatch",
+            mismatches=mismatches,
+        )
+    if require_ai and stage == "inpaint":
+        mask_path = _generated_mask_path(store, image)
+        try:
+            with Image.open(mask_path) as opened:
+                has_repair_support = opened.convert("L").getbbox() is not None
+        except (OSError, UnidentifiedImageError, ValueError) as error:
+            raise StagePrerequisiteConflict(
+                "The accepted inpaint mask is unavailable and must be rebuilt",
+                resource=resource,
+                stage=stage,
+                reason="artifact-unavailable",
+            ) from error
+        if has_repair_support:
+            current_provenance = current_inpaint_provenance(store, image, checksums)
+            if current_provenance is None:
+                raise StagePrerequisiteConflict(
+                    "An accepted AI inpaint is required before this operation",
+                    resource=resource,
+                    stage=stage,
+                    reason="ai-inpaint-required",
+                )
+            provenance, provenance_digest = current_provenance
+            provider_ids = provenance["providerIds"]
+            ai_generated = (
+                provenance["originKind"] in {"direct-ai", "ai-derived"}
+                and isinstance(provider_ids, list)
+                and bool(provider_ids)
+                and all(provider_id in AI_INPAINT_PROVIDERS for provider_id in provider_ids)
+                and review.get("provenanceDigest") == provenance_digest
+            )
+            if not ai_generated:
+                raise StagePrerequisiteConflict(
+                    "An accepted AI inpaint is required before this operation",
+                    resource=resource,
+                    stage=stage,
+                    reason="ai-inpaint-required",
+                )
+    return checksums
 
 
 def clear_stage_reviews(image: ImageAsset, stages: set[str]) -> bool:
@@ -239,8 +580,12 @@ def invalidate_image_pipeline(
         if provider_key:
             status[provider_key] = ""
     if "inpaint" in stages:
+        image.inpaint_provenance = None
         status.pop("inpaintCandidate", None)
         status.pop("inpaintCandidates", None)
+        status.pop("renderInputVariant", None)
+        status.pop("renderScale", None)
+        status.pop("renderedSize", None)
     image.status = status
     invalid_error_stages = set().union(*(_ERROR_STAGE_KEYS[stage] for stage in stages))
     image.processing_errors = [
@@ -627,6 +972,18 @@ def review_image_stage(
                 if stage != "inpaint" and observed_mask_checksum is not None:
                     raise ProjectError(f"{stage} reviews cannot include an observed mask checksum")
                 checksums = stage_artifact_checksums(store, image, stage)
+                if stage == "inpaint":
+                    provenance = current_inpaint_provenance(store, image, checksums)
+                    if (
+                        state == "accepted"
+                        and image.inpaint_provenance is not None
+                        and (provenance is None)
+                    ):
+                        raise ProjectError(
+                            "Inpainting provenance changed; rerun inpainting before accepting"
+                        )
+                    if provenance is not None:
+                        checksums["provenanceDigest"] = provenance[1]
                 observed = {"artifactChecksum": observed_artifact_checksum}
                 if stage == "inpaint":
                     observed["maskChecksum"] = observed_mask_checksum
@@ -649,14 +1006,15 @@ def review_image_stage(
                 "stage": stage,
                 "review": reviews.get(stage),
             }
+            previous_review = reviews.get(stage)
             if state == "pending":
                 reviews.pop(stage, None)
                 after = None
                 artifact_changed = False
             else:
-                previous_review = reviews.get(stage)
+                integrity_keys = {"artifactChecksum", "maskChecksum", "provenanceDigest"}
                 artifact_changed = previous_review is not None and any(
-                    previous_review.get(key) != value for key, value in checksums.items()
+                    previous_review.get(key) != checksums.get(key) for key in integrity_keys
                 )
                 after = {
                     "state": state,
@@ -665,11 +1023,26 @@ def review_image_stage(
                     **checksums,
                 }
                 reviews[stage] = after
-            clear_dependents = state != "accepted" or artifact_changed
+            preprocess_requires_redraw = (
+                stage == "preprocess"
+                and state == "accepted"
+                and (
+                    previous_review is None
+                    or previous_review.get("state") != "accepted"
+                    or artifact_changed
+                )
+            )
+            clear_dependents = state != "accepted" or artifact_changed or preprocess_requires_redraw
             cleared_dependents = dependent_reviews if clear_dependents else {}
             if clear_dependents:
                 for dependent in cleared_dependents:
                     reviews.pop(dependent, None)
+            if preprocess_requires_redraw:
+                invalidate_image_pipeline(
+                    store,
+                    image,
+                    {"inpaint", "typeset", "export"},
+                )
             before["clearedDependents"] = cleared_dependents
             status = dict(image.status or {})
             if reviews:

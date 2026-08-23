@@ -679,7 +679,7 @@ function RepairInspector({ region }: { region: Region | undefined }) {
     );
   }
   const repair = region.repair;
-  const updateRepair = (patch: Partial<Region['repair']>) => updateRegion(region.id, { repair: { ...repair, ...patch } });
+  const updateRepair = (patch: Partial<Region['repair']>) => updateRegion(region.id, { repair: patch });
   const inheritedProvider = project?.settings.inpainterProvider ?? 'opencv';
   const provider = repair.inpainterProvider || inheritedProvider;
   const isLama = provider === 'lama' || provider === 'lama-onnx';
@@ -688,11 +688,26 @@ function RepairInspector({ region }: { region: Region | undefined }) {
     (capability) => capability.kind === 'inpainter' && capability.id === provider,
   );
   const providerUnavailable = providerCapability?.available === false;
+  const manualAddStrokeCount = repair.maskEdits?.strokes.filter(
+    (stroke) => stroke.mode === 'add',
+  ).length ?? 0;
   return (
     <div className="form-stack">
       {candidatePicker}
       <div className="notice notice--local"><b>本地处理 · {provider}</b><span>图像、蒙版和修复结果只在本机处理；可在画布用蒙版画笔与橡皮擦精修选中区域。</span></div>
       <div className="notice notice--local"><b>安全修复策略</b><span>只处理已确认、可信自动识别或手工识别区域；完成后任务抽屉会显示实际修复与跳过数量。</span></div>
+      <button
+        aria-label="清除当前区域蒙版笔迹"
+        className="button button--compact"
+        disabled={!repair.maskEdits?.strokes.length}
+        onClick={() => {
+          if (!window.confirm('清除当前区域的全部蒙版画笔和橡皮擦笔迹？')) return;
+          updateRepair({ maskEdits: { version: 1, strokes: [] } });
+        }}
+        type="button"
+      >
+        清除蒙版笔迹{repair.maskEdits?.strokes.length ? `（${repair.maskEdits.strokes.length}）` : ''}
+      </button>
       {providerUnavailable ? <div className="notice notice--warning"><b>当前修复 Provider 不可用</b><span>{providerCapability?.reason}</span></div> : null}
       <Field label="区域修复 Provider" hint="继承使用项目默认；区域覆盖只影响当前文本框。">
         <select
@@ -712,12 +727,21 @@ function RepairInspector({ region }: { region: Region | undefined }) {
           ))}
         </select>
       </Field>
-      <Field label="蒙版策略" hint="文本轮廓优先使用检测多边形并细化字形；区域模式会覆盖整个文本框。">
-        <select onChange={(event) => updateRepair({ maskMode: event.target.value as Region['repair']['maskMode'] })} value={repair.maskMode}>
+      <Field label="蒙版策略" hint="文本轮廓会自动细化字形；完整区域覆盖整个文本框；仅手工模式从空蒙版开始，只使用持久画笔笔迹。">
+        <select aria-label="蒙版策略" onChange={(event) => updateRepair({ maskMode: event.target.value as Region['repair']['maskMode'] })} value={repair.maskMode}>
           <option value="text">文本轮廓（推荐）</option>
           <option value="region">完整区域</option>
+          <option value="manual">仅手工蒙版（空白起步）</option>
         </select>
       </Field>
+      {repair.maskMode === 'manual' ? (
+        <div className={`notice ${manualAddStrokeCount ? 'notice--local' : 'notice--warning'}`}>
+          <b>{manualAddStrokeCount ? `仅手工蒙版 · ${manualAddStrokeCount} 条添加笔迹` : '仅手工蒙版尚未添加范围'}</b>
+          <span>
+            自动字形、文本框、蒙版外扩、膨胀和羽化均不产生修改范围；请用画笔明确扣出文字，橡皮擦仍为最终权威。
+          </span>
+        </div>
+      ) : null}
       <Field label="文字极性" hint="仅文本轮廓模式生效；描边字可只移除字芯并保留反色衬底。">
         <select
           aria-label="文字极性"
@@ -734,19 +758,20 @@ function RepairInspector({ region }: { region: Region | undefined }) {
         <div className="notice notice--local"><b>LaMa AI 背景修复</b><span>使用当前蒙版的局部上下文推理，并保持灰度页不被染色。复杂线稿可在修复完成后比较 Navier–Stokes 与线稿引导候选。</span></div>
       ) : (
         <Field label="修复方法">
-          <select onChange={(event) => updateRepair({ method: event.target.value as Region['repair']['method'] })} value={repair.method}>
+          <select aria-label="修复方法" onChange={(event) => updateRepair({ method: event.target.value as Region['repair']['method'] })} value={repair.method}>
             <option value="telea">OpenCV Telea</option>
             <option value="navier_stokes">OpenCV Navier–Stokes</option>
             <option value="solid">纯色填充</option>
+            <option value="screentone">规则网点 / 底纹修复</option>
           </select>
         </Field>
       )}
       <div className="field-grid">
-        <Field label="蒙版外扩 px"><input max={512} min={0} onChange={(event) => updateRepair({ maskPadding: Math.min(512, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.maskPadding} /></Field>
-        <Field label="膨胀 px"><input max={128} min={0} onChange={(event) => updateRepair({ dilation: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.dilation} /></Field>
-        <Field label="羽化 px"><input max={128} min={0} onChange={(event) => updateRepair({ feather: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.feather} /></Field>
+        <Field label="蒙版外扩 px"><input disabled={repair.maskMode === 'manual'} max={512} min={0} onChange={(event) => updateRepair({ maskPadding: Math.min(512, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.maskPadding} /></Field>
+        <Field label="膨胀 px"><input disabled={repair.maskMode === 'manual'} max={128} min={0} onChange={(event) => updateRepair({ dilation: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.dilation} /></Field>
+        <Field label="羽化 px"><input disabled={repair.maskMode === 'manual'} max={128} min={0} onChange={(event) => updateRepair({ feather: Math.min(128, Math.max(0, Math.round(Number(event.target.value)))) })} type="number" value={repair.feather} /></Field>
         {!isLama ? <Field label="修复半径"><input max={256} min={1} onChange={(event) => updateRepair({ radius: Math.min(256, Math.max(1, Number(event.target.value))) })} type="number" value={repair.radius} /></Field> : null}
-        {!isLama ? <Field label="填充色"><input aria-label="修复填充色" onChange={(event) => updateRepair({ fillColor: event.target.value })} type="color" value={repair.fillColor} /></Field> : null}
+        {!isLama ? <Field label="填充色"><input aria-label="修复填充色" onInput={(event) => updateRepair({ fillColor: event.currentTarget.value })} type="color" value={repair.fillColor} /></Field> : null}
       </div>
       <Toggle checked={showMask} description="在画布上叠加上一次实际生成的蒙版；重新修复后会刷新。" label="显示实际蒙版" onChange={(event) => setShowMask(event.target.checked)} />
       <button
@@ -850,6 +875,14 @@ function ProjectInspector() {
         <ProviderSelect kind="ocr" label="日文 OCR" onChange={(ocrProvider) => update({ ocrProvider })} providers={providers} value={settings.ocrProvider} />
         <ProviderSelect kind="translator" label="翻译" onChange={(translatorProvider) => update({ translatorProvider })} providers={providers} value={settings.translatorProvider} />
         <ProviderSelect kind="inpainter" label="图像修复" onChange={(inpainterProvider) => update({ inpainterProvider })} providers={providers} value={settings.inpainterProvider} />
+        <Toggle
+          checked={settings.requireAIInpaintBeforeDownstream}
+          label="翻译/嵌字前必须验收 AI 补图"
+          onChange={(event) => update({ requireAIInpaintBeforeDownstream: event.target.checked })}
+        />
+        <p className="field-hint">
+          开启后，非 AI 修复候选即使已接受也不会解锁翻译或嵌字；空蒙版页不受影响。
+        </p>
       </section>
       <section className="inspector-section">
         <h3>OCR 前图片增强</h3>

@@ -92,6 +92,10 @@ class ImageAsset(Base):
             "typesettingProvider": "",
         },
     )
+    # Internal generation evidence for the current clean plate. This is kept
+    # separate from ``status`` because status is a public presentation/cache
+    # payload and must never authorize the strict AI-clean-plate gate.
+    inpaint_provenance: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     processing_errors: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     revision: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -240,6 +244,10 @@ def create_project_engine(database_path: Path) -> Engine:
             connection.exec_driver_sql(
                 "ALTER TABLE text_regions ADD COLUMN recognition JSON NOT NULL DEFAULT '{}'"
             )
+    image_columns = {column["name"] for column in inspect(engine).get_columns("images")}
+    if "inpaint_provenance" not in image_columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE images ADD COLUMN inpaint_provenance JSON")
     # Do not normalize rows here. ``ProjectRegistry.open`` needs to observe an
     # empty or malformed payload so it can fail closed and invalidate derived
     # artifacts. Eager SQL backfills used to hide stale schema-2 rows by making

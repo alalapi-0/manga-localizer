@@ -105,6 +105,9 @@ class ImageOut(APIModel):
     translator_provider: str | None
     inpainting_provider: str | None
     typesetting_provider: str | None
+    render_input_variant: Literal["original", "preprocessed"] | None = None
+    render_scale: list[float] | None = None
+    rendered_size: list[int] | None = None
     inpaint_candidate: str | None = None
     inpaint_candidates: list[InpaintCandidateOut] = Field(default_factory=list)
     typeset_overflow_count: int = 0
@@ -372,8 +375,8 @@ def _validate_repair(value: dict[str, Any]) -> dict[str, Any]:
         normalized["radius"] = float(radius)
     if "maskMode" in normalized:
         mask_mode = normalized["maskMode"]
-        if not isinstance(mask_mode, str) or mask_mode not in {"region", "text"}:
-            raise ValueError("maskMode must be region or text")
+        if not isinstance(mask_mode, str) or mask_mode not in {"region", "text", "manual"}:
+            raise ValueError("maskMode must be region, text, or manual")
     if "textPolarity" in normalized:
         text_polarity = normalized["textPolarity"]
         if not isinstance(text_polarity, str) or text_polarity not in {
@@ -390,9 +393,10 @@ def _validate_repair(value: dict[str, Any]) -> dict[str, Any]:
             "navier-stokes": "navier-stokes",
             "navier_stokes": "navier-stokes",
             "solid": "solid",
+            "screentone": "screentone",
         }
         if not isinstance(method, str) or method not in aliases:
-            raise ValueError("method must be telea, navier-stokes, or solid")
+            raise ValueError("method must be telea, navier-stokes, solid, or screentone")
         normalized["method"] = aliases[method]
     if "fillColor" in normalized:
         fill_color = normalized["fillColor"]

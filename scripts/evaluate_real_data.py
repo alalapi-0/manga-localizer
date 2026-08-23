@@ -460,6 +460,7 @@ def run(args: argparse.Namespace) -> int:
             for image in imported.json()
         }
         for stage in stages:
+            started = time.monotonic()
             response = client.post(
                 f"/api/projects/{project['id']}/{stage}",
                 json={
@@ -467,6 +468,24 @@ def run(args: argparse.Namespace) -> int:
                     "options": job_options(stage, args, output),
                 },
             )
+            if response.status_code == 409:
+                elapsed = time.monotonic() - started
+                stage_reports.append(
+                    {
+                        "kind": stage,
+                        "status": "blocked",
+                        "total": len(image_ids),
+                        "completed": 0,
+                        "failedItems": len(image_ids),
+                        "seconds": round(elapsed, 3),
+                    }
+                )
+                print(
+                    f"[{stage}] blocked by an unmet reviewed-stage prerequisite "
+                    f"(0/{len(image_ids)}, {elapsed:.1f}s)",
+                    flush=True,
+                )
+                continue
             response.raise_for_status()
             job, elapsed = wait_for_job(
                 client,

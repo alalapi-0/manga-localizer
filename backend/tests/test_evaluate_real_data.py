@@ -102,6 +102,9 @@ def test_evaluator_generated_export_stays_gated_without_review(tmp_path: Path) -
     assert result == 1
     report = json.loads((output / "report.json").read_text(encoding="utf-8"))
     assert report["configuration"]["exportFormat"] == "both"
+    typeset_stage = next(stage for stage in report["stages"] if stage["kind"] == "typeset")
+    assert typeset_stage["status"] == "blocked"
+    assert typeset_stage["failedItems"] == 1
     export_stage = next(stage for stage in report["stages"] if stage["kind"] == "export")
     assert export_stage["status"] == "failed"
     assert export_stage["failedItems"] == 1

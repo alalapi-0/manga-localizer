@@ -231,6 +231,24 @@ describe('canvas generated-image refresh', () => {
       .toBeUndefined();
   });
 
+  it('renders a persisted single-point mask stroke as a visible circle', () => {
+    const region = regionFixture('region-1');
+    region.repair.maskEdits = {
+      version: 1,
+      strokes: [
+        { mode: 'add', radius: 13, points: [[120, 140]] },
+        { mode: 'erase', radius: 6, points: [[150, 160], [150, 180]] },
+      ],
+    };
+    seedWorkbench({ regions: [region], selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.setState({ canvasTool: 'mask-brush' });
+
+    const { container } = render(<CanvasWorkspace />);
+
+    expect(container.querySelectorAll('[data-konva="Circle"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-konva="Line"]')).toHaveLength(1);
+  });
+
   it('caps mask strokes at the backend resource contract before autosave', () => {
     const oversizedStroke = buildMaskStroke(
       'add',
@@ -415,6 +433,36 @@ describe('canvas generated-image refresh', () => {
         maskChecksum: 'aa'.repeat(32),
       }),
     ));
+  });
+
+  it('accepts a high-resolution inpaint grid only when its mask matches', async () => {
+    const image = imageFixture('image-1', {
+      revision: 7,
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({ canvasMode: 'erased', showMask: true });
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => ({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'image/png' }),
+      arrayBuffer: async () => new TextEncoder().encode(String(input)).buffer,
+    }) as unknown as Response));
+    vi.stubGlobal('createImageBitmap', vi.fn(async (blob: Blob) => {
+      const source = await blob.text();
+      return {
+        width: source.includes('/generated/mask') ? 1200 : 2400,
+        height: source.includes('/generated/mask') ? 1800 : 3600,
+        close: vi.fn(),
+      } as unknown as ImageBitmap;
+    }));
+
+    render(<CanvasWorkspace />);
+
+    await waitFor(() => expect(
+      screen.getByLabelText('当前视觉阶段复核'),
+    ).toHaveTextContent('复核文件读取失败'));
+    expect(screen.getByRole('button', { name: '接受' })).toBeDisabled();
   });
 
   it('shows the review mask when the operator opens the erased preview', async () => {

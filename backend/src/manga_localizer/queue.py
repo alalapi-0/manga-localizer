@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import logging
 import math
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,13 @@ from manga_localizer.providers.detection import (
     detection_min_side_for_image,
     detection_region_is_usable,
 )
+from manga_localizer.providers.inpainting_lama import (
+    COMPONENT_CONTEXT_PADDING,
+    COMPONENT_INFERENCE_PADDING,
+    DEFAULT_INFERENCE_PADDING,
+    MODEL_SIZE,
+    TILE_OVERLAP,
+)
 from manga_localizer.providers.ocr import OCRRegion
 from manga_localizer.providers.registry import ProviderRegistry
 from manga_localizer.security import (
@@ -44,12 +53,16 @@ from manga_localizer.services.exporting import (
     write_json_export_summary,
 )
 from manga_localizer.services.images import (
+    StagePrerequisiteConflict,
     clear_stage_reviews,
     image_path,
     invalidate_image_pipeline,
+    make_inpaint_provenance,
+    require_current_accepted_stage_review,
     reset_image_review,
 )
 from manga_localizer.services.inpaint_candidates import (
+    inpaint_candidate_manifest_digest,
     prepare_page_inpaint_candidates,
     write_page_inpaint_candidates,
 )
@@ -97,6 +110,13 @@ class PersistentJobQueue:
         self.settings = settings
         self._runner: asyncio.Task[None] | None = None
         self._stopping = asyncio.Event()
+
+    @staticmethod
+    def _requires_ai_inpaint(project_settings: dict[str, Any]) -> bool:
+        value = project_settings.get("requireAIInpaintBeforeDownstream", False)
+        if type(value) is not bool:
+            raise ProjectError("requireAIInpaintBeforeDownstream must be a boolean")
+        return value
 
     @property
     def running(self) -> bool:
@@ -574,6 +594,7 @@ class PersistentJobQueue:
         safe_options["concurrency"] = concurrency
         with store.session() as session:
             project = store.project(session)
+            require_ai_inpaint = self._requires_ai_inpaint(dict(project.settings))
             available_images = {
                 image.id: image
                 for image in session.scalars(
@@ -605,6 +626,22 @@ class PersistentJobQueue:
                 targets = [(image_id, None) for image_id in image_ids]
             if not targets:
                 raise ProjectError("A job must contain at least one image or region")
+            if kind in {"translate", "typeset", "render"}:
+                for target_image_id in sorted({target[0] for target in targets if target[0]}):
+                    target_image = available_images[target_image_id]
+                    if kind == "translate":
+                        require_current_accepted_stage_review(
+                            store,
+                            target_image,
+                            "inpaint",
+                            require_ai=require_ai_inpaint,
+                        )
+                    else:
+                        self._accepted_inpaint_render_source(
+                            store,
+                            target_image,
+                            require_ai=require_ai_inpaint,
+                        )
             job = Job(
                 project_id=project.id,
                 kind=kind,
@@ -867,6 +904,198 @@ class PersistentJobQueue:
             processed_height / image.height,
             "preprocessed",
         )
+
+    @classmethod
+    def _inpaint_processing_source(
+        cls,
+        store: ProjectStore,
+        image: ImageAsset,
+    ) -> tuple[Path, float, float, str]:
+        """Use preprocessing for redraw only after its exact pixels were accepted."""
+        original = image_path(store, image)
+        if image.status.get("preprocess") != "done":
+            return original, 1.0, 1.0, "original"
+        try:
+            require_current_accepted_stage_review(store, image, "preprocess")
+        except StagePrerequisiteConflict:
+            return original, 1.0, 1.0, "original"
+        processed = cls._preprocessed_path(store, image.relative_path)
+        try:
+            with Image.open(processed) as opened:
+                processed_width, processed_height = opened.size
+        except (OSError, ValueError) as error:
+            raise StagePrerequisiteConflict(
+                "The accepted preprocess output is unavailable and must be rebuilt",
+                resource=f"image:{image.id}",
+                stage="preprocess",
+                reason="artifact-unavailable",
+            ) from error
+        scale_x = processed_width / image.width
+        scale_y = processed_height / image.height
+        cls._render_scale(scale_x, scale_y)
+        return processed, scale_x, scale_y, "preprocessed"
+
+    @classmethod
+    def _accepted_inpaint_render_source(
+        cls,
+        store: ProjectStore,
+        image: ImageAsset,
+        *,
+        require_ai: bool,
+    ) -> tuple[Path, float, float, str]:
+        """Return the immutable source plus the accepted clean plate's render grid."""
+        require_current_accepted_stage_review(
+            store,
+            image,
+            "inpaint",
+            require_ai=require_ai,
+        )
+        relative = safe_relative_path(image.relative_path).with_suffix(".png")
+        artifact = resolve_write_target(
+            store.root,
+            Path("generated") / "inpainted" / relative,
+            protected_roots=(store.source_root,),
+        )
+        try:
+            with Image.open(artifact) as opened:
+                rendered_width, rendered_height = opened.size
+        except (OSError, ValueError) as error:
+            raise StagePrerequisiteConflict(
+                "The accepted inpaint output is unavailable and must be rebuilt",
+                resource=f"image:{image.id}",
+                stage="inpaint",
+                reason="artifact-unavailable",
+            ) from error
+        scale_x = rendered_width / image.width
+        scale_y = rendered_height / image.height
+        cls._render_scale(scale_x, scale_y)
+        status = image.status or {}
+        recorded_variant = status.get("renderInputVariant")
+        recorded_scale = status.get("renderScale")
+        recorded_size = status.get("renderedSize")
+        lineage_matches = (
+            recorded_variant in {"original", "preprocessed"}
+            and isinstance(recorded_scale, list)
+            and len(recorded_scale) == 2
+            and all(
+                isinstance(value, (int, float))
+                and not isinstance(value, bool)
+                and math.isfinite(float(value))
+                for value in recorded_scale
+            )
+            and math.isclose(float(recorded_scale[0]), scale_x, rel_tol=1e-6, abs_tol=1e-6)
+            and math.isclose(float(recorded_scale[1]), scale_y, rel_tol=1e-6, abs_tol=1e-6)
+            and recorded_size == [rendered_width, rendered_height]
+            and (recorded_variant == "preprocessed" or cls._render_scale(scale_x, scale_y) == 1)
+        )
+        if not lineage_matches:
+            raise StagePrerequisiteConflict(
+                "The accepted inpaint render lineage changed and must be rebuilt",
+                resource=f"image:{image.id}",
+                stage="inpaint",
+                reason="checksum-mismatch",
+                mismatches=["renderLineage"],
+            )
+        if recorded_variant == "preprocessed":
+            require_current_accepted_stage_review(store, image, "preprocess")
+        return image_path(store, image), scale_x, scale_y, str(recorded_variant)
+
+    @staticmethod
+    def _render_scale(scale_x: float, scale_y: float) -> int:
+        """Return the supported canonical-to-render scale or fail closed."""
+        if (
+            not math.isfinite(scale_x)
+            or not math.isfinite(scale_y)
+            or not math.isclose(scale_x, scale_y, rel_tol=1e-6, abs_tol=1e-6)
+        ):
+            raise ProjectError("Preprocessed render input must use one uniform scale")
+        rounded = round(scale_x)
+        if not math.isclose(scale_x, rounded, rel_tol=1e-6, abs_tol=1e-6) or not 1 <= rounded <= 4:
+            raise ProjectError("Preprocessed render input must use a 1x to 4x integer scale")
+        return rounded
+
+    @staticmethod
+    def _scale_render_region(
+        region: dict[str, Any],
+        scale_x: float,
+        scale_y: float,
+    ) -> dict[str, Any]:
+        """Map one canonical persisted region into a transient render-pixel snapshot."""
+        scale = PersistentJobQueue._render_scale(scale_x, scale_y)
+        scaled = dict(region)
+        for key, axis_scale in (
+            ("x", scale_x),
+            ("y", scale_y),
+            ("width", scale_x),
+            ("height", scale_y),
+        ):
+            scaled[key] = float(region[key]) * axis_scale
+
+        raw_style = region.get("style")
+        if isinstance(raw_style, dict):
+            style = dict(raw_style)
+            for key in (
+                "fontSize",
+                "font_size",
+                "minFontSize",
+                "min_font_size",
+                "maxFontSize",
+                "max_font_size",
+                "strokeWidth",
+                "stroke_width",
+                "letterSpacing",
+                "letter_spacing",
+                "padding",
+            ):
+                value = style.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    multiplied = float(value) * scale
+                    style[key] = round(multiplied) if isinstance(value, int) else multiplied
+            scaled["style"] = style
+
+        raw_repair = region.get("repair")
+        if isinstance(raw_repair, dict):
+            repair = dict(raw_repair)
+            for key in (
+                "padding",
+                "maskPadding",
+                "dilation",
+                "feather",
+                "radius",
+                "contextPadding",
+            ):
+                value = repair.get(key)
+                if isinstance(value, (int, float)) and not isinstance(value, bool):
+                    multiplied = float(value) * scale
+                    repair[key] = round(multiplied) if isinstance(value, int) else multiplied
+            polygon = repair.get("maskPolygon")
+            if isinstance(polygon, list):
+                repair["maskPolygon"] = [
+                    [float(point[0]) * scale_x, float(point[1]) * scale_y]
+                    for point in polygon
+                    if isinstance(point, (list, tuple)) and len(point) == 2
+                ]
+            edits = repair.get("maskEdits")
+            if isinstance(edits, dict) and isinstance(edits.get("strokes"), list):
+                scaled_strokes: list[dict[str, Any]] = []
+                for raw_stroke in edits["strokes"]:
+                    if not isinstance(raw_stroke, dict):
+                        continue
+                    stroke = dict(raw_stroke)
+                    radius = stroke.get("radius")
+                    if isinstance(radius, (int, float)) and not isinstance(radius, bool):
+                        stroke["radius"] = float(radius) * scale
+                    points = stroke.get("points")
+                    if isinstance(points, list):
+                        stroke["points"] = [
+                            [float(point[0]) * scale_x, float(point[1]) * scale_y]
+                            for point in points
+                            if isinstance(point, (list, tuple)) and len(point) == 2
+                        ]
+                    scaled_strokes.append(stroke)
+                repair["maskEdits"] = {**edits, "strokes": scaled_strokes}
+            scaled["repair"] = repair
+        return scaled
 
     @staticmethod
     def _clamp_box(
@@ -1577,6 +1806,12 @@ class PersistentJobQueue:
                 raise ProjectError("Translation image was not found")
             project = store.project(session)
             project_settings = dict(project.settings)
+            require_current_accepted_stage_review(
+                store,
+                image,
+                "inpaint",
+                require_ai=self._requires_ai_inpaint(project_settings),
+            )
             expected_image_revision = image.revision
             page_regions = list(
                 session.scalars(
@@ -1642,6 +1877,12 @@ class PersistentJobQueue:
                 "translation",
             )
             project = store.project(session)
+            require_current_accepted_stage_review(
+                store,
+                current_image,
+                "inpaint",
+                require_ai=self._requires_ai_inpaint(dict(project.settings)),
+            )
             review_changed = False
             for target_id, value in translated:
                 current = session.get(TextRegion, target_id)
@@ -1738,6 +1979,19 @@ class PersistentJobQueue:
             if image is None:
                 raise ProjectError("Render image was not found")
             project = store.project(session)
+            require_ai_inpaint = self._requires_ai_inpaint(dict(project.settings))
+            if kind == "inpaint":
+                source, scale_x, scale_y, render_input_variant = self._inpaint_processing_source(
+                    store, image
+                )
+            else:
+                source, scale_x, scale_y, render_input_variant = (
+                    self._accepted_inpaint_render_source(
+                        store,
+                        image,
+                        require_ai=require_ai_inpaint,
+                    )
+                )
             typesetting_provider_name = str(
                 (
                     options.get("provider")
@@ -1745,10 +1999,6 @@ class PersistentJobQueue:
                     else options.get("typesetterProvider")
                 )
                 or "pillow"
-            )
-            inpaint_is_current = image.status.get("inpaint") == "done"
-            recorded_repair_policy = image.status.get("inpaintingRepairPolicy") or image.status.get(
-                "repairPolicy"
             )
             recorded_inpainting_provider = image.status.get("inpaintingProvider")
             persisted_inpainting_provider = recorded_inpainting_provider
@@ -1775,7 +2025,8 @@ class PersistentJobQueue:
                     .order_by(TextRegion.reading_order)
                 ).all()
             )
-            source = image_path(store, image)
+            render_scale = self._render_scale(scale_x, scale_y)
+            rendered_size = [round(image.width * scale_x), round(image.height * scale_y)]
             relative = safe_relative_path(image.relative_path).with_suffix(".png")
             expected_image_revision = image.revision
             expected_region_versions = {region.id: region.revision for region in regions}
@@ -1793,7 +2044,15 @@ class PersistentJobQueue:
             )
         if kind != "inpaint" and typesetting_provider_name != "pillow":
             raise ProjectError(f"Unknown typesetting provider: {typesetting_provider_name}")
-        active_regions = [region_payload(region) for region in regions if not region.ignored]
+        active_regions_canonical = [
+            region_payload(region) for region in regions if not region.ignored
+        ]
+        active_regions = [
+            self._scale_render_region(region, scale_x, scale_y)
+            for region in active_regions_canonical
+        ]
+        canonical_regions_by_id = {str(region["id"]): region for region in active_regions_canonical}
+        render_regions_by_id = {str(region["id"]): region for region in active_regions}
 
         def should_repair(region: dict[str, Any]) -> bool:
             if repair_policy == "all":
@@ -1814,6 +2073,9 @@ class PersistentJobQueue:
         repair_data = [region for region in active_regions if should_repair(region)]
         typesetting_data = [
             region for region in repair_data if str(region.get("translationText", "")).strip()
+        ]
+        typesetting_data_canonical = [
+            canonical_regions_by_id[str(region["id"])] for region in typesetting_data
         ]
         inpaint_relative = Path("generated") / "inpainted" / relative
         typeset_relative = Path("generated") / "typeset" / relative
@@ -1842,21 +2104,45 @@ class PersistentJobQueue:
         public_inpaint_candidates: list[dict[str, Any]] = []
         pending_candidate_files: list[tuple[str, bytes]] = []
         pending_candidate_manifest: list[dict[str, Any]] = []
+        inpaint_generation_id: str | None = None
         region_inpainting_providers: dict[str, str] = {}
         full_context_provider_name: str | None = None
+        component_candidate_allowed = True
         effective_inpainting_provider_name = str(
             recorded_inpainting_provider or page_inpainting_provider_name
         )
         rebuilt_inpaint = False
         overlay_ids: list[str] = []
         did_partial_typeset = False
-        if (
-            kind != "typeset"
-            or not inpaint_is_current
-            or recorded_repair_policy != repair_policy
-            or not inpaint_path.exists()
-        ):
+
+        def render_int_option(
+            option_key: str,
+            repair: dict[str, Any],
+            repair_keys: tuple[str, ...],
+            default: int,
+        ) -> int:
+            if option_key in options:
+                return round(float(options[option_key]) * render_scale)
+            for repair_key in repair_keys:
+                if repair_key in repair:
+                    return int(repair[repair_key])
+            return default * render_scale
+
+        def render_float_option(
+            option_key: str,
+            repair: dict[str, Any],
+            repair_key: str,
+            default: float,
+        ) -> float:
+            if option_key in options:
+                return float(options[option_key]) * render_scale
+            if repair_key in repair:
+                return float(repair[repair_key])
+            return default * render_scale
+
+        if kind == "inpaint":
             rebuilt_inpaint = True
+            inpaint_generation_id = str(uuid.uuid4())
             try:
                 page_inpainting_provider = self.providers.inpainter(page_inpainting_provider_name)
             except ValueError as error:
@@ -1870,6 +2156,7 @@ class PersistentJobQueue:
                 padding=0,
                 dilation=0,
                 feather=0,
+                render_scale=render_scale,
             )
             cleaned: Path | Image.Image = source
             repaired_region_count = 0
@@ -1885,27 +2172,23 @@ class PersistentJobQueue:
                 inpainting_provider_name = str(
                     getattr(inpainting_provider, "name", requested_region_provider)
                 )
-                region_inpainting_providers[str(region["id"])] = inpainting_provider_name
-                padding = int(
-                    options.get(
-                        "padding",
-                        repair.get(
-                            "maskPadding",
-                            repair.get("padding", DEFAULT_REPAIR_SETTINGS["maskPadding"]),
-                        ),
-                    )
+                padding = render_int_option(
+                    "padding",
+                    repair,
+                    ("maskPadding", "padding"),
+                    int(DEFAULT_REPAIR_SETTINGS["maskPadding"]),
                 )
-                dilation = int(
-                    options.get(
-                        "dilation",
-                        repair.get("dilation", DEFAULT_REPAIR_SETTINGS["dilation"]),
-                    )
+                dilation = render_int_option(
+                    "dilation",
+                    repair,
+                    ("dilation",),
+                    int(DEFAULT_REPAIR_SETTINGS["dilation"]),
                 )
-                feather = int(
-                    options.get(
-                        "feather",
-                        repair.get("feather", DEFAULT_REPAIR_SETTINGS["feather"]),
-                    )
+                feather = render_int_option(
+                    "feather",
+                    repair,
+                    ("feather",),
+                    int(DEFAULT_REPAIR_SETTINGS["feather"]),
                 )
                 default_mask_mode = str(DEFAULT_REPAIR_SETTINGS["maskMode"])
                 mask_mode = str(options.get("maskMode", repair.get("maskMode", default_mask_mode)))
@@ -1938,9 +2221,13 @@ class PersistentJobQueue:
                     feather=feather,
                     mask_mode=mask_mode,
                     text_polarity=text_polarity,
+                    render_scale=render_scale,
                 )
                 if not np.any(region_mask):
                     continue
+                region_inpainting_providers[str(region["id"])] = inpainting_provider_name
+                if inpainting_provider_name not in {"lama", "lama-onnx"} or mask_mode != "manual":
+                    component_candidate_allowed = False
                 mask = np.maximum(mask, region_mask)
                 if inpainting_provider_name in {"lama", "lama-onnx"}:
                     if full_context_provider_name is None:
@@ -1948,23 +2235,28 @@ class PersistentJobQueue:
                     generated = inpainting_provider.inpaint(
                         cleaned,
                         region_mask,
-                        context_padding=int(
-                            options.get("contextPadding", repair.get("contextPadding", 64))
+                        context_padding=render_int_option(
+                            "contextPadding",
+                            repair,
+                            ("contextPadding",),
+                            64,
                         ),
+                        inference_padding=DEFAULT_INFERENCE_PADDING * render_scale,
                         # The persisted region mask already contains the final
                         # feather weights. Blurring again inside LaMa would make
                         # its composite boundary diverge from that saved mask.
                         feather=0,
+                        render_scale=render_scale,
                     )
                 else:
                     generated = inpainting_provider.inpaint(
                         cleaned,
                         region_mask,
-                        radius=float(
-                            options.get(
-                                "radius",
-                                repair.get("radius", DEFAULT_REPAIR_SETTINGS["radius"]),
-                            )
+                        radius=render_float_option(
+                            "radius",
+                            repair,
+                            "radius",
+                            float(DEFAULT_REPAIR_SETTINGS["radius"]),
                         ),
                         method=str(
                             options.get(
@@ -1978,6 +2270,7 @@ class PersistentJobQueue:
                                 repair.get("fillColor", DEFAULT_REPAIR_SETTINGS["fillColor"]),
                             )
                         ),
+                        render_scale=render_scale,
                     )
                 cleaned = self._preserve_mask_outside(cleaned, generated, region_mask)
                 repaired_region_count += 1
@@ -1994,15 +2287,126 @@ class PersistentJobQueue:
             with Image.open(source) as opened:
                 opened.load()
                 original = opened.convert("RGBA" if "A" in opened.getbands() else "RGB")
+            used_only_lama = bool(region_inpainting_providers) and all(
+                name in {"lama", "lama-onnx"} for name in region_inpainting_providers.values()
+            )
+            component_context_candidate: Image.Image | None = None
+            if (
+                full_context_provider_name is not None
+                and used_only_lama
+                and component_candidate_allowed
+                and np.any(mask)
+            ):
+                try:
+                    component_provider = self.providers.inpainter(full_context_provider_name)
+                    component_runner = getattr(component_provider, "inpaint_components", None)
+                    if callable(component_runner):
+                        generated_component_context = component_runner(
+                            original,
+                            mask,
+                            context_padding=COMPONENT_CONTEXT_PADDING * render_scale,
+                            inference_padding=COMPONENT_INFERENCE_PADDING * render_scale,
+                            feather=0,
+                            render_scale=render_scale,
+                        )
+                        component_context_candidate = self._preserve_mask_outside(
+                            original,
+                            generated_component_context,
+                            mask,
+                        )
+                except Exception:
+                    # This is an optional comparison candidate. The ordinary
+                    # per-region result remains valid if local component redraw
+                    # is unavailable, malformed, or exceeds its conservative cap.
+                    logger.warning("Optional component-context inpaint candidate was skipped")
+            overview_refine_candidate: Image.Image | None = None
+            overview_base_candidate: Image.Image | None = None
+            overview_refine_provider_name: str | None = None
+            mask_rows, mask_columns = np.nonzero(mask > 0)
+            overview_refine_needed = bool(len(mask_rows)) and (
+                int(mask_rows.min()) == 0
+                or int(mask_columns.min()) == 0
+                or int(mask_rows.max()) == mask.shape[0] - 1
+                or int(mask_columns.max()) == mask.shape[1] - 1
+                or int(mask_rows.max() - mask_rows.min() + 1) > MODEL_SIZE - TILE_OVERLAP
+                or int(mask_columns.max() - mask_columns.min() + 1) > MODEL_SIZE - TILE_OVERLAP
+            )
+            if (
+                full_context_provider_name is not None
+                and used_only_lama
+                and component_candidate_allowed
+                and overview_refine_needed
+            ):
+                try:
+                    overview_provider = self.providers.inpainter(full_context_provider_name)
+                    overview_pair_runner = getattr(
+                        overview_provider,
+                        "inpaint_overview_candidates",
+                        None,
+                    )
+                    if callable(overview_pair_runner):
+                        generated_overview_base, generated_overview_refine = overview_pair_runner(
+                            original,
+                            mask,
+                            context_padding=128 * render_scale,
+                            inference_padding=DEFAULT_INFERENCE_PADDING * render_scale,
+                            feather=0,
+                            render_scale=render_scale,
+                        )
+                        preserved_overview_base = self._preserve_mask_outside(
+                            original,
+                            generated_overview_base,
+                            mask,
+                        )
+                        preserved_overview_refine = self._preserve_mask_outside(
+                            original,
+                            generated_overview_refine,
+                            mask,
+                        )
+                        overview_base_candidate = preserved_overview_base
+                        overview_refine_candidate = preserved_overview_refine
+                        overview_refine_provider_name = full_context_provider_name
+                    else:
+                        overview_runner = getattr(
+                            overview_provider,
+                            "inpaint_overview_refine",
+                            None,
+                        )
+                        if callable(overview_runner):
+                            generated_overview_refine = overview_runner(
+                                original,
+                                mask,
+                                context_padding=128 * render_scale,
+                                inference_padding=DEFAULT_INFERENCE_PADDING * render_scale,
+                                feather=0,
+                                render_scale=render_scale,
+                            )
+                            overview_refine_candidate = self._preserve_mask_outside(
+                                original,
+                                generated_overview_refine,
+                                mask,
+                            )
+                            overview_refine_provider_name = full_context_provider_name
+                except Exception:
+                    # Large-cavity overview repair is an optional comparison aid.
+                    # Its failure must never invalidate the ordinary provider result.
+                    logger.warning("Optional overview-refine inpaint candidate was skipped")
             full_context_candidate: Image.Image | None = None
             if full_context_provider_name is not None and np.any(mask):
                 full_context_provider = self.providers.inpainter(full_context_provider_name)
                 try:
-                    full_context_candidate = full_context_provider.inpaint(
+                    generated_full_context = full_context_provider.inpaint(
                         original,
                         mask,
-                        context_padding=128,
+                        context_padding=128 * render_scale,
+                        inference_padding=DEFAULT_INFERENCE_PADDING * render_scale,
                         feather=0,
+                        render_scale=render_scale,
+                    )
+                    full_context_candidate = self._preserve_mask_outside(
+                        original,
+                        generated_full_context,
+                        mask,
                     )
                 except Exception:
                     # The extra whole-union pass is a comparison aid. Primary
@@ -2010,9 +2414,6 @@ class PersistentJobQueue:
                     # candidate must never fail the page or expose provider
                     # exception details in public job output.
                     logger.warning("Optional full-context inpaint candidate was skipped")
-            used_only_lama = bool(region_inpainting_providers) and all(
-                name in {"lama", "lama-onnx"} for name in region_inpainting_providers.values()
-            )
             (
                 selected_inpaint_candidate,
                 inpainted_bytes,
@@ -2024,8 +2425,23 @@ class PersistentJobQueue:
                 mask=mask,
                 primary=cleaned,
                 used_only_lama=used_only_lama,
-                radius=float(DEFAULT_REPAIR_SETTINGS["radius"]),
+                radius=float(DEFAULT_REPAIR_SETTINGS["radius"]) * render_scale,
+                render_scale=render_scale,
                 full_context=full_context_candidate,
+                component_context=component_context_candidate,
+                overview_base=overview_base_candidate,
+                overview_refine=overview_refine_candidate,
+                primary_provider_ids=sorted(routed_providers),
+                full_context_provider_id=(
+                    full_context_provider_name if full_context_candidate is not None else None
+                ),
+                component_context_provider_id=(
+                    full_context_provider_name if component_context_candidate is not None else None
+                ),
+                overview_provider_id=(
+                    overview_refine_provider_name if overview_base_candidate is not None else None
+                ),
+                overview_refine_provider_id=overview_refine_provider_name,
             )
             with Image.open(io.BytesIO(inpainted_bytes)) as selected_image:
                 selected_image.load()
@@ -2036,17 +2452,22 @@ class PersistentJobQueue:
         if kind == "typeset":
             requested_ids = self._typeset_region_ids(options)
             if requested_ids and not rebuilt_inpaint:
-                page_ids = {str(region["id"]) for region in active_regions}
+                page_ids = {str(region["id"]) for region in active_regions_canonical}
                 matching = [region_id for region_id in requested_ids if region_id in page_ids]
                 if matching and typeset_path.is_file() and inpaint_path.is_file():
-                    overlay_ids = expand_typeset_region_ids(typesetting_data, matching)
+                    overlay_ids = expand_typeset_region_ids(
+                        typesetting_data_canonical,
+                        matching,
+                    )
                     overlay_set = set(overlay_ids)
                     overlay_ids.extend(
                         region_id for region_id in matching if region_id not in overlay_set
                     )
                     overlay_set = set(overlay_ids)
                     punch_regions = [
-                        region for region in active_regions if str(region["id"]) in overlay_set
+                        render_regions_by_id[region_id]
+                        for region_id in overlay_ids
+                        if region_id in render_regions_by_id
                     ]
                     typesetting_data = [
                         region for region in typesetting_data if str(region["id"]) in overlay_set
@@ -2101,7 +2522,11 @@ class PersistentJobQueue:
             renderable_typesetting_data = [
                 region for region in typesetting_data if overlaps_actual_mask(region)
             ]
-            result = typeset_image(typeset_source, renderable_typesetting_data)
+            result = typeset_image(
+                typeset_source,
+                renderable_typesetting_data,
+                geometry_scale=render_scale,
+            )
             typeset_bytes = self._png_bytes(result.image)
             layouts = result.layouts
         else:
@@ -2116,15 +2541,28 @@ class PersistentJobQueue:
                 expected_region_versions,
                 "rendering",
             )
+            if kind == "inpaint" and render_input_variant == "preprocessed":
+                require_current_accepted_stage_review(store, current, "preprocess")
+            if kind != "inpaint":
+                project = store.project(session)
+                self._accepted_inpaint_render_source(
+                    store,
+                    current,
+                    require_ai=self._requires_ai_inpaint(dict(project.settings)),
+                )
             if mask_bytes is not None:
                 atomic_write_bytes(mask_path, mask_bytes)
             if inpainted_bytes is not None:
                 atomic_write_bytes(inpaint_path, inpainted_bytes)
             if pending_candidate_files and selected_inpaint_candidate is not None:
+                assert inpaint_generation_id is not None
+                assert mask_bytes is not None
                 write_page_inpaint_candidates(
                     store,
                     relative,
                     selected_id=selected_inpaint_candidate,
+                    generation_id=inpaint_generation_id,
+                    mask_checksum=hashlib.sha256(mask_bytes).hexdigest(),
                     encoded_files=pending_candidate_files,
                     manifest_candidates=pending_candidate_manifest,
                 )
@@ -2140,8 +2578,50 @@ class PersistentJobQueue:
             status = dict(current.status)
             status["inpaint"] = "done"
             if mask_bytes is not None:
+                assert inpainted_bytes is not None
+                assert inpaint_generation_id is not None
+                artifact_checksum = hashlib.sha256(inpainted_bytes).hexdigest()
+                mask_checksum = hashlib.sha256(mask_bytes).hexdigest()
+                candidate_manifest_digest = inpaint_candidate_manifest_digest(
+                    generation_id=inpaint_generation_id,
+                    mask_checksum=mask_checksum,
+                    candidates=pending_candidate_manifest,
+                )
+                if np.any(render_mask):
+                    selected_record = next(
+                        (
+                            record
+                            for record in pending_candidate_manifest
+                            if record.get("id") == selected_inpaint_candidate
+                        ),
+                        None,
+                    )
+                    if selected_record is None:
+                        raise ProjectError("Selected inpainting provenance is unavailable")
+                    current.inpaint_provenance = make_inpaint_provenance(
+                        artifact_checksum=artifact_checksum,
+                        mask_checksum=mask_checksum,
+                        candidate_id=str(selected_record["id"]),
+                        origin_kind=str(selected_record["originKind"]),
+                        provider_ids=selected_record["providerIds"],
+                        generation_id=inpaint_generation_id,
+                        candidate_manifest_digest=candidate_manifest_digest,
+                    )
+                else:
+                    current.inpaint_provenance = make_inpaint_provenance(
+                        artifact_checksum=artifact_checksum,
+                        mask_checksum=mask_checksum,
+                        candidate_id="primary",
+                        origin_kind="no-op",
+                        provider_ids=[],
+                        generation_id=inpaint_generation_id,
+                        candidate_manifest_digest=candidate_manifest_digest,
+                    )
                 status["inpaintingProvider"] = effective_inpainting_provider_name
                 status["inpaintingRepairPolicy"] = repair_policy
+                status["renderInputVariant"] = render_input_variant
+                status["renderScale"] = [scale_x, scale_y]
+                status["renderedSize"] = rendered_size
                 status.pop("repairPolicy", None)
                 if public_inpaint_candidates:
                     status["inpaintCandidate"] = selected_inpaint_candidate
@@ -2187,6 +2667,9 @@ class PersistentJobQueue:
             "inpaintingProviders": sorted(set(region_inpainting_providers.values())),
             "typesettingProvider": (typesetting_provider_name if kind != "inpaint" else None),
             "repairPolicy": repair_policy,
+            "inputVariant": render_input_variant,
+            "renderedSize": rendered_size,
+            "scale": [scale_x, scale_y],
             "eligibleRegionCount": len(repair_data),
             "skippedRegionCount": len(active_regions) - len(repair_data),
             "repairedRegionCount": repaired_region_count if mask_bytes is not None else None,

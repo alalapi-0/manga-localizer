@@ -78,6 +78,7 @@ vi.mock('react-konva', () => {
     Layer: container('Layer'),
     Group: container('Group'),
     Label: container('Label'),
+    Circle: container('Circle'),
     Line: container('Line'),
     Rect,
     Transformer,

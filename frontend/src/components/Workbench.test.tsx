@@ -1353,6 +1353,25 @@ describe('desktop workbench interactions', () => {
     ).toBe(true);
   });
 
+  it('lets the project require accepted AI inpainting before downstream work', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '项目' }));
+    const gate = screen.getByRole('checkbox', {
+      name: '翻译/嵌字前必须验收 AI 补图',
+    });
+    expect(gate).not.toBeChecked();
+    await user.click(gate);
+
+    expect(
+      useWorkbenchStore.getState().currentProject?.settings
+        .requireAIInpaintBeforeDownstream,
+    ).toBe(true);
+    expect(screen.getByText(/非 AI 修复候选即使已接受也不会解锁/)).toBeInTheDocument();
+  });
+
   it('queues the current page with its preprocess suggestion without changing project defaults', async () => {
     const user = userEvent.setup();
     const startJob = vi.spyOn(api, 'startJob').mockResolvedValue(jobFixture({
@@ -1438,6 +1457,10 @@ describe('desktop workbench interactions', () => {
     expect(provider).toHaveValue('');
     expect(within(provider).getByRole('option', { name: /继承项目设置/ })).toBeInTheDocument();
 
+    const method = screen.getByRole('combobox', { name: '修复方法' });
+    await user.selectOptions(method, 'screentone');
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair.method).toBe('screentone');
+
     await user.selectOptions(provider, 'lama-onnx');
     const textPolarity = screen.getByRole('combobox', { name: '文字极性' });
     expect(textPolarity).toHaveValue('auto');
@@ -1447,8 +1470,112 @@ describe('desktop workbench interactions', () => {
       inpainterProvider: 'lama-onnx',
       textPolarity: 'dark',
     });
+    const maskMode = screen.getByRole('combobox', { name: '蒙版策略' });
+    await user.selectOptions(maskMode, 'manual');
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair.maskMode).toBe('manual');
+    expect(textPolarity).toBeDisabled();
+    expect(screen.getByText('仅手工蒙版尚未添加范围')).toBeInTheDocument();
+    expect(screen.getByRole('spinbutton', { name: '蒙版外扩 px' })).toBeDisabled();
+    expect(screen.getByRole('spinbutton', { name: '膨胀 px' })).toBeDisabled();
+    expect(screen.getByRole('spinbutton', { name: '羽化 px' })).toBeDisabled();
     expect(screen.getByRole('button', { name: '重建当前页' })).toBeEnabled();
     expect(screen.getByText('LaMa AI 背景修复')).toBeInTheDocument();
+  });
+
+  it('persists a solid fill color across region selection without losing sibling repair settings', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({
+      regions: [
+        regionFixture('region-1', { order: 10 }),
+        regionFixture('region-2', { order: 20, x: 360 }),
+      ],
+      selectedRegionIds: ['region-1'],
+    });
+    const update = vi.spyOn(api, 'updateRegion').mockImplementation(async (regionId, patch) => ({
+      ...regionFixture(regionId),
+      ...patch,
+      repair: {
+        ...regionFixture(regionId).repair,
+        ...patch.repair,
+      },
+      revision: 6,
+    }));
+    vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture({ revision: 4 }));
+    vi.spyOn(api, 'listImages').mockResolvedValue([
+      imageFixture('image-1'),
+      imageFixture('image-2'),
+    ]);
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    fireEvent.change(screen.getByRole('combobox', { name: '修复方法' }), {
+      target: { value: 'solid' },
+    });
+    fireEvent.input(screen.getByLabelText('修复填充色'), {
+      target: { value: '#000000' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: '蒙版外扩 px' }), {
+      target: { value: '3' },
+    });
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair).toMatchObject({
+      method: 'solid',
+      fillColor: '#000000',
+      maskPadding: 3,
+    });
+
+    act(() => useWorkbenchStore.getState().selectRegion('region-2'));
+    act(() => useWorkbenchStore.getState().selectRegion('region-1'));
+    expect(screen.getByLabelText('修复填充色')).toHaveValue('#000000');
+
+    await act(async () => {
+      expect(await useWorkbenchStore.getState().flushAutosave()).toBe(true);
+    });
+    expect(update).toHaveBeenCalledWith(
+      'region-1',
+      expect.objectContaining({
+        repair: expect.objectContaining({
+          method: 'solid',
+          fillColor: '#000000',
+          maskPadding: 3,
+        }),
+      }),
+    );
+  });
+
+  it('clears persisted mask strokes for only the selected region after confirmation', async () => {
+    const user = userEvent.setup();
+    const first = regionFixture('region-1', { order: 10 });
+    first.repair.maskEdits = {
+      version: 1,
+      strokes: [
+        { mode: 'add', radius: 8, points: [[120, 140], [120, 180]] },
+        { mode: 'erase', radius: 3, points: [[120, 160]] },
+      ],
+    };
+    const second = regionFixture('region-2', { order: 20, x: 360 });
+    second.repair.maskEdits = {
+      version: 1,
+      strokes: [{ mode: 'add', radius: 5, points: [[370, 140]] }],
+    };
+    seedWorkbench({
+      regions: [first, second],
+      selectedRegionIds: ['region-1'],
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    await user.click(screen.getByRole('button', { name: '清除当前区域蒙版笔迹' }));
+
+    expect(window.confirm).toHaveBeenCalledOnce();
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair.maskEdits).toEqual({
+      version: 1,
+      strokes: [],
+    });
+    expect(
+      useWorkbenchStore.getState().regionsByImage['image-1']?.[1]?.repair.maskEdits?.strokes,
+    ).toHaveLength(1);
   });
 
   it('lets the editor choose among inpaint candidates from the repair inspector', async () => {

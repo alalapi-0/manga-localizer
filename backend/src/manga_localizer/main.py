@@ -52,6 +52,7 @@ from manga_localizer.security import (
     safe_relative_path,
 )
 from manga_localizer.services.images import (
+    StagePrerequisiteConflict,
     StageReviewObservationConflict,
     image_path,
     import_local,
@@ -239,6 +240,9 @@ def _image_dict(image: ImageAsset) -> dict[str, Any]:
         "translatorProvider": image.status.get("translatorProvider") or None,
         "inpaintingProvider": image.status.get("inpaintingProvider") or None,
         "typesettingProvider": image.status.get("typesettingProvider") or None,
+        "renderInputVariant": image.status.get("renderInputVariant") or None,
+        "renderScale": image.status.get("renderScale") or None,
+        "renderedSize": image.status.get("renderedSize") or None,
         "inpaintCandidate": selected_inpaint_candidate,
         "inpaintCandidates": inpaint_candidate_records,
         "typesetOverflowCount": overflow_count,
@@ -298,6 +302,9 @@ _PUBLIC_JOB_OUTPUT_FIELDS = {
         "inpaintingProviders",
         "typesettingProvider",
         "repairPolicy",
+        "inputVariant",
+        "renderedSize",
+        "scale",
         "eligibleRegionCount",
         "skippedRegionCount",
         "repairedRegionCount",
@@ -457,9 +464,24 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         return JSONResponse(status_code=404, content={"detail": str(error)})
 
     @app.exception_handler(RevisionConflict)
+    @app.exception_handler(StagePrerequisiteConflict)
     @app.exception_handler(StageReviewObservationConflict)
     @app.exception_handler(JobConflict)
     async def conflict_handler(_request: Request, error: Exception) -> JSONResponse:
+        if isinstance(error, StagePrerequisiteConflict):
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": {
+                        "message": str(error),
+                        "resource": error.resource,
+                        "stage": error.stage,
+                        "requiredState": error.required_state,
+                        "reason": error.reason,
+                        "mismatches": error.mismatches,
+                    }
+                },
+            )
         if isinstance(error, StageReviewObservationConflict):
             return JSONResponse(
                 status_code=409,

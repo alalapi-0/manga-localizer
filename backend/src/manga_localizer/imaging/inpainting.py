@@ -14,6 +14,7 @@ from manga_localizer.imaging.boundary_inpaint import (
     directional_background_consensus,
     two_tone_background_model,
 )
+from manga_localizer.imaging.screentone_inpaint import screentone_inpaint
 
 DEFAULT_REPAIR_SETTINGS: dict[str, Any] = {
     "method": "telea",
@@ -34,6 +35,14 @@ _MAX_STROKE_POINTS = 4096
 _MAX_TOTAL_STROKE_POINTS = 16384
 _MAX_STROKE_RADIUS = 512.0
 _MAX_EXPLICIT_TEXT_MASK_COVERAGE = 0.8
+MAX_RENDER_SCALE = 4
+
+
+def validate_render_scale(value: Any) -> int:
+    """Return a supported canonical-to-render scale."""
+    if type(value) is not int or not 1 <= value <= MAX_RENDER_SCALE:
+        raise ValueError(f"render_scale must be an integer from 1 through {MAX_RENDER_SCALE}")
+    return value
 
 
 def _validate_mask_integer(name: str, value: Any, maximum: int) -> int:
@@ -47,8 +56,10 @@ def validate_mask_edits(
     *,
     width: int,
     height: int,
+    render_scale: int = 1,
 ) -> list[dict[str, Any]]:
     """Return validated version-1 canonical mask strokes."""
+    render_scale = validate_render_scale(render_scale)
     if type(value) is not dict or set(value) != {"version", "strokes"}:
         raise ValueError("maskEdits must contain exactly version and strokes")
     if type(value["version"]) is not int or value["version"] != 1:
@@ -71,10 +82,11 @@ def validate_mask_edits(
             or not isinstance(radius, (int, float))
             or not math.isfinite(float(radius))
             or float(radius) <= 0
-            or float(radius) > _MAX_STROKE_RADIUS
+            or float(radius) > _MAX_STROKE_RADIUS * render_scale
         ):
             raise ValueError(
-                f"Mask edit stroke radius must be between 0 and {_MAX_STROKE_RADIUS:g}"
+                "Mask edit stroke radius must be between 0 and "
+                f"{_MAX_STROKE_RADIUS * render_scale:g}"
             )
         points = stroke["points"]
         if not isinstance(points, list) or not points:
@@ -116,13 +128,19 @@ def _apply_mask_edits(
     regions: Sequence[Mapping[str, Any]],
     *,
     mode: str,
+    render_scale: int = 1,
 ) -> None:
     height, width = mask.shape
     for region in regions:
         raw_edits = region.get("maskEdits", region.get("mask_edits"))
         if raw_edits is None:
             continue
-        for stroke in validate_mask_edits(raw_edits, width=width, height=height):
+        for stroke in validate_mask_edits(
+            raw_edits,
+            width=width,
+            height=height,
+            render_scale=render_scale,
+        ):
             if stroke["mode"] != mode:
                 continue
             color = 255 if mode == "add" else 0
@@ -170,32 +188,36 @@ def create_mask(
     feather: int = 0,
     mask_mode: str = "region",
     text_polarity: str = "auto",
+    render_scale: int = 1,
 ) -> np.ndarray:
-    """Create a region or locally segmented text mask in canonical image coordinates."""
+    """Create an automatic or explicit manual mask in canonical image coordinates."""
     width, height = _dimensions(image)
     if width <= 0 or height <= 0:
         raise ValueError("Mask dimensions must be positive")
-    padding = _validate_mask_integer("padding", padding, _MAX_MASK_PADDING)
-    dilation = _validate_mask_integer("dilation", dilation, _MAX_MASK_DILATION)
-    feather = _validate_mask_integer("feather", feather, _MAX_MASK_FEATHER)
+    render_scale = validate_render_scale(render_scale)
+    padding = _validate_mask_integer("padding", padding, _MAX_MASK_PADDING * render_scale)
+    dilation = _validate_mask_integer("dilation", dilation, _MAX_MASK_DILATION * render_scale)
+    feather = _validate_mask_integer("feather", feather, _MAX_MASK_FEATHER * render_scale)
     mask = np.zeros((height, width), dtype=np.uint8)
     normalized_default_mode = mask_mode.lower().replace("_", "-")
-    if normalized_default_mode not in {"region", "text"}:
-        raise ValueError("Mask mode must be 'region' or 'text'")
+    if normalized_default_mode not in {"region", "text", "manual"}:
+        raise ValueError("Mask mode must be 'region', 'text', or 'manual'")
     normalized_default_polarity = text_polarity.lower().replace("_", "-")
     if normalized_default_polarity not in {"auto", "dark", "light"}:
         raise ValueError("Text polarity must be 'auto', 'dark', or 'light'")
     grayscale: np.ndarray | None = None
     if not isinstance(image, tuple):
         grayscale = np.asarray(_pil_image(image).convert("L"), dtype=np.uint8)
+    automatic_regions: list[Mapping[str, Any]] = []
+    manual_regions: list[Mapping[str, Any]] = []
     for region in regions:
         selected_mode = (
             str(region.get("maskMode", region.get("mask_mode", normalized_default_mode)))
             .lower()
             .replace("_", "-")
         )
-        if selected_mode not in {"region", "text"}:
-            raise ValueError("Mask mode must be 'region' or 'text'")
+        if selected_mode not in {"region", "text", "manual"}:
+            raise ValueError("Mask mode must be 'region', 'text', or 'manual'")
         selected_polarity = (
             str(
                 region.get(
@@ -208,6 +230,13 @@ def create_mask(
         )
         if selected_polarity not in {"auto", "dark", "light"}:
             raise ValueError("Text polarity must be 'auto', 'dark', or 'light'")
+        if selected_mode == "manual":
+            # Manual mode is a strict authority boundary: geometry, detector
+            # polygons, image segmentation, and morphology cannot create any
+            # support. Only persisted add strokes contribute pixels below.
+            manual_regions.append(region)
+            continue
+        automatic_regions.append(region)
         region_mask = np.zeros_like(mask)
         # Full-region mode is an explicit escape hatch from detector geometry.
         # A persisted detection polygon only constrains text-aware mode.
@@ -243,7 +272,7 @@ def create_mask(
             region_padding = _validate_mask_integer(
                 "padding",
                 region.get("padding", padding),
-                _MAX_MASK_PADDING,
+                _MAX_MASK_PADDING * render_scale,
             )
             geometric_padding = region_padding if selected_mode == "region" else 0
             center = (x + region_width / 2, y + region_height / 2)
@@ -257,7 +286,7 @@ def create_mask(
         region_padding = _validate_mask_integer(
             "padding",
             region.get("padding", padding),
-            _MAX_MASK_PADDING,
+            _MAX_MASK_PADDING * render_scale,
         )
         if selected_mode == "text" and grayscale is not None:
             region_mask = _text_pixels(
@@ -284,13 +313,27 @@ def create_mask(
     if dilation > 0:
         size = dilation * 2 + 1
         mask = cv2.dilate(mask, np.ones((size, size), dtype=np.uint8), iterations=1)
-    _apply_mask_edits(mask, regions, mode="add")
+    _apply_mask_edits(
+        mask,
+        automatic_regions,
+        mode="add",
+        render_scale=render_scale,
+    )
     if feather > 0:
         size = feather * 2 + 1
         mask = cv2.GaussianBlur(mask, (size, size), 0)
+    if manual_regions:
+        manual_mask = np.zeros_like(mask)
+        _apply_mask_edits(
+            manual_mask,
+            manual_regions,
+            mode="add",
+            render_scale=render_scale,
+        )
+        mask = np.maximum(mask, manual_mask)
     # Erase strokes are the final authority: their zeroes cannot be
     # repopulated by feathering automatic or explicitly added mask pixels.
-    _apply_mask_edits(mask, regions, mode="erase")
+    _apply_mask_edits(mask, regions, mode="erase", render_scale=render_scale)
     return mask
 
 
@@ -659,19 +702,22 @@ def inpaint(
     radius: float = 3.0,
     method: str = "telea",
     fill_color: str = "#ffffff",
+    render_scale: int = 1,
 ) -> Image.Image:
-    """Inpaint locally with OpenCV Telea or Navier-Stokes, preserving an existing alpha channel."""
+    """Inpaint locally with an explicit OpenCV repair method, preserving source alpha."""
     source = _pil_image(image)
     mask_image = _pil_image(mask).convert("L")
     if source.size != mask_image.size:
         raise ValueError("Image and inpainting mask dimensions differ")
+    render_scale = validate_render_scale(render_scale)
+    max_radius = 256 * render_scale
     if (
         isinstance(radius, bool)
         or not isinstance(radius, (int, float))
         or not math.isfinite(float(radius))
-        or not 0 < float(radius) <= 256
+        or not 0 < float(radius) <= max_radius
     ):
-        raise ValueError("Inpainting radius must be between 0 and 256")
+        raise ValueError(f"Inpainting radius must be between 0 and {max_radius}")
     source_array = np.asarray(source.convert("RGB"), dtype=np.uint8)
     normalized_method = method.lower().replace("_", "-")
     mask_array = np.asarray(mask_image, dtype=np.uint8)
@@ -683,11 +729,21 @@ def inpaint(
         if source.mode == "RGBA":
             result.putalpha(source.getchannel("A"))
         return result
+    if normalized_method == "screentone":
+        restored = screentone_inpaint(source_array, mask_array)
+        result = Image.fromarray(restored, mode="RGB")
+        if source.mode == "RGBA":
+            result.putalpha(source.getchannel("A"))
+        elif source.mode == "L":
+            result = result.convert("L")
+        return result
     source_bgr = cv2.cvtColor(source_array, cv2.COLOR_RGB2BGR)
     binary_mask = np.where(mask_array > 0, 255, 0).astype(np.uint8)
     flag = cv2.INPAINT_TELEA if normalized_method == "telea" else cv2.INPAINT_NS
     if normalized_method not in {"telea", "ns", "navier-stokes"}:
-        raise ValueError("Inpainting method must be 'telea', 'navier-stokes', or 'solid'")
+        raise ValueError(
+            "Inpainting method must be 'telea', 'navier-stokes', 'solid', or 'screentone'"
+        )
     result_bgr = cv2.inpaint(source_bgr, binary_mask, radius, flag)
     generated = cv2.cvtColor(result_bgr, cv2.COLOR_BGR2RGB)
     weights = mask_array.astype(np.float32)[..., np.newaxis] / 255.0
@@ -745,10 +801,10 @@ class OpenCVInpaintingProvider:
         return {
             "provider": self.name,
             "available": True,
-            "methods": ["telea", "navier-stokes", "solid"],
+            "methods": ["telea", "navier-stokes", "solid", "screentone"],
             "editableMask": True,
             "maskEditVersion": 1,
-            "maskModes": ["text", "region"],
+            "maskModes": ["text", "region", "manual"],
             "textPolarities": ["auto", "dark", "light"],
             "softMaskComposite": True,
         }

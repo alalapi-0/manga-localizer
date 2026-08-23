@@ -88,6 +88,7 @@ DEFAULT_PROJECT_SETTINGS: dict[str, Any] = {
     "ocrProvider": "tesseract",
     "translatorProvider": "manual",
     "inpainterProvider": "opencv",
+    "requireAIInpaintBeforeDownstream": False,
     "typesetterProvider": "pillow",
     "glossary": {},
     "characterNames": {},
@@ -148,13 +149,16 @@ def settings_with_defaults(
             drop_invalid_remote_endpoints=drop_invalid_remote_endpoints,
         ),
     )
-    return merge(
+    merged = merge(
         merged,
         _safe_settings(
             settings or {},
             drop_invalid_remote_endpoints=drop_invalid_remote_endpoints,
         ),
     )
+    if type(merged.get("requireAIInpaintBeforeDownstream")) is not bool:
+        raise ProjectError("requireAIInpaintBeforeDownstream must be a boolean")
+    return merged
 
 
 class ProjectStore:

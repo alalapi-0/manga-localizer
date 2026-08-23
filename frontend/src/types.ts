@@ -74,6 +74,7 @@ export interface ProjectSettings {
   ocrProvider: string;
   translatorProvider: string;
   inpainterProvider: string;
+  requireAIInpaintBeforeDownstream: boolean;
   contextPages: number;
   glossary: string;
   characterNames: string;
@@ -169,6 +170,9 @@ export interface ImageAsset {
   translatorProvider?: string;
   inpaintingProvider?: string;
   typesettingProvider?: string;
+  renderInputVariant?: 'original' | 'preprocessed';
+  renderScale?: [number, number];
+  renderedSize?: [number, number];
   inpaintCandidate?: string;
   inpaintCandidates?: InpaintCandidate[];
   typesetOverflowCount: number;
@@ -193,8 +197,8 @@ export interface RegionStyle {
 }
 
 export interface RepairSettings {
-  method: 'telea' | 'navier_stokes' | 'solid';
-  maskMode: 'region' | 'text';
+  method: 'telea' | 'navier_stokes' | 'solid' | 'screentone';
+  maskMode: 'region' | 'text' | 'manual';
   textPolarity: 'auto' | 'dark' | 'light';
   maskPadding: number;
   dilation: number;
@@ -324,6 +328,7 @@ export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
   ocrProvider: 'tesseract',
   translatorProvider: 'manual',
   inpainterProvider: 'opencv',
+  requireAIInpaintBeforeDownstream: false,
   contextPages: 1,
   glossary: '',
   characterNames: '',

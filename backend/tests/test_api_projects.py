@@ -539,6 +539,14 @@ def test_accepting_unchanged_upstream_review_keeps_dependent_reviews(
             "preprocess": "done",
             "inpaint": "done",
             "typeset": "done",
+            "stageReviews": {
+                "preprocess": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-01-01T00:00:00+00:00",
+                    "resultRevision": image.revision,
+                    "artifactChecksum": _checksum(generated_bytes),
+                }
+            },
         }
 
     current = client.get(f"/api/projects/{project['id']}/images").json()[0]
@@ -559,7 +567,7 @@ def test_accepting_unchanged_upstream_review_keeps_dependent_reviews(
             "observedArtifactChecksum": _checksum(generated_bytes),
         },
     ).json()
-    assert set(current["stageReviews"]) == {"inpaint", "typeset"}
+    assert set(current["stageReviews"]) == {"preprocess", "inpaint", "typeset"}
 
     accepted = client.patch(
         f"/api/images/{imported['id']}/stage-reviews/preprocess",
@@ -899,6 +907,7 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
     database_path = root / "project/project.sqlite3"
     with sqlite3.connect(database_path) as database:
         database.execute("ALTER TABLE text_regions DROP COLUMN recognition")
+        database.execute("ALTER TABLE images DROP COLUMN inpaint_provenance")
         database.execute("UPDATE projects SET schema_version = 1")
 
     fresh_settings = app.state.settings.model_copy(
@@ -945,6 +954,8 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
     with sqlite3.connect(database_path) as database:
         columns = {row[1] for row in database.execute("PRAGMA table_info(text_regions)")}
         assert "recognition" in columns
+        image_columns = {row[1] for row in database.execute("PRAGMA table_info(images)")}
+        assert "inpaint_provenance" in image_columns
         assert database.execute("SELECT schema_version FROM projects").fetchone()[0] == 2
         stored_recognition = json.loads(
             database.execute(

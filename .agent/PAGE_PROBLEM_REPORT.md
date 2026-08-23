@@ -1,6 +1,6 @@
 # Manga Localizer — one-page reprocess problem report
 
-Updated: 2026-08-21
+Updated: 2026-08-22
 
 Public operator log for the one-page full-reprocess loop. No private
 page images, OCR text, or personal paths.
@@ -10,6 +10,543 @@ page images, OCR text, or personal paths.
 None.
 
 ## Cleared findings
+
+### P-33 — the local application service disappeared between page rounds
+
+- Kind: `function / runtime reliability`
+- Page: sidebar 56, 1284×559
+- What happened: immediately after navigating from the completed previous page,
+  the workbench reported that it could not reach the local API and the original
+  raster view failed to load. The previously tracked bounded application process
+  was no longer present.
+- Recovery: restarted the bounded local application session from the current
+  verified worktree and reloaded the existing persisted project. No project,
+  source, region, review, or generated-artifact data required repair.
+- Same-page verification: sidebar 56 reopened at the same persisted position,
+  the original raster loaded, and a current-page Real-ESRGAN 4× job completed.
+  Original/enhanced comparison succeeded and the improved raster was accepted;
+  the local API remained healthy throughout that job and review.
+- Repro: finish and reload one page, advance to the next sidebar page, and open
+  the original preview after the local application process has exited.
+
+### P-32 — changing only the semantic text type deleted the accepted clean plate
+
+- Kind: `workflow / review safety`
+- Page: sidebar 55, 1060×492
+- What happened: after the clean plate was accepted, changing the trusted region
+  from dialogue to sound effect correctly made page confirmation stale, but also
+  withdrew OCR trust and deleted the accepted inpaint artifact, authoritative
+  mask, review, provenance, and erased preview.
+- Expected: semantic type changes require page reconfirmation and a new typeset,
+  while preserving the unchanged accepted clean plate. Geometry, source text,
+  trust/ignore disposition, repair settings, mask, and reading order did not
+  change.
+- Fix: semantic type is no longer treated as an OCR/trust input in either the
+  backend invalidation policy or the frontend optimistic trust policy. It remains
+  a substantive page-review and typesetting input, so changing it clears
+  confirmation and invalidates typeset/export only; direction, geometry, source,
+  repair, order, and trust/ignore changes retain their stricter behavior.
+- Same-page verification: after rebuilding and accepting the exact AI-derived
+  clean plate, the operator changed the region type to dialogue and back to
+  sound effect. Both transitions preserved trusted recognition, the accepted
+  inpaint review, authoritative mask, erased preview, candidate provenance, and
+  an enabled clean-plate view. The final style change likewise left that clean
+  plate intact; only typesetting was regenerated. A full application reload kept
+  both inpaint and typeset accepted.
+- Checks: focused backend invalidation regressions passed 2 cases; the focused
+  frontend store regression passed; backend formatting/lint, frontend lint and
+  typecheck, and `git diff --check` passed.
+- Repro: accept a trusted region's AI clean plate, change only its semantic text
+  type, and inspect the inpaint stage, erased artifact, mask, review, and
+  provenance before rerunning any job.
+
+### P-31 — the sound-effect translation and first typeset were not publication-ready
+
+- Kind: `quality / translation / typesetting`
+- Page: sidebar 55, 1060×492
+- What happened: the local translation job replaced the one trusted sound-effect
+  region with a shorter fragment that remained in the source writing system,
+  then correctly cleared the region's confirmation state. After the operator
+  corrected and reconfirmed the translation, the first typeset still treated the
+  region as dialogue and auto-fit the one-character sound effect far too small
+  for the action cavity.
+- Expected: the region contains a concise Simplified Chinese sound effect that
+  matches the visible action, is explicitly reconfirmed, and is typeset as a
+  legible sound effect with visual weight appropriate to the repaired area.
+- Fix: the unusable provider result was replaced locally with a concise operator-
+  reviewed translation without disclosing it in the public report. The region
+  was classified as a sound effect, changed from auto-fit dialogue styling to a
+  fixed 200-pixel layout with a two-pixel outline, and reconfirmed after the
+  final style change.
+- Same-page verification: the first undersized result was not accepted. The
+  second result was inspected against the original at full-page fit and enlarged
+  region zoom, had no overflow, restored the intended visual weight without
+  covering adjacent artwork, and was accepted. Page review, current-page JSON-
+  only export, zero active jobs, and reload persistence all passed after the
+  clean plate remained independently accepted.
+- Repro: run the configured local translator on the current trusted one-region
+  sound-effect page and inspect the saved translation before reconfirming it.
+
+### P-30 — the accepted AI-derived clean plate could not satisfy the strict provenance gate
+
+- Kind: `workflow / AI provenance`
+- Page: sidebar 55, 1060×492
+- What happened: the accepted clean plate uses a real LaMa overview as its only
+  generated source inside the authoritative support, followed by a deterministic
+  line-art cleanup. Its manifest currently classifies the selected artifact as
+  `deterministic-postprocess`, while the project's strict clean-first gate accepts
+  only `direct-ai`. The image is visually clean and accepted, but later automated
+  translation or typesetting would correctly fail closed under the current
+  provenance contract.
+- Expected: an AI-derived artifact is eligible only when immutable internal
+  evidence binds its generation, mask, selected checksum, allowed transform, and
+  exact direct-AI base candidate checksum/provider. Classical or unbound
+  postprocessing must remain ineligible, and display metadata must never unlock
+  the gate.
+- Why it blocks: turning off the strict gate or relabelling the candidate would
+  violate the user's AI-redraw requirement; leaving the contract unchanged makes
+  the accepted clean plate unusable for the required later stages.
+- Fix: the real direct-LaMa overview is now persisted as an internal-only PNG and
+  checksum-bound manifest-v2 record. The public cleanup candidate is classified
+  as `ai-derived` and names only one versioned, allowlisted transform over that
+  exact base. Server validation binds the base and derived artifact to the same
+  generation, authoritative mask, actual provider, selected candidate, manifest
+  digest, and accepted-review provenance digest. Internal base records cannot be
+  listed or selected through public candidate routes. Candidate selection first
+  validates the complete current evidence, so a changed database field, manifest,
+  base file, or public status label cannot be used to launder a result.
+- Verification: the latest real 4× clean plate was regenerated after the schema
+  change, the public candidate list excluded the hidden base, and the intended
+  overview-derived candidate was selected in the workbench. Full-resolution
+  before/after and actual-mask review found the glyph removed and the motion lines
+  continued without a readable remnant; the artifact changes zero pixels outside
+  the 818,466-pixel persisted support. The real UI accepted that exact artifact
+  and mask, and the live strict prerequisite recomputed and matched its artifact,
+  mask, manifest, internal-base, and review-provenance evidence. Translation and
+  typesetting remain pending. Focused provenance tests passed 29 cases; the full
+  repository check passed 9 launcher, 360 backend, and 181 frontend tests plus
+  lint, formatting, typecheck, production build, and `git diff --check`.
+- Repro: generate the overview-derived line-art candidate from an allowed LaMa
+  base, select and accept it, then evaluate the strict downstream prerequisite.
+  It is rejected solely because its origin is deterministic postprocessing.
+
+### P-29 — narrow layouts hid modal controls and overlapped clean-plate review
+
+- Kind: `interaction / responsive layout`
+- Page: sidebar 55, 1060×492
+- What happened: the mobile top bar retained a fixed 54-pixel flex basis while
+  its wrapped children overflowed into the canvas toolbar, placing the shortcuts
+  trigger over the `接受` action. The long shortcuts modal also had no viewport
+  height limit or scrollable body, so its header and close control could be
+  centered outside a short viewport.
+- Fix: the mobile top bar now occupies its actual wrapped height. General modals
+  are bounded by their padded viewport container, keep header/footer fixed, and
+  scroll only the body; their width also follows the safe-area-aware container.
+- Verification: in a 319×734 real app viewport the top bar reflowed to 132.5px,
+  the canvas toolbar moved below it, the shortcuts and review controls had zero
+  overlap, and the review button's center hit the correct element. The shortcuts
+  dialog stayed wholly within the viewport, its body scrolled to the last item,
+  its close control remained visible, and closing it returned to the accepted
+  current-page clean plate with the actual mask still shown.
+
+### P-28 — a large stylized glyph left fragments across every redraw candidate
+
+- Kind: `quality / authoritative mask and AI redraw`
+- Page: sidebar 55, 1060×492
+- What happened: the initial support followed only the thick strokes, while
+  ordinary tiled/component LaMa retained dark fragments and pale bands and the
+  classical candidates became blocky.
+- Fix: the hard manual support was completed around the entire visible glyph.
+  LaMa padding now keeps reflected masked pixels hidden; a global overview pass
+  supplies coherent page-edge context before overlapping native-resolution core
+  refinement. A conservative overview-only line-art cleanup uses source pixels
+  exclusively outside the authoritative support and AI pixels exclusively
+  inside it, fails closed outside light monochrome material, and never becomes
+  the automatic default.
+- Verification: the selected 4× overview-derived candidate changes zero pixels
+  outside the persisted mask, removes the readable glyph, gray haze, and block
+  artifacts, and continues the motion lines without a visible seam. Full-page,
+  enlarged mask-on/mask-off, and persisted-candidate checks passed in the real
+  app; that exact clean plate and mask are accepted. Translation and typesetting
+  remain pending after P-30 secured its derived-AI provenance.
+
+### P-27 — inpaint could consume an unaccepted or rejected enhancement
+
+- Kind: `workflow / review safety`
+- Page: sidebar 54, 1204×1351
+- What happened: render source selection checked that preprocessing was `done`
+  and readable, but did not require that exact artifact to have a current
+  accepted review. An unreviewed, rejected, missing, or changed enhancement
+  could therefore become the mask and AI-redraw input.
+- Fix: inpaint now uses a preprocessing raster only when its accepted review and
+  checksum are current; otherwise it explicitly falls back to the immutable
+  original at 1×. If an accepted enhancement was selected, the worker rechecks
+  it before publishing. Typeset/render use the accepted clean plate's recorded
+  raster lineage instead of reselecting preprocessing, and recheck both that
+  lineage and the accepted clean plate before committing. Accepting an
+  enhancement after an original-based clean plate was accepted invalidates and
+  removes that old clean plate, mask, downstream artifacts, reviews, candidates,
+  and provenance so the high-resolution plate must be rebuilt.
+- Verification: regressions cover every fallback state, enqueue and worker
+  races, the rejected-to-accepted transition with an unchanged enhancement,
+  accepted high-resolution lineage, and deletion/tampering failure. The real
+  current-page enhancement, clean plate, mask, and final raster still decode at
+  the same supported 4× grid and match their accepted checksums. Independent
+  read-only reviews found no remaining clean-plate lineage bypass.
+
+### P-26 — valid canonical repair sizes could fail after 4× render scaling
+
+- Kind: `function / high-resolution rendering`
+- Page: sidebar 54, 1204×1351
+- What happened: render snapshots correctly scaled canonical brush radii, mask
+  morphology, provider radius, and context padding, but the imaging validators
+  still applied 1× maxima to those runtime values.
+- Fix: a validated integer render scale now travels through mask creation,
+  OpenCV, LaMa, component/full-context AI repair, and comparison-candidate
+  construction. Canonical values are scaled exactly once; runtime validation
+  permits the corresponding 2×–4× maxima without clamping, while 1× limits and
+  API persistence limits remain unchanged.
+- Verification: exact-maximum and maximum-plus-one regressions cover 2×, 3×,
+  and 4× mask, brush, OpenCV, and LaMa paths; render snapshots remain immutable
+  and prove no double scaling. Independent read-only review passed the complete
+  propagation chain. The real current-page 4× artifact and authoritative mask
+  grids and accepted checksums remained unchanged.
+- Checks: the complete repository check passed with 9 launcher, 343 backend,
+  and 181 frontend tests, plus backend lint/format, frontend lint/typecheck, and
+  the production build. `git diff --check` passed.
+
+### P-24 — bounded manual support left a fringe and a visible AI fill band
+
+- Kind: `quality / mask calibration`
+- Page: sidebar 54, 1204×1351
+- What happened: the first real LaMa clean-plate pass removed the main vertical
+  glyphs, but a narrow outer annotation/knockout fringe remained and the first
+  long support made the continued gray field look like a vertical smoothing
+  band. An intermediate per-glyph support still left pinholes and side edges.
+- Expected: the authoritative support covers every glyph and knockout remnant
+  without touching the panel border or adjacent line art, and the AI result
+  continues the local gray field without a readable strip, hole, or seam.
+- Fix: the one-point overlay fix made the authoritative mask directly auditable;
+  the two manual-only supports were then recentered and widened only over the
+  knockout lettering, with the circular intersections overlapped to close every
+  pinhole. The 4× LaMa componentwise candidate was regenerated and selected;
+  no classical, solid-fill, or deterministic cleanup candidate was accepted.
+- Same-page verification: both regions were checked with the actual mask shown,
+  then with it hidden in original/result comparison at enlarged zoom, and again
+  as an unannotated full-page result. No glyph or knockout remnant remained, the
+  panel borders and adjacent line art stayed intact, and the local dark-to-light
+  field continued without a visible repair boundary.
+- Persistent verification: inpaint is done and accepted, the selected candidate
+  is the direct LaMa component candidate, and the accepted clean plate remained
+  unchanged through later translation and typesetting. A local high-resolution
+  diagnostic also confirmed zero changed pixels outside the authoritative mask;
+  private temporary samples were removed after review.
+
+### P-25 — a persisted single-point mask stroke was invisible in the editor
+
+- Kind: `interaction / mask preview`
+- Page: sidebar 54, 1204×1351
+- What happened: a valid one-point manual mask stroke was persisted and used by
+  the backend as a circular repair support, but the pre-generation canvas drew
+  every stroke as a polyline, so the one-point stroke had no visible overlay.
+- Expected: the editing overlay represents the authoritative backend mask
+  semantics; a one-point add or erase stroke appears as a circle with the same
+  center, radius, color, and opacity before the page is rebuilt.
+- Fix: the canvas now renders a one-point stroke as a Konva circle and retains
+  the existing round-cap polyline rendering for multi-point strokes; the test
+  environment and component regression cover both branches.
+- Same-page verification: rebuilt frontend assets were loaded in the real app;
+  the persisted compact add strokes appeared as correctly centered circular
+  overlays in both active regions, including the smaller annotation supports.
+- Checks: focused canvas tests passed (19 tests), then the complete repository
+  check passed (9 launcher, 322 backend, and 181 frontend tests; lint,
+  typecheck, formatting, and production build). `git diff --check` also passed.
+
+### P-20 — clean-plate quality is not a hard gate before translation/typesetting
+
+- Kind: `workflow / quality`
+- Page: sidebar 53, 771×449
+- Clicked: accepted the current AI repair candidate, then proceeded to the
+  translated/typeset preview and page-complete actions before obtaining a
+  separate user-quality decision on every reconstructed cavity in the clean
+  plate
+- Expected: the workflow remains in mask-and-AI-redraw review until every
+  removed-text cavity is convincingly reconstructed; translation, typesetting,
+  page completion, and advancement stay out of scope until that clean plate is
+  independently accepted
+- What happened: the later-stage artifact was generated and accepted while the
+  user still considered the AI reconstruction incomplete.
+- Why it blocks: translated text can conceal residual glyphs, broken line art,
+  texture discontinuities, or soft AI blocks. A final-page view is therefore not
+  evidence that the underlying clean plate is ready.
+- Fix: translation, typesetting, and the compatibility render entry point now
+  fail closed unless the current clean plate is `done`, independently accepted,
+  and still matches both its artifact and authoritative-mask checksums. The
+  worker repeats the prerequisite check before committing output, and
+  typesetting can no longer rebuild a missing or stale clean plate implicitly.
+  A persisted project switch adds the stricter policy required for this real-
+  page loop. Every generated candidate now carries internal, non-display
+  provenance bound to its generation, candidate file, artifact checksum, mask
+  checksum, origin class, and actual providers; acceptance binds a canonical
+  digest of that evidence. The complete immutable candidate record set is also
+  canonically hashed into an independent database anchor. Candidate selection
+  recomputes that anchor before trusting origin/provider metadata, so changing
+  only a manifest provenance label fails closed while leaving the accepted
+  artifact, mask, revision, and database provenance untouched. Stage acceptance
+  and the strict gate also compare the database provenance with the anchored
+  manifest's currently selected candidate record, so relabeling database origin
+  or provider fields and re-reviewing unchanged pixels cannot legitimize a
+  classical result. When the mask is nonempty, only a checksum-current
+  `direct-ai` origin from an allowed LaMa provider unlocks downstream work.
+  OpenCV, mixed/classical candidates, deterministic manga postprocessing, and
+  forged UI status labels remain blocked. A zero mask is the deliberate safe
+  no-op exception.
+- Same-page verification: enabled the strict AI prerequisite in the real
+  workbench and reloaded to confirm persistence, then rebuilt the current 4×
+  clean plate under the provenance-aware implementation. The componentwise
+  LaMa candidate and same-grid authoritative mask were inspected again at fit
+  and enlarged zoom with the mask shown and hidden, then accepted with a bound
+  provenance digest. The reconstructed cavities remained clean while the light
+  knockout backing, nearby line art, and screentone were preserved; translation
+  and typesetting remained pending. Public regressions cover unreviewed,
+  rejected, deleted, tampered, non-AI, forged-display-status, deterministic-
+  postprocess, provenance-tamper, database-relabel/re-review,
+  manifest-metadata-tamper, zero-mask, and worker-race cases. The same live
+  prerequisite gate admitted the accepted LaMa result and the page then
+  completed translation and typesetting without rebuilding the clean plate.
+  Its candidate-manifest anchor and accepted review digest match, and its 4×
+  artifact and mask grids agree. A fresh independent Judge passed the exact
+  candidate. The final repository check passed: 9 launcher tests, 322 backend
+  tests, 180 frontend tests, frontend lint/typecheck, and the production build.
+- Repro: generate a typeset artifact immediately after an AI inpaint candidate,
+  then compare its apparent completeness with the clean plate while toggling the
+  authoritative mask. Do not include private text, page pixels, project names,
+  filenames, IDs, or paths.
+
+### P-23 — AI redraw recreates removed glyph shapes after an exact manual mask
+
+- Kind: `quality / AI reconstruction`
+- Page: sidebar 53, 771×449
+- What happened: the persisted manual support was correct, but the original
+  sequential and full-context LaMa results still produced dark or gray glyph-
+  shaped blocks inside it.
+- Fix: added an explicit `LaMa 逐空缺重绘(局部上下文)` candidate. It processes
+  each mask connected component independently and sequentially with local
+  context plus an inference-only collar, then composites only through the
+  persisted review mask. It is optional, never silently becomes the default,
+  and malformed or failed component output cannot fail the page job.
+- Same-page verification: rebuilt the accepted 4× plate, selected the new AI
+  candidate, confirmed it was bit-exact outside the authoritative mask, and
+  inspected the real erased-result canvas at fit and enlarged zoom with the mask
+  shown and hidden. The dark glyph remnants were gone while the light knockout
+  backing, nearby line art, and screentone remained. The current artifact and
+  mask then received a checksum-bound accepted inpaint review; translation and
+  typeset remained pending.
+- Repro: on a genuine enlarged near-grayscale page, draw exact manual-only
+  support over several long outlined glyph groups spanning flat and periodic
+  backgrounds, rebuild with local LaMa, and inspect the AI candidates with the
+  actual mask shown and hidden. Do not include private text, page pixels,
+  project names, filenames, IDs, or paths.
+
+### P-22 — automatic text mask absorbs screentone instead of isolating glyphs
+
+- Kind: `function / mask authority`
+- Page: sidebar 53, 771×449
+- What happened: automatic both-polarity segmentation treated periodic dots and
+  the light inter-dot field as text, creating a dense repair mask.
+- Fix: the manual-only strategy has an empty automatic base, ignores automatic
+  morphology, derives authority only from persisted strokes, preserves the same
+  support for composition/review, and fails closed when no manual add support
+  exists.
+- Same-page verification: the 4× generated mask was byte-for-byte equal to the
+  locally simulated persisted-stroke mask, excluded surrounding retained
+  texture, loaded on the same grid as the chosen AI artifact, and was inspected
+  in the real workbench at fit and enlarged zoom before acceptance.
+- Repro: place outlined text over a regular black-and-white dot field, rebuild
+  with a both-polarity automatic text mask, and inspect the generated mask at
+  enlarged zoom. Do not include private text, page pixels, project names,
+  filenames, IDs, or paths.
+
+### P-21 — 4× AI redraw candidate cannot be loaded in the review canvas
+
+- Kind: `function / review safety`
+- Page: sidebar 53, 771×449
+- What happened: the selected high-resolution result initially reported an
+  image-read failure in the real erased-result pane.
+- Fix: generated visual modes and masks accept supported equal integer-scale
+  grids while retaining canonical interaction coordinates; inpaint review fails
+  closed when artifact and mask grids differ.
+- Same-page verification: the real canvas loaded the 3084×1796 selected AI
+  artifact and same-grid mask, displayed the candidate label, allowed fit and
+  enlarged inspection, and kept acceptance disabled until the reviewer
+  explicitly showed the mask.
+- Repro: accept a genuine 4× preprocessing artifact, run local LaMa over several
+  trusted regions, select a generated candidate, and open the erased-result
+  review with the actual mask enabled. Do not include private text, page pixels,
+  project names, filenames, IDs, or paths.
+
+### P-19 — AI redraw treats the tight text mask as a glyph contour
+
+- Kind: `quality`
+- Page: sidebar 53, 771×449
+- Clicked: accepted a genuine local 4× AI super-resolution result, persisted a
+  separate bounded add-mask for every visible glyph component, rebuilt all six
+  trusted repair regions with LaMa, then compared both the sequential-provider
+  and full-context LaMa candidates with the actual mask shown and hidden
+- Expected: LaMa receives clean high-resolution context outside the verified
+  text support and redraws the erased cavities by continuing the surrounding
+  dark field, light knockout plate, line art, and screentone.
+- What happened: the render job correctly used the accepted 4× plate and the
+  persisted mask followed the intended glyph support, but both LaMa candidates
+  produced repeated light glyph-shaped blocks and vertical smears. The tight
+  inference boundary still exposes antialiased outline pixels and the glyph
+  silhouette as conditioning evidence, so the model reconstructs the removed
+  foreground instead of the background.
+- Why it blocks: every available AI clean-plate candidate remains visibly
+  defective at normal page fit, so the current page cannot be accepted and the
+  requested AI cavity-redraw workflow is not satisfied.
+- Fix: replace shape-distorting one-shot LaMa resizing with native 512px
+  overlapping tiles and cosine blending, keep the wider inference support
+  separate from the authoritative review mask, and add a confidence-gated
+  **AI manga redraw** candidate that uses the AI result for local dark/light
+  structure before snapping it back to the verified monochrome palette. For
+  this page the six repair regions use honest full-region review masks so no
+  changed pixels are hidden outside the displayed support.
+- Same-page verification: rebuilt the accepted 4× plate through the local LaMa
+  provider, selected the automatically generated AI manga redraw candidate,
+  inspected it at fit and enlarged zoom with the actual mask both visible and
+  hidden, and confirmed that all source glyphs disappeared without stretching
+  the retained character line art. The clean plate and final typeset were both
+  accepted; page review, local export, same-page reload, and zero active jobs
+  passed.
+- Repro: on an accepted 4× plate, draw bounded persisted masks that closely
+  cover multiple outlined glyphs across mixed manga backgrounds, rebuild with
+  LaMa, hide the mask overlay, and compare the sequential and full-context AI
+  candidates. Do not include private text, page pixels, project names,
+  filenames, IDs, or paths.
+
+### P-18 — AI inpainting ignores the accepted super-resolved plate
+
+- Kind: `function`
+- Page: sidebar 53, 771×449
+- Clicked: requested a real local Real-ESRGAN 4× redraw for the current
+  low-resolution page, then prepared to rebuild its trusted repair regions with
+  the local LaMa AI provider
+- Expected: after the enhanced plate is accepted, text detection, OCR, mask
+  construction, AI inpainting, typesetting, preview, and export all use the same
+  super-resolved pixels while persisted region geometry remains on the stable
+  canonical coordinate grid
+- What happened: detection and OCR select the generated preprocessed artifact and
+  map coordinates across its scale, but the render pipeline unconditionally
+  reopens the original source image. LaMa, repair masks, typesetting, and final
+  artifacts therefore remain low resolution even after a genuine 4× AI pass.
+- Why it blocks: the erased glyph cavities are being reconstructed from the
+  least detailed source instead of the accepted clear plate, so neither the
+  clean plate nor the final page meets the requested AI-redraw workflow.
+- Fix: render from the accepted preprocessing artifact, scale temporary repair
+  geometry, brush/polygon data, pixel-valued repair options, and typesetting
+  style into the processed grid without rewriting canonical database
+  coordinates. Persist rendered size/scale provenance, accept generated 1×–4×
+  grids in the review canvas, require artifact/mask pixel-grid equality, and
+  describe canonical versus rendered dimensions in export metadata.
+- Same-page verification: the genuine local 4× artifact became the input for
+  mask generation, LaMa, candidate creation, typesetting, review, and export;
+  the generated clean plate, mask, and final page shared the 4× raster while
+  inspector geometry remained on the canonical grid. Both visual stages were
+  accepted and remained accepted after the page was reselected.
+- Repro: accept a genuine 2×–4× AI preprocessing result, run current-page AI
+  inpainting, and compare the provider input and generated mask/image dimensions
+  with the enhanced artifact. Do not include private text, page pixels, project
+  names, filenames, IDs, or paths.
+
+### P-17 — persisted mask strokes cannot be cleared after reopening a page
+
+- Kind: `interaction`
+- Page: sidebar 53, 771×449
+- Clicked: reopened the current page after a production backend restart, framed
+  one repaired region, and inspected the enlarged clean plate after its earlier
+  manual mask experiments had been saved
+- Expected: the repair inspector provides an explicit way to clear all persisted
+  add/erase strokes for the selected region before rebuilding a precise mask
+- What happened: global undo history was empty after reopening, the inspector had
+  no clear/reset action, and later add strokes could not supersede an earlier
+  erase because erase strokes are always applied last.
+- Why it blocks: obsolete wide strokes continue producing visible flat blocks and
+  scalloped edges even after the repair algorithm is corrected, while the current
+  region cannot be safely redrawn through the visible application.
+- Fix: add a selected-region **clear mask strokes** action that writes an empty
+  versioned stroke list through the ordinary nested repair patch, while keeping
+  manual erase as the final authority for non-cleared edit histories.
+- Same-page verification: cleared the persisted experimental strokes through
+  the visible repair inspector, switched regions and reopened the page, and
+  verified that all six active regions retained zero strokes before the final
+  rebuild. The clear action then correctly disabled because there was nothing
+  left to remove.
+- Repro: save one or more manual mask strokes, reopen the application or page,
+  then try to remove all strokes for only that region without splitting or
+  recreating its text data. Do not include private text, page pixels, project
+  names, filenames, or paths.
+
+### P-16 — every repair method breaks periodic screentone behind text
+
+- Kind: `quality`
+- Page: sidebar 53, 771×449
+- Clicked: split three outlined text regions at their dark-to-screentone
+  background boundary, kept the uniform dark halves on verified solid fills,
+  then rebuilt the screentone halves with isolated persisted glyph masks using
+  LaMa, OpenCV Telea, OpenCV Navier–Stokes, solid white, line-guided, and
+  full-context candidates at enlarged region zoom
+- Expected: the complete foreground glyphs disappear while the regular dot
+  lattice and the long artwork edges remain visually continuous through each
+  small repaired area
+- What happened: LaMa retains glyph-shaped dark ghosts; Telea and
+  Navier–Stokes create triangular or radial smears; solid white leaves aligned
+  capsule-shaped blank areas; the line-guided and full-context candidates retain
+  the same defects or add larger structure hallucinations.
+- Why it blocks: every available clean-plate result has visible repeated damage
+  across the screentone at normal page fit and enlarged zoom, so the repair and
+  final page cannot be accepted.
+- Fix: add an explicit, non-default screentone repair method with validated
+  periodic phase reconstruction and a confidence-gated two-field boundary
+  model; reject ambiguous curved/one-sided fields instead of silently replacing
+  them with a flat or periodic fill. The final user-requested workflow remains
+  local AI redraw rather than deterministic fill.
+- Same-page verification: exercised the new explicit method on the isolated
+  periodic segments during same-page repair comparison, then selected the
+  higher-quality local AI manga redraw for the accepted page. Public hard-mask,
+  phase, field-boundary, mask-outside, alpha, and failure-closed regressions
+  passed.
+- Repro: place several small verified text masks over a regular black-and-white
+  screentone crossed by artwork edges, rebuild each available repair method, hide
+  the actual-mask overlay, and compare the lattice phase and edge continuity.
+  Do not include private text, page pixels, project names, filenames, or paths.
+
+### P-15 — solid-fill color appears saved but reverts after region selection
+
+- Kind: `interaction`
+- Page: sidebar 53, 771×449
+- Clicked: selected a trusted repair segment, chose **OpenCV → 纯色填充**,
+  changed the fill color from white to black, waited until the workbench reported
+  **已保存**, selected another segment, then returned to the edited segment
+- Expected: the black fill color remains in the region repair settings so the
+  next current-page rebuild uses the verified uniform backing color
+- What happened: the color control immediately showed black and the global save
+  indicator completed, but returning to the same segment restored white.
+- Why it blocks: rebuilding with the reverted value creates a conspicuous light
+  block instead of removing the light glyphs on the uniform dark backing, so the
+  clean plate cannot be accepted.
+- Fix: send only the changed partial repair object from the inspector and let
+  the store perform its existing nested merge, preventing stale render closures
+  from restoring sibling values. Handle the native color input event directly
+  so a real UI edit always enters pending persistence.
+- Same-page verification: changed the fill color through the visible inspector,
+  waited for the dirty/save cycle, switched regions and returned, and verified
+  that the persisted value remained. The final accepted page used local AI
+  redraw, not a solid-fill substitute.
+- Repro: on any trusted repair region, select **OpenCV → 纯色填充**, change the
+  fill color, wait for the saved indicator, switch to another region, then return
+  and inspect the color control. Do not include private text, page pixels, project
+  names, filenames, or paths.
 
 ### P-14 — large connected manual text mask leaves glyph-shaped repair remnants
 
@@ -406,7 +943,7 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 51.
+- Finished pages this loop: 58.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -553,6 +1090,45 @@ None.
   duplicates; Real-ESRGAN, bounded manual-mask LaMa full-context repair, and
   zero-overflow vertical typeset were accepted; page review, current-page
   text-only JSON export, reload persistence, and zero active jobs verified).
-- Next page: sidebar 53 of the 130-page book.
+- Finished: sidebar 53, 771×449, text path after quality pass
+  (4× Real-ESRGAN, exact manual-only support, and componentwise LaMa redraw were
+  accepted before downstream work; 6 trusted text boxes were translated and
+  reconfirmed; the second single-column typeset pass, page review, text-only JSON
+  export, strict provenance gate, and zero active jobs were verified).
+- Finished: sidebar 54, 1204×1351, text path after quality pass
+  (4× Real-ESRGAN, calibrated manual-only support, and the direct LaMa component
+  redraw were accepted before downstream work; 2 trusted text boxes were
+  manually corrected and reconfirmed after incomplete local translation; the
+  zero-overflow vertical typeset, page review, current-page text-only JSON export,
+  and zero active jobs were verified).
+- Finished: sidebar 55, 1060×492, text path after quality pass
+  (4× Real-ESRGAN, a hard manual-only support, and the checksum-bound AI-derived
+  overview redraw were accepted before downstream work; one trusted sound-effect
+  region was locally corrected and reconfirmed after an unusable translator
+  result; the enlarged fixed-size typeset, page review, current-page text-only
+  JSON export, reload persistence, and zero active jobs were verified after
+  P-28 through P-32 were cleared).
+- Finished: sidebar 56, 1284×559, no-text path after quality pass
+  (Real-ESRGAN anime 4× was accepted after full-width and enlarged comparison;
+  fresh detection/OCR reduced stale empty proposals to one enlarged clothing/
+  shadow false positive, which was explicitly ignored; full-page scan, no-text
+  confirmation, reload persistence, zero active jobs, and P-33 recovery were
+  verified without any translation, repair, typesetting, or image export).
+- Finished: sidebar 57, 611×704, no-text path after quality pass
+  (Real-ESRGAN anime 4× was accepted after original/enhanced comparison restored
+  the low-resolution line work; two overlapping hand/motion-shading false
+  positives were inspected enlarged and ignored; integrated impact lettering
+  was retained as artwork, while full-page scan, no-text confirmation, reload
+  persistence, and cleared batch selection passed without downstream jobs).
+- Finished: sidebar 58, 1177×1133, no-text path after quality pass
+  (Real-ESRGAN anime 4× was accepted after original/enhanced comparison sharpened
+  the character, arrows, snow contours, and screentone without structural loss;
+  fresh detection/OCR replaced twenty-five stale empty proposals with one
+  high-zoom false positive on a continuous snowbank contour and its parallel
+  motion/shading marks, which was explicitly ignored; the large cropped edge
+  marks were retained as artwork, while full-page scan, no-text confirmation,
+  reload persistence, zero active jobs, and cleared batch selection passed
+  without translation, repair, typesetting, or private image export).
+- Next page: sidebar 59 of the 130-page book.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

@@ -61,6 +61,7 @@ def _changed_region_stages(values: dict[str, Any], region: TextRegion) -> set[st
     if keys & {
         "translation_text",
         "style",
+        "type",
         "direction",
     }:
         stages.add("typeset")
@@ -244,7 +245,6 @@ def update_region(store: ProjectStore, region_id: str, values: dict[str, Any]) -
             "height",
             "rotation",
             "source_text",
-            "type",
             "direction",
             "confidence",
         }

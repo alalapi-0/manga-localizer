@@ -1,7 +1,19 @@
 import Konva from 'konva';
 import type { KonvaEventObject } from 'konva/lib/Node';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Group, Image as KonvaImage, Label, Layer, Line, Rect, Stage, Tag, Text, Transformer } from 'react-konva';
+import {
+  Circle,
+  Group,
+  Image as KonvaImage,
+  Label,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Tag,
+  Text,
+  Transformer,
+} from 'react-konva';
 
 import { api } from '../api/client';
 import {
@@ -93,8 +105,17 @@ function useCanvasImage(
     src: string;
     image: ImageBitmap | null;
     checksum: string | null;
+    pixelWidth: number | null;
+    pixelHeight: number | null;
     state: 'loading' | 'ready' | 'error';
-  }>({ src: '', image: null, checksum: null, state: 'loading' });
+  }>({
+    src: '',
+    image: null,
+    checksum: null,
+    pixelWidth: null,
+    pixelHeight: null,
+    state: 'loading',
+  });
 
   useEffect(() => {
     if (!src) return;
@@ -106,10 +127,28 @@ function useCanvasImage(
     }, controller.signal, allowCanonicalScale)
       .then((loaded) => {
         if (disposed) loaded.image.close();
-        else setResult({ src, image: loaded.image, checksum: loaded.checksum, state: 'ready' });
+        else {
+          setResult({
+            src,
+            image: loaded.image,
+            checksum: loaded.checksum,
+            pixelWidth: loaded.pixelWidth,
+            pixelHeight: loaded.pixelHeight,
+            state: 'ready',
+          });
+        }
       })
       .catch(() => {
-        if (!disposed) setResult({ src, image: null, checksum: null, state: 'error' });
+        if (!disposed) {
+          setResult({
+            src,
+            image: null,
+            checksum: null,
+            pixelWidth: null,
+            pixelHeight: null,
+            state: 'error',
+          });
+        }
       });
     return () => {
       disposed = true;
@@ -122,10 +161,26 @@ function useCanvasImage(
     return () => loadedImage?.close();
   }, [result.image]);
 
-  if (!src) return { src: '', image: null, checksum: null, state: 'ready' as const };
+  if (!src) {
+    return {
+      src: '',
+      image: null,
+      checksum: null,
+      pixelWidth: null,
+      pixelHeight: null,
+      state: 'ready' as const,
+    };
+  }
   return result.src === src
     ? result
-    : { src, image: null, checksum: null, state: 'loading' as const };
+    : {
+        src,
+        image: null,
+        checksum: null,
+        pixelWidth: null,
+        pixelHeight: null,
+        state: 'loading' as const,
+      };
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {
@@ -324,8 +379,10 @@ function CanvasViewport({
   const {
     image,
     checksum: artifactChecksum,
+    pixelWidth: artifactPixelWidth,
+    pixelHeight: artifactPixelHeight,
     state: imageLoadState,
-  } = useCanvasImage(source, canonicalSize, mode === 'preprocessed');
+  } = useCanvasImage(source, canonicalSize, mode !== 'original');
   const showMask = useWorkbenchStore((state) => state.showMask);
   const maskSource = mode === 'erased'
     && (showMask || observationStage === 'inpaint')
@@ -335,8 +392,10 @@ function CanvasViewport({
   const {
     image: maskImage,
     checksum: maskChecksum,
+    pixelWidth: maskPixelWidth,
+    pixelHeight: maskPixelHeight,
     state: maskLoadState,
-  } = useCanvasImage(maskSource, canonicalSize);
+  } = useCanvasImage(maskSource, canonicalSize, true);
   const regions = useWorkbenchStore(activeRegions);
   const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const tool = useWorkbenchStore((state) => state.canvasTool);
@@ -372,8 +431,12 @@ function CanvasViewport({
       stage: observationStage,
       revision: imageAsset.revision,
     };
+    const rasterMismatch = observationStage === 'inpaint'
+      && imageLoadState === 'ready'
+      && maskLoadState === 'ready'
+      && (artifactPixelWidth !== maskPixelWidth || artifactPixelHeight !== maskPixelHeight);
     if (imageLoadState === 'error'
-      || (observationStage === 'inpaint' && maskLoadState === 'error')) {
+      || (observationStage === 'inpaint' && (maskLoadState === 'error' || rasterMismatch))) {
       onReviewObservation({ ...identity, state: 'error' });
       return;
     }
@@ -391,11 +454,15 @@ function CanvasViewport({
     });
   }, [
     artifactChecksum,
+    artifactPixelHeight,
+    artifactPixelWidth,
     imageAsset.id,
     imageAsset.revision,
     imageLoadState,
     maskChecksum,
     maskLoadState,
+    maskPixelHeight,
+    maskPixelWidth,
     observationStage,
     onReviewObservation,
   ]);
@@ -677,18 +744,36 @@ function CanvasViewport({
             {maskEditing && selectedRegion ? [
               ...(selectedRegion.repair.maskEdits?.strokes ?? []),
               ...(maskDraft?.regionId === selectedRegion.id ? [maskDraft] : []),
-            ].map((stroke, index) => (
-              <Line
-                key={`${stroke.mode}-${index}`}
-                points={stroke.points.flat()}
-                stroke={stroke.mode === 'add' ? '#4ad7c8' : '#ff6b6b'}
-                strokeWidth={Math.max(1, stroke.radius * 2)}
-                lineCap="round"
-                lineJoin="round"
-                listening={false}
-                opacity={0.72}
-              />
-            )) : null}
+            ].map((stroke, index) => {
+              const color = stroke.mode === 'add' ? '#4ad7c8' : '#ff6b6b';
+              const key = `${stroke.mode}-${index}`;
+              const point = stroke.points.length === 1 ? stroke.points[0] : null;
+              if (point) {
+                return (
+                  <Circle
+                    fill={color}
+                    key={key}
+                    listening={false}
+                    opacity={0.72}
+                    radius={Math.max(0.5, stroke.radius)}
+                    x={point[0]}
+                    y={point[1]}
+                  />
+                );
+              }
+              return (
+                <Line
+                  key={key}
+                  points={stroke.points.flat()}
+                  stroke={color}
+                  strokeWidth={Math.max(1, stroke.radius * 2)}
+                  lineCap="round"
+                  lineJoin="round"
+                  listening={false}
+                  opacity={0.72}
+                />
+              );
+            }) : null}
             {draftRect ? (
               <Rect
                 {...draftRect}

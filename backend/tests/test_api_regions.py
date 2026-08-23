@@ -729,6 +729,53 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
     )
     assert conflicting.status_code == 422
 
+    manual = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 50,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "repair": {
+                "maskMode": "manual",
+                "maskEdits": {"version": 1, "strokes": []},
+            },
+        },
+    )
+    assert manual.status_code == 201, manual.text
+    assert manual.json()["repair"]["maskMode"] == "manual"
+    assert manual.json()["repair"]["maskEdits"] == {"version": 1, "strokes": []}
+
+    canonical_maxima = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 90,
+            "y": 10,
+            "width": 30,
+            "height": 30,
+            "repair": {
+                "maskMode": "manual",
+                "maskPadding": 512,
+                "dilation": 128,
+                "feather": 128,
+                "radius": 256,
+                "contextPadding": 4096,
+                "maskEdits": {
+                    "version": 1,
+                    "strokes": [{"mode": "add", "radius": 512, "points": [[100, 20]]}],
+                },
+            },
+        },
+    )
+    assert canonical_maxima.status_code == 201, canonical_maxima.text
+    maximum_repair = canonical_maxima.json()["repair"]
+    assert maximum_repair["maskPadding"] == 512
+    assert maximum_repair["dilation"] == 128
+    assert maximum_repair["feather"] == 128
+    assert maximum_repair["radius"] == 256
+    assert maximum_repair["contextPadding"] == 4096
+    assert maximum_repair["maskEdits"]["strokes"][0]["radius"] == 512.0
+
     invalid_edits = (
         {"version": 2, "strokes": []},
         {"version": 1, "strokes": [{"mode": "paint", "radius": 2, "points": [[1, 1]]}]},
@@ -859,6 +906,7 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
         json={
             "repair": {
                 **valid_region["repair"],
+                "method": "screentone",
                 "maskEdits": {
                     "version": 1,
                     "strokes": [{"mode": "erase", "radius": 3, "points": [[15, 15]]}],
@@ -869,6 +917,7 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
         },
     )
     assert autosaved_repair.status_code == 200, autosaved_repair.text
+    assert autosaved_repair.json()["repair"]["method"] == "screentone"
     assert autosaved_repair.json()["confirmed"] is False
     assert autosaved_repair.json()["trustDisposition"] == "trusted"
     assert autosaved_repair.json()["trustReason"] == "human-confirmed"

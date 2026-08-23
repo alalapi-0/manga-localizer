@@ -9,27 +9,43 @@ import numpy as np
 from PIL import Image
 
 from manga_localizer.imaging.inpainting import inpaint
+from manga_localizer.imaging.manga_ai_postprocess import (
+    manga_overview_lineart_cleanup,
+    manga_tone_cleanup,
+)
 
 CANDIDATE_PRIMARY = "primary"
+CANDIDATE_AI_MANGA_CLEAN = "ai-manga-clean"
+CANDIDATE_AI_OVERVIEW_LINEART = "ai-overview-lineart"
 CANDIDATE_OPENCV_NS = "opencv-ns"
 CANDIDATE_OPENCV_TELEA = "opencv-telea"
 CANDIDATE_LINEART = "lineart-guided"
 CANDIDATE_LAMA_FULL_CONTEXT = "lama-full-context"
+CANDIDATE_LAMA_COMPONENTS = "lama-components"
+CANDIDATE_LAMA_OVERVIEW_REFINE = "lama-overview-refine"
 CANDIDATE_IDS = frozenset(
     {
         CANDIDATE_PRIMARY,
+        CANDIDATE_AI_MANGA_CLEAN,
+        CANDIDATE_AI_OVERVIEW_LINEART,
         CANDIDATE_OPENCV_NS,
         CANDIDATE_OPENCV_TELEA,
         CANDIDATE_LINEART,
         CANDIDATE_LAMA_FULL_CONTEXT,
+        CANDIDATE_LAMA_COMPONENTS,
+        CANDIDATE_LAMA_OVERVIEW_REFINE,
     }
 )
 CANDIDATE_LABELS = {
     CANDIDATE_PRIMARY: "当前 Provider 结果",
+    CANDIDATE_AI_MANGA_CLEAN: "AI 漫画重绘(清晰黑白)",
+    CANDIDATE_AI_OVERVIEW_LINEART: "AI 全景重绘 + 线稿清晰化",
     CANDIDATE_OPENCV_NS: "OpenCV Navier-Stokes",
     CANDIDATE_OPENCV_TELEA: "OpenCV Telea",
     CANDIDATE_LINEART: "线稿引导(结构+纹理)",
     CANDIDATE_LAMA_FULL_CONTEXT: "LaMa 全局上下文(连续边界)",
+    CANDIDATE_LAMA_COMPONENTS: "LaMa 逐空缺重绘(局部上下文)",
+    CANDIDATE_LAMA_OVERVIEW_REFINE: "LaMa 全景引导重绘(大空缺)",
 }
 ANOMALY_MASK_OUTSIDE = "mask-outside-changed"
 ANOMALY_CHROMA = "chroma-introduced"
@@ -124,6 +140,7 @@ def lineart_guided_inpaint(
     *,
     texture: Image.Image | None = None,
     radius: float = 3.0,
+    render_scale: int = 1,
 ) -> Image.Image:
     """Blend Navier-Stokes structure with a smoother texture fill for manga line art."""
     source = _as_image(image)
@@ -133,7 +150,13 @@ def lineart_guided_inpaint(
     if not np.any(mask_array):
         return source.copy()
 
-    structure = inpaint(source, mask_array, radius=radius, method="ns")
+    structure = inpaint(
+        source,
+        mask_array,
+        radius=radius,
+        method="ns",
+        render_scale=render_scale,
+    )
     texture_image = (
         texture
         if texture is not None
@@ -142,6 +165,7 @@ def lineart_guided_inpaint(
             mask_array,
             radius=radius,
             method="telea",
+            render_scale=render_scale,
         )
     )
     source_rgb = np.asarray(source.convert("RGB"), dtype=np.uint8)
@@ -242,26 +266,79 @@ def build_inpaint_candidates(
     primary: Image.Image,
     *,
     radius: float = 3.0,
+    render_scale: int = 1,
     full_context: Image.Image | None = None,
+    component_context: Image.Image | None = None,
+    overview_base: Image.Image | None = None,
+    overview_refine: Image.Image | None = None,
 ) -> list[dict[str, Any]]:
     source_image = _as_image(source)
     mask_array = _as_mask(mask)
     if not np.any(mask_array):
         return []
-    ns = inpaint(source_image, mask_array, radius=radius, method="ns")
-    telea = inpaint(source_image, mask_array, radius=radius, method="telea")
+    ns = inpaint(
+        source_image,
+        mask_array,
+        radius=radius,
+        method="ns",
+        render_scale=render_scale,
+    )
+    telea = inpaint(
+        source_image,
+        mask_array,
+        radius=radius,
+        method="telea",
+        render_scale=render_scale,
+    )
     guided = lineart_guided_inpaint(
         source_image,
         mask_array,
         texture=primary,
         radius=radius,
+        render_scale=render_scale,
     )
     candidate_images: list[tuple[str, Image.Image]] = [
         (CANDIDATE_PRIMARY, primary),
-        (CANDIDATE_OPENCV_NS, ns),
-        (CANDIDATE_OPENCV_TELEA, telea),
-        (CANDIDATE_LINEART, guided),
     ]
+    if component_context is not None:
+        candidate_images.append((CANDIDATE_LAMA_COMPONENTS, component_context))
+    if overview_refine is not None:
+        candidate_images.append((CANDIDATE_LAMA_OVERVIEW_REFINE, overview_refine))
+    if overview_base is not None:
+        overview_cleaned_pixels = manga_overview_lineart_cleanup(
+            np.asarray(source_image.convert("RGB"), dtype=np.uint8),
+            np.asarray(overview_base.convert("RGB"), dtype=np.uint8),
+            mask_array,
+            render_scale=render_scale,
+        )
+        if overview_cleaned_pixels is not None:
+            overview_cleaned = Image.fromarray(overview_cleaned_pixels, mode="RGB")
+            overview_cleaned = preserve_grayscale(overview_cleaned, source_image)
+            if source_image.mode == "RGBA":
+                overview_cleaned = overview_cleaned.convert("RGBA")
+                overview_cleaned.putalpha(source_image.getchannel("A"))
+            candidate_images.append((CANDIDATE_AI_OVERVIEW_LINEART, overview_cleaned))
+    candidate_images.extend(
+        [
+            (CANDIDATE_OPENCV_NS, ns),
+            (CANDIDATE_OPENCV_TELEA, telea),
+            (CANDIDATE_LINEART, guided),
+        ]
+    )
+    ai_base = full_context if full_context is not None else primary
+    cleaned_pixels = manga_tone_cleanup(
+        np.asarray(source_image.convert("RGB"), dtype=np.uint8),
+        np.asarray(ai_base.convert("RGB"), dtype=np.uint8),
+        mask_array,
+        radius=radius,
+    )
+    if cleaned_pixels is not None:
+        cleaned = Image.fromarray(cleaned_pixels, mode="RGB")
+        cleaned = preserve_grayscale(cleaned, source_image)
+        if source_image.mode == "RGBA":
+            cleaned = cleaned.convert("RGBA")
+            cleaned.putalpha(source_image.getchannel("A"))
+        candidate_images.insert(1, (CANDIDATE_AI_MANGA_CLEAN, cleaned))
     if full_context is not None:
         candidate_images.append((CANDIDATE_LAMA_FULL_CONTEXT, full_context))
     built: list[dict[str, Any]] = []
@@ -288,8 +365,8 @@ def choose_default_candidate(
     used_only_lama: bool,
 ) -> str:
     ids = {str(item.get("id")) for item in candidates}
-    if used_only_lama and CANDIDATE_LINEART in ids:
-        return CANDIDATE_LINEART
+    if used_only_lama and CANDIDATE_AI_MANGA_CLEAN in ids:
+        return CANDIDATE_AI_MANGA_CLEAN
     if CANDIDATE_PRIMARY in ids:
         return CANDIDATE_PRIMARY
     if not ids:

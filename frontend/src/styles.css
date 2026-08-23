@@ -420,12 +420,12 @@ h1, h2, h3, p { margin: 0; }
   background: rgba(4,6,8,.68);
   backdrop-filter: blur(4px);
 }
-.modal { width: min(460px, calc(100vw - 48px)); overflow: hidden; background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: 11px; box-shadow: var(--shadow); }
-.modal__header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 15px 17px; background: var(--surface-0); border-bottom: 1px solid var(--border); }
+.modal { display: flex; width: min(460px, 100%); max-height: 100%; min-height: 0; flex-direction: column; overflow: hidden; background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: 11px; box-shadow: var(--shadow); }
+.modal__header { display: flex; justify-content: space-between; align-items: flex-start; flex: 0 0 auto; gap: 16px; padding: 15px 17px; background: var(--surface-0); border-bottom: 1px solid var(--border); }
 .modal__header h2, .batch-drawer__header h2 { font-size: 15px; }
 .modal__header p { margin-top: 4px; color: var(--muted); font-size: 9px; line-height: 1.5; }
-.modal__body { padding: 17px; }
-.modal__footer { display: flex; justify-content: flex-end; gap: 7px; padding: 11px 17px; border-top: 1px solid var(--border); }
+.modal__body { flex: 1 1 auto; min-height: 0; padding: 17px; overflow-y: auto; overscroll-behavior: contain; }
+.modal__footer { display: flex; justify-content: flex-end; flex: 0 0 auto; gap: 7px; padding: 11px 17px; border-top: 1px solid var(--border); }
 .form-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 4px; }
 
 .drawer-backdrop {
@@ -534,7 +534,7 @@ kbd { display: inline-block; padding: 3px 6px; color: var(--text-soft); backgrou
 
 @media (max-width: 900px) {
   body { min-width: 0; min-height: 0; }
-  .topbar { height: auto; min-height: 54px; flex-wrap: wrap; padding: 8px 10px; }
+  .topbar { flex: 0 0 auto; height: auto; min-height: 54px; flex-wrap: wrap; padding: 8px 10px; }
   .topbar__brand { flex-basis: auto; }
   .topbar__project { max-width: none; margin-right: 0; }
   .topbar__batch { display: none; }

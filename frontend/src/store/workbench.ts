@@ -63,6 +63,11 @@ interface ProjectMutation {
   expectedRevision: number;
 }
 
+type RegionUpdatePatch = Omit<Partial<Region>, 'repair' | 'style'> & {
+  repair?: Partial<Region['repair']>;
+  style?: Partial<Region['style']>;
+};
+
 interface WorkbenchState {
   loadState: LoadState;
   loadMessage: string;
@@ -126,7 +131,7 @@ interface WorkbenchState {
   selectRegion: (regionId: string, additive?: boolean) => void;
   clearRegionSelection: () => void;
   createRegion: (geometry: Pick<Region, 'x' | 'y' | 'width' | 'height'>) => string | null;
-  updateRegion: (regionId: string, patch: Partial<Region>, recordHistory?: boolean) => void;
+  updateRegion: (regionId: string, patch: RegionUpdatePatch, recordHistory?: boolean) => void;
   nudgeSelectedRegions: (dx: number, dy: number) => void;
   setRegionConfirmed: (regionId: string, confirmed: boolean) => Promise<boolean>;
   deleteSelectedRegions: () => void;
@@ -253,6 +258,10 @@ function hydrateProject(project: Project): Project {
       },
       glossary: mappingToLines(rawSettings.glossary),
       characterNames: mappingToLines(rawSettings.characterNames),
+      requireAIInpaintBeforeDownstream:
+        typeof rawSettings.requireAIInpaintBeforeDownstream === 'boolean'
+          ? rawSettings.requireAIInpaintBeforeDownstream
+          : DEFAULT_PROJECT_SETTINGS.requireAIInpaintBeforeDownstream,
       preserveTree: typeof exportSettings.preserveTree === 'boolean'
         ? exportSettings.preserveTree
         : Boolean(rawSettings.preserveTree ?? DEFAULT_PROJECT_SETTINGS.preserveTree),
@@ -577,9 +586,15 @@ function hydrateRegion(region: Region): Region {
         ? 'navier_stokes'
         : repairMethod === 'solid'
           ? 'solid'
-          : 'telea',
+          : repairMethod === 'screentone'
+            ? 'screentone'
+            : 'telea',
       maskPadding: Number(rawRepair.maskPadding ?? rawRepair.padding ?? DEFAULT_REPAIR_SETTINGS.maskPadding),
-      maskMode: rawRepair.maskMode === 'region' ? 'region' : 'text',
+      maskMode: rawRepair.maskMode === 'region'
+        ? 'region'
+        : rawRepair.maskMode === 'manual'
+          ? 'manual'
+          : 'text',
       textPolarity: rawRepair.textPolarity === 'dark' || rawRepair.textPolarity === 'light'
         ? rawRepair.textPolarity
         : 'auto',
@@ -617,7 +632,6 @@ function hasTrustInputChange(before: Region, after: Region): boolean {
     'height',
     'rotation',
     'sourceText',
-    'type',
     'direction',
     'confidence',
   ];

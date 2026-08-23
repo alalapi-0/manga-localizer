@@ -1,6 +1,6 @@
 # Manga Localizer — Project State
 
-Updated: 2026-08-21
+Updated: 2026-08-23
 
 ## Authority and purpose
 
@@ -20,8 +20,11 @@ workbench/app panel; do not stop for reversible packaging review.
 ## Current round and candidate
 
 Live work is one-page full reprocess: every real uploaded image, one
-image per round, quality pass first, then text pipeline only when
-the page has text. Earlier realpages “已检查” counts are not a skip.
+image per round. The clean-plate gate is strict: finish and independently
+accept preprocessing, authoritative text removal, and AI cavity redraw before
+translation or typesetting begins. Translation/typesetting cannot conceal or
+serve as evidence for an incomplete clean plate. Earlier realpages “已检查”
+counts are not a skip.
 This loop finished sidebar 1 (1184×701, no-text), sidebar 2
 (1166×540, text), sidebar 3 (627×1843, no-text after P-1),
 sidebar 4 (340×594, text), sidebar 5 (1110×312, text after
@@ -52,8 +55,120 @@ text after P-10/P-11/P-12), followed by sidebar 48 (1175×1189, no-text
 after rejecting enhancement) and sidebar 49 (1166×566, text after rejecting
 enhancement), are finished. Sidebar 50 (1064×473, text after P-13/P-14),
 sidebar 51 (1060×721, no-text after rejecting enhancement), and sidebar 52
-(706×491, text) are also finished. Next page: sidebar 53. Product Round 8 is not
-complete. No open finding blocks the next page; CI is not a page gate.
+(706×491, text) are also finished. Sidebar 53 (771×449, text after
+P-15 through P-23) is finished: genuine 4× local enhancement, a manual-only
+authoritative text support, and the componentwise LaMa clean plate were accepted
+after fit and enlarged mask-on/mask-off inspection. Six active text boxes were
+translated, manually shortened and redistributed across their paired vertical
+boxes, then reconfirmed. The second typeset pass was accepted after full-page and
+three enlarged cluster comparisons showed single-column text contained within
+the original knockout backing without covering the character, line art, or
+screentone. Page review and current-page text-only JSON export completed with no
+active jobs.
+
+Sidebar 54 (1204×1351, text after P-24/P-25) is also finished: the genuine 4×
+local enhancement, manually bounded authoritative support, and direct LaMa
+component redraw were accepted before any downstream text work. Two trusted
+regions were manually corrected after the local translator produced incomplete
+results, reconfirmed, and typeset vertically on the accepted clean plate. The
+high-resolution final page was accepted with zero overflow; page review and the
+current-page text-only JSON export completed with no active jobs.
+
+P-20 is cleared: accepted clean-plate artifact and mask checksums are checked at
+enqueue and worker commit time; typeset/render cannot silently rebuild the clean
+plate; and the persisted strict switch requires checksum-bound internal
+`direct-ai` provenance from an allowed LaMa provider for every nonempty
+authoritative mask. Display status is ignored. The immutable candidate set is
+canonically hashed into the database anchor, and both stage acceptance and the
+strict downstream gate recompute that anchor and compare its currently selected
+candidate's artifact checksum, origin class, and provider IDs with database
+provenance. Manifest metadata edits and database provenance relabel/re-review
+therefore fail closed. A fresh independent Judge passed the exact candidate.
+
+P-26 and P-27 are cleared. Runtime repair limits now scale exactly once across
+the complete 2×–4× mask, OpenCV, LaMa, component, full-context, and candidate
+pipeline without weakening canonical persistence limits or clamping values.
+Inpaint consumes an enhanced raster only when that exact preprocessing artifact
+is independently accepted and checksum-current; otherwise it explicitly uses
+the immutable original. Accepted high-resolution lineage is rechecked before
+publication and before downstream work, and accepting preprocessing after an
+original-based clean plate invalidates that stale plate and all dependents.
+Independent read-only reviews passed both fixes. The accepted sidebar 54
+enhancement, clean plate, mask, and final raster remain on the same 4× grid and
+still match their accepted checksums; its persisted reviews and completion state
+remain unchanged.
+
+P-28 through P-30 are cleared for sidebar 55. Its genuine 4x local enhancement
+was accepted before rendering. A hard manual-only support now covers the full
+stylized glyph, including its page-edge cavities; the selected overview-derived
+LaMa candidate removes the readable foreground and continues the surrounding
+motion lines while changing zero pixels outside the persisted mask. The exact
+4x artifact and mask are accepted in the real application. Its deterministic
+line-art cleanup is now represented as `ai-derived`, not relabelled as raw AI:
+an internal-only PNG of the direct LaMa overview, its checksum, provider,
+generation, mask, allowlisted transform, selected artifact, and manifest-v2
+digest form one server-validated evidence chain. The internal base is absent
+from public candidate routes. Candidate selection, re-review, and the strict
+downstream gate recompute that evidence and fail closed on any missing,
+classical, cyclic, mismatched, or tampered lineage. The accepted live artifact
+passes the strict AI prerequisite with matching artifact, mask, manifest, and
+review-provenance digests.
+
+Sidebar 55 (1060×492, text after P-28 through P-32) is finished. After the
+clean plate was rebuilt under the bound derived-AI provenance contract, it was
+accepted again with the actual mask visible. P-32 is cleared: semantic type is
+now a typeset/page-review input rather than an OCR trust input, so changing it
+and later changing style preserved the trusted region, accepted clean plate,
+mask, candidate provenance, and erased preview while invalidating only the
+appropriate downstream state. P-31 is cleared: the unusable local-translation
+result was corrected locally, the sound-effect region was reconfirmed, and the
+first undersized typeset was replaced by an enlarged fixed-size result. The
+final page was accepted after fit and enlarged comparison with zero overflow.
+Page review, current-page text-only JSON export, zero active jobs, and a full
+reload preserving both accepted visual stages all passed.
+
+Sidebar 56 (1284×559, no-text after P-33) is finished. Its original was soft
+enough to warrant the local Real-ESRGAN anime 4× pass; the accepted enhancement
+sharpened the line art without introducing a structural break. Fresh detection
+and OCR reduced nine stale empty proposals to one high-confidence false positive
+on a clothing/shadow contour. That region was inspected enlarged and explicitly
+ignored; a clean full-page scan found no dialogue, caption, title, or sound-effect
+text. The no-text page confirmation, accepted preprocessing review, zero active
+jobs, cleared batch selection, and reload persistence all passed. P-33 is
+cleared: the bounded local application service was restarted after its process
+disappeared, and the same persisted page then completed its full quality path
+without data repair or another connection failure.
+
+Sidebar 57 (611×704, no-text) is finished. Its heavily enlarged original was
+visibly soft; the accepted Real-ESRGAN anime 4× result restored crisp contours,
+speed lines, and screentone boundaries without a new structural break. Fresh
+detection/OCR found only two overlapping false positives on the raised hand and
+adjacent motion shading. Both were inspected enlarged and explicitly ignored.
+The remaining drawn impact lettering is inseparable from the action composition
+and was retained as artwork; full-page scan found no independently translatable
+dialogue, narration, caption, or title. No-text confirmation, accepted
+preprocessing review, cleared batch selection, and reload persistence passed;
+no translation, repair, typeset, or private image export ran.
+
+Sidebar 58 (1177×1133, no-text) is finished. Its soft original received the
+local Real-ESRGAN anime 4× pass; the accepted result sharpened the character,
+arrows, snow contours, and screentone without a structural break. Fresh
+detection/OCR replaced twenty-five stale empty proposals with one false positive
+on a continuous snowbank contour and its parallel motion/shading marks. That
+proposal was inspected at high zoom and explicitly ignored. The large cropped
+edge marks remain inseparable from the page composition and were retained as
+artwork; full-page scan found no independently translatable dialogue, narration,
+caption, or title. No-text confirmation, accepted preprocessing review, cleared
+batch selection, zero active jobs, and reload persistence passed; no translation,
+repair, typeset, or private image export ran.
+
+Sidebar 59 is the current page. Do not advance until its required quality and
+text/no-text path passes. Product Round 8 is not complete; 58/130 pages are
+currently finished. CI is not a page gate.
+
+The current candidate passed `npm run check` on 2026-08-23: 9 launcher tests,
+360 backend tests, 182 frontend tests, backend formatting/lint, frontend
+lint/typecheck, and the production build. `git diff --check` passed.
 
 Do not re-arm `AGENT_LOOP_WAKE_manga_realpages`,
 `AGENT_LOOP_WAKE_manga_ui`, `AGENT_LOOP_WAKE_manga_desktop`,
@@ -126,6 +241,11 @@ sentinels skip rewrite.
   zero-detection result is authoritative and is not silently replaced during OCR.
 - Low-resolution pages can be manually AI-redrawn with the local Real-ESRGAN anime 4× preprocessor.
   The workbench button never runs this automatically and does not change the project default.
+- An accepted genuine 2×–4× preprocessing artifact is the render input for masks,
+  AI inpainting, later typesetting, review, and export. Persisted region geometry
+  remains canonical while temporary render geometry and pixel-valued settings are
+  scaled to the processed raster. Generated preview grids must be integer 1×–4×
+  and an inpaint artifact must exactly match its review-mask grid.
 - Annotated detection/OCR evaluation is path-parameterized. Public reports store only anonymous page
   IDs and aggregate precision, recall, CER, and negative-page false positives. Transcriptions, image
   names, checksums, and absolute paths stay out of sanitized output. Private draft JSON remains under
@@ -142,8 +262,14 @@ sentinels skip rewrite.
   Simplified Chinese). OpenAI-compatible remains the only path that can send trusted text remotely, and
   only after the user selects it and supplies a session credential.
 - Inpainting uses exact provider routing. OpenCV is the guaranteed fallback; optional LaMa ONNX is lazy,
-  local, context-cropped, and composites with exact mask-outside preservation. Grayscale manga pages
-  keep chroma suppressed after RGB LaMa inference. Each nonempty repair also stores comparison
+  local, context-cropped, and composites with exact mask-outside preservation. LaMa preserves native
+  scale through overlapping 512px inference tiles instead of stretching arbitrary crops. Its wider
+  inference support is never substituted for the authoritative persisted/review mask. Grayscale manga pages
+  keep chroma suppressed after RGB LaMa inference. Large page-edge manual supports can publish a
+  non-default global-overview-plus-native-core LaMa candidate. A conservative overview-only line-art
+  cleanup may publish an `ai-derived` candidate only with an internal, checksum-bound direct-LaMa base
+  and allowlisted deterministic transform; its hidden base is part of the immutable candidate evidence,
+  not a public candidate or a display label. Each nonempty repair also stores comparison
   candidates (provider, Navier-Stokes, Telea, line-art-guided); eligible LaMa pages also store an
   optional union-mask full-context candidate for mixed high-contrast boundaries. Candidate choice
   remains explicit; an optional-pass failure falls back to the four successful candidates. Switching a candidate replaces the canonical inpainted bytes and clears
@@ -162,6 +288,10 @@ sentinels skip rewrite.
   export remains independent. The per-region `confirmed` flag controls the page-review gate only;
   toggling it on an already-trusted region preserves current visual artifacts and accepted reviews,
   while a new trust decision or any pixel-affecting edit still invalidates its owning stages.
+- Page processing is stage-gated: the enhanced/source comparison and the clean
+  inpaint artifact with its actual mask are reviewed first. Translation and
+  typesetting wait until the clean plate has no visible residual glyph, broken
+  artwork, texture seam, blur block, or unauthorized changed pixel.
 - Moving, resizing, merging, or splitting a detector region removes its stale polygon while preserving
   the remaining repair provenance. Generated preview/compare controls are gated by current artifacts.
 - Projects remain portable: each output root contains `project/project.sqlite3` and a sanitized
@@ -202,7 +332,7 @@ sentinels skip rewrite.
 - [x] Round 7: public documentation, evaluator configuration evidence, full gates, exact real-provider
   regression, and release/privacy audit.
 - [ ] Round 8: full-book clean-plate visual review is partial; this
-  loop reprocesses from sidebar 1 and has finished 52/130.
+  loop reprocesses from sidebar 1 and has finished 58/130.
 - [x] Round 9: ignored aggregate evidence, durable visual-stage review, checksum-bound generated-image
   export, governed review, non-default-branch delivery, and complete CI verification.
 - [x] Round 10: post-OCR evidence/trust gate, public regression, governed review, non-default-branch
@@ -314,7 +444,7 @@ sentinels skip rewrite.
   public evaluator export-gate fix; no further software defect on the full pass.
 - [ ] NEEDS_USER unified visual check of manga01+manga02, including empty-recognized
   pages and remaining manga01 clean-plate review. Product Round 8 is not complete.
-- [ ] Next real-data checkpoint: remaining 78/130 visual reviews; local human use of the draft-review
+- [ ] Next real-data checkpoint: remaining 72/130 visual reviews; local human use of the draft-review
   CLI to promote private detector-draft JSON into independent ground truth.
 
 ## Verification evidence

@@ -256,11 +256,14 @@ def _region_direction(region: Mapping[str, Any]) -> str:
     return "vertical" if (y2 - y1) >= (x2 - x1) else "horizontal"
 
 
-def _is_fragment_region(region: Mapping[str, Any]) -> bool:
+def _is_fragment_region(region: Mapping[str, Any], geometry_scale: float = 1.0) -> bool:
     x1, y1, x2, y2 = _region_box(region)
     width = x2 - x1
     height = y2 - y1
-    return min(width, height) <= _FRAGMENT_MAX_SHORT_SIDE or width * height <= _FRAGMENT_MAX_AREA
+    return (
+        min(width, height) <= _FRAGMENT_MAX_SHORT_SIDE * geometry_scale
+        or width * height <= _FRAGMENT_MAX_AREA * geometry_scale**2
+    )
 
 
 def _box_gap(
@@ -306,8 +309,12 @@ def _region_sort_key(region: Mapping[str, Any]) -> tuple[int, float, float]:
 
 def cluster_fragment_regions(
     regions: Sequence[Mapping[str, Any]],
+    *,
+    geometry_scale: float = 1.0,
 ) -> list[list[Mapping[str, Any]]]:
     """Group adjacent small boxes that can share one typeset run."""
+    if not math.isfinite(geometry_scale) or geometry_scale <= 0:
+        raise ValueError("geometry_scale must be a positive finite number")
     parent = list(range(len(regions)))
 
     def find(index: int) -> int:
@@ -322,18 +329,18 @@ def cluster_fragment_regions(
             parent[root_right] = root_left
 
     for left, region in enumerate(regions):
-        if region.get("ignored") or not _is_fragment_region(region):
+        if region.get("ignored") or not _is_fragment_region(region, geometry_scale):
             continue
         left_box = _region_box(region)
         left_direction = _region_direction(region)
         for right in range(left + 1, len(regions)):
             other = regions[right]
-            if other.get("ignored") or not _is_fragment_region(other):
+            if other.get("ignored") or not _is_fragment_region(other, geometry_scale):
                 continue
             if _region_direction(other) != left_direction:
                 continue
             other_box = _region_box(other)
-            if _box_gap(left_box, other_box) <= _FRAGMENT_GAP and _boxes_aligned(
+            if _box_gap(left_box, other_box) <= _FRAGMENT_GAP * geometry_scale and _boxes_aligned(
                 left_box, other_box, left_direction
             ):
                 union(left, right)
@@ -788,6 +795,8 @@ def _composite_region(
 def typeset_image(
     image: Path | Image.Image,
     regions: Sequence[Mapping[str, Any]],
+    *,
+    geometry_scale: float = 1.0,
 ) -> TypesetResult:
     if isinstance(image, Path):
         with Image.open(image) as source:
@@ -803,7 +812,7 @@ def typeset_image(
         if not text:
             continue
         drawable.append(region)
-    for group in cluster_fragment_regions(drawable):
+    for group in cluster_fragment_regions(drawable, geometry_scale=geometry_scale):
         if len(group) == 1:
             region = group[0]
             text = str(region.get("translationText", region.get("translation_text", "")))

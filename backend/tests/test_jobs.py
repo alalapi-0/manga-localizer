@@ -23,8 +23,9 @@ from manga_localizer.database import ImageAsset, Job, JobStatus, TextRegion
 from manga_localizer.imaging import create_mask
 from manga_localizer.main import create_app
 from manga_localizer.providers.ocr import OCRRegion
+from manga_localizer.queue import PersistentJobQueue
 from manga_localizer.services.images import review_image_stage, stage_reviews
-from manga_localizer.services.projects import RevisionConflict
+from manga_localizer.services.projects import ProjectError, RevisionConflict
 
 from .conftest import create_project, png_bytes, upload_image
 
@@ -149,12 +150,75 @@ def _set_stage_review(
     return response.json()
 
 
+def _inpaint_and_accept(
+    client: TestClient,
+    project_id: str,
+    image_id: str,
+    options: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    queued = client.post(
+        f"/api/projects/{project_id}/inpaint",
+        json={"imageIds": [image_id], "options": options or {}},
+    )
+    assert queued.status_code == 202, queued.text
+    if not client.app.state.queue.running:
+        claimed = client.app.state.queue._claim_next()
+        assert claimed is not None
+        claimed_store, claimed_job_id = claimed
+        assert claimed_job_id == queued.json()["id"]
+        asyncio.run(client.app.state.queue._execute(claimed_store, claimed_job_id))
+    completed = _wait_job(client, queued.json()["id"])
+    assert completed["status"] == "completed", completed
+    return _accept_current_inpaint(client, project_id, image_id)
+
+
+def _accept_current_inpaint(
+    client: TestClient,
+    project_id: str,
+    image_id: str,
+) -> dict[str, Any]:
+    image = next(
+        item
+        for item in client.get(f"/api/projects/{project_id}/images").json()
+        if item["id"] == image_id
+    )
+    return _set_stage_review(client, image, "inpaint", "accepted")
+
+
+def _inpaint_and_accept_many(
+    client: TestClient,
+    project_id: str,
+    image_ids: list[str],
+    options: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    queued = client.post(
+        f"/api/projects/{project_id}/inpaint",
+        json={"imageIds": image_ids, "options": options or {}},
+    )
+    assert queued.status_code == 202, queued.text
+    if not client.app.state.queue.running:
+        claimed = client.app.state.queue._claim_next()
+        assert claimed is not None
+        claimed_store, claimed_job_id = claimed
+        assert claimed_job_id == queued.json()["id"]
+        asyncio.run(client.app.state.queue._execute(claimed_store, claimed_job_id))
+    completed = _wait_job(client, queued.json()["id"])
+    assert completed["status"] == "completed", completed
+    images = {
+        image["id"]: image for image in client.get(f"/api/projects/{project_id}/images").json()
+    }
+    return [
+        _set_stage_review(client, images[image_id], "inpaint", "accepted") for image_id in image_ids
+    ]
+
+
 def test_queue_control_actions_and_job_options_drop_credentials(
     client: TestClient, tmp_path: Path
 ) -> None:
     project = create_project(client, tmp_path / "project")
     image = upload_image(client, project["id"])
     region = _add_region(client, image["id"])
+    _inpaint_and_accept(client, project["id"], image["id"])
     response = client.post(
         f"/api/projects/{project['id']}/translate",
         json={
@@ -353,6 +417,7 @@ def test_mock_and_manual_translation_jobs_preserve_reviewed_text(tmp_path: Path)
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], translation="不要覆盖", confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         manual = client.post(
             f"/api/projects/{project['id']}/translate",
@@ -383,6 +448,7 @@ def test_blank_provider_translation_keeps_existing_reviewed_text(
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], translation="阳光", confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         monkeypatch.setattr(app.state.providers.mock, "translate_text", lambda *args, **kwargs: "")
 
         job = client.post(
@@ -416,6 +482,7 @@ def test_argos_translation_job_uses_local_pivot_without_mock_prefix(tmp_path: Pa
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         job = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [region["id"]], "options": {"provider": "argos-ja-zh"}},
@@ -450,6 +517,7 @@ def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
             },
         ).json()
         assert region["trustDisposition"] == "review"
+        _inpaint_and_accept(client, project["id"], image["id"], {"repairPolicy": "safe"})
 
         rejected = client.post(
             f"/api/projects/{project['id']}/translate",
@@ -479,6 +547,7 @@ def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
         )
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["trustDisposition"] == "trusted"
+        _inpaint_and_accept(client, project["id"], image["id"], {"repairPolicy": "safe"})
 
         translated = client.post(
             f"/api/projects/{project['id']}/translate",
@@ -506,6 +575,7 @@ def test_confidence_never_promotes_trust_and_human_disposition_gates_pipeline(
         )
         assert ignored.status_code == 200, ignored.text
         assert ignored.json()["trustDisposition"] == "ignored"
+        _inpaint_and_accept(client, project["id"], image["id"], {"repairPolicy": "safe"})
         ignored_translation = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
@@ -527,6 +597,7 @@ def test_legacy_confirmation_is_materialized_before_translation_resets_page_revi
             legacy = session.get(TextRegion, region["id"])
             assert legacy is not None
             legacy.recognition = {}
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         translated = client.post(
             f"/api/projects/{project['id']}/translate",
@@ -539,6 +610,606 @@ def test_legacy_confirmation_is_materialized_before_translation_resets_page_revi
         assert current["confirmed"] is False
         assert current["trustDisposition"] == "trusted"
         assert current["trustReason"] == "legacy-confirmed"
+
+
+def test_translate_typeset_and_render_require_an_accepted_inpaint_before_enqueue(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+
+        def submit(kind: str):
+            body = (
+                {"regionIds": [region["id"]], "options": {"provider": "mock"}}
+                if kind == "translate"
+                else {"imageIds": [image["id"]], "options": {}}
+            )
+            return client.post(f"/api/projects/{project['id']}/{kind}", json=body)
+
+        assert client.get(f"/api/jobs?projectId={project['id']}").json() == []
+        for kind in ("translate", "typeset", "render"):
+            response = submit(kind)
+            assert response.status_code == 409, response.text
+            assert response.json()["detail"] == {
+                "message": "inpaint must be completed and accepted before this operation",
+                "resource": f"image:{image['id']}",
+                "stage": "inpaint",
+                "requiredState": "accepted",
+                "reason": "stage-not-done",
+                "mismatches": [],
+            }
+        assert client.get(f"/api/jobs?projectId={project['id']}").json() == []
+
+        queued_inpaint = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert _wait_job(client, queued_inpaint.json()["id"])["status"] == "completed"
+        job_count = len(client.get(f"/api/jobs?projectId={project['id']}").json())
+        for kind in ("translate", "typeset", "render"):
+            response = submit(kind)
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["reason"] == "review-required"
+            assert detail["mismatches"] == []
+        assert len(client.get(f"/api/jobs?projectId={project['id']}").json()) == job_count
+
+        accepted = _accept_current_inpaint(client, project["id"], image["id"])
+        rejected = _set_stage_review(client, accepted, "inpaint", "rejected")
+        assert rejected["stageReviews"]["inpaint"]["state"] == "rejected"
+        job_count = len(client.get(f"/api/jobs?projectId={project['id']}").json())
+        for kind in ("translate", "typeset", "render"):
+            response = submit(kind)
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["stage"] == "inpaint"
+            assert detail["requiredState"] == "accepted"
+            assert detail["reason"] == "review-rejected"
+            assert detail["mismatches"] == []
+        assert len(client.get(f"/api/jobs?projectId={project['id']}").json()) == job_count
+
+
+def test_strict_project_gate_requires_an_ai_inpaint_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+
+    class FakeLama:
+        name = "lama-onnx"
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, _mask, **_options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    return opened.convert("RGB").copy()
+            return image.convert("RGB").copy()
+
+    monkeypatch.setattr(app.state.providers, "lama", FakeLama())
+    monkeypatch.setattr(
+        "manga_localizer.imaging.lineart_inpaint.manga_tone_cleanup",
+        lambda source, _ai_result, _mask, **_options: source.copy(),
+    )
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        accepted_opencv = _inpaint_and_accept(
+            client,
+            project["id"],
+            image["id"],
+            {"provider": "opencv"},
+        )
+        current_project = client.get(f"/api/projects/{project['id']}").json()
+        strict = client.patch(
+            f"/api/projects/{project['id']}",
+            json={
+                "settings": {"requireAIInpaintBeforeDownstream": True},
+                "expectedRevision": current_project["revision"],
+            },
+        )
+        assert strict.status_code == 200, strict.text
+        after_strict = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert after_strict["stageReviews"] == accepted_opencv["stageReviews"]
+
+        def submit(kind: str):
+            body = (
+                {"regionIds": [region["id"]], "options": {"provider": "mock"}}
+                if kind == "translate"
+                else {"imageIds": [image["id"]], "options": {}}
+            )
+            return client.post(f"/api/projects/{project['id']}/{kind}", json=body)
+
+        def assert_strictly_blocked() -> None:
+            for kind in ("translate", "typeset", "render"):
+                response = submit(kind)
+                assert response.status_code == 409, response.text
+                assert response.json()["detail"]["reason"] == "ai-inpaint-required"
+
+        assert_strictly_blocked()
+
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            stored.status = {
+                **stored.status,
+                "inpaintingProvider": "lama-onnx",
+                "inpaintCandidate": "lama-components",
+            }
+        assert_strictly_blocked()
+
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        selected_postprocess = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "ai-manga-clean",
+                "expectedRevision": current["revision"],
+            },
+        )
+        assert selected_postprocess.status_code == 200, selected_postprocess.text
+        _set_stage_review(client, selected_postprocess.json(), "inpaint", "accepted")
+        assert_strictly_blocked()
+
+        accepted_ai = _inpaint_and_accept(
+            client,
+            project["id"],
+            image["id"],
+            {"provider": "lama-onnx"},
+        )
+        assert accepted_ai["inpaintingProvider"] == "lama-onnx"
+        assert accepted_ai["inpaintCandidate"] == "ai-manga-clean"
+        assert_strictly_blocked()
+
+        selected_ai = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "primary",
+                "expectedRevision": accepted_ai["revision"],
+            },
+        )
+        assert selected_ai.status_code == 200, selected_ai.text
+        accepted_direct_ai = _set_stage_review(
+            client,
+            selected_ai.json(),
+            "inpaint",
+            "accepted",
+        )
+        assert accepted_direct_ai["stageReviews"]["inpaint"]["provenanceDigest"]
+        for kind in ("translate", "typeset", "render"):
+            response = submit(kind)
+            assert response.status_code == 202, response.text
+
+
+def test_strict_ai_gate_allows_a_zero_mask_without_provenance(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        strict = client.patch(
+            f"/api/projects/{project['id']}",
+            json={
+                "settings": {"requireAIInpaintBeforeDownstream": True},
+                "expectedRevision": project["revision"],
+            },
+        )
+        assert strict.status_code == 200, strict.text
+        image = upload_image(client, project["id"])
+        region_response = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 30,
+                "y": 40,
+                "width": 100,
+                "height": 120,
+                "sourceText": "文字",
+                "translationText": "译文",
+                "confirmed": True,
+                "repair": {
+                    "maskMode": "manual",
+                    "maskPadding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "maskEdits": {"version": 1, "strokes": []},
+                },
+            },
+        )
+        assert region_response.status_code == 201, region_response.text
+        region = region_response.json()
+        accepted = _inpaint_and_accept(client, project["id"], image["id"])
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            stored.inpaint_provenance = None
+            status = dict(stored.status)
+            reviews = dict(status["stageReviews"])
+            review = dict(reviews["inpaint"])
+            review.pop("provenanceDigest", None)
+            reviews["inpaint"] = review
+            status["stageReviews"] = reviews
+            stored.status = status
+
+        requests = (
+            client.post(
+                f"/api/projects/{project['id']}/translate",
+                json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/render",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+        )
+        assert accepted["stageReviews"]["inpaint"]["state"] == "accepted"
+        assert all(response.status_code == 202 for response in requests)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ("missing", "origin", "artifact-checksum", "review-digest"),
+)
+def test_strict_ai_gate_rejects_unbound_or_changed_internal_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+
+    class FakeLama:
+        name = "lama-onnx"
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, _mask, **_options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    return opened.convert("RGB").copy()
+            return image.convert("RGB").copy()
+
+    monkeypatch.setattr(app.state.providers, "lama", FakeLama())
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        strict = client.patch(
+            f"/api/projects/{project['id']}",
+            json={
+                "settings": {"requireAIInpaintBeforeDownstream": True},
+                "expectedRevision": project["revision"],
+            },
+        )
+        assert strict.status_code == 200, strict.text
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        accepted = _inpaint_and_accept(
+            client,
+            project["id"],
+            image["id"],
+            {"provider": "lama-onnx"},
+        )
+        if accepted["inpaintCandidate"] != "primary":
+            selected = client.patch(
+                f"/api/images/{image['id']}/inpaint-candidate",
+                json={
+                    "candidateId": "primary",
+                    "expectedRevision": accepted["revision"],
+                },
+            )
+            assert selected.status_code == 200, selected.text
+            accepted = _set_stage_review(client, selected.json(), "inpaint", "accepted")
+        assert accepted["stageReviews"]["inpaint"]["provenanceDigest"]
+
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            if mutation == "missing":
+                stored.inpaint_provenance = None
+            elif mutation == "review-digest":
+                status = dict(stored.status)
+                reviews = dict(status["stageReviews"])
+                review = dict(reviews["inpaint"])
+                review["provenanceDigest"] = "0" * 64
+                reviews["inpaint"] = review
+                status["stageReviews"] = reviews
+                stored.status = status
+            else:
+                provenance = dict(stored.inpaint_provenance or {})
+                if mutation == "origin":
+                    provenance["originKind"] = "classical"
+                else:
+                    provenance["artifactChecksum"] = "0" * 64
+                stored.inpaint_provenance = provenance
+
+        requests = (
+            client.post(
+                f"/api/projects/{project['id']}/translate",
+                json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/render",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+        )
+        for response in requests:
+            assert response.status_code == 409, response.text
+            assert response.json()["detail"]["reason"] == "ai-inpaint-required"
+
+
+def test_tampered_database_provenance_cannot_be_legitimized_by_rereview(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=False)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        accepted = _inpaint_and_accept(
+            client,
+            project["id"],
+            image["id"],
+            {"provider": "opencv"},
+        )
+        project_before_strict = client.get(f"/api/projects/{project['id']}").json()
+        strict = client.patch(
+            f"/api/projects/{project['id']}",
+            json={
+                "settings": {"requireAIInpaintBeforeDownstream": True},
+                "expectedRevision": project_before_strict["revision"],
+            },
+        )
+        assert strict.status_code == 200, strict.text
+
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            provenance = dict(stored.inpaint_provenance or {})
+            assert provenance["originKind"] == "classical"
+            provenance["originKind"] = "direct-ai"
+            provenance["providerIds"] = ["lama-onnx"]
+            stored.inpaint_provenance = provenance
+            tampered_provenance = dict(provenance)
+
+        before_rereview = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert before_rereview["revision"] == accepted["revision"]
+        original_review = dict(before_rereview["stageReviews"]["inpaint"])
+        rereview = client.patch(
+            f"/api/images/{image['id']}/stage-reviews/inpaint",
+            json=_stage_review_json(client, before_rereview, "inpaint", "accepted"),
+        )
+        assert rereview.status_code == 400, rereview.text
+        assert "provenance changed" in rereview.json()["detail"].lower()
+
+        after_rereview = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert after_rereview["revision"] == before_rereview["revision"]
+        assert after_rereview["stageReviews"]["inpaint"] == original_review
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            assert stored.inpaint_provenance == tampered_provenance
+
+        requests = (
+            client.post(
+                f"/api/projects/{project['id']}/translate",
+                json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/render",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+        )
+        for response in requests:
+            assert response.status_code == 409, response.text
+            assert response.json()["detail"]["reason"] == "ai-inpaint-required"
+
+
+@pytest.mark.parametrize(
+    ("generated_directory", "expected_mismatch"),
+    (("inpainted", "artifactChecksum"), ("masks", "maskChecksum")),
+)
+def test_downstream_jobs_reject_a_changed_accepted_inpaint_file(
+    tmp_path: Path,
+    generated_directory: str,
+    expected_mismatch: str,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
+        relative = Path(image["relativePath"]).with_suffix(".png")
+        target = project_root / "generated" / generated_directory / relative
+        replacement = Image.new(
+            "L" if generated_directory == "masks" else "RGB",
+            (image["width"], image["height"]),
+            127 if generated_directory == "masks" else (210, 30, 40),
+        )
+        replacement.save(target, format="PNG")
+        job_count = len(client.get(f"/api/jobs?projectId={project['id']}").json())
+
+        requests = (
+            client.post(
+                f"/api/projects/{project['id']}/translate",
+                json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/render",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+        )
+        for response in requests:
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["reason"] == "checksum-mismatch"
+            assert detail["mismatches"] == [expected_mismatch]
+        assert len(client.get(f"/api/jobs?projectId={project['id']}").json()) == job_count
+
+
+@pytest.mark.parametrize("generated_directory", ("inpainted", "masks"))
+def test_downstream_jobs_reject_a_deleted_accepted_inpaint_file(
+    tmp_path: Path,
+    generated_directory: str,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
+        relative = Path(image["relativePath"]).with_suffix(".png")
+        (project_root / "generated" / generated_directory / relative).unlink()
+        job_count = len(client.get(f"/api/jobs?projectId={project['id']}").json())
+
+        requests = (
+            client.post(
+                f"/api/projects/{project['id']}/translate",
+                json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+            client.post(
+                f"/api/projects/{project['id']}/render",
+                json={"imageIds": [image["id"]], "options": {}},
+            ),
+        )
+        for response in requests:
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["reason"] == "artifact-unavailable"
+            assert detail["mismatches"] == []
+        assert len(client.get(f"/api/jobs?projectId={project['id']}").json()) == job_count
+
+
+def test_translation_rechecks_the_accepted_inpaint_before_committing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    entered = threading.Event()
+    release = threading.Event()
+
+    def blocking_translate(*_args, **_kwargs) -> str:
+        entered.set()
+        assert release.wait(3)
+        return "后台新译文"
+
+    monkeypatch.setattr(app.state.providers.mock, "translate_text", blocking_translate)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], translation="保留人工译文", confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
+        queued = client.post(
+            f"/api/projects/{project['id']}/translate",
+            json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
+        )
+        assert queued.status_code == 202, queued.text
+        assert entered.wait(3)
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            current = session.get(ImageAsset, image["id"])
+            assert current is not None
+            status = dict(current.status)
+            reviews = dict(status.get("stageReviews") or {})
+            reviews.pop("inpaint", None)
+            status["stageReviews"] = reviews
+            current.status = status
+        release.set()
+
+        failed = _wait_job(client, queued.json()["id"])
+        assert failed["status"] == "failed"
+        assert failed["items"][0]["error"] == (
+            "Translation failed; inspect the private project log"
+        )
+        current_region = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert current_region["translationText"] == "保留人工译文"
+
+
+def test_typeset_rechecks_the_accepted_inpaint_before_writing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    entered = threading.Event()
+    release = threading.Event()
+    original_typeset = queue_module.typeset_image
+
+    def blocking_typeset(*args, **kwargs):
+        entered.set()
+        assert release.wait(3)
+        return original_typeset(*args, **kwargs)
+
+    monkeypatch.setattr(queue_module, "typeset_image", blocking_typeset)
+    with TestClient(app) as client:
+        project_root = tmp_path / "project"
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"])
+        _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
+        before_artifact = client.get(f"/api/images/{image['id']}/generated/inpainted").content
+        before_mask = client.get(f"/api/images/{image['id']}/generated/mask").content
+        queued = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert queued.status_code == 202, queued.text
+        assert entered.wait(3)
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            current = session.get(ImageAsset, image["id"])
+            assert current is not None
+            status = dict(current.status)
+            reviews = dict(status.get("stageReviews") or {})
+            reviews.pop("inpaint", None)
+            status["stageReviews"] = reviews
+            current.status = status
+        release.set()
+
+        failed = _wait_job(client, queued.json()["id"])
+        assert failed["status"] == "failed"
+        assert failed["items"][0]["error"] == (
+            "Image rendering failed; inspect the private project log"
+        )
+        assert client.get(f"/api/images/{image['id']}/generated/typeset").status_code == 404
+        assert (
+            client.get(f"/api/images/{image['id']}/generated/inpainted").content == before_artifact
+        )
+        assert client.get(f"/api/images/{image['id']}/generated/mask").content == before_mask
 
 
 def test_region_repair_settings_drive_the_inpainting_job(tmp_path: Path) -> None:
@@ -574,6 +1245,566 @@ def test_region_repair_settings_drive_the_inpainting_job(tmp_path: Path) -> None
             assert result.convert("RGB").getpixel((50, 60)) == (239, 35, 60)
 
 
+def test_manual_mask_job_repairs_only_persisted_brush_support(tmp_path: Path) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"], data=png_bytes(color="white"))
+        region = _add_region(client, image["id"], confirmed=True)
+        updated = client.patch(
+            f"/api/regions/{region['id']}",
+            json={
+                "repair": {
+                    "method": "solid",
+                    "maskMode": "manual",
+                    "maskPadding": 40,
+                    "dilation": 20,
+                    "feather": 20,
+                    "radius": 1,
+                    "fillColor": "#ef233c",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [{"mode": "add", "radius": 3, "points": [[50, 60]]}],
+                    },
+                },
+                "expectedRevision": region["revision"],
+            },
+        )
+        assert updated.status_code == 200, updated.text
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+
+        assert completed["status"] == "completed", completed
+        assert completed["items"][0]["output"]["repairedRegionCount"] == 1
+        mask_response = client.get(f"/api/images/{image['id']}/generated/mask")
+        erased_response = client.get(f"/api/images/{image['id']}/generated/inpainted")
+        assert mask_response.status_code == 200, mask_response.text
+        assert erased_response.status_code == 200, erased_response.text
+        with Image.open(io.BytesIO(mask_response.content)) as opened:
+            mask = np.asarray(opened.convert("L"), dtype=np.uint8)
+        with Image.open(io.BytesIO(erased_response.content)) as opened:
+            erased = opened.convert("RGB")
+
+        assert mask[60, 50] == 255
+        assert mask[60, 60] == 0
+        assert erased.getpixel((50, 60)) == (239, 35, 60)
+        assert erased.getpixel((60, 60)) == (255, 255, 255)
+
+
+def test_render_region_snapshot_scales_pixels_without_mutating_canonical_data() -> None:
+    region = {
+        "id": "region-public",
+        "x": 10,
+        "y": 20,
+        "width": 30,
+        "height": 40,
+        "style": {
+            "fontSize": 12,
+            "min_font_size": 8,
+            "maxFontSize": 18,
+            "stroke_width": 1,
+            "letterSpacing": 1.5,
+            "lineHeight": 1.2,
+            "padding": 3,
+        },
+        "repair": {
+            "maskPadding": 2,
+            "dilation": 1,
+            "feather": 1,
+            "radius": 3.5,
+            "contextPadding": 64,
+            "maskPolygon": [[10, 20], [40, 20], [40, 60]],
+            "maskEdits": {
+                "version": 1,
+                "strokes": [{"mode": "add", "radius": 4, "points": [[12, 24], [18, 30]]}],
+            },
+        },
+    }
+
+    scaled = PersistentJobQueue._scale_render_region(region, 4.0, 4.0)
+
+    assert (scaled["x"], scaled["y"], scaled["width"], scaled["height"]) == (
+        40.0,
+        80.0,
+        120.0,
+        160.0,
+    )
+    assert scaled["style"] == {
+        "fontSize": 48,
+        "min_font_size": 32,
+        "maxFontSize": 72,
+        "stroke_width": 4,
+        "letterSpacing": 6.0,
+        "lineHeight": 1.2,
+        "padding": 12,
+    }
+    assert scaled["repair"]["maskPadding"] == 8
+    assert scaled["repair"]["dilation"] == 4
+    assert scaled["repair"]["feather"] == 4
+    assert scaled["repair"]["radius"] == 14.0
+    assert scaled["repair"]["contextPadding"] == 256
+    assert scaled["repair"]["maskPolygon"] == [
+        [40.0, 80.0],
+        [160.0, 80.0],
+        [160.0, 240.0],
+    ]
+    assert scaled["repair"]["maskEdits"]["strokes"] == [
+        {
+            "mode": "add",
+            "radius": 16.0,
+            "points": [[48.0, 96.0], [72.0, 120.0]],
+        }
+    ]
+    assert region["x"] == 10
+    assert region["style"]["fontSize"] == 12
+    assert region["repair"]["maskEdits"]["strokes"][0]["radius"] == 4
+    with pytest.raises(ProjectError, match="uniform scale"):
+        PersistentJobQueue._scale_render_region(region, 2.0, 3.0)
+
+
+@pytest.mark.parametrize("scale", (2, 3, 4))
+def test_render_region_snapshot_scales_every_canonical_repair_maximum(scale: int) -> None:
+    region = {
+        "id": "region-boundary",
+        "x": 1,
+        "y": 2,
+        "width": 3,
+        "height": 4,
+        "repair": {
+            "padding": 512,
+            "maskPadding": 512,
+            "dilation": 128,
+            "feather": 128,
+            "radius": 256,
+            "contextPadding": 4096,
+            "maskEdits": {
+                "version": 1,
+                "strokes": [{"mode": "add", "radius": 512, "points": [[1, 2], [3, 4]]}],
+            },
+        },
+    }
+
+    scaled = PersistentJobQueue._scale_render_region(region, float(scale), float(scale))
+
+    assert scaled["repair"]["padding"] == 512 * scale
+    assert scaled["repair"]["maskPadding"] == 512 * scale
+    assert scaled["repair"]["dilation"] == 128 * scale
+    assert scaled["repair"]["feather"] == 128 * scale
+    assert scaled["repair"]["radius"] == 256 * scale
+    assert scaled["repair"]["contextPadding"] == 4096 * scale
+    assert scaled["repair"]["maskEdits"]["strokes"][0] == {
+        "mode": "add",
+        "radius": 512.0 * scale,
+        "points": [[float(scale), 2.0 * scale], [3.0 * scale, 4.0 * scale]],
+    }
+    assert region["repair"]["maskPadding"] == 512
+    assert region["repair"]["maskEdits"]["strokes"][0]["radius"] == 512
+
+
+def test_preprocessed_plate_drives_high_resolution_inpaint_mask_and_typeset(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(
+            client,
+            project["id"],
+            relative_path="public-scale.png",
+            data=png_bytes((120, 100), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"provider": "opencv-pillow", "profile": "ocr-friendly"},
+            },
+        )
+        preprocessed = _wait_job(client, preprocess.json()["id"])
+        assert preprocessed["status"] == "completed", preprocessed
+        assert preprocessed["items"][0]["output"]["processedSize"] == [240, 200]
+        current = next(
+            item
+            for item in client.get(f"/api/projects/{project['id']}/images").json()
+            if item["id"] == image["id"]
+        )
+        _set_stage_review(client, current, "preprocess", "accepted")
+
+        created = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 10,
+                "y": 20,
+                "width": 20,
+                "height": 30,
+                "sourceText": "PUBLIC",
+                "translationText": "TEST",
+                "confirmed": True,
+                "direction": "horizontal",
+                "repair": {
+                    "method": "solid",
+                    "maskMode": "region",
+                    "maskPadding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "radius": 2,
+                    "fillColor": "#000000",
+                },
+                "style": {
+                    "fontSize": 12,
+                    "minFontSize": 12,
+                    "autoFit": False,
+                    "strokeWidth": 1,
+                    "padding": 1,
+                },
+            },
+        )
+        assert created.status_code == 201, created.text
+        canonical_region = created.json()
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["inputVariant"] == "preprocessed"
+        assert output["renderedSize"] == [240, 200]
+        assert output["scale"] == [2.0, 2.0]
+
+        erased_response = client.get(f"/api/images/{image['id']}/content?variant=erased")
+        mask_response = client.get(f"/api/images/{image['id']}/generated/mask")
+        assert erased_response.status_code == 200
+        assert mask_response.status_code == 200
+        with Image.open(io.BytesIO(erased_response.content)) as erased:
+            assert erased.size == (240, 200)
+        with Image.open(io.BytesIO(mask_response.content)) as opened_mask:
+            mask = np.asarray(opened_mask.convert("L"), dtype=np.uint8)
+        assert mask.shape == (200, 240)
+        assert np.all(mask[40:100, 20:60] == 255)
+        assert not np.any(mask[:38, :])
+        _accept_current_inpaint(client, project["id"], image["id"])
+
+        typeset = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {"provider": "pillow"}},
+        )
+        typeset_job = _wait_job(client, typeset.json()["id"])
+        assert typeset_job["status"] == "completed", typeset_job
+        typeset_response = client.get(f"/api/images/{image['id']}/content?variant=typeset")
+        with Image.open(io.BytesIO(typeset_response.content)) as typeset_image:
+            assert typeset_image.size == (240, 200)
+
+        current = next(
+            item
+            for item in client.get(f"/api/projects/{project['id']}/images").json()
+            if item["id"] == image["id"]
+        )
+        assert current["renderInputVariant"] == "preprocessed"
+        assert current["renderScale"] == [2.0, 2.0]
+        assert current["renderedSize"] == [240, 200]
+        persisted = client.get(f"/api/images/{image['id']}/regions").json()[0]
+        assert (persisted["x"], persisted["y"], persisted["width"], persisted["height"]) == (
+            10.0,
+            20.0,
+            20.0,
+            30.0,
+        )
+        assert persisted["style"]["fontSize"] == canonical_region["style"]["fontSize"]
+
+        export_root = tmp_path / "json-export"
+        export = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "format": "json",
+                    "outputPath": str(export_root),
+                    "conflict": "overwrite",
+                },
+            },
+        )
+        exported = _wait_job(client, export.json()["id"])
+        assert exported["status"] == "completed", exported
+        payload = json.loads((export_root / "original-text/public-scale.json").read_text("utf-8"))
+        assert payload["image"]["width"] == 120
+        assert payload["image"]["height"] == 100
+        assert payload["image"]["coordinateSpace"] == {
+            "basis": "source",
+            "unit": "pixel",
+            "width": 120,
+            "height": 100,
+        }
+        assert payload["image"]["renderInputVariant"] == "preprocessed"
+        assert payload["image"]["artifacts"]["inpainted"] == {
+            "width": 240,
+            "height": 200,
+            "scaleX": 2.0,
+            "scaleY": 2.0,
+        }
+        assert payload["image"]["artifacts"]["mask"] == {
+            "width": 240,
+            "height": 200,
+            "scaleX": 2.0,
+            "scaleY": 2.0,
+        }
+        assert payload["image"]["artifacts"]["typeset"] == {
+            "width": 240,
+            "height": 200,
+            "scaleX": 2.0,
+            "scaleY": 2.0,
+        }
+        assert payload["regions"][0]["geometry"] == {
+            "x": 10.0,
+            "y": 20.0,
+            "width": 20.0,
+            "height": 30.0,
+            "rotation": 0.0,
+        }
+
+
+@pytest.mark.parametrize(
+    "preprocess_state",
+    ("unreviewed", "rejected", "tampered", "missing"),
+)
+def test_inpaint_uses_only_a_current_accepted_preprocess_or_the_original(
+    tmp_path: Path,
+    preprocess_state: str,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(
+            client,
+            project["id"],
+            relative_path="public-preprocess-gate.png",
+            data=png_bytes((160, 180), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"provider": "opencv-pillow", "profile": "ocr-friendly"},
+            },
+        )
+        completed_preprocess = _wait_job(client, preprocess.json()["id"])
+        assert completed_preprocess["status"] == "completed", completed_preprocess
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        if preprocess_state == "rejected":
+            _set_stage_review(client, current, "preprocess", "rejected")
+        elif preprocess_state in {"tampered", "missing"}:
+            _set_stage_review(client, current, "preprocess", "accepted")
+            generated = (
+                project_root
+                / "generated"
+                / "preprocessed"
+                / Path(image["relativePath"]).with_suffix(".png")
+            )
+            if preprocess_state == "tampered":
+                Image.new("RGB", (320, 360), "black").save(generated, format="PNG")
+            else:
+                generated.unlink()
+
+        _add_region(client, image["id"], confirmed=True)
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        assert queued.status_code == 202, queued.text
+        completed = _wait_job(client, queued.json()["id"])
+
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["inputVariant"] == "original"
+        assert output["scale"] == [1.0, 1.0]
+        assert output["renderedSize"] == [160, 180]
+        artifact = client.get(f"/api/images/{image['id']}/generated/inpainted")
+        with Image.open(io.BytesIO(artifact.content)) as opened:
+            assert opened.size == (160, 180)
+
+
+def test_typeset_and_render_reject_a_stale_preprocess_used_by_the_accepted_clean_plate(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(
+            client,
+            project["id"],
+            relative_path="public-preprocess-lineage.png",
+            data=png_bytes((160, 180), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"provider": "opencv-pillow", "profile": "ocr-friendly"},
+            },
+        )
+        assert _wait_job(client, preprocess.json()["id"])["status"] == "completed"
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        _set_stage_review(client, current, "preprocess", "accepted")
+        _add_region(client, image["id"], confirmed=True)
+        accepted = _inpaint_and_accept(client, project["id"], image["id"])
+        assert accepted["renderInputVariant"] == "preprocessed"
+        generated = (
+            project_root
+            / "generated"
+            / "preprocessed"
+            / Path(image["relativePath"]).with_suffix(".png")
+        )
+        Image.new("RGB", (320, 360), "black").save(generated, format="PNG")
+        job_count = len(client.get(f"/api/jobs?projectId={project['id']}").json())
+
+        for endpoint in ("typeset", "render"):
+            response = client.post(
+                f"/api/projects/{project['id']}/{endpoint}",
+                json={"imageIds": [image["id"]], "options": {}},
+            )
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["stage"] == "preprocess"
+            assert detail["reason"] == "checksum-mismatch"
+            assert detail["mismatches"] == ["artifactChecksum"]
+        assert len(client.get(f"/api/jobs?projectId={project['id']}").json()) == job_count
+
+
+def test_accepting_preprocess_after_original_fallback_invalidates_the_clean_plate(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    with TestClient(create_app(settings, start_worker=True)) as client:
+        project = create_project(client, project_root)
+        image = upload_image(
+            client,
+            project["id"],
+            relative_path="public-preprocess-transition.png",
+            data=png_bytes((160, 180), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"provider": "opencv-pillow", "profile": "ocr-friendly"},
+            },
+        )
+        assert _wait_job(client, preprocess.json()["id"])["status"] == "completed"
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        rejected = _set_stage_review(client, current, "preprocess", "rejected")
+        _add_region(client, image["id"], confirmed=True)
+        accepted_clean = _inpaint_and_accept(client, project["id"], image["id"])
+        assert accepted_clean["renderInputVariant"] == "original"
+        assert accepted_clean["stageReviews"]["preprocess"]["state"] == "rejected"
+        assert accepted_clean["stageReviews"]["inpaint"]["state"] == "accepted"
+
+        accepted_preprocess = _set_stage_review(
+            client,
+            accepted_clean,
+            "preprocess",
+            "accepted",
+        )
+
+        assert (
+            rejected["stageReviews"]["preprocess"]["artifactChecksum"]
+            == (accepted_preprocess["stageReviews"]["preprocess"]["artifactChecksum"])
+        )
+        assert accepted_preprocess["status"]["inpaint"] == "pending"
+        assert accepted_preprocess["status"]["typeset"] == "pending"
+        assert set(accepted_preprocess["stageReviews"]) == {"preprocess"}
+        assert client.get(f"/api/images/{image['id']}/generated/inpainted").status_code == 404
+        assert client.get(f"/api/images/{image['id']}/generated/mask").status_code == 404
+        for endpoint in ("typeset", "render"):
+            response = client.post(
+                f"/api/projects/{project['id']}/{endpoint}",
+                json={"imageIds": [image["id"]], "options": {}},
+            )
+            assert response.status_code == 409, response.text
+            detail = response.json()["detail"]
+            assert detail["stage"] == "inpaint"
+            assert detail["reason"] == "stage-not-done"
+
+
+def test_inpaint_rechecks_the_selected_preprocess_before_publishing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+    entered = threading.Event()
+    release = threading.Event()
+
+    class BlockingInpainter:
+        name = "opencv"
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, _mask, **_options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    result = opened.convert("RGB")
+            else:
+                result = image.convert("RGB")
+            entered.set()
+            assert release.wait(3)
+            return result
+
+    monkeypatch.setattr(app.state.providers, "inpainter", lambda _name: BlockingInpainter())
+    project_root = tmp_path / "project"
+    with TestClient(app) as client:
+        project = create_project(client, project_root)
+        image = upload_image(
+            client,
+            project["id"],
+            relative_path="public-preprocess-race.png",
+            data=png_bytes((160, 180), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"provider": "opencv-pillow", "profile": "ocr-friendly"},
+            },
+        )
+        assert _wait_job(client, preprocess.json()["id"])["status"] == "completed"
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        _set_stage_review(client, current, "preprocess", "accepted")
+        _add_region(client, image["id"], confirmed=True)
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        assert queued.status_code == 202, queued.text
+        assert entered.wait(3)
+        generated = (
+            project_root
+            / "generated"
+            / "preprocessed"
+            / Path(image["relativePath"]).with_suffix(".png")
+        )
+        Image.new("RGB", (320, 360), "black").save(generated, format="PNG")
+        release.set()
+
+        failed = _wait_job(client, queued.json()["id"])
+        assert failed["status"] == "failed"
+        assert failed["items"][0]["error"] == (
+            "Image rendering failed; inspect the private project log"
+        )
+        assert client.get(f"/api/images/{image['id']}/generated/inpainted").status_code == 404
+        assert client.get(f"/api/images/{image['id']}/generated/mask").status_code == 404
+
+
 @pytest.mark.parametrize("fail_full_context", [False, True])
 def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_outside(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fail_full_context: bool
@@ -587,6 +1818,7 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
             self.color = color
             self.fail_optional = fail_optional
             self.calls = 0
+            self.component_calls = 0
             self.inpaint_options: list[dict[str, Any]] = []
             self.masks: list[np.ndarray] = []
             self.mask_options: list[dict[str, Any]] = []
@@ -610,6 +1842,10 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
                 size = image.size
             return Image.new("RGB", size, self.color)
 
+        def inpaint_components(self, image, mask, **options):
+            self.component_calls += 1
+            return self.inpaint(image, mask, **options)
+
     opencv = RecordingInpainter("opencv", "#ff0000")
     lama = RecordingInpainter(
         "lama-onnx",
@@ -625,9 +1861,9 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"], data=png_bytes((120, 80), color="white"))
         regions = []
-        for x, provider, text_polarity in (
-            (10, "opencv", "dark"),
-            (70, "lama-onnx", "light"),
+        for x, provider, text_polarity, method in (
+            (10, "opencv", "dark", "screentone"),
+            (70, "lama-onnx", "light", "telea"),
         ):
             response = client.post(
                 f"/api/images/{image['id']}/regions",
@@ -641,6 +1877,7 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
                     "repair": {
                         "maskMode": "region",
                         "textPolarity": text_polarity,
+                        "method": method,
                         "maskPadding": 0,
                         "dilation": 0,
                         "feather": 3,
@@ -673,10 +1910,29 @@ def test_inpainting_routes_each_region_to_its_selected_provider_and_preserves_ou
         assert output["inpaintingProviders"] == ["lama-onnx", "opencv"]
         assert "regionInpaintingProviders" not in output
         assert opencv.calls == 1
+        assert opencv.inpaint_options == [
+            {
+                "radius": 3.0,
+                "method": "screentone",
+                "fill_color": "#ffffff",
+                "render_scale": 1,
+            }
+        ]
         assert lama.calls == 2
+        assert lama.component_calls == 0
         assert lama.inpaint_options == [
-            {"context_padding": 64, "feather": 0},
-            {"context_padding": 128, "feather": 0},
+            {
+                "context_padding": 64,
+                "inference_padding": 4,
+                "feather": 0,
+                "render_scale": 1,
+            },
+            {
+                "context_padding": 128,
+                "inference_padding": 4,
+                "feather": 0,
+                "render_scale": 1,
+            },
         ]
         assert output["inpaintCandidateCount"] == (4 if fail_full_context else 5)
         listed = client.get(f"/api/projects/{project['id']}/images").json()
@@ -727,8 +1983,9 @@ def test_inpaint_stores_comparison_candidates_and_selection_keeps_mask_outside(
     tmp_path: Path,
 ) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
     with TestClient(create_app(settings, start_worker=True)) as client:
-        project = create_project(client, tmp_path / "project")
+        project = create_project(client, project_root)
         image = upload_image(client, project["id"])
         _add_region(client, image["id"], confirmed=True)
         queued = client.post(
@@ -768,11 +2025,585 @@ def test_inpaint_stores_comparison_candidates_and_selection_keeps_mask_outside(
         assert payload["status"]["inpaint"] == "done"
         assert payload["stageReviews"] == {}
         erased = client.get(f"/api/images/{image['id']}/content?variant=inpainted")
+        selected_bytes = erased.content
         with Image.open(io.BytesIO(erased.content)) as result:
             pixels = result.convert("RGB")
             assert pixels.getpixel((5, 5)) == (255, 255, 255)
+        relative = Path(image["relativePath"]).with_suffix("")
+        tampered = project_root / "generated" / "inpaint-candidates" / relative / "opencv-telea.png"
+        tampered.write_bytes(tampered.read_bytes() + b"changed")
+        refused = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "opencv-telea",
+                "expectedRevision": payload["revision"],
+            },
+        )
+        assert refused.status_code == 400, refused.text
+        after_refusal = client.get(f"/api/images/{image['id']}/content?variant=inpainted")
+        assert after_refusal.content == selected_bytes
+        unchanged = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert unchanged["inpaintCandidate"] == "lineart-guided"
+        assert unchanged["revision"] == payload["revision"]
         missing = client.get(f"/api/images/{image['id']}/generated/inpaint-candidates/missing")
         assert missing.status_code == 404
+
+
+def test_candidate_selection_rejects_manifest_provenance_tampering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project"
+    app = create_app(settings, start_worker=True)
+    monkeypatch.setattr(
+        "manga_localizer.imaging.lineart_inpaint.manga_tone_cleanup",
+        lambda source, _ai_result, _mask, **_options: source.copy(),
+    )
+    with TestClient(app) as client:
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"])
+        _add_region(client, image["id"], confirmed=True)
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "opencv"}},
+        )
+        assert _wait_job(client, queued.json()["id"])["status"] == "completed"
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert "ai-manga-clean" in {candidate["id"] for candidate in current["inpaintCandidates"]}
+        artifact_before = client.get(f"/api/images/{image['id']}/content?variant=inpainted").content
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            provenance_before = dict(stored.inpaint_provenance or {})
+
+        relative = Path(image["relativePath"]).with_suffix("")
+        manifest_path = (
+            project_root / "generated" / "inpaint-candidates" / relative / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text("utf-8"))
+        postprocess = next(
+            candidate for candidate in manifest["candidates"] if candidate["id"] == "ai-manga-clean"
+        )
+        assert postprocess["originKind"] == "deterministic-postprocess"
+        postprocess["originKind"] = "direct-ai"
+        postprocess["providerIds"] = ["lama-onnx"]
+        manifest_path.write_text(json.dumps(manifest, indent=2), "utf-8")
+
+        refused = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "ai-manga-clean",
+                "expectedRevision": current["revision"],
+            },
+        )
+        assert refused.status_code == 400, refused.text
+        assert "evidence changed" in refused.json()["detail"]
+        assert (
+            client.get(f"/api/images/{image['id']}/content?variant=inpainted").content
+            == artifact_before
+        )
+        unchanged = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert unchanged["revision"] == current["revision"]
+        assert unchanged["inpaintCandidate"] == current["inpaintCandidate"]
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            assert stored.inpaint_provenance == provenance_before
+
+
+@pytest.mark.parametrize("component_failure", [None, "raise", "wrong-size"])
+def test_manual_lama_page_stores_a_component_context_ai_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    component_failure: str | None,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+
+    class RecordingLama:
+        name = "lama-onnx"
+
+        def __init__(self) -> None:
+            self.component_options: list[dict[str, Any]] = []
+            self.component_masks: list[np.ndarray] = []
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, mask, **options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    size = opened.size
+            else:
+                size = image.size
+            return Image.new("RGB", size, (30, 60, 90))
+
+        def inpaint_components(self, image, mask, **options):
+            self.component_options.append(dict(options))
+            self.component_masks.append(np.asarray(mask, dtype=np.uint8).copy())
+            if component_failure == "raise":
+                raise RuntimeError("optional component failure")
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    size = opened.size
+            else:
+                size = image.size
+            if component_failure == "wrong-size":
+                size = (size[0] - 1, size[1])
+            return Image.new("RGB", size, (20, 180, 80))
+
+    lama = RecordingLama()
+    monkeypatch.setattr(app.state.providers, "inpainter", lambda _name: lama)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(
+            client,
+            project["id"],
+            data=png_bytes((120, 80), color="#f0e6dc"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "provider": "opencv-pillow",
+                    "profile": "visual-quality",
+                    "upscaleFactor": 4,
+                },
+            },
+        )
+        preprocessed = _wait_job(client, preprocess.json()["id"])
+        assert preprocessed["status"] == "completed", preprocessed
+        assert preprocessed["items"][0]["output"]["processedSize"] == [480, 320]
+        current = next(
+            item
+            for item in client.get(f"/api/projects/{project['id']}/images").json()
+            if item["id"] == image["id"]
+        )
+        _set_stage_review(client, current, "preprocess", "accepted")
+        region = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 10,
+                "y": 10,
+                "width": 50,
+                "height": 50,
+                "sourceText": "文字",
+                "confirmed": True,
+                "repair": {
+                    "maskMode": "manual",
+                    "maskPadding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "inpainterProvider": "lama-onnx",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [
+                            {"mode": "add", "radius": 4, "points": [[24, 30]]},
+                            {"mode": "add", "radius": 4, "points": [[44, 46]]},
+                        ],
+                    },
+                },
+            },
+        )
+        assert region.status_code == 201, region.text
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "lama-onnx"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        output = completed["items"][0]["output"]
+        assert output["scale"] == [4.0, 4.0]
+        assert output["inpaintCandidate"] == "primary"
+        assert output["inpaintCandidateCount"] == (6 if component_failure is None else 5)
+        assert lama.component_options == [
+            {
+                "context_padding": 128,
+                "inference_padding": 4,
+                "feather": 0,
+                "render_scale": 4,
+            }
+        ]
+
+        mask_response = client.get(f"/api/images/{image['id']}/generated/mask")
+        with Image.open(io.BytesIO(mask_response.content)) as opened:
+            persisted_mask = np.asarray(opened.convert("L"), dtype=np.uint8)
+        assert np.array_equal(lama.component_masks[0], persisted_mask)
+
+        listed = client.get(f"/api/projects/{project['id']}/images").json()
+        current = next(item for item in listed if item["id"] == image["id"])
+        expected_candidates = [
+            "primary",
+            "opencv-ns",
+            "opencv-telea",
+            "lineart-guided",
+            "lama-full-context",
+        ]
+        if component_failure is None:
+            expected_candidates.insert(1, "lama-components")
+        assert [item["id"] for item in current["inpaintCandidates"]] == expected_candidates
+        candidate_response = client.get(
+            f"/api/images/{image['id']}/generated/inpaint-candidates/lama-components"
+        )
+        if component_failure is not None:
+            assert candidate_response.status_code == 404
+            return
+        assert candidate_response.status_code == 200
+        with Image.open(io.BytesIO(candidate_response.content)) as opened:
+            candidate = np.asarray(opened.convert("RGB"), dtype=np.uint8)
+        processed_response = client.get(f"/api/images/{image['id']}/content?variant=preprocessed")
+        with Image.open(io.BytesIO(processed_response.content)) as opened:
+            source = np.asarray(opened.convert("RGB"), dtype=np.uint8)
+        assert np.array_equal(candidate[persisted_mask == 0], source[persisted_mask == 0])
+        assert np.all(candidate[persisted_mask > 0] == (20, 180, 80))
+
+
+def test_large_edge_manual_lama_page_stores_an_overview_refine_ai_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+
+    class RecordingLama:
+        name = "lama-onnx"
+
+        def __init__(self) -> None:
+            self.overview_options: list[dict[str, Any]] = []
+            self.overview_masks: list[np.ndarray] = []
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, _mask, **_options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    size = opened.size
+            else:
+                size = image.size
+            return Image.new("RGB", size, (30, 30, 30))
+
+        def inpaint_overview_candidates(self, image, mask, **options):
+            self.overview_options.append(dict(options))
+            mask_array = np.asarray(mask, dtype=np.uint8).copy()
+            self.overview_masks.append(mask_array)
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    size = opened.size
+            else:
+                size = image.size
+            overview = np.full((size[1], size[0], 3), 255, dtype=np.uint8)
+            _, columns = np.indices(mask_array.shape)
+            support_columns = np.nonzero(mask_array)[1]
+            support_left = int(support_columns.min())
+            overview[(mask_array > 0) & ((columns - support_left) % 20 < 4)] = 12
+            return Image.fromarray(overview, mode="RGB"), Image.new(
+                "RGB",
+                size,
+                (80, 80, 80),
+            )
+
+    lama = RecordingLama()
+    monkeypatch.setattr(app.state.providers, "inpainter", lambda _name: lama)
+    project_root = tmp_path / "project"
+    with TestClient(app) as client:
+        project = create_project(client, project_root)
+        image = upload_image(
+            client,
+            project["id"],
+            data=png_bytes((120, 80), color="white"),
+        )
+        preprocess = client.post(
+            f"/api/projects/{project['id']}/preprocess",
+            json={
+                "imageIds": [image["id"]],
+                "options": {
+                    "provider": "opencv-pillow",
+                    "profile": "visual-quality",
+                    "upscaleFactor": 4,
+                },
+            },
+        )
+        assert _wait_job(client, preprocess.json()["id"])["status"] == "completed"
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        _set_stage_review(client, current, "preprocess", "accepted")
+        region = client.post(
+            f"/api/images/{image['id']}/regions",
+            json={
+                "x": 96,
+                "y": 56,
+                "width": 24,
+                "height": 24,
+                "sourceText": "文字",
+                "confirmed": True,
+                "repair": {
+                    "maskMode": "manual",
+                    "maskPadding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "inpainterProvider": "lama-onnx",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [{"mode": "add", "radius": 8, "points": [[118, 78]]}],
+                    },
+                },
+            },
+        )
+        assert region.status_code == 201, region.text
+
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "lama-onnx"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        assert lama.overview_options == [
+            {
+                "context_padding": 512,
+                "inference_padding": 16,
+                "feather": 0,
+                "render_scale": 4,
+            }
+        ]
+
+        mask_response = client.get(f"/api/images/{image['id']}/generated/mask")
+        with Image.open(io.BytesIO(mask_response.content)) as opened:
+            persisted_mask = np.asarray(opened.convert("L"), dtype=np.uint8)
+        assert np.array_equal(lama.overview_masks[0], persisted_mask)
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert [item["id"] for item in current["inpaintCandidates"]] == [
+            "primary",
+            "lama-overview-refine",
+            "ai-overview-lineart",
+            "opencv-ns",
+            "opencv-telea",
+            "lineart-guided",
+            "lama-full-context",
+        ]
+        candidate_response = client.get(
+            f"/api/images/{image['id']}/generated/inpaint-candidates/lama-overview-refine"
+        )
+        assert candidate_response.status_code == 200
+        with Image.open(io.BytesIO(candidate_response.content)) as opened:
+            candidate = np.asarray(opened.convert("RGB"), dtype=np.uint8)
+        processed_response = client.get(f"/api/images/{image['id']}/content?variant=preprocessed")
+        with Image.open(io.BytesIO(processed_response.content)) as opened:
+            source = np.asarray(opened.convert("RGB"), dtype=np.uint8)
+        assert np.array_equal(candidate[persisted_mask == 0], source[persisted_mask == 0])
+        assert np.all(candidate[persisted_mask > 0] == 80)
+
+        relative = Path(image["relativePath"]).with_suffix("")
+        manifest_path = (
+            project_root / "generated" / "inpaint-candidates" / relative / "manifest.json"
+        )
+        manifest = json.loads(manifest_path.read_text("utf-8"))
+        overview_record = next(
+            item for item in manifest["candidates"] if item["id"] == "lama-overview-refine"
+        )
+        assert overview_record["originKind"] == "direct-ai"
+        assert overview_record["providerIds"] == ["lama-onnx"]
+        cleanup_record = next(
+            item for item in manifest["candidates"] if item["id"] == "ai-overview-lineart"
+        )
+        assert manifest["version"] == 2
+        assert cleanup_record["originKind"] == "ai-derived"
+        assert cleanup_record["providerIds"] == ["lama-onnx"]
+        assert cleanup_record["lineage"] == {
+            "version": 1,
+            "transformId": "manga-overview-lineart-cleanup",
+            "transformVersion": 1,
+            "baseId": "overview-base-v1",
+            "baseChecksum": manifest["internalBases"][0]["artifactChecksum"],
+        }
+        assert manifest["internalBases"] == [
+            {
+                "kind": "internal-base",
+                "id": "overview-base-v1",
+                "artifactChecksum": manifest["internalBases"][0]["artifactChecksum"],
+                "originKind": "direct-ai",
+                "providerIds": ["lama-onnx"],
+            }
+        ]
+        internal_base = (
+            project_root
+            / "generated"
+            / "inpaint-candidates"
+            / relative
+            / ".internal"
+            / "overview-base-v1.png"
+        )
+        assert (
+            hashlib.sha256(internal_base.read_bytes()).hexdigest()
+            == cleanup_record["lineage"]["baseChecksum"]
+        )
+        assert "overview-base-v1" not in {
+            candidate["id"] for candidate in current["inpaintCandidates"]
+        }
+        assert (
+            client.get(
+                f"/api/images/{image['id']}/generated/inpaint-candidates/overview-base-v1"
+            ).status_code
+            == 404
+        )
+
+        original_manifest = manifest_path.read_bytes()
+        original_base = internal_base.read_bytes()
+        for mutation in (
+            "base-file",
+            "base-checksum",
+            "base-provider",
+            "base-origin",
+            "derived-origin",
+            "derived-provider",
+            "transform",
+            "lineage",
+        ):
+            manifest_path.write_bytes(original_manifest)
+            internal_base.write_bytes(original_base)
+            if mutation == "base-file":
+                internal_base.write_bytes(original_base + b"tampered")
+            else:
+                changed = json.loads(original_manifest)
+                base_record = changed["internalBases"][0]
+                derived_record = next(
+                    record
+                    for record in changed["candidates"]
+                    if record["id"] == "ai-overview-lineart"
+                )
+                if mutation == "base-checksum":
+                    base_record["artifactChecksum"] = "0" * 64
+                elif mutation == "base-provider":
+                    base_record["providerIds"] = ["opencv"]
+                elif mutation == "base-origin":
+                    base_record["originKind"] = "classical"
+                elif mutation == "derived-origin":
+                    derived_record["originKind"] = "direct-ai"
+                elif mutation == "derived-provider":
+                    derived_record["providerIds"] = ["lama"]
+                elif mutation == "transform":
+                    derived_record["lineage"]["transformId"] = "untrusted-transform"
+                else:
+                    derived_record.pop("lineage")
+                manifest_path.write_text(json.dumps(changed), "utf-8")
+            before = client.get(f"/api/projects/{project['id']}/images").json()[0]
+            if mutation == "base-file":
+                rereview = client.patch(
+                    f"/api/images/{image['id']}/stage-reviews/inpaint",
+                    json=_stage_review_json(client, before, "inpaint", "accepted"),
+                )
+                assert rereview.status_code == 400, rereview.text
+            blocked = client.patch(
+                f"/api/images/{image['id']}/inpaint-candidate",
+                json={
+                    "candidateId": "ai-overview-lineart",
+                    "expectedRevision": before["revision"],
+                },
+            )
+            assert blocked.status_code == 400, (mutation, blocked.text)
+            after = client.get(f"/api/projects/{project['id']}/images").json()[0]
+            assert after["revision"] == before["revision"]
+            assert after["inpaintCandidate"] == before["inpaintCandidate"]
+        manifest_path.write_bytes(original_manifest)
+        internal_base.write_bytes(original_base)
+
+        selected = client.patch(
+            f"/api/images/{image['id']}/inpaint-candidate",
+            json={
+                "candidateId": "ai-overview-lineart",
+                "expectedRevision": current["revision"],
+            },
+        )
+        assert selected.status_code == 200, selected.text
+        accepted = _set_stage_review(client, selected.json(), "inpaint", "accepted")
+        current_project = client.get(f"/api/projects/{project['id']}").json()
+        strict = client.patch(
+            f"/api/projects/{project['id']}",
+            json={
+                "settings": {"requireAIInpaintBeforeDownstream": True},
+                "expectedRevision": current_project["revision"],
+            },
+        )
+        assert strict.status_code == 200, strict.text
+        for kind, body in (
+            (
+                "translate",
+                {"regionIds": [region.json()["id"]], "options": {"provider": "mock"}},
+            ),
+            ("typeset", {"imageIds": [image["id"]], "options": {}}),
+            ("render", {"imageIds": [image["id"]], "options": {}}),
+        ):
+            response = client.post(f"/api/projects/{project['id']}/{kind}", json=body)
+            assert response.status_code == 202, response.text
+            assert _wait_job(client, response.json()["id"])["status"] == "completed"
+        assert accepted["stageReviews"]["inpaint"]["provenanceDigest"]
+        internal_base.write_bytes(original_base + b"tampered")
+        for kind, body in (
+            (
+                "translate",
+                {"regionIds": [region.json()["id"]], "options": {"provider": "mock"}},
+            ),
+            ("typeset", {"imageIds": [image["id"]], "options": {}}),
+            ("render", {"imageIds": [image["id"]], "options": {}}),
+        ):
+            blocked = client.post(f"/api/projects/{project['id']}/{kind}", json=body)
+            assert blocked.status_code == 409, blocked.text
+            assert blocked.json()["detail"]["reason"] == "ai-inpaint-required"
+        internal_base.write_bytes(original_base)
+
+
+def test_all_lama_non_manual_page_does_not_publish_a_component_candidate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    app = create_app(settings, start_worker=True)
+
+    class RecordingLama:
+        name = "lama-onnx"
+
+        def __init__(self) -> None:
+            self.component_calls = 0
+
+        @staticmethod
+        def create_mask(image, regions, **options):
+            return create_mask(image, regions, **options)
+
+        @staticmethod
+        def inpaint(image, _mask, **_options):
+            if isinstance(image, Path):
+                with Image.open(image) as opened:
+                    return opened.convert("RGB").copy()
+            return image.convert("RGB").copy()
+
+        def inpaint_components(self, image, mask, **options):
+            self.component_calls += 1
+            return self.inpaint(image, mask, **options)
+
+    lama = RecordingLama()
+    monkeypatch.setattr(app.state.providers, "inpainter", lambda _name: lama)
+    with TestClient(app) as client:
+        project = create_project(client, tmp_path / "project")
+        image = upload_image(client, project["id"])
+        _add_region(client, image["id"], confirmed=True)
+        queued = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [image["id"]], "options": {"provider": "lama-onnx"}},
+        )
+        completed = _wait_job(client, queued.json()["id"])
+        assert completed["status"] == "completed", completed
+        assert lama.component_calls == 0
+        current = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert "lama-components" not in {
+            candidate["id"] for candidate in current["inpaintCandidates"]
+        }
 
 
 def test_typeset_provider_is_not_misrouted_to_inpainting(tmp_path: Path) -> None:
@@ -781,6 +2612,7 @@ def test_typeset_provider_is_not_misrouted_to_inpainting(tmp_path: Path) -> None
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         _add_region(client, image["id"], translation="排版")
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -835,6 +2667,7 @@ def test_typeset_persists_overflow_review_fields(tmp_path: Path) -> None:
         )
         assert confirmed.status_code == 200, confirmed.text
         assert confirmed.json()["trustDisposition"] == "trusted"
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -915,6 +2748,7 @@ def test_typeset_region_ids_overlay_selected_boxes_only(tmp_path: Path) -> None:
         )
         assert second.status_code == 200, second.text
         second = _confirm_region(client, second.json())
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1033,6 +2867,7 @@ def test_typeset_region_ids_redraw_the_page_when_the_plate_is_missing(
         )
         assert second.status_code == 200, second.text
         second = _confirm_region(client, second.json())
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1122,6 +2957,7 @@ def test_partial_typeset_keeps_overflow_ids_for_untouched_boxes(tmp_path: Path) 
         )
         assert moved.status_code == 200, moved.text
         fitting = _confirm_region(client, moved.json())
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1170,6 +3006,7 @@ def test_safe_typesetting_does_not_overlay_an_unrepaired_detection(tmp_path: Pat
             },
         )
         assert updated.status_code == 200, updated.text
+        _inpaint_and_accept(client, project["id"], image["id"], {"repairPolicy": "safe"})
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1185,7 +3022,10 @@ def test_safe_typesetting_does_not_overlay_an_unrepaired_detection(tmp_path: Pat
         assert "layouts" not in output
 
 
-def test_safe_typesetting_rebuilds_inpaint_created_with_all_policy(tmp_path: Path) -> None:
+def test_safe_typesetting_never_rebuilds_accepted_inpaint_created_with_all_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     app = create_app(settings, start_worker=True)
     with TestClient(app) as client:
@@ -1204,6 +3044,14 @@ def test_safe_typesetting_rebuilds_inpaint_created_with_all_policy(tmp_path: Pat
         assert unsafe_mask.status_code == 200, unsafe_mask.text
         with Image.open(io.BytesIO(unsafe_mask.content)) as opened:
             assert np.any(np.asarray(opened.convert("L"), dtype=np.uint8))
+        unsafe_plate = client.get(f"/api/images/{image['id']}/content?variant=erased")
+        assert unsafe_plate.status_code == 200, unsafe_plate.text
+        _accept_current_inpaint(client, project["id"], image["id"])
+
+        def unexpected_inpainter(_name: str):
+            raise AssertionError("typeset must not invoke an inpainter")
+
+        monkeypatch.setattr(app.state.providers, "inpainter", unexpected_inpainter)
 
         safe = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1225,33 +3073,30 @@ def test_safe_typesetting_rebuilds_inpaint_created_with_all_policy(tmp_path: Pat
         )
         assert output["repairPolicy"] == "safe"
         assert output["eligibleRegionCount"] == 0
-        assert output["repairedRegionCount"] == 0
+        assert output["repairedRegionCount"] is None
         assert output["typesetEligibleRegionCount"] == 0
         safe_mask = client.get(f"/api/images/{image['id']}/generated/mask")
         assert safe_mask.status_code == 200, safe_mask.text
-        with Image.open(io.BytesIO(safe_mask.content)) as opened:
-            assert not np.any(np.asarray(opened.convert("L"), dtype=np.uint8))
+        safe_plate = client.get(f"/api/images/{image['id']}/content?variant=erased")
+        assert safe_plate.status_code == 200, safe_plate.text
+        assert safe_mask.content == unsafe_mask.content
+        assert safe_plate.content == unsafe_plate.content
         store = app.state.registry.get(project["id"])
         with store.session() as session:
             asset = session.get(ImageAsset, image["id"])
             assert asset is not None
-            assert asset.status["inpaintingRepairPolicy"] == "safe"
+            assert asset.status["inpaintingRepairPolicy"] == "all"
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    (("type", "sound_effect"), ("direction", "horizontal")),
-)
-def test_trust_input_edit_discards_repair_cache_before_safe_typesetting(
+def test_direction_trust_input_edit_discards_repair_cache_before_safe_typesetting(
     tmp_path: Path,
-    field: str,
-    value: str,
 ) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:
-        project = create_project(client, tmp_path / f"project-{field}")
+        project = create_project(client, tmp_path / "project-direction")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], translation="已信任译文", confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1264,7 +3109,7 @@ def test_trust_input_edit_discards_repair_cache_before_safe_typesetting(
 
         changed = client.patch(
             f"/api/regions/{region['id']}",
-            json={field: value, "expectedRevision": region["revision"]},
+            json={"direction": "horizontal", "expectedRevision": region["revision"]},
         )
         assert changed.status_code == 200, changed.text
         assert changed.json()["trustDisposition"] == "review"
@@ -1281,14 +3126,111 @@ def test_trust_input_edit_discards_repair_cache_before_safe_typesetting(
             f"/api/projects/{project['id']}/typeset",
             json={"imageIds": [image["id"]], "options": {"repairPolicy": "safe"}},
         )
-        completed = _wait_job(client, typeset.json()["id"])
-        assert completed["status"] == "completed", completed
-        output = completed["items"][0]["output"]
-        assert output["eligibleRegionCount"] == 0
-        assert output["typesetEligibleRegionCount"] == 0
+        assert typeset.status_code == 409, typeset.text
+        assert typeset.json()["detail"]["reason"] == "stage-not-done"
 
 
-def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: Path) -> None:
+def test_region_type_edit_is_style_only_and_preserves_accepted_inpaint(
+    tmp_path: Path,
+) -> None:
+    settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
+    project_root = tmp_path / "project-type"
+    app = create_app(settings, start_worker=True)
+    with TestClient(app) as client:
+        project = create_project(client, project_root)
+        image = upload_image(client, project["id"])
+        region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
+        rendered = client.post(
+            f"/api/projects/{project['id']}/render",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
+        _review_image(client, project["id"], image["id"])
+        exported = client.post(
+            f"/api/projects/{project['id']}/export",
+            json={
+                "imageIds": [image["id"]],
+                "options": {"format": "images", "conflict": "rename"},
+            },
+        )
+        assert _wait_job(client, exported.json()["id"])["status"] == "completed"
+
+        before = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert before["status"]["reviewState"] == "reviewed"
+        assert before["status"]["export"] == "done"
+        before_review = dict(before["stageReviews"]["inpaint"])
+        before_mask = client.get(f"/api/images/{image['id']}/generated/mask").content
+        before_erased = client.get(f"/api/images/{image['id']}/content?variant=erased").content
+        store = app.state.registry.get(project["id"])
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            before_provenance = dict(stored.inpaint_provenance or {})
+
+        changed = client.patch(
+            f"/api/regions/{region['id']}",
+            json={"type": "sound_effect", "expectedRevision": region["revision"]},
+        )
+        assert changed.status_code == 200, changed.text
+        assert changed.json()["trustDisposition"] == "trusted"
+        assert changed.json()["trustReason"] == "human-confirmed"
+        assert changed.json()["confirmed"] is False
+
+        state = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        for stage in ("preprocess", "detection", "ocr", "translation", "inpaint"):
+            assert state["status"][stage] == before["status"][stage]
+        assert state["status"]["inpaint"] == "done"
+        assert state["status"]["typeset"] == "pending"
+        assert state["status"]["export"] == "pending"
+        assert state["status"]["reviewState"] == "pending"
+        assert state["stageReviews"]["inpaint"] == before_review
+        assert "typeset" not in state["stageReviews"]
+        assert client.get(f"/api/images/{image['id']}/generated/mask").content == before_mask
+        assert (
+            client.get(f"/api/images/{image['id']}/content?variant=erased").content == before_erased
+        )
+        assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 404
+        with store.session() as session:
+            stored = session.get(ImageAsset, image["id"])
+            assert stored is not None
+            assert stored.inpaint_provenance == before_provenance
+
+        restyled = client.patch(
+            f"/api/regions/{region['id']}",
+            json={
+                "style": {
+                    **changed.json()["style"],
+                    "autoFit": False,
+                    "fontSize": 48,
+                },
+                "expectedRevision": changed.json()["revision"],
+            },
+        )
+        assert restyled.status_code == 200, restyled.text
+        assert restyled.json()["trustDisposition"] == "trusted"
+        after_style = client.get(f"/api/projects/{project['id']}/images").json()[0]
+        assert after_style["status"]["inpaint"] == "done"
+        assert after_style["stageReviews"]["inpaint"] == before_review
+        assert client.get(f"/api/images/{image['id']}/generated/mask").content == before_mask
+        assert (
+            client.get(f"/api/images/{image['id']}/content?variant=erased").content == before_erased
+        )
+
+        typeset = client.post(
+            f"/api/projects/{project['id']}/typeset",
+            json={"imageIds": [image["id"]], "options": {}},
+        )
+        assert typeset.status_code == 202, typeset.text
+        assert _wait_job(client, typeset.json()["id"])["status"] == "completed"
+        assert client.get(f"/api/images/{image['id']}/content?variant=typeset").status_code == 200
+
+
+@pytest.mark.parametrize("mask_mode", ["text", "manual"])
+def test_typesetting_skips_an_eligible_region_with_an_empty_mask(
+    tmp_path: Path,
+    mask_mode: str,
+) -> None:
     settings = Settings(data_dir=tmp_path / "catalog", worker_poll_seconds=0.01)
     with TestClient(create_app(settings, start_worker=True)) as client:
         project = create_project(client, tmp_path / "project")
@@ -1297,11 +3239,12 @@ def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: 
         updated = client.patch(
             f"/api/regions/{region['id']}",
             json={
-                "repair": {"maskMode": "text", "maskPadding": 0, "dilation": 0},
+                "repair": {"maskMode": mask_mode, "maskPadding": 0, "dilation": 0},
                 "expectedRevision": region["revision"],
             },
         )
         assert updated.status_code == 200, updated.text
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         queued = client.post(
             f"/api/projects/{project['id']}/typeset",
@@ -1312,7 +3255,7 @@ def test_typesetting_skips_an_eligible_region_with_an_empty_text_mask(tmp_path: 
         assert completed["status"] == "completed", completed
         output = completed["items"][0]["output"]
         assert output["eligibleRegionCount"] == 1
-        assert output["repairedRegionCount"] == 0
+        assert output["repairedRegionCount"] is None
         assert output["typesetEligibleRegionCount"] == 0
         assert "layouts" not in output
 
@@ -1324,6 +3267,7 @@ def test_region_and_translation_edits_invalidate_stale_render_and_export(tmp_pat
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], translation="第一版", confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         render = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1447,6 +3391,7 @@ def test_rotation_and_reactivating_empty_region_invalidate_required_stages(
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -1505,6 +3450,7 @@ def test_translation_settings_invalidate_rendered_and_exported_output(tmp_path: 
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         translated = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
@@ -1870,6 +3816,7 @@ def test_background_ocr_and_translation_never_overwrite_newer_manual_edits(
         )
         assert confirmed.status_code == 200, confirmed.text
         current = confirmed.json()
+        _inpaint_and_accept(client, project["id"], image["id"])
 
         translation_entered = threading.Event()
         translation_release = threading.Event()
@@ -1903,7 +3850,7 @@ def test_background_ocr_and_translation_never_overwrite_newer_manual_edits(
         assert final["translationText"] == "用户新译文"
 
 
-def test_background_render_discards_results_when_region_changes(
+def test_background_inpaint_discards_results_when_region_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1924,8 +3871,8 @@ def test_background_render_discards_results_when_region_changes(
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], confirmed=True)
-        render = client.post(
-            f"/api/projects/{project['id']}/render",
+        inpaint = client.post(
+            f"/api/projects/{project['id']}/inpaint",
             json={"imageIds": [image["id"]], "options": {}},
         )
         assert entered.wait(3)
@@ -1936,7 +3883,7 @@ def test_background_render_discards_results_when_region_changes(
         assert edited.status_code == 200, edited.text
         state_after_edit = client.get(f"/api/projects/{project['id']}/images").json()[0]
         release.set()
-        failed = _wait_job(client, render.json()["id"])
+        failed = _wait_job(client, inpaint.json()["id"])
         assert failed["status"] == "failed"
         assert failed["items"][0]["error"] == (
             "Image rendering failed; inspect the private project log"
@@ -1969,8 +3916,8 @@ def test_provider_failure_after_edit_does_not_pollute_new_image_state(
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         region = _add_region(client, image["id"], confirmed=True)
-        render = client.post(
-            f"/api/projects/{project['id']}/render",
+        inpaint = client.post(
+            f"/api/projects/{project['id']}/inpaint",
             json={"imageIds": [image["id"]], "options": {}},
         )
         assert entered.wait(3)
@@ -1982,13 +3929,13 @@ def test_provider_failure_after_edit_does_not_pollute_new_image_state(
         state_after_edit = client.get(f"/api/projects/{project['id']}/images").json()[0]
         release.set()
 
-        failed = _wait_job(client, render.json()["id"])
+        failed = _wait_job(client, inpaint.json()["id"])
         assert failed["status"] == "failed"
         assert failed["items"][0]["error"] == (
             "Image rendering failed; inspect the private project log"
         )
         store = app.state.registry.get(project["id"])
-        internal = app.state.queue.get_job(store, render.json()["id"])
+        internal = app.state.queue.get_job(store, inpaint.json()["id"])
         assert "stale failure was discarded" in internal.items[0].error
         assert "obsolete provider failure" not in internal.items[0].error
         final_state = client.get(f"/api/projects/{project['id']}/images").json()[0]
@@ -2021,7 +3968,10 @@ def test_artifact_publication_and_revision_commit_are_atomic_with_stage_review(
         app.state.queue._process_preprocess(store, image["id"], {})
     else:
         _add_region(client, image["id"], confirmed=True)
-        app.state.queue._process_render(store, image["id"], {}, "render")
+        app.state.queue._process_render(store, image["id"], {}, "inpaint")
+        if job_kind == "typeset":
+            _accept_current_inpaint(client, project["id"], image["id"])
+            app.state.queue._process_render(store, image["id"], {}, "typeset")
 
     with store.session() as session:
         current = session.get(ImageAsset, image["id"])
@@ -2146,13 +4096,19 @@ def test_render_content_variants_and_safe_tree_export(tmp_path: Path) -> None:
             data=source_data,
         )
         _add_region(client, image["id"], translation="翻译完成", confirmed=True)
+        _inpaint_and_accept(
+            client,
+            project["id"],
+            image["id"],
+            {"radius": 3},
+        )
         before_hash = hashlib.sha256(
             (project_root / "source/巻一/章二/页.png").read_bytes()
         ).hexdigest()
 
         render = client.post(
             f"/api/projects/{project['id']}/render",
-            json={"imageIds": [image["id"]], "options": {"radius": 3}},
+            json={"imageIds": [image["id"]], "options": {}},
         )
         assert render.status_code == 202
         rendered = _wait_job(client, render.json()["id"])
@@ -2498,9 +4454,15 @@ def test_portable_bundle_excludes_unreviewed_generated_artifacts(
         unreviewed = upload_image(client, project["id"], relative_path="b/unreviewed.png")
         _add_region(client, accepted["id"], confirmed=True)
         _add_region(client, unreviewed["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], accepted["id"])
+        unreviewed_inpaint = client.post(
+            f"/api/projects/{project['id']}/inpaint",
+            json={"imageIds": [unreviewed["id"]], "options": {}},
+        )
+        assert _wait_job(client, unreviewed_inpaint.json()["id"])["status"] == "completed"
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
-            json={"imageIds": [accepted["id"], unreviewed["id"]], "options": {}},
+            json={"imageIds": [accepted["id"]], "options": {}},
         )
         assert _wait_job(client, rendered.json()["id"])["status"] == "completed"
         _review_image(client, project["id"], accepted["id"])
@@ -2560,6 +4522,7 @@ def test_verified_export_copy_never_publishes_changed_bytes(
         project = create_project(client, project_root)
         image = upload_image(client, project["id"], relative_path="chapter/page.png")
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -2616,16 +4579,12 @@ def test_reading_order_changes_invalidate_clean_output_and_review(tmp_path: Path
         first = _add_region(client, image["id"], translation="第一", confirmed=True)
         second = _add_region(client, image["id"], translation="第二", confirmed=True)
 
+        _inpaint_and_accept(client, project["id"], image["id"])
         translated = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [first["id"], second["id"]], "options": {}},
         )
         assert _wait_job(client, translated.json()["id"])["status"] == "completed"
-        inpainted = client.post(
-            f"/api/projects/{project['id']}/inpaint",
-            json={"imageIds": [image["id"]], "options": {}},
-        )
-        assert _wait_job(client, inpainted.json()["id"])["status"] == "completed"
         _review_image(client, project["id"], image["id"])
         initial_export = client.post(
             f"/api/projects/{project['id']}/export",
@@ -2682,16 +4641,12 @@ def test_reading_order_changes_invalidate_clean_output_and_review(tmp_path: Path
             },
         )
         assert reconfirmed.status_code == 200, reconfirmed.text
+        _inpaint_and_accept(client, project["id"], image["id"])
         retranslated = client.post(
             f"/api/projects/{project['id']}/translate",
             json={"regionIds": [first["id"], second["id"]], "options": {}},
         )
         assert _wait_job(client, retranslated.json()["id"])["status"] == "completed"
-        rerendered = client.post(
-            f"/api/projects/{project['id']}/inpaint",
-            json={"imageIds": [image["id"]], "options": {}},
-        )
-        assert _wait_job(client, rerendered.json()["id"])["status"] == "completed"
         _review_image(client, project["id"], image["id"])
 
         ordered = client.post(
@@ -2741,6 +4696,11 @@ def test_mixed_source_extensions_receive_distinct_render_and_export_stems(tmp_pa
         assert second["relativePath"] == "chapter/page-2.png"
         _add_region(client, first["id"], translation="第一张", confirmed=True)
         _add_region(client, second["id"], translation="第二张", confirmed=True)
+        _inpaint_and_accept_many(
+            client,
+            project["id"],
+            [first["id"], second["id"]],
+        )
 
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
@@ -2849,6 +4809,7 @@ def test_generated_and_export_symlinks_cannot_overwrite_immutable_source(tmp_pat
         project = create_project(client, project_root)
         image = upload_image(client, project["id"], data=source_data)
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         source = project_root / "source/第一章/ページ一.png"
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
 
@@ -2926,6 +4887,7 @@ def test_export_never_overwrites_a_trusted_local_original(tmp_path: Path) -> Non
             translation="不会写回原稿",
             confirmed=True,
         )
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -3012,6 +4974,7 @@ def test_export_recovers_stale_atomic_temps_for_skip_and_renamed_destinations(
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"], relative_path="chapter/page.png")
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -3079,6 +5042,11 @@ def test_flat_export_renames_cross_platform_equivalent_filenames(tmp_path: Path)
         second = upload_image(client, project["id"], relative_path="b/page.png")
         _add_region(client, first["id"], confirmed=True)
         _add_region(client, second["id"], confirmed=True)
+        _inpaint_and_accept_many(
+            client,
+            project["id"],
+            [first["id"], second["id"]],
+        )
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [first["id"], second["id"]], "options": {"concurrency": 2}},
@@ -3185,6 +5153,11 @@ def test_export_retry_requeues_a_completed_page_that_changed_after_partial_failu
         second = upload_image(client, project["id"], relative_path="b/two.png")
         first_region = _add_region(client, first["id"], confirmed=True)
         _add_region(client, second["id"], confirmed=True)
+        _inpaint_and_accept_many(
+            client,
+            project["id"],
+            [first["id"], second["id"]],
+        )
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [first["id"], second["id"]], "options": {}},
@@ -3249,6 +5222,7 @@ def test_running_jobs_and_items_recover_to_queued(client: TestClient, tmp_path: 
     project = create_project(client, tmp_path / "project")
     image = upload_image(client, project["id"])
     region = _add_region(client, image["id"])
+    _inpaint_and_accept(client, project["id"], image["id"])
     queued = client.post(
         f"/api/projects/{project['id']}/translate",
         json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
@@ -3275,16 +5249,18 @@ def test_running_jobs_and_items_recover_to_queued(client: TestClient, tmp_path: 
         job.items[0].status = JobStatus.RUNNING.value
     store.write_snapshot()
     before = json.loads(store.manifest_path.read_text("utf-8"))
-    assert before["jobs"][0]["status"] == JobStatus.PAUSED.value
-    assert before["jobs"][0]["items"][0]["status"] == JobStatus.RUNNING.value
+    before_job = next(job for job in before["jobs"] if job["id"] == queued["id"])
+    assert before_job["status"] == JobStatus.PAUSED.value
+    assert before_job["items"][0]["status"] == JobStatus.RUNNING.value
 
     assert store.recover_jobs() == 1
     paused = app.state.queue.get_job(store, queued["id"])
     assert paused.status == JobStatus.PAUSED.value
     assert paused.items[0].status == JobStatus.QUEUED.value
     snapshot = json.loads(store.manifest_path.read_text("utf-8"))
-    assert snapshot["jobs"][0]["status"] == JobStatus.PAUSED.value
-    assert snapshot["jobs"][0]["items"][0]["status"] == JobStatus.QUEUED.value
+    snapshot_job = next(job for job in snapshot["jobs"] if job["id"] == queued["id"])
+    assert snapshot_job["status"] == JobStatus.PAUSED.value
+    assert snapshot_job["items"][0]["status"] == JobStatus.QUEUED.value
 
 
 def test_cancelled_running_item_recovers_as_cancelled_and_can_be_retried(
@@ -3295,6 +5271,7 @@ def test_cancelled_running_item_recovers_as_cancelled_and_can_be_retried(
     project = create_project(client, tmp_path / "project")
     image = upload_image(client, project["id"])
     region = _add_region(client, image["id"])
+    _inpaint_and_accept(client, project["id"], image["id"])
     queued = client.post(
         f"/api/projects/{project['id']}/translate",
         json={"regionIds": [region["id"]], "options": {"provider": "mock"}},
@@ -3429,6 +5406,7 @@ def test_export_bundle_finalization_recovers_temp_only_and_database_only_crashes
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         render = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -3525,6 +5503,7 @@ def test_relative_export_output_is_canonicalized_before_worker_recovery(
         project = create_project(client, project_root)
         image = upload_image(client, project["id"])
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         rendered = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},
@@ -3584,6 +5563,7 @@ def test_export_stays_nonterminal_until_bundle_finalization_finishes(
         project = create_project(client, tmp_path / "project")
         image = upload_image(client, project["id"])
         _add_region(client, image["id"], confirmed=True)
+        _inpaint_and_accept(client, project["id"], image["id"])
         render = client.post(
             f"/api/projects/{project['id']}/render",
             json={"imageIds": [image["id"]], "options": {}},

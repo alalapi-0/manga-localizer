@@ -42,7 +42,184 @@ def test_opencv_mask_inpaint_and_exact_provider_interface() -> None:
     assert provider.health_check()["available"] is True
     assert "telea" in provider.get_capabilities()["methods"]
     assert "solid" in provider.get_capabilities()["methods"]
+    assert "screentone" in provider.get_capabilities()["methods"]
+    assert provider.get_capabilities()["maskModes"] == ["text", "region", "manual"]
     assert provider.get_capabilities()["textPolarities"] == ["auto", "dark", "light"]
+
+
+def test_screentone_inpaint_restores_a_periodic_plate_and_preserves_soft_mask_semantics() -> None:
+    height, width = 180, 240
+    clean = np.full((height, width, 3), 245, dtype=np.uint8)
+    for y in range(4, height, 11):
+        for x in range(6, width, 11):
+            cv2.circle(clean, (x, y), 2, (24, 24, 24), -1, lineType=cv2.LINE_AA)
+
+    contaminated = clean.copy()
+    outline = np.zeros((height, width), dtype=np.uint8)
+    core = np.zeros((height, width), dtype=np.uint8)
+    cv2.putText(
+        outline,
+        "AB",
+        (55, 112),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2.2,
+        255,
+        11,
+        cv2.LINE_AA,
+    )
+    cv2.putText(
+        core,
+        "AB",
+        (55, 112),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2.2,
+        255,
+        5,
+        cv2.LINE_AA,
+    )
+    contaminated[outline > 0] = 20
+    contaminated[core > 0] = 250
+    hard_mask = cv2.dilate(
+        outline,
+        cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)),
+    )
+    soft_mask = cv2.GaussianBlur(hard_mask, (7, 7), 1.0)
+    alpha = soft_mask.astype(np.float32)[..., np.newaxis] / 255.0
+    expected = np.rint(contaminated * (1.0 - alpha) + clean * alpha).astype(np.uint8)
+
+    source_alpha = np.arange(height * width, dtype=np.uint8).reshape(height, width)
+    source = Image.fromarray(np.dstack((contaminated, source_alpha)), mode="RGBA")
+    repaired = inpaint(source, soft_mask, method="screentone")
+    repaired_array = np.asarray(repaired)
+    target = soft_mask > 0
+
+    assert repaired.mode == "RGBA"
+    assert np.array_equal(repaired_array[..., 3], source_alpha)
+    assert np.array_equal(repaired_array[~target, :3], contaminated[~target])
+    assert (
+        np.mean(np.abs(repaired_array[target, :3].astype(int) - expected[target].astype(int))) < 1
+    )
+    assert (
+        np.percentile(
+            np.abs(repaired_array[target, :3].astype(int) - expected[target].astype(int)),
+            95,
+        )
+        <= 1
+    )
+
+
+def test_screentone_inpaint_fails_closed_for_nonperiodic_context() -> None:
+    _rows, columns = np.indices((140, 180))
+    gradient = np.rint(30 + columns[..., np.newaxis] * np.array([0.8, 0.8, 0.8])).clip(0, 255)
+    source = Image.fromarray(gradient.astype(np.uint8), mode="RGB")
+    mask = np.zeros((140, 180), dtype=np.uint8)
+    mask[45:95, 60:120] = 255
+
+    with pytest.raises(ValueError, match="Screentone repair"):
+        inpaint(source, mask, method="screentone")
+
+
+def test_screentone_inpaint_reconstructs_a_dark_field_boundary_across_the_mask() -> None:
+    height, width = 190, 260
+    clean = np.full((height, width, 3), 245, dtype=np.uint8)
+    for y in range(4, height, 11):
+        for x in range(6, width, 11):
+            cv2.circle(clean, (x, y), 2, (24, 24, 24), -1, lineType=cv2.LINE_AA)
+    rows, columns = np.indices((height, width))
+    dark_field = rows < (48 + 0.55 * columns)
+    clean[dark_field] = 12
+
+    contaminated = clean.copy()
+    glyph = np.zeros((height, width), dtype=np.uint8)
+    cv2.putText(
+        glyph,
+        "AB",
+        (72, 145),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        2.4,
+        255,
+        12,
+        cv2.LINE_AA,
+    )
+    contaminated[glyph > 0] = 250
+    mask = cv2.dilate(glyph, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5)))
+
+    repaired = np.asarray(inpaint(contaminated, mask, method="screentone").convert("RGB"))
+    target = mask > 0
+    absolute_error = np.abs(repaired.astype(int) - clean.astype(int))
+
+    assert np.array_equal(repaired[~target], contaminated[~target])
+    assert float(np.mean(absolute_error[target])) < 8
+    assert float(np.percentile(absolute_error[target], 95)) < 30
+    assert float(np.mean(repaired[target & dark_field])) < 30
+    assert float(np.mean(repaired[target & ~dark_field])) > 160
+
+
+def test_screentone_inpaint_does_not_stamp_wide_mask_bands_across_a_dark_field() -> None:
+    height, width = 190, 280
+    clean = np.full((height, width, 3), 245, dtype=np.uint8)
+    for y in range(4, height, 11):
+        for x in range(6, width, 11):
+            cv2.circle(clean, (x, y), 2, (24, 24, 24), -1, lineType=cv2.LINE_AA)
+    rows, columns = np.indices((height, width))
+    dark_field = rows < (42 + 0.58 * columns)
+    clean[dark_field] = 12
+
+    mask = np.zeros((height, width), dtype=np.uint8)
+    cv2.line(mask, (95, 16), (95, 178), 255, 48, cv2.LINE_8)
+    cv2.line(mask, (143, 16), (143, 178), 255, 48, cv2.LINE_8)
+    contaminated = clean.copy()
+    contaminated[mask > 0] = 250
+
+    repaired = np.asarray(inpaint(contaminated, mask, method="screentone").convert("RGB"))
+    target = mask > 0
+    absolute_error = np.abs(repaired.astype(int) - clean.astype(int))
+    true_light = target & ~dark_field & (np.mean(clean, axis=2) >= 128)
+    false_black = true_light & (np.mean(repaired, axis=2) < 128)
+
+    expected_boundary = 42 + 0.58 * np.arange(width)
+    recovered_dark = np.mean(repaired, axis=2) < 128
+    boundary_errors = []
+    for column in np.flatnonzero(np.any(target, axis=0)):
+        target_rows = np.flatnonzero(target[:, column])
+        if target_rows.size == 0:
+            continue
+        first_light = np.flatnonzero(~recovered_dark[target_rows, column])
+        recovered_boundary = (
+            float(target_rows[first_light[0]]) if first_light.size else float(target_rows.max() + 1)
+        )
+        boundary_errors.append(abs(recovered_boundary - expected_boundary[column]))
+
+    assert set(np.unique(mask)) <= {0, 255}
+    assert np.array_equal(repaired[~target], contaminated[~target])
+    assert float(np.mean(absolute_error[target])) < 8
+    assert float(np.percentile(absolute_error[target], 95)) < 30
+    assert float(np.mean(repaired[target & dark_field])) < 30
+    assert float(np.mean(repaired[target & ~dark_field])) > 160
+    assert float(np.mean(false_black[true_light])) < 0.01
+    assert float(np.percentile(boundary_errors, 95)) < 3.0
+
+
+def test_screentone_inpaint_rejects_an_unverified_curved_structural_boundary() -> None:
+    height, width = 190, 280
+    source = np.full((height, width, 3), 245, dtype=np.uint8)
+    for y in range(4, height, 11):
+        for x in range(6, width, 11):
+            cv2.circle(source, (x, y), 2, (24, 24, 24), -1, lineType=cv2.LINE_AA)
+    rows, columns = np.indices((height, width))
+    curved_field = rows < (55 + 0.0028 * (columns - 140) ** 2)
+    source[curved_field] = 12
+
+    mask = np.zeros((height, width), dtype=np.uint8)
+    cv2.line(mask, (95, 16), (95, 178), 255, 48, cv2.LINE_8)
+    cv2.line(mask, (143, 16), (143, 178), 255, 48, cv2.LINE_8)
+    source[mask > 0] = 250
+
+    with pytest.raises(
+        ValueError,
+        match="Screentone repair could not verify the structural field boundary",
+    ):
+        inpaint(source, mask, method="screentone")
 
 
 def test_text_mask_keeps_sparse_and_dense_strokes_without_filling_geometry() -> None:
@@ -464,6 +641,143 @@ def test_full_region_mask_ignores_a_stale_detector_polygon() -> None:
     assert mask[50, 70] == 255
 
 
+def test_manual_mask_mode_uses_only_persisted_add_and_erase_strokes() -> None:
+    image = Image.new("RGB", (100, 80), "white")
+    region = {
+        "x": 2,
+        "y": 2,
+        "width": 96,
+        "height": 76,
+        "maskMode": "manual",
+        "maskPolygon": [[2, 2], [98, 2], [98, 78], [2, 78]],
+        "padding": 40,
+        "maskEdits": {
+            "version": 1,
+            "strokes": [
+                {"mode": "add", "radius": 3, "points": [[20, 20], [40, 20]]},
+                {"mode": "erase", "radius": 2, "points": [[30, 20]]},
+            ],
+        },
+    }
+
+    mask = create_mask(image, [region], padding=40, dilation=20, feather=20)
+
+    assert set(np.unique(mask)) <= {0, 255}
+    assert mask[20, 20] == 255
+    assert mask[20, 30] == 0
+    assert mask[20, 40] == 255
+    assert mask[12, 30] == 0
+    assert mask[70, 90] == 0
+
+
+@pytest.mark.parametrize("render_scale", (2, 3, 4))
+def test_scaled_render_limits_accept_canonical_mask_maxima(render_scale: int) -> None:
+    maximum_padding = 512 * render_scale
+    maximum_dilation = 128 * render_scale
+    maximum_feather = 128 * render_scale
+    maximum_stroke_radius = 512 * render_scale
+    region = {
+        "x": 2,
+        "y": 2,
+        "width": 12,
+        "height": 12,
+        "maskMode": "manual",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [
+                {
+                    "mode": "add",
+                    "radius": maximum_stroke_radius,
+                    "points": [[8, 8]],
+                }
+            ],
+        },
+    }
+
+    mask = create_mask(
+        (16, 16),
+        [region],
+        padding=maximum_padding,
+        dilation=maximum_dilation,
+        feather=maximum_feather,
+        render_scale=render_scale,
+    )
+
+    assert np.all(mask == 255)
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "message"),
+    (
+        ("padding", 2049, "padding"),
+        ("dilation", 513, "dilation"),
+        ("feather", 513, "feather"),
+    ),
+)
+def test_scaled_render_mask_limits_reject_values_above_four_x_maxima(
+    option: str,
+    value: int,
+    message: str,
+) -> None:
+    options = {"padding": 0, "dilation": 0, "feather": 0, option: value}
+    with pytest.raises(ValueError, match=message):
+        create_mask((16, 16), [], render_scale=4, **options)
+
+    oversized_stroke = {
+        "x": 1,
+        "y": 1,
+        "width": 8,
+        "height": 8,
+        "maskMode": "manual",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [{"mode": "add", "radius": 2049, "points": [[4, 4]]}],
+        },
+    }
+    with pytest.raises(ValueError, match="stroke radius"):
+        create_mask((16, 16), [oversized_stroke], render_scale=4)
+
+
+def test_scaled_render_opencv_radius_is_scale_aware_without_clamping() -> None:
+    source = Image.new("RGB", (8, 8), "white")
+    mask = Image.new("L", source.size, 0)
+
+    result = inpaint(source, mask, method="solid", radius=1024, render_scale=4)
+
+    assert np.array_equal(np.asarray(result), np.asarray(source))
+    with pytest.raises(ValueError, match="1024"):
+        inpaint(source, mask, method="solid", radius=1024.1, render_scale=4)
+    with pytest.raises(ValueError, match="render_scale"):
+        inpaint(source, mask, method="solid", radius=3, render_scale=5)
+
+
+@pytest.mark.parametrize(
+    "mask_edits",
+    (
+        None,
+        {"version": 1, "strokes": []},
+        {
+            "version": 1,
+            "strokes": [{"mode": "erase", "radius": 4, "points": [[30, 20]]}],
+        },
+    ),
+)
+def test_manual_mask_mode_fails_closed_without_add_strokes(mask_edits: dict | None) -> None:
+    region: dict[str, object] = {
+        "x": 5,
+        "y": 5,
+        "width": 80,
+        "height": 60,
+        "maskMode": "manual",
+    }
+    if mask_edits is not None:
+        region["maskEdits"] = mask_edits
+
+    mask = create_mask((100, 80), [region], padding=30, dilation=20, feather=20)
+
+    assert not np.any(mask)
+
+
 def test_versioned_mask_strokes_add_then_erase_in_canonical_coordinates() -> None:
     image = Image.new("RGB", (100, 80), "white")
     region = {
@@ -703,6 +1017,48 @@ def test_fragment_clusters_pack_shared_text_across_adjacent_boxes() -> None:
     packed_chars = "".join("".join(layout["lines"]) for layout in packed.layouts)
     assert "这" in packed_chars
     assert "排" in packed_chars
+
+
+def test_fragment_cluster_thresholds_scale_with_the_render_grid() -> None:
+    canonical = [
+        {
+            "id": "a",
+            "x": 40,
+            "y": 10,
+            "width": 22,
+            "height": 80,
+            "direction": "vertical",
+            "order": 0,
+        },
+        {
+            "id": "b",
+            "x": 40,
+            "y": 94,
+            "width": 22,
+            "height": 80,
+            "direction": "vertical",
+            "order": 1,
+        },
+    ]
+    scaled = [
+        {
+            **region,
+            "x": region["x"] * 4,
+            "y": region["y"] * 4,
+            "width": region["width"] * 4,
+            "height": region["height"] * 4,
+        }
+        for region in canonical
+    ]
+
+    canonical_groups = cluster_fragment_regions(canonical)
+    scaled_groups = cluster_fragment_regions(scaled, geometry_scale=4)
+
+    assert [[region["id"] for region in group] for group in scaled_groups] == [
+        [region["id"] for region in group] for group in canonical_groups
+    ]
+    with pytest.raises(ValueError, match="geometry_scale"):
+        cluster_fragment_regions(scaled, geometry_scale=0)
 
 
 def test_fragment_clusters_concatenate_distinct_fragment_text() -> None:

@@ -7,9 +7,12 @@ from manga_localizer.imaging.inpainting import (
     validate_mask_edits,
 )
 from manga_localizer.imaging.lineart_inpaint import (
+    CANDIDATE_AI_OVERVIEW_LINEART,
     CANDIDATE_IDS,
     CANDIDATE_LABELS,
+    CANDIDATE_LAMA_COMPONENTS,
     CANDIDATE_LAMA_FULL_CONTEXT,
+    CANDIDATE_LAMA_OVERVIEW_REFINE,
     lineart_guided_inpaint,
 )
 from manga_localizer.imaging.preprocessing import (
@@ -43,9 +46,12 @@ from manga_localizer.imaging.typesetting import (
 )
 
 __all__ = [
+    "CANDIDATE_AI_OVERVIEW_LINEART",
     "CANDIDATE_IDS",
     "CANDIDATE_LABELS",
+    "CANDIDATE_LAMA_COMPONENTS",
     "CANDIDATE_LAMA_FULL_CONTEXT",
+    "CANDIDATE_LAMA_OVERVIEW_REFINE",
     "DEFAULT_REPAIR_SETTINGS",
     "ImageEnhancementProvider",
     "InpaintingProvider",

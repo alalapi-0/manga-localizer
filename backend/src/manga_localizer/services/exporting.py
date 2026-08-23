@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from PIL import Image
 from sqlalchemy import select
 
 from manga_localizer.database import ImageAsset, ImportBoundary, Job, JobStatus, TextRegion
@@ -71,6 +72,65 @@ def _sha256(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _raster_metadata(path: Path, image: ImageAsset) -> dict[str, int | float] | None:
+    if not path.is_file():
+        return None
+    try:
+        with Image.open(path) as opened:
+            width, height = opened.size
+    except (OSError, ValueError) as error:
+        raise ProjectError("Generated export raster could not be decoded") from error
+    scale_x = width / image.width
+    scale_y = height / image.height
+    rounded = round(scale_x)
+    if (
+        image.width <= 0
+        or image.height <= 0
+        or abs(scale_x - scale_y) > 1e-6
+        or abs(scale_x - rounded) > 1e-6
+        or not 1 <= rounded <= 4
+    ):
+        raise ProjectError("Generated export raster does not use a supported canonical scale")
+    return {
+        "width": width,
+        "height": height,
+        "scaleX": scale_x,
+        "scaleY": scale_y,
+    }
+
+
+def _render_raster_metadata(
+    store: ProjectStore,
+    image: ImageAsset,
+    source_relative: Path,
+) -> dict[str, dict[str, int | float]]:
+    suffix = source_relative.with_suffix(".png")
+    directories = {
+        "preprocessed": "preprocessed",
+        "inpainted": "inpainted",
+        "mask": "masks",
+        "typeset": "typeset",
+    }
+    metadata: dict[str, dict[str, int | float]] = {}
+    for key, directory in directories.items():
+        path = resolve_write_target(
+            store.root,
+            Path("generated") / directory / suffix,
+            protected_roots=(store.source_root,),
+        )
+        record = _raster_metadata(path, image)
+        if record is not None:
+            metadata[key] = record
+    render_grids = {
+        (int(record["width"]), int(record["height"]))
+        for key, record in metadata.items()
+        if key in {"inpainted", "mask", "typeset"}
+    }
+    if len(render_grids) > 1:
+        raise ProjectError("Generated render artifacts do not share one pixel grid")
+    return metadata
 
 
 def _atomic_copy_verified(
@@ -139,6 +199,9 @@ def _portable_image_status(
     if "inpaint" not in available_stages:
         status.pop("inpaintCandidate", None)
         status.pop("inpaintCandidates", None)
+        status.pop("renderInputVariant", None)
+        status.pop("renderScale", None)
+        status.pop("renderedSize", None)
     else:
         status.pop("inpaintCandidates", None)
     if "inpaint" not in available_stages or "typeset" not in available_stages:
@@ -1032,6 +1095,7 @@ def export_image(
             ).all()
         )
     source_relative = safe_relative_path(image.relative_path)
+    raster_metadata = _render_raster_metadata(store, image, source_relative)
     relative = source_relative if preserve_tree else Path(source_relative.name)
     output: dict[str, Any] = {
         "imageId": image.id,
@@ -1120,6 +1184,14 @@ def export_image(
                 "width": image.width,
                 "height": image.height,
                 "checksum": image.checksum,
+                "coordinateSpace": {
+                    "basis": "source",
+                    "unit": "pixel",
+                    "width": image.width,
+                    "height": image.height,
+                },
+                "artifacts": raster_metadata,
+                "renderInputVariant": image.status.get("renderInputVariant") or None,
             },
         }
         original_payload = {

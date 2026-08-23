@@ -195,6 +195,46 @@ describe('workbench store', () => {
     });
   });
 
+  it('hydrates the explicit screentone repair method without making it the default', async () => {
+    seedWorkbench({ regions: [] });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([{
+      ...regionFixture('region-1'),
+      repair: {
+        ...regionFixture('region-1').repair,
+        method: 'screentone',
+      },
+    }]);
+
+    await useWorkbenchStore.getState().loadRegions('image-1', true);
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair.method).toBe('screentone');
+  });
+
+  it('hydrates manual-only mask mode while unknown modes fail back to text', async () => {
+    seedWorkbench({ regions: [] });
+    vi.spyOn(api, 'listRegions').mockResolvedValue([
+      {
+        ...regionFixture('region-manual'),
+        repair: {
+          ...regionFixture('region-manual').repair,
+          maskMode: 'manual',
+        },
+      },
+      {
+        ...regionFixture('region-unknown'),
+        repair: {
+          ...regionFixture('region-unknown').repair,
+          maskMode: 'unknown',
+        },
+      } as unknown as ReturnType<typeof regionFixture>,
+    ]);
+
+    await useWorkbenchStore.getState().loadRegions('image-1', true);
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]?.repair.maskMode).toBe('manual');
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[1]?.repair.maskMode).toBe('text');
+  });
+
   it('hydrates separate recognition evidence and fails legacy trust state closed', async () => {
     seedWorkbench({ regions: [] });
     const legacy = regionFixture('region-1', {
@@ -601,6 +641,35 @@ describe('workbench store', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it('treats a semantic type edit as style-only for trust while staling confirmation', () => {
+    const confirmed = regionFixture('region-1', {
+      confirmed: true,
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      type: 'dialogue',
+    });
+    seedWorkbench({
+      regions: [confirmed],
+      images: [imageFixture('image-1', {
+        status: { ...imageFixture('image-1').status, reviewState: 'reviewed' },
+      })],
+    });
+
+    useWorkbenchStore.getState().updateRegion('region-1', { type: 'sound_effect' });
+
+    expect(useWorkbenchStore.getState().regionsByImage['image-1']?.[0]).toMatchObject({
+      type: 'sound_effect',
+      trustDisposition: 'trusted',
+      trustReason: 'human-confirmed',
+      confirmed: false,
+    });
+    expect(useWorkbenchStore.getState().images[0]?.status.reviewState).toBe('pending');
+    expect(useWorkbenchStore.getState().pendingRegionMutations[0]?.region).toMatchObject({
+      trustDisposition: 'trusted',
+      confirmed: false,
+    });
+  });
+
   it('does not report reconfirmation success when the server keeps the region in review', async () => {
     const stale = regionFixture('region-1', {
       confirmed: true,
@@ -859,6 +928,25 @@ describe('workbench store', () => {
     expect(useWorkbenchStore.getState().images[0]?.stageReviews).toEqual({
       preprocess: initial.stageReviews.preprocess,
     });
+  });
+
+  it('enables the strict AI clean-plate gate without invalidating an accepted artifact', () => {
+    const initial = imageFixture('image-1', {
+      stageReviews: {
+        inpaint: {
+          state: 'accepted', reviewedAt: '2026-08-13T10:00:00Z', resultRevision: 7, artifactChecksum: 'b'.repeat(64), maskChecksum: 'c'.repeat(64),
+        },
+      },
+    });
+    seedWorkbench({ images: [initial] });
+
+    useWorkbenchStore.getState().updateProjectSettings({
+      requireAIInpaintBeforeDownstream: true,
+    });
+
+    expect(useWorkbenchStore.getState().images[0]?.stageReviews).toEqual(
+      initial.stageReviews,
+    );
   });
 
   it('does not wipe page pipeline status when only the detector default changes', () => {

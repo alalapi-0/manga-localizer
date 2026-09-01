@@ -4,10 +4,16 @@ import process from 'node:process';
 import { spawn } from 'node:child_process';
 
 import { frontendLaunch, isLoopbackHost } from './dev-platform.mjs';
+import { resolveCanonicalUv } from './external-uv.mjs';
+import { resolveGuardedModelBundle } from './storage-model-route.mjs';
+import { resolveGuardedRuntimeEnvironment } from './storage-runtime-route.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(root, '.env');
 if (existsSync(envFile)) process.loadEnvFile(envFile);
+process.env.MANGA_LOCALIZER_MODEL_BUNDLE = resolveGuardedModelBundle();
+const runtimeEnvironment = resolveGuardedRuntimeEnvironment().environment;
+const canonicalUv = resolveCanonicalUv();
 
 const apiHost = (process.env.MANGA_LOCALIZER_HOST || '127.0.0.1').replace(/^\[|\]$/g, '');
 const apiPort = process.env.MANGA_LOCALIZER_PORT || '8000';
@@ -20,7 +26,7 @@ if (!isLoopbackHost(apiHost) || !isLoopbackHost(webHost)) {
 
 const proxyHost = apiHost.includes(':') ? `[${apiHost}]` : apiHost;
 const environment = {
-  ...process.env,
+  ...runtimeEnvironment,
   VITE_DEV_API_TARGET:
     process.env.VITE_DEV_API_TARGET || `http://${proxyHost}:${apiPort}`,
 };
@@ -28,7 +34,7 @@ const frontend = frontendLaunch(root, webHost, webPort);
 
 const processes = [
   spawn(
-    'uv',
+    canonicalUv,
     [
       'run',
       '--project',

@@ -9,6 +9,7 @@ from typing import Any
 
 import cv2
 import numpy as np
+from manga_localizer.config import Settings
 from manga_localizer.imaging.inpainting import inpaint
 from manga_localizer.imaging.lineart_inpaint import (
     CANDIDATE_LINEART,
@@ -18,6 +19,7 @@ from manga_localizer.imaging.lineart_inpaint import (
     build_inpaint_candidates,
     candidate_metrics,
 )
+from manga_localizer.model_bundle import apply_model_bundle
 from manga_localizer.providers.inpainting_lama import (
     LaMaONNXInpaintingProvider,
     LaMaUnavailable,
@@ -209,21 +211,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", nargs="*", type=Path, default=[])
     parser.add_argument("--mask", type=Path)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--data-dir", type=Path, default=Path.home() / ".manga-localizer"
-    )
     parser.add_argument("--lama-model", type=Path)
     parser.add_argument("--label", default="inpaint-compare")
     return parser.parse_args()
 
 
 def resolve_lama(args: argparse.Namespace) -> LaMaONNXInpaintingProvider | None:
-    candidates = []
-    if args.lama_model is not None:
-        candidates.append(args.lama_model.expanduser())
-    filename = "inpainting_lama_2025jan.onnx"
-    candidates.append(Path.cwd() / ".manga-localizer" / "models" / filename)
-    candidates.append(args.data_dir.expanduser() / "models" / filename)
+    candidates = [args.lama_model.expanduser()] if args.lama_model is not None else []
+    settings = Settings()
+    if settings.model_bundle is not None:
+        settings, _ = apply_model_bundle(settings)
+        candidates.append(settings.lama_inpainting_model_path)
     for path in candidates:
         if path.is_file():
             provider = LaMaONNXInpaintingProvider(path)

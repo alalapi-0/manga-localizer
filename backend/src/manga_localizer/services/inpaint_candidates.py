@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import os
 import shutil
+import tempfile
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,7 @@ from PIL import Image
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from manga_localizer.database import ImageAsset
+from manga_localizer.database import ImageAsset, PageGeneration
 from manga_localizer.imaging.lineart_inpaint import (
     CANDIDATE_AI_OVERVIEW_LINEART,
     CANDIDATE_IDS,
@@ -26,6 +28,10 @@ from manga_localizer.imaging.lineart_inpaint import (
     public_candidate_records,
 )
 from manga_localizer.security import atomic_write_bytes, resolve_write_target, safe_relative_path
+from manga_localizer.services.page_lineage import (
+    _immutable_image_path,
+    require_image_mutation_lineage,
+)
 from manga_localizer.services.projects import (
     ProjectError,
     ProjectStore,
@@ -41,6 +47,7 @@ DERIVED_TRANSFORMS = frozenset({("manga-overview-lineart-cleanup", 1)})
 VALID_CANDIDATE_ORIGINS = frozenset(
     {"direct-ai", "ai-derived", "classical", "deterministic-postprocess", "mixed"}
 )
+LAYERED_STRUCTURE_INPUT_ROOT = Path("generated") / "lineage-inputs" / "layered-structure-v1"
 
 
 def _png_bytes(image: Image.Image) -> bytes:
@@ -334,6 +341,50 @@ def public_candidates_from_status(
     )
 
 
+def trusted_public_candidate_evidence(
+    store: ProjectStore,
+    image: ImageAsset,
+) -> tuple[str | None, str | None, list[dict[str, Any]]]:
+    """Project the current candidate origins only after validating private evidence."""
+    from manga_localizer.services.images import normalize_inpaint_provenance
+
+    provenance = normalize_inpaint_provenance(image.inpaint_provenance)
+    if provenance is None or (image.status or {}).get("inpaint") != "done":
+        return None, None, []
+    try:
+        relative = safe_relative_path(image.relative_path).with_suffix(".png")
+        manifest = _read_internal_candidate_manifest(store, relative)
+        digest = inpaint_candidate_manifest_digest(
+            generation_id=manifest["generationId"],
+            mask_checksum=manifest["maskChecksum"],
+            candidates=manifest["candidates"],
+            internal_bases=manifest.get("internalBases", []),
+        )
+    except (OSError, ProjectError, TypeError, ValueError):
+        return None, None, []
+    selected_id = manifest.get("selectedId")
+    selected_records = [
+        record
+        for record in manifest["candidates"]
+        if isinstance(record, dict) and record.get("id") == selected_id
+    ]
+    if (
+        manifest.get("generationId") != provenance["generationId"]
+        or manifest.get("maskChecksum") != provenance["maskChecksum"]
+        or digest != provenance["candidateManifestDigest"]
+        or selected_id != provenance["candidateId"]
+        or len(selected_records) != 1
+        or selected_records[0].get("artifactChecksum") != provenance["artifactChecksum"]
+        or selected_records[0].get("originKind") != provenance["originKind"]
+        or selected_records[0].get("providerIds") != provenance["providerIds"]
+    ):
+        return None, None, []
+    records = public_candidate_records(manifest["candidates"])
+    if any(record.get("originKind") not in VALID_CANDIDATE_ORIGINS for record in records):
+        return None, None, []
+    return str(manifest["generationId"]), str(selected_id), records
+
+
 def _read_internal_candidate_manifest(
     store: ProjectStore,
     relative: Path,
@@ -472,6 +523,373 @@ def validate_inpaint_candidate_evidence(
         raise ProjectError("Inpainting candidate evidence is invalid; rerun inpainting") from error
 
 
+def _write_once(path: Path, payload: bytes) -> None:
+    if path.exists():
+        try:
+            existing = path.read_bytes()
+        except OSError as error:
+            raise ProjectError("Layered structure snapshot is unavailable") from error
+        if existing != payload:
+            raise ProjectError("Layered structure snapshot collision")
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        descriptor, temporary_name = tempfile.mkstemp(
+            dir=path.parent,
+            prefix=".layered-structure-publish-",
+        )
+        temporary = Path(temporary_name)
+        try:
+            with os.fdopen(descriptor, "wb") as stream:
+                stream.write(payload)
+                stream.flush()
+                os.fsync(stream.fileno())
+            try:
+                os.link(temporary, path, follow_symlinks=False)
+                directory_descriptor = os.open(path.parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory_descriptor)
+                finally:
+                    os.close(directory_descriptor)
+            except FileExistsError:
+                if path.read_bytes() != payload:
+                    raise ProjectError("Layered structure snapshot collision") from None
+        finally:
+            temporary.unlink(missing_ok=True)
+    except ProjectError:
+        raise
+    except OSError as error:
+        raise ProjectError("Layered structure snapshot publication failed") from error
+
+
+def snapshot_layered_structure_references(
+    store: ProjectStore,
+    session,
+    *,
+    image: ImageAsset,
+    generation: PageGeneration,
+    references: object,
+    expected_grid: tuple[int, int],
+) -> list[dict[str, Any]]:
+    """Resolve legacy candidates once and bind immutable bytes to the current generation."""
+    if not isinstance(references, list) or not 1 <= len(references) <= 16:
+        raise ProjectError("layeredStructureReferences must contain 1 to 16 references")
+    normalized: list[dict[str, Any]] = []
+    reference_ids: set[str] = set()
+    for requested in references:
+        expected_keys = {
+            "id",
+            "imageId",
+            "candidateId",
+            "expectedSourceChecksum",
+            "expectedArtifactChecksum",
+            "expectedManifestDigest",
+            "expectedMaskChecksum",
+        }
+        if not isinstance(requested, dict) or set(requested) != expected_keys:
+            raise ProjectError("Layered structure reference has unsupported keys")
+        reference_id = requested.get("id")
+        if (
+            not isinstance(reference_id, str)
+            or not 1 <= len(reference_id) <= 64
+            or not all(character.isalnum() or character in "._-" for character in reference_id)
+            or reference_id in reference_ids
+        ):
+            raise ProjectError("Layered structure reference id is invalid or duplicated")
+        reference_ids.add(reference_id)
+        if any(
+            not _is_sha256(requested.get(key))
+            for key in (
+                "expectedSourceChecksum",
+                "expectedArtifactChecksum",
+                "expectedManifestDigest",
+                "expectedMaskChecksum",
+            )
+        ):
+            raise ProjectError("Layered structure reference checksums are invalid")
+        reference_image = session.get(ImageAsset, requested.get("imageId"))
+        if (
+            reference_image is None
+            or reference_image.project_id != image.project_id
+            or reference_image.checksum != generation.source_checksum
+            or requested["expectedSourceChecksum"] != generation.source_checksum
+        ):
+            raise ProjectError("Layered structure reference is not from the same immutable source")
+        try:
+            immutable_checksum = hashlib.sha256(
+                _immutable_image_path(store, reference_image).read_bytes()
+            ).hexdigest()
+        except OSError as error:
+            raise ProjectError("Layered structure immutable source is unavailable") from error
+        if immutable_checksum != generation.source_checksum:
+            raise ProjectError("Layered structure immutable source changed")
+        relative = safe_relative_path(reference_image.relative_path).with_suffix(".png")
+        trusted_generation_id, _selected_id, trusted_records = trusted_public_candidate_evidence(
+            store, reference_image
+        )
+        if trusted_generation_id is None or not any(
+            record.get("id") == requested.get("candidateId") for record in trusted_records
+        ):
+            raise ProjectError("Layered structure reference is not trusted current provenance")
+        manifest = _read_internal_candidate_manifest(store, relative)
+        manifest_digest = validate_inpaint_candidate_evidence(store, relative, manifest)
+        reference_generation = session.get(PageGeneration, manifest["generationId"])
+        candidate_id = requested.get("candidateId")
+        records = [
+            record
+            for record in manifest["candidates"]
+            if isinstance(record, dict) and record.get("id") == candidate_id
+        ]
+        if (
+            reference_generation is None
+            or reference_generation.id == generation.id
+            or reference_generation.project_id != image.project_id
+            or reference_generation.image_id != reference_image.id
+            or reference_generation.source_checksum != generation.source_checksum
+            or trusted_generation_id != reference_generation.id
+            or len(records) != 1
+            or manifest_digest != requested["expectedManifestDigest"]
+            or manifest["maskChecksum"] != requested["expectedMaskChecksum"]
+            or records[0].get("artifactChecksum") != requested["expectedArtifactChecksum"]
+        ):
+            raise ProjectError("Layered structure reference lineage or checksum changed")
+        try:
+            artifact_bytes = candidate_image_path(store, relative, str(candidate_id)).read_bytes()
+        except OSError as error:
+            raise ProjectError("Layered structure reference artifact is unavailable") from error
+        mask_path = resolve_write_target(
+            store.root,
+            Path("generated") / "masks" / relative,
+            protected_roots=(store.source_root,),
+        )
+        try:
+            mask_bytes = mask_path.read_bytes()
+            with Image.open(io.BytesIO(artifact_bytes)) as opened:
+                opened.load()
+                decoded_size = opened.size
+            with Image.open(io.BytesIO(mask_bytes)) as opened_mask:
+                opened_mask.load()
+                mask_size = opened_mask.size
+        except (OSError, ValueError) as error:
+            raise ProjectError("Layered structure reference artifact is unavailable") from error
+        if (
+            hashlib.sha256(artifact_bytes).hexdigest() != requested["expectedArtifactChecksum"]
+            or hashlib.sha256(mask_bytes).hexdigest() != requested["expectedMaskChecksum"]
+            or decoded_size != expected_grid
+            or mask_size != expected_grid
+        ):
+            raise ProjectError("Layered structure reference grid or bytes changed")
+        ancestry = {
+            "referenceGenerationId": reference_generation.id,
+            "originKind": records[0]["originKind"],
+            "providerIds": records[0]["providerIds"],
+            **({"lineage": records[0]["lineage"]} if "lineage" in records[0] else {}),
+        }
+        if records[0]["originKind"] == "classical" and records[0]["providerIds"] != ["opencv"]:
+            raise ProjectError("Layered structure classical reference provenance is invalid")
+        source_manifest = {
+            "version": 1,
+            "referenceId": reference_id,
+            "referenceImageId": reference_image.id,
+            "referenceCandidateId": candidate_id,
+            "referenceGenerationId": reference_generation.id,
+            "sourceChecksum": generation.source_checksum,
+            "artifactChecksum": requested["expectedArtifactChecksum"],
+            "legacyManifestDigest": manifest_digest,
+            "maskChecksum": manifest["maskChecksum"],
+            "width": decoded_size[0],
+            "height": decoded_size[1],
+            "ancestry": ancestry,
+        }
+        source_manifest_bytes = json.dumps(
+            source_manifest,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        source_manifest_digest = hashlib.sha256(source_manifest_bytes).hexdigest()
+        snapshot_id = hashlib.sha256(
+            json.dumps(
+                {
+                    "generationId": generation.id,
+                    "sourceManifestDigest": source_manifest_digest,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        snapshot_root = LAYERED_STRUCTURE_INPUT_ROOT / generation.id / snapshot_id
+        artifact_target = resolve_write_target(
+            store.root,
+            snapshot_root / "artifact.png",
+            protected_roots=(store.source_root,),
+        )
+        manifest_target = resolve_write_target(
+            store.root,
+            snapshot_root / "manifest.json",
+            protected_roots=(store.source_root,),
+        )
+        _write_once(artifact_target, artifact_bytes)
+        _write_once(manifest_target, source_manifest_bytes)
+        normalized.append(
+            {
+                "referenceId": reference_id,
+                "referenceImageId": reference_image.id,
+                "referenceCandidateId": candidate_id,
+                "snapshotId": snapshot_id,
+                "artifactChecksum": requested["expectedArtifactChecksum"],
+                "sourceManifestDigest": source_manifest_digest,
+                "legacyManifestDigest": manifest_digest,
+                "sourceChecksum": generation.source_checksum,
+                "maskChecksum": manifest["maskChecksum"],
+                "width": decoded_size[0],
+                "height": decoded_size[1],
+                "ancestry": ancestry,
+            }
+        )
+    return sorted(normalized, key=lambda item: item["referenceId"])
+
+
+def load_layered_structure_snapshots(
+    store: ProjectStore,
+    generation_id: str,
+    snapshots: list[dict[str, Any]],
+) -> dict[str, bytes]:
+    loaded: dict[str, bytes] = {}
+    snapshot_ids: set[str] = set()
+    for snapshot in snapshots:
+        expected_keys = {
+            "referenceId",
+            "referenceImageId",
+            "referenceCandidateId",
+            "snapshotId",
+            "artifactChecksum",
+            "sourceManifestDigest",
+            "legacyManifestDigest",
+            "sourceChecksum",
+            "maskChecksum",
+            "width",
+            "height",
+            "ancestry",
+        }
+        ancestry = snapshot.get("ancestry") if isinstance(snapshot, dict) else None
+        ancestry_keys = set(ancestry) if isinstance(ancestry, dict) else set()
+        if (
+            not isinstance(snapshot, dict)
+            or set(snapshot) != expected_keys
+            or any(
+                not _is_sha256(snapshot.get(key))
+                for key in (
+                    "snapshotId",
+                    "artifactChecksum",
+                    "sourceManifestDigest",
+                    "legacyManifestDigest",
+                    "sourceChecksum",
+                    "maskChecksum",
+                )
+            )
+            or not isinstance(snapshot.get("referenceId"), str)
+            or not isinstance(snapshot.get("referenceImageId"), str)
+            or not isinstance(snapshot.get("referenceCandidateId"), str)
+            or type(snapshot.get("width")) is not int
+            or type(snapshot.get("height")) is not int
+            or snapshot["width"] <= 0
+            or snapshot["height"] <= 0
+            or ancestry_keys
+            not in (
+                {"referenceGenerationId", "originKind", "providerIds"},
+                {"referenceGenerationId", "originKind", "providerIds", "lineage"},
+            )
+            or not isinstance(ancestry.get("referenceGenerationId"), str)
+            or ancestry.get("originKind") not in VALID_CANDIDATE_ORIGINS
+            or not isinstance(ancestry.get("providerIds"), list)
+            or any(
+                not isinstance(provider, str) or not provider or len(provider) > 80
+                for provider in ancestry.get("providerIds", [])
+            )
+            or ancestry.get("providerIds") != sorted(set(ancestry.get("providerIds", [])))
+            or snapshot.get("referenceId") in loaded
+            or snapshot.get("snapshotId") in snapshot_ids
+        ):
+            raise ProjectError("Layered structure snapshot binding is invalid")
+        expected_snapshot_id = hashlib.sha256(
+            json.dumps(
+                {
+                    "generationId": generation_id,
+                    "sourceManifestDigest": snapshot["sourceManifestDigest"],
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        if snapshot["snapshotId"] != expected_snapshot_id:
+            raise ProjectError("Layered structure snapshot content address is invalid")
+        snapshot_ids.add(snapshot["snapshotId"])
+        root = LAYERED_STRUCTURE_INPUT_ROOT / generation_id / snapshot["snapshotId"]
+        artifact_path = resolve_write_target(
+            store.root, root / "artifact.png", protected_roots=(store.source_root,)
+        )
+        manifest_path = resolve_write_target(
+            store.root, root / "manifest.json", protected_roots=(store.source_root,)
+        )
+        try:
+            artifact_bytes = artifact_path.read_bytes()
+            manifest_bytes = manifest_path.read_bytes()
+        except OSError as error:
+            raise ProjectError("Layered structure snapshot is unavailable") from error
+        if (
+            hashlib.sha256(artifact_bytes).hexdigest() != snapshot["artifactChecksum"]
+            or hashlib.sha256(manifest_bytes).hexdigest() != snapshot["sourceManifestDigest"]
+        ):
+            raise ProjectError("Layered structure snapshot changed")
+        try:
+            manifest = json.loads(manifest_bytes)
+        except (UnicodeError, json.JSONDecodeError) as error:
+            raise ProjectError("Layered structure snapshot manifest is invalid") from error
+        if (
+            not isinstance(manifest, dict)
+            or set(manifest)
+            != {
+                "version",
+                "referenceId",
+                "referenceImageId",
+                "referenceCandidateId",
+                "referenceGenerationId",
+                "sourceChecksum",
+                "artifactChecksum",
+                "legacyManifestDigest",
+                "maskChecksum",
+                "width",
+                "height",
+                "ancestry",
+            }
+            or manifest.get("version") != 1
+            or manifest.get("referenceId") != snapshot["referenceId"]
+            or manifest.get("referenceImageId") != snapshot["referenceImageId"]
+            or manifest.get("referenceCandidateId") != snapshot["referenceCandidateId"]
+            or manifest.get("referenceGenerationId")
+            != snapshot["ancestry"]["referenceGenerationId"]
+            or manifest.get("artifactChecksum") != snapshot["artifactChecksum"]
+            or manifest.get("legacyManifestDigest") != snapshot["legacyManifestDigest"]
+            or manifest.get("sourceChecksum") != snapshot["sourceChecksum"]
+            or manifest.get("maskChecksum") != snapshot["maskChecksum"]
+            or manifest.get("width") != snapshot["width"]
+            or manifest.get("height") != snapshot["height"]
+            or manifest.get("ancestry") != snapshot["ancestry"]
+        ):
+            raise ProjectError("Layered structure snapshot manifest changed")
+        try:
+            with Image.open(io.BytesIO(artifact_bytes)) as opened:
+                opened.load()
+                decoded_size = opened.size
+        except (OSError, ValueError) as error:
+            raise ProjectError("Layered structure snapshot artifact is invalid") from error
+        if decoded_size != (snapshot["width"], snapshot["height"]):
+            raise ProjectError("Layered structure snapshot artifact grid changed")
+        loaded[snapshot["referenceId"]] = artifact_bytes
+    return loaded
+
+
 def select_inpaint_candidate(
     store: ProjectStore,
     image_id: str,
@@ -506,6 +924,7 @@ def select_inpaint_candidate(
                     actual_revision=image.revision,
                     resource=f"image:{image.id}",
                 )
+            require_image_mutation_lineage(store, session, image, None)
             if image.status.get("inpaint") != "done":
                 raise ProjectError("Cannot select an inpainting candidate until inpainting is done")
             relative = safe_relative_path(image.relative_path).with_suffix(".png")
@@ -604,6 +1023,7 @@ def select_inpaint_candidate(
                 ).encode("utf-8"),
             )
             invalidate_image_pipeline(store, image, {"typeset", "export"})
+            image.inpaint_classical_approval = None
             reset_image_review(image)
             clear_stage_reviews(image, {"inpaint", "typeset"})
             status = dict(image.status or {})

@@ -20,6 +20,7 @@ from manga_localizer.database import (
     Job,
     JobItem,
     JobStatus,
+    PageLineageEvent,
     Project,
     Revision,
     TextRegion,
@@ -294,6 +295,16 @@ class ProjectStore:
 
     def recover_jobs(self) -> int:
         with self.session() as session:
+            published_typeset_item_ids = {
+                item_id
+                for item_id in session.scalars(
+                    select(PageLineageEvent.job_item_id).where(
+                        PageLineageEvent.operation == "typeset-candidate-produced",
+                        PageLineageEvent.job_item_id.is_not(None),
+                    )
+                ).all()
+                if item_id is not None
+            }
             running_item_rows = list(
                 session.execute(
                     select(JobItem, Job.status)
@@ -302,6 +313,11 @@ class ProjectStore:
                 ).all()
             )
             item_job_ids = {item.job_id for item, _job_status in running_item_rows}
+            resumable_item_job_ids = {
+                item.job_id
+                for item, parent_status in running_item_rows
+                if parent_status not in {JobStatus.CANCELLED.value, JobStatus.PAUSED.value}
+            }
             running_job_ids = set(
                 session.scalars(select(Job.id).where(Job.status == JobStatus.RUNNING.value)).all()
             )
@@ -327,13 +343,29 @@ class ProjectStore:
                     item.finished_at = now
                 else:
                     item.status = JobStatus.QUEUED.value
-                    item.started_at = None
+                    # A G10 publication freezes the original attempt start in its
+                    # immutable event. Preserve it so a restarted worker can reuse
+                    # that exact candidate and append only the missing completion.
+                    if item.id not in published_typeset_item_ids:
+                        item.started_at = None
                     item.finished_at = None
             session.execute(
                 update(Job)
                 .where(Job.status == JobStatus.RUNNING.value)
                 .values(status=JobStatus.QUEUED.value, error=None)
             )
+            if resumable_item_job_ids:
+                # A worker-level failure can mark the parent failed after the item
+                # transaction rolls back to running. Requeue that parent together
+                # with its recovered item so published lineage work can finish.
+                session.execute(
+                    update(Job)
+                    .where(
+                        Job.id.in_(resumable_item_job_ids),
+                        Job.status.not_in((JobStatus.CANCELLED.value, JobStatus.PAUSED.value)),
+                    )
+                    .values(status=JobStatus.QUEUED.value, error=None)
+                )
             if incomplete_bundle_job_ids:
                 session.execute(
                     update(Job)
@@ -389,6 +421,19 @@ def region_payload(region: TextRegion) -> dict[str, Any]:
         "type": region.region_type,
         "direction": region.direction,
         "order": region.reading_order,
+        "paragraphGroupId": region.paragraph_group_id,
+        "rubyParentId": region.ruby_parent_id,
+        "contentDisposition": region.content_disposition,
+        "detectorJobItemId": region.detector_job_item_id,
+        "detectorCandidateIndex": region.detector_candidate_index,
+        "backgroundCategory": region.background_category,
+        "backgroundConfidence": region.background_confidence,
+        "backgroundRationaleCodes": region.background_rationale_codes,
+        "backgroundReviewer": region.background_reviewer,
+        "backgroundGenerationId": region.background_generation_id,
+        "ocrReview": region.ocr_review,
+        "ocrReviewer": region.ocr_reviewer,
+        "ocrGenerationId": region.ocr_generation_id,
         "confidence": region.confidence,
         "recognition": recognition,
         "detectorConfidence": (
@@ -417,20 +462,20 @@ def add_revision(
     operation: str,
     before: dict[str, Any] | None,
     after: dict[str, Any] | None,
-) -> None:
+) -> Revision:
     project.revision += 1
     project.updated_at = datetime.now(UTC)
-    session.add(
-        Revision(
-            project_id=project.id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            operation=operation,
-            before=before,
-            after=after,
-            project_revision=project.revision,
-        )
+    revision = Revision(
+        project_id=project.id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        operation=operation,
+        before=before,
+        after=after,
+        project_revision=project.revision,
     )
+    session.add(revision)
+    return revision
 
 
 class ProjectRegistry:
@@ -596,10 +641,19 @@ class ProjectRegistry:
             for image in session.scalars(select(ImageAsset)).all():
                 image.processing_errors = redact(image.processing_errors)
             for job in session.scalars(select(Job).options(selectinload(Job.items))).all():
-                job.options = normalize_remote_endpoints(
-                    without_secrets(job.options),
-                    drop_invalid=True,
-                )
+                if job.kind == "typeset" and isinstance(job.lineage_context, dict):
+                    from manga_localizer.services.typesets import (
+                        sanitized_typeset_job_options,
+                    )
+
+                    job.options = sanitized_typeset_job_options(dict(job.options))
+                else:
+                    job.options = normalize_remote_endpoints(
+                        without_secrets(job.options),
+                        drop_invalid=True,
+                    )
+                lineage_context = redact(without_secrets(job.lineage_context))
+                job.lineage_context = lineage_context if isinstance(lineage_context, dict) else None
                 job.error = redact(job.error) if job.error else None
                 for item in job.items:
                     item.output = without_secrets(item.output)

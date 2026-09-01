@@ -803,6 +803,74 @@ def test_versioned_mask_strokes_add_then_erase_in_canonical_coordinates() -> Non
     assert mask[75, 95] == 0
 
 
+def test_manual_mask_strokes_apply_in_persisted_order() -> None:
+    def render(first: str, second: str) -> np.ndarray:
+        return create_mask(
+            (40, 40),
+            [
+                {
+                    "x": 0,
+                    "y": 0,
+                    "width": 40,
+                    "height": 40,
+                    "maskMode": "manual",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [
+                            {"mode": first, "radius": 4, "points": [[20, 20]]},
+                            {"mode": second, "radius": 4, "points": [[20, 20]]},
+                        ],
+                    },
+                }
+            ],
+            padding=0,
+            dilation=0,
+            feather=0,
+        )
+
+    erase_then_add = render("erase", "add")
+    add_then_erase = render("add", "erase")
+
+    assert erase_then_add[20, 20] == 255
+    assert np.count_nonzero(erase_then_add) > 0
+    assert add_then_erase[20, 20] == 0
+    assert np.count_nonzero(add_then_erase) == 0
+
+
+def test_automatic_mask_strokes_apply_in_persisted_order_after_feathering() -> None:
+    def render(first: str, second: str) -> np.ndarray:
+        return create_mask(
+            (48, 48),
+            [
+                {
+                    "x": 2,
+                    "y": 2,
+                    "width": 6,
+                    "height": 6,
+                    "maskMode": "region",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [
+                            {"mode": first, "radius": 4, "points": [[30, 30]]},
+                            {"mode": second, "radius": 4, "points": [[30, 30]]},
+                        ],
+                    },
+                }
+            ],
+            padding=0,
+            dilation=0,
+            feather=3,
+        )
+
+    erase_then_add = render("erase", "add")
+    add_then_erase = render("add", "erase")
+
+    assert erase_then_add[30, 30] == 255
+    assert add_then_erase[30, 30] == 0
+    assert np.any(erase_then_add[:12, :12])
+    assert np.any(add_then_erase[:12, :12])
+
+
 def test_mask_erase_stays_zero_after_base_feathering() -> None:
     image = Image.new("RGB", (64, 64), "white")
     region = {
@@ -970,6 +1038,44 @@ def test_vertical_typesetting_uses_vertical_punctuation_forms() -> None:
     assert "\u300c" not in "".join(by_id["quoted"]["lines"])
     assert "\u300c" in "".join(by_id["horizontal-quoted"]["lines"])
     assert "\u300d" in "".join(by_id["horizontal-quoted"]["lines"])
+
+
+def test_short_vertical_typesetting_is_centered_inside_its_region() -> None:
+    capabilities = font_capabilities()
+    if not capabilities["available"]:
+        pytest.skip("No usable system CJK font")
+    source = Image.new("RGB", (120, 240), "white")
+    result = typeset_image(
+        source,
+        [
+            {
+                "id": "short-vertical",
+                "x": 20,
+                "y": 20,
+                "width": 80,
+                "height": 200,
+                "direction": "vertical",
+                "translationText": "天使\uff1f",
+                "style": {
+                    "fontSize": 24,
+                    "minFontSize": 24,
+                    "padding": 4,
+                    "lineSpacing": 0,
+                    "verticalAlign": "center",
+                    "strokeWidth": 0,
+                    "autoFit": False,
+                },
+            }
+        ],
+    )
+
+    changed = np.any(np.asarray(result.image.convert("RGB")) != 255, axis=2)
+    ys, xs = np.nonzero(changed)
+    assert xs.min() >= 20
+    assert xs.max() < 100
+    assert ys.min() >= 70
+    assert ys.max() < 170
+    assert (ys.min() + ys.max()) / 2 == pytest.approx(120, abs=15)
 
 
 def test_fragment_clusters_pack_shared_text_across_adjacent_boxes() -> None:

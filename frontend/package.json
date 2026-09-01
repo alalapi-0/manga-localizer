@@ -4,11 +4,18 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
+    "storage:check": "node ../scripts/external-frontend.mjs --check",
+    "predev": "npm run storage:check",
     "dev": "vite",
+    "prebuild": "npm run storage:check",
     "build": "tsc -b && vite build",
+    "prelint": "npm run storage:check",
     "lint": "eslint . --max-warnings=0",
+    "pretypecheck": "npm run storage:check",
     "typecheck": "tsc -b --pretty false",
+    "pretest": "npm run storage:check",
     "test": "vitest run",
+    "pretest:watch": "npm run storage:check",
     "test:watch": "vitest"
   },
   "dependencies": {

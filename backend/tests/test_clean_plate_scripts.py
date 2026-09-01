@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib.util
 import json
 import sqlite3
@@ -254,6 +255,11 @@ def test_setup_optional_models_copies_verified_files_and_rejects_checksum_mismat
     monkeypatch,
 ) -> None:
     script = load_script("setup_optional_models.py")
+    monkeypatch.setattr(
+        script,
+        "validate_guarded_bundle_destination",
+        lambda destination: destination.expanduser().resolve(),
+    )
     payload = b"tiny-realesrgan"
     source_dir = tmp_path / "source" / "models"
     source_dir.mkdir(parents=True)
@@ -275,13 +281,27 @@ def test_setup_optional_models_copies_verified_files_and_rejects_checksum_mismat
     assert script.verify_named("realesrgan", dest)["available"] is True
     (dest / "toy.onnx").write_bytes(b"tampered")
     assert script.verify_named("realesrgan", dest)["error"] == "checksum mismatch"
+    copied_bundle = tmp_path / "copied-bundle"
     monkeypatch.setattr(
         sys,
         "argv",
         [
             "setup_optional_models.py",
-            "--data-dir",
-            str(tmp_path / "empty-data"),
+            "--bundle-dest",
+            str(copied_bundle),
+            "--copy-from-models-dir",
+            str(source_dir),
+            "--no-download",
+            "realesrgan",
+        ],
+    )
+    assert script.main() == 0
+    assert (copied_bundle / "toy.onnx").read_bytes() == payload
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "setup_optional_models.py",
             "--bundle-dest",
             str(tmp_path / "missing-bundle"),
             "--no-download",
@@ -293,6 +313,200 @@ def test_setup_optional_models_copies_verified_files_and_rejects_checksum_mismat
         raise AssertionError("missing models must not be downloaded")
     except RuntimeError as error:
         assert "downloads are disabled" in str(error)
+
+
+def test_setup_optional_models_rejects_every_implicit_or_data_dir_destination(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    script = load_script("setup_optional_models.py")
+    for argv in (
+        ["setup_optional_models.py", "realesrgan"],
+        [
+            "setup_optional_models.py",
+            "--data-dir",
+            str(tmp_path / "internal-data"),
+            "realesrgan",
+        ],
+    ):
+        monkeypatch.setattr(sys, "argv", argv)
+        try:
+            script.main()
+            raise AssertionError("an implicit or data-dir destination must fail")
+        except SystemExit as error:
+            assert error.code == 2
+    assert not (tmp_path / "internal-data").exists()
+
+
+def test_setup_optional_models_accepts_destinations_only_below_guarded_external_roots(
+    tmp_path: Path,
+) -> None:
+    script = load_script("setup_optional_models.py")
+    home = tmp_path / "home"
+    guard = home / ".config/storage-governance/guard.sh"
+    guard.parent.mkdir(parents=True)
+    guard.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    guard.chmod(0o755)
+    models_root = tmp_path / "Models"
+    artifacts_root = tmp_path / "Artifacts"
+    models_root.mkdir()
+    artifacts_root.mkdir()
+    mappings = {
+        "roots.models": models_root,
+        "roots.artifacts": artifacts_root,
+    }
+
+    def run_guard(argv: list[str], **_kwargs: object) -> argparse.Namespace:
+        return argparse.Namespace(
+            returncode=0,
+            stdout=f"{mappings[argv[-1]]}\n",
+            stderr="",
+        )
+
+    environ = {"HOME": str(home), "STORAGE_GOVERNANCE_GUARD": str(guard)}
+    model_bundle = models_root / "manga-localizer/model-bundle"
+    package_bundle = artifacts_root / "manga-localizer/app/Models"
+    assert (
+        script.validate_guarded_bundle_destination(
+            model_bundle,
+            environ=environ,
+            run_guard=run_guard,
+        )
+        == model_bundle
+    )
+    assert (
+        script.validate_guarded_bundle_destination(
+            package_bundle,
+            environ=environ,
+            run_guard=run_guard,
+        )
+        == package_bundle
+    )
+    try:
+        script.validate_guarded_bundle_destination(
+            tmp_path / "internal-fallback",
+            environ=environ,
+            run_guard=run_guard,
+        )
+        raise AssertionError("an internal destination must fail")
+    except RuntimeError as error:
+        assert "outside the verified external roots" in str(error)
+    real_models = models_root / "real-models"
+    real_models.mkdir()
+    linked_models = models_root / "linked-models"
+    linked_models.symlink_to(real_models, target_is_directory=True)
+    try:
+        script.validate_guarded_bundle_destination(
+            linked_models / "bundle",
+            environ=environ,
+            run_guard=run_guard,
+        )
+        raise AssertionError("a symbolic-link destination component must fail")
+    except RuntimeError as error:
+        assert "must not contain symbolic links" in str(error)
+
+
+def test_offline_diagnostics_prefer_configured_external_model_bundle(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    bundle = tmp_path / "external-model-bundle"
+    bundle.mkdir()
+    ppocr = bundle / "text_detection_cn_ppocrv3_2023may.onnx"
+    lama = bundle / "inpainting_lama_2025jan.onnx"
+    realesrgan = bundle / "RealESRGAN_x4plus_anime_6B.onnx"
+    ppocr.write_bytes(b"ppocr-fixture")
+    lama.write_bytes(b"lama-fixture")
+    realesrgan.write_bytes(b"realesrgan-fixture")
+    archive_entries = []
+    for name, archive_name, extract_name, setting in (
+        ("argos-ja-en", "ja-en.argosmodel", "argos-ja-en", "argos_ja_en_model"),
+        ("argos-en-zh", "en-zh.argosmodel", "argos-en-zh", "argos_en_zh_model"),
+    ):
+        archive = bundle / archive_name
+        archive.write_bytes(name.encode())
+        extract = bundle / extract_name
+        (extract / "model").mkdir(parents=True)
+        (extract / "metadata.json").write_text("{}", encoding="utf-8")
+        (extract / "sentencepiece.model").write_bytes(b"sentencepiece")
+        (extract / "model" / "model.bin").write_bytes(b"model")
+        archive_entries.append(
+            {
+                "name": name,
+                "kind": "archive",
+                "path": extract_name,
+                "archive": archive_name,
+                "sha256": hashlib.sha256(archive.read_bytes()).hexdigest(),
+                "license": "test",
+                "setting": setting,
+            }
+        )
+    (bundle / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "downloadsAtStartup": False,
+                "models": [
+                    {
+                        "name": "ppocr",
+                        "kind": "file",
+                        "path": ppocr.name,
+                        "sha256": hashlib.sha256(ppocr.read_bytes()).hexdigest(),
+                        "license": "test",
+                        "setting": "ppocr_detection_model",
+                    },
+                    {
+                        "name": "lama",
+                        "kind": "file",
+                        "path": lama.name,
+                        "sha256": hashlib.sha256(lama.read_bytes()).hexdigest(),
+                        "license": "test",
+                        "setting": "lama_inpainting_model",
+                    },
+                    {
+                        "name": "realesrgan",
+                        "kind": "file",
+                        "path": realesrgan.name,
+                        "sha256": hashlib.sha256(realesrgan.read_bytes()).hexdigest(),
+                        "license": "test",
+                        "setting": "realesrgan_onnx_model",
+                    },
+                    *archive_entries,
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MANGA_LOCALIZER_MODEL_BUNDLE", str(bundle))
+
+    bootstrap = load_script("bootstrap_detection_annotations.py")
+    evaluate = load_script("evaluate_detection_ocr.py")
+    compare = load_script("compare_inpaint.py")
+    upscale = load_script("compare_upscale.py")
+    translate = load_script("compare_translate.py")
+    assert bootstrap.resolve_ppocr_model(None) == ppocr
+    assert evaluate.resolve_ppocr_model(None) == ppocr
+
+    class AvailableLama:
+        def __init__(self, model_path: Path) -> None:
+            self.model_path = model_path
+
+        def health_check(self) -> dict[str, bool]:
+            return {"available": True}
+
+    monkeypatch.setattr(compare, "LaMaONNXInpaintingProvider", AvailableLama)
+    provider = compare.resolve_lama(
+        argparse.Namespace(lama_model=None, data_dir=tmp_path / "internal-data")
+    )
+    assert provider is not None
+    assert provider.model_path == lama
+    assert upscale.resolve_realesrgan_model(argparse.Namespace(model=None)) == realesrgan
+    translated_settings = translate.resolve_settings()
+    assert translated_settings.argos_ja_en_model_path == bundle / "argos-ja-en"
+    assert translated_settings.argos_en_zh_model_path == bundle / "argos-en-zh"
+
+    ppocr.write_bytes(b"tampered")
+    assert bootstrap.resolve_ppocr_model(None) is None
 
 
 def test_macos_app_launcher_prefers_bundled_window_and_does_not_download() -> None:
@@ -359,8 +573,7 @@ def test_compare_upscale_writes_relative_metrics_without_source_mutation(
         argparse.Namespace(
             input=[source],
             output=output,
-            data_dir=tmp_path / "data",
-            model=None,
+            model=tmp_path / "explicit-test-model.onnx",
             factor=2,
             tile_size=64,
             label="test-upscale",

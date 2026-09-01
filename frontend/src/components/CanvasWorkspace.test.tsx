@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import { resetWorkbenchStore, useWorkbenchStore } from '../store/workbench';
 import { imageFixture, regionFixture, seedWorkbench } from '../test/fixtures';
+import type { TypesetGateContext } from '../types';
 import {
   buildMaskStroke,
   centeredNodeToRegionGeometry,
@@ -20,6 +21,12 @@ import {
 } from './canvasGeometry';
 import { loadCanonicalCanvasImage } from './canvasImage';
 import { CanvasWorkspace } from './CanvasWorkspace';
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+
+function pngPayload(label = ''): ArrayBuffer {
+  return new Uint8Array([...PNG_SIGNATURE, ...new TextEncoder().encode(label)]).buffer;
+}
 
 describe('canvas generated-image refresh', () => {
   beforeEach(() => {
@@ -153,6 +160,31 @@ describe('canvas generated-image refresh', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('rejects a mask unless both its media type and byte signature are PNG', async () => {
+    const decode = vi.mocked(globalThis.createImageBitmap);
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/jpeg' }),
+        arrayBuffer: async () => pngPayload('jpeg-header-lie'),
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png; charset=binary' }),
+        arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer,
+      } as unknown as Response));
+
+    await expect(loadCanonicalCanvasImage(
+      '/mask-as-jpeg', { width: 1200, height: 1800 }, undefined, true, 'png',
+    )).rejects.toThrow('canonical PNG');
+    await expect(loadCanonicalCanvasImage(
+      '/jpeg-bytes-as-mask', { width: 1200, height: 1800 }, undefined, true, 'png',
+    )).rejects.toThrow('canonical PNG');
+    expect(decode).not.toHaveBeenCalled();
+  });
+
   it('accepts only supported integer upscale grids for preprocessing previews', async () => {
     const close = vi.fn();
     vi.stubGlobal('createImageBitmap', vi.fn(async () => ({
@@ -187,6 +219,269 @@ describe('canvas generated-image refresh', () => {
       true,
     )).rejects.toThrow('does not match canonical grid');
     expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('binds the G8 four-view observation to the context accepted mask, not an old selection', async () => {
+    const requested: string[] = [];
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => pngPayload(String(input)),
+      } as unknown as Response;
+    }));
+    const checksum = 'aa'.repeat(32);
+    const image = imageFixture('image-1', { revision: 11, width: 1200, height: 1800 });
+    seedWorkbench({ images: [image], regions: [regionFixture('region-1', {
+      contentDisposition: 'translate', backgroundCategory: 'complex-lineart',
+      backgroundGenerationId: 'generation-1',
+    })] });
+    const maskArtifact = (artifactId: string, sequence: number) => ({
+      artifactId, sequence, jobId: `job-mask-${sequence}`, jobItemId: `item-mask-${sequence}`,
+      parentChecksum: checksum, qualityChecksum: checksum, recipeChecksum: checksum,
+      maskChecksum: checksum, width: 1200, height: 1800, renderScale: 1,
+      provider: 'deterministic-mask', modelVersion: 'create-mask-v1', parameterHash: checksum,
+      nonzeroPixelCount: 42, bbox: { x: 1, y: 2, width: 3, height: 4 },
+      createdAt: '2026-08-25T00:00:00Z',
+    });
+    const acceptedMask = maskArtifact('mask-accepted', 2);
+    const oldMask = maskArtifact('mask-old', 1);
+    const routeManifest = [{
+      regionId: 'region-1', backgroundCategory: 'complex-lineart' as const,
+      route: 'ai-inpaint-redraw' as const, originKind: 'ai' as const,
+      provider: 'lama', modelVersion: 'lama-onnx-local-v1', parameterHash: checksum,
+    }];
+    const candidate = {
+      candidateId: 'candidate-1', sequence: 1, jobId: 'job-inpaint',
+      jobItemId: 'item-inpaint', parentChecksum: checksum, qualityChecksum: checksum,
+      backgroundChecksum: checksum, maskArtifactId: acceptedMask.artifactId,
+      maskChecksum: checksum, routeManifest, routeChecksum: checksum,
+      originKind: 'ai' as const, providerIds: ['lama'], modelVersions: ['lama-onnx-local-v1'],
+      parameterHash: checksum, candidateChecksum: checksum, width: 1200, height: 1800,
+      renderScale: 1, outsideMaskChangeCount: 0, anomalies: [], completed: true,
+      review: null, createdAt: '2026-08-25T00:00:00Z',
+    };
+    useWorkbenchStore.setState({
+      g4Contexts: { 'image-1': {
+        status: 'active', phase: 'G8', error: '', conflict: false,
+        generation: {
+          id: 'generation-1', runId: 'run-1', projectId: 'project-1', imageId: 'image-1',
+          restartFromSource: true, parameterSetId: 'params-1', parameterSetHash: checksum,
+          sourceProjectId: 'project-1', sourceImageId: 'image-1', sourceChecksum: checksum,
+          state: 'active', nextSequence: 22,
+          actor: { actorKind: 'codex', taskId: 'task-1', operationSource: 'api' },
+          createdAt: '2026-08-25T00:00:00Z', closedAt: null,
+        },
+        events: [],
+      } },
+      maskContexts: { 'image-1': {
+        imageId: 'image-1', imageRevision: 11, generationId: 'generation-1', nextSequence: 22,
+        g6Checksum: checksum, qualityChecksum: checksum, maskStateChecksum: checksum,
+        state: 'accepted', eligibleRegionIds: ['region-1'],
+        rubyRegionIdsByPrimary: { 'region-1': [] },
+        draft: { revision: 1, stateChecksum: checksum, regions: [] },
+        artifacts: [oldMask, acceptedMask], selectedArtifactId: acceptedMask.artifactId,
+        review: {
+          id: 'mask-review', state: 'accepted', reason: 'complete-and-no-collateral',
+          artifactId: acceptedMask.artifactId, maskChecksum: checksum,
+          coverageChecks: [], collateralChecks: [],
+          reviewer: { actorKind: 'human', sessionId: 'reviewer', operationSource: 'ui' },
+          createdAt: '2026-08-25T00:00:00Z',
+        },
+      } },
+      selectedMaskArtifactIds: { 'image-1': oldMask.artifactId },
+      cleanPlateContexts: { 'image-1': {
+        imageId: 'image-1', imageRevision: 11, generationId: 'generation-1', nextSequence: 22,
+        g7Checksum: checksum, qualityChecksum: checksum, backgroundChecksum: checksum,
+        maskArtifactId: acceptedMask.artifactId, maskChecksum: checksum,
+        cleanPlateStateChecksum: checksum, state: 'pending',
+        routes: [{ regionId: 'region-1', backgroundCategory: 'complex-lineart',
+          defaultRoute: 'ai-inpaint-redraw' }],
+        candidates: [candidate], acceptedCandidateId: null,
+        fallbackEnabled: false, fallbackAllowed: false,
+      } },
+      selectedCleanPlateCandidateIds: { 'image-1': candidate.candidateId },
+    });
+
+    render(<CanvasWorkspace />);
+
+    expect(await screen.findByText('质量底板 · accepted mask')).toBeInTheDocument();
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().cleanPlateBitmapObservations['image-1'],
+    ).toMatchObject({
+      generationId: 'generation-1', nextSequence: 22,
+      candidateId: 'candidate-1', maskArtifactId: 'mask-accepted',
+      maskChecksum: checksum, checksum, state: 'ready',
+    }));
+    expect(requested.some((url) => url.includes('/page-gates/mask/artifacts/mask-accepted')))
+      .toBe(true);
+    expect(requested.some((url) => url.includes('/page-gates/mask/artifacts/mask-old')))
+      .toBe(false);
+    expect(requested.some((url) => url.includes('/page-gates/clean-plate/candidates/candidate-1')))
+      .toBe(true);
+
+    act(() => useWorkbenchStore.setState((state) => ({
+      cleanPlateContexts: {
+        ...state.cleanPlateContexts,
+        'image-1': {
+          ...state.cleanPlateContexts['image-1']!,
+          candidates: [{ ...candidate, candidateChecksum: 'bb'.repeat(32) }],
+        },
+      },
+    })));
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().cleanPlateBitmapObservations['image-1'],
+    ).toBeUndefined());
+    await waitFor(() => expect(useWorkbenchStore.getState().globalError)
+      .toContain('G8 四视图'));
+  });
+
+  it('observes a scaled clean parent and candidate, and rejects a base-grid clean parent', async () => {
+    const requested: string[] = [];
+    const decodedGrids: Array<{ payload: string; width: number; height: number }> = [];
+    let returnBaseGridCleanPlate = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      requested.push(String(input));
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ 'content-type': 'image/png' }),
+        arrayBuffer: async () => pngPayload(String(input)),
+      } as unknown as Response;
+    }));
+    vi.stubGlobal('createImageBitmap', vi.fn(async (blob: Blob) => {
+      const payload = await blob.text();
+      const scaled = payload.includes('/page-gates/typeset/candidates/')
+        || (!returnBaseGridCleanPlate
+          && payload.includes('/page-gates/clean-plate/candidates/'));
+      decodedGrids.push({ payload, width: scaled ? 2400 : 1200, height: scaled ? 3600 : 1800 });
+      return {
+        width: scaled ? 2400 : 1200,
+        height: scaled ? 3600 : 1800,
+        close: vi.fn(),
+      } as unknown as ImageBitmap;
+    }));
+    const checksum = 'aa'.repeat(32);
+    const style = {
+      fontToken: 'installed-font-aaaaaaaaaaaaaaaaaaaaaaaa', fontChecksum: checksum,
+      fontSize: 48, minFontSize: 12,
+      padding: 4, fill: '#111111', strokeColor: '#FFFFFF', strokeWidth: 2, rotation: 0,
+      scaleX: 1, scaleY: 1, shearX: 0, shearY: 0, opacity: 1,
+      visualCenterX: 0.5, visualCenterY: 0.5, align: 'center' as const,
+      lineSpacing: 0.15, letterSpacing: 0, autoFit: true,
+      fontSource: 'server-display-default' as const,
+    };
+    const route = { regionId: 'sfx-redraw', readingOrder: 1, route: 'art-lettering' as const,
+      renderRequired: true, translationCandidateId: 'translation-1',
+      translationCandidateChecksum: checksum };
+    const candidate: TypesetGateContext['candidates'][number] = {
+      candidateId: 'typeset-candidate-1', sequence: 22, jobId: 'job-typeset',
+      jobItemId: 'item-typeset', parentChecksum: checksum, g9TerminalChecksum: checksum,
+      translationStateChecksum: checksum, cleanPlateCandidateId: 'clean-1',
+      cleanPlateChecksum: checksum, regionManifest: [{
+        regionId: route.regionId, regionRevision: 4,
+        geometry: { x: 10, y: 20, width: 200, height: 100, rotation: 0 },
+        readingOrder: 1, regionType: 'sound_effect', direction: 'vertical',
+        paragraphGroupId: null, contentDisposition: 'redraw-art',
+        acceptedTranslationCandidateId: 'translation-1',
+        acceptedTranslationCandidateChecksum: checksum,
+      }], routeManifest: [route], routeChecksum: checksum,
+      styleManifest: [{ regionId: route.regionId, route: route.route, style }],
+      styleChecksum: checksum, layoutManifest: [{
+        regionId: route.regionId, route: route.route,
+        bounds: { x: 10, y: 20, width: 200, height: 100 }, fontSize: 48,
+        overflow: false, direction: 'vertical', rotation: 0, scaleX: 1, scaleY: 1,
+        shearX: 0, shearY: 0, opacity: 1, visualCenterX: 0.5, visualCenterY: 0.5,
+        align: 'center',
+      }], layoutChecksum: checksum, provider: 'pillow-g10',
+      modelVersion: 'g10-typeset-v1', parameterHash: checksum, candidateChecksum: checksum,
+      width: 2400, height: 3600, renderScale: 2, overflowRegionIds: [], anomalies: [],
+      revisionId: 'revision-typeset-1', completed: true,
+      artifactUrl: '/images/image-1/page-gates/typeset/candidates/typeset-candidate-1',
+      review: null, createdAt: '2026-08-25T00:00:00Z',
+    };
+    const context: TypesetGateContext = {
+      imageId: 'image-1', imageRevision: 11, generationId: 'generation-1', nextSequence: 22,
+      g9TerminalChecksum: checksum, translationStateChecksum: checksum,
+      cleanPlateCandidateId: 'clean-1', cleanPlateChecksum: checksum, state: 'pending',
+      terminalChecksum: null, candidates: [candidate], reviews: [], routeManifest: [route],
+      routeChecksum: checksum, styleDefaults: { bubble: style, ordinary: style,
+        artLettering: style }, availableFonts: [{
+        token: 'installed-font-aaaaaaaaaaaaaaaaaaaaaaaa', label: 'Display CJK',
+        fontChecksum: checksum,
+        capabilityChecksum: '8f2d75c0332a268c23ecec4b770aacc53437ea108382dc399645141653cde365',
+        role: 'display' }],
+      availableDisplayFonts: [{ token: 'installed-font-aaaaaaaaaaaaaaaaaaaaaaaa',
+        label: 'Display CJK', fontChecksum: checksum,
+        capabilityChecksum: '8f2d75c0332a268c23ecec4b770aacc53437ea108382dc399645141653cde365',
+        role: 'display' }],
+      artLetteringCapability: { available: true, contractVersion: 'g10-art-lettering-v1',
+        features: ['explicit-installed-chinese-display-font', 'fill-stroke', 'rotation',
+          'nonuniform-scale', 'shear-affine', 'opacity', 'visual-center',
+          'alignment', 'line-spacing'], reason: null },
+      retryRegionStyles: {},
+    };
+    const image = imageFixture('image-1', { revision: 11, width: 1200, height: 1800 });
+    seedWorkbench({ images: [image], regions: [regionFixture('sfx-redraw', {
+      order: 1, type: 'sound_effect', contentDisposition: 'redraw-art',
+    })] });
+    useWorkbenchStore.setState({
+      g4Contexts: { 'image-1': { status: 'active', phase: 'G10', error: '', conflict: false,
+        generation: {
+          id: 'generation-1', runId: 'run-1', projectId: 'project-1', imageId: 'image-1',
+          restartFromSource: true, parameterSetId: 'params-1', parameterSetHash: checksum,
+          sourceProjectId: 'project-1', sourceImageId: 'image-1', sourceChecksum: checksum,
+          state: 'active', nextSequence: 22,
+          actor: { actorKind: 'codex', taskId: 'task-1', operationSource: 'api' },
+          createdAt: '2026-08-25T00:00:00Z', closedAt: null,
+        }, events: [] } },
+      typesetContexts: { 'image-1': context },
+      selectedTypesetCandidateIds: { 'image-1': candidate.candidateId },
+    });
+
+    const mounted = render(<CanvasWorkspace />);
+
+    expect(await screen.findByText('不可变原图')).toBeInTheDocument();
+    expect(screen.getByText('G10 父项 · accepted clean plate')).toBeInTheDocument();
+    expect(screen.getByText('不可变最终候选')).toBeInTheDocument();
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().typesetBitmapObservations['image-1'],
+    ).toMatchObject({ candidateId: candidate.candidateId, sourceChecksum: checksum,
+      cleanPlateChecksum: checksum, candidateChecksum: checksum, width: 2400, height: 3600,
+      renderScale: 2, state: 'ready' }));
+    expect(requested.some((url) => url.includes('/images/image-1/content'))).toBe(true);
+    expect(requested.some((url) => url.includes('/page-gates/clean-plate/candidates/clean-1')))
+      .toBe(true);
+    expect(requested.some((url) => url.includes('/page-gates/typeset/candidates/typeset-candidate-1')))
+      .toBe(true);
+    expect(decodedGrids).toEqual(expect.arrayContaining([
+      expect.objectContaining({ payload: expect.stringContaining('/images/image-1/content'),
+        width: 1200, height: 1800 }),
+      expect.objectContaining({ payload: expect.stringContaining('/page-gates/clean-plate/candidates/clean-1'),
+        width: 2400, height: 3600 }),
+      expect.objectContaining({ payload: expect.stringContaining('/page-gates/typeset/candidates/typeset-candidate-1'),
+        width: 2400, height: 3600 }),
+    ]));
+
+    mounted.unmount();
+    returnBaseGridCleanPlate = true;
+    act(() => useWorkbenchStore.setState({
+      typesetBitmapObservations: {},
+      globalError: '',
+    }));
+    render(<CanvasWorkspace />);
+    await waitFor(() => expect(
+      useWorkbenchStore.getState().typesetBitmapObservations['image-1'],
+    ).toBeUndefined());
+    await waitFor(() => expect(useWorkbenchStore.getState().globalError)
+      .toContain('G10 三视图'));
+    expect(decodedGrids).toContainEqual(expect.objectContaining({
+      payload: expect.stringContaining('/page-gates/clean-plate/candidates/clean-1'),
+      width: 1200,
+      height: 1800,
+    }));
   });
 
   it('records add and erase strokes in canonical image coordinates with undo support', () => {
@@ -393,7 +688,7 @@ describe('canvas generated-image refresh', () => {
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'image/png' }),
-        arrayBuffer: async () => new Uint8Array([requested.length]).buffer,
+        arrayBuffer: async () => pngPayload(String(input)),
       } as unknown as Response;
     }));
     const review = vi.spyOn(api, 'reviewImageStage').mockResolvedValue({
@@ -446,7 +741,7 @@ describe('canvas generated-image refresh', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'image/png' }),
-      arrayBuffer: async () => new TextEncoder().encode(String(input)).buffer,
+      arrayBuffer: async () => pngPayload(String(input)),
     }) as unknown as Response));
     vi.stubGlobal('createImageBitmap', vi.fn(async (blob: Blob) => {
       const source = await blob.text();
@@ -476,7 +771,7 @@ describe('canvas generated-image refresh', () => {
       ok: true,
       status: 200,
       headers: new Headers({ 'content-type': 'image/png' }),
-      arrayBuffer: async () => new Uint8Array([1]).buffer,
+      arrayBuffer: async () => pngPayload('mask'),
     }) as unknown as Response));
 
     render(<CanvasWorkspace />);
@@ -501,7 +796,7 @@ describe('canvas generated-image refresh', () => {
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'image/png' }),
-        arrayBuffer: async () => new TextEncoder().encode(source).buffer,
+        arrayBuffer: async () => pngPayload(source),
       } as unknown as Response;
     }));
     const decoded = new Map<string, Array<ImageBitmap & { close: ReturnType<typeof vi.fn> }>>();
@@ -570,7 +865,7 @@ describe('canvas generated-image refresh', () => {
         ok: true,
         status: 200,
         headers: new Headers({ 'content-type': 'image/png' }),
-        arrayBuffer: async () => new Uint8Array([requested.length]).buffer,
+        arrayBuffer: async () => pngPayload(String(input)),
       } as unknown as Response;
     }));
 

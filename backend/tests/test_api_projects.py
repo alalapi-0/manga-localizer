@@ -908,6 +908,8 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
     with sqlite3.connect(database_path) as database:
         database.execute("ALTER TABLE text_regions DROP COLUMN recognition")
         database.execute("ALTER TABLE images DROP COLUMN inpaint_provenance")
+        database.execute("ALTER TABLE images DROP COLUMN inpaint_classical_approval")
+        database.execute("ALTER TABLE images DROP COLUMN inpaint_ai_candidate_reviews")
         database.execute("UPDATE projects SET schema_version = 1")
 
     fresh_settings = app.state.settings.model_copy(
@@ -956,6 +958,8 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
         assert "recognition" in columns
         image_columns = {row[1] for row in database.execute("PRAGMA table_info(images)")}
         assert "inpaint_provenance" in image_columns
+        assert "inpaint_classical_approval" in image_columns
+        assert "inpaint_ai_candidate_reviews" in image_columns
         assert database.execute("SELECT schema_version FROM projects").fetchone()[0] == 2
         stored_recognition = json.loads(
             database.execute(
@@ -967,6 +971,153 @@ def test_open_migrates_legacy_region_recognition_and_preserves_human_confirmatio
             "disposition": "trusted",
             "reason": "legacy-confirmed",
         }
+
+
+def test_open_adds_nullable_g4_region_fields_without_fabricating_legacy_evidence(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    root = tmp_path / "legacy-g4-fields"
+    project = create_project(client, root)
+    image = upload_image(client, project["id"])
+    created = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={"x": 10, "y": 10, "width": 30, "height": 30, "sourceText": "旧记录"},
+    )
+    assert created.status_code == 201, created.text
+    region_id = created.json()["id"]
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        project_row = store.project(session)
+        image_row = session.get(ImageAsset, image["id"])
+        assert image_row is not None
+        preimage = {
+            "projectRevision": project_row.revision,
+            "imageRevision": image_row.revision,
+            "revisionCount": session.query(Revision).count(),
+        }
+    store.engine.dispose()
+    database_path = root / "project/project.sqlite3"
+    with sqlite3.connect(database_path) as database:
+        database.execute("PRAGMA foreign_keys=OFF")
+        database.executescript(
+            """
+            -- This test starts from a current database and removes all G4/G6
+            -- region schema objects to reproduce a genuinely pre-G4 project.
+            -- Those later triggers and the attempt table would not exist in
+            -- that legacy preimage.
+            DROP TRIGGER IF EXISTS images_g4_delete_regions;
+            DROP TRIGGER IF EXISTS text_regions_g6_validate_insert;
+            DROP TRIGGER IF EXISTS text_regions_g6_validate_update;
+            DROP TRIGGER IF EXISTS region_ocr_attempts_validate_insert;
+            DROP TRIGGER IF EXISTS region_ocr_attempts_append_only_update;
+            DROP TRIGGER IF EXISTS region_ocr_attempts_append_only_delete;
+            DROP TABLE IF EXISTS region_ocr_attempts;
+            CREATE TABLE text_regions_legacy (
+                id VARCHAR(36) NOT NULL PRIMARY KEY,
+                image_id VARCHAR(36) NOT NULL,
+                x FLOAT NOT NULL,
+                y FLOAT NOT NULL,
+                width FLOAT NOT NULL,
+                height FLOAT NOT NULL,
+                rotation FLOAT NOT NULL,
+                source_text TEXT NOT NULL,
+                translation_text TEXT NOT NULL,
+                region_type VARCHAR(50) NOT NULL,
+                direction VARCHAR(20) NOT NULL,
+                reading_order INTEGER NOT NULL,
+                confidence FLOAT,
+                ignored BOOLEAN NOT NULL,
+                confirmed BOOLEAN NOT NULL,
+                style JSON NOT NULL,
+                repair JSON NOT NULL,
+                recognition JSON NOT NULL DEFAULT '{}',
+                ocr_provider VARCHAR(80),
+                translation_provider VARCHAR(80),
+                revision INTEGER NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                FOREIGN KEY(image_id) REFERENCES images(id) ON DELETE CASCADE
+            );
+            INSERT INTO text_regions_legacy (
+                id, image_id, x, y, width, height, rotation, source_text,
+                translation_text, region_type, direction, reading_order,
+                confidence, ignored, confirmed, style, repair, recognition,
+                ocr_provider, translation_provider, revision, created_at, updated_at
+            )
+            SELECT
+                id, image_id, x, y, width, height, rotation, source_text,
+                translation_text, region_type, direction, reading_order,
+                confidence, ignored, confirmed, style, repair, recognition,
+                ocr_provider, translation_provider, revision, created_at, updated_at
+            FROM text_regions;
+            DROP TABLE text_regions;
+            ALTER TABLE text_regions_legacy RENAME TO text_regions;
+            """
+        )
+        database.commit()
+
+    fresh_settings = app.state.settings.model_copy(
+        update={"data_dir": tmp_path / "legacy-g4-catalog"}
+    )
+    for _attempt in range(2):
+        with TestClient(create_app(fresh_settings, start_worker=False)) as fresh:
+            reopened = fresh.post(
+                "/api/projects/open",
+                json={"manifestPath": str(root / "project/project.json")},
+            )
+            assert reopened.status_code == 200, reopened.text
+            migrated = fresh.get(f"/api/images/{image['id']}/regions").json()[0]
+            assert migrated["id"] == region_id
+            assert migrated["paragraphGroupId"] is None
+            assert migrated["rubyParentId"] is None
+            assert migrated["contentDisposition"] is None
+            assert migrated["detectorJobItemId"] is None
+            assert migrated["detectorCandidateIndex"] is None
+            assert migrated["backgroundCategory"] is None
+            assert migrated["backgroundConfidence"] is None
+            assert migrated["backgroundRationaleCodes"] is None
+            assert migrated["backgroundReviewer"] is None
+            assert migrated["backgroundGenerationId"] is None
+            reopened_store = fresh.app.state.registry.get(project["id"])
+            with reopened_store.session() as session:
+                project_row = reopened_store.project(session)
+                image_row = session.get(ImageAsset, image["id"])
+                assert image_row is not None
+                assert project_row.revision == preimage["projectRevision"]
+                assert image_row.revision == preimage["imageRevision"]
+                assert session.query(Revision).count() == preimage["revisionCount"]
+
+    with sqlite3.connect(database_path) as database:
+        columns = {row[1] for row in database.execute("PRAGMA table_info(text_regions)")}
+        assert {
+            "paragraph_group_id",
+            "ruby_parent_id",
+            "region_disposition",
+            "detector_job_item_id",
+            "detector_candidate_index",
+            "background_category",
+            "background_confidence",
+            "background_rationale_codes",
+            "background_reviewer",
+            "background_generation_id",
+        } <= columns
+        indexes = {row[1] for row in database.execute("PRAGMA index_list(text_regions)")}
+        assert "uq_text_region_detector_candidate" in indexes
+        triggers = {
+            row[0]
+            for row in database.execute(
+                "SELECT name FROM sqlite_master "
+                "WHERE type = 'trigger' AND tbl_name = 'text_regions'"
+            )
+        }
+        assert {
+            "text_regions_g4_validate_insert",
+            "text_regions_g4_validate_update",
+            "text_regions_g4_validate_parent_update",
+            "text_regions_g4_restrict_parent_delete",
+            "text_regions_g5_validate_insert",
+            "text_regions_g5_validate_update",
+        } <= triggers
 
 
 def test_open_schema_two_empty_recognition_invalidates_derived_artifacts(

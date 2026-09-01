@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 
 import { defineConfig, devices } from '@playwright/test';
@@ -7,6 +8,19 @@ const backendPort = 18100;
 const frontendPort = 15173;
 const backendUrl = `http://127.0.0.1:${backendPort}`;
 const frontendUrl = `http://127.0.0.1:${frontendPort}`;
+const ciLocalRuntime = process.env.CI === 'true'
+  && process.env.MANGA_LOCALIZER_CI_LOCAL_RUNTIME === '1';
+const backendCommand = ciLocalRuntime
+  ? `uv run --project backend --frozen --offline --no-sync uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`
+  : `node scripts/external-uv.mjs run --frozen --offline --no-sync uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`;
+const browserExecutable = process.env.MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE?.trim() || null;
+if (browserExecutable && (!path.isAbsolute(browserExecutable) || !existsSync(browserExecutable))) {
+  throw new Error('MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE must be an existing absolute path');
+}
+const backendDataDir = path.resolve(
+  process.env.MANGA_LOCALIZER_E2E_DATA_DIR
+    || path.join(workspaceRoot, 'tests/e2e/.generated/runtime'),
+);
 const inheritedEnvironment = Object.fromEntries(
   Object.entries(process.env).filter((entry): entry is [string, string] => entry[1] !== undefined),
 );
@@ -28,20 +42,18 @@ export default defineConfig({
     baseURL: frontendUrl,
     locale: 'zh-CN',
     viewport: { width: 1440, height: 900 },
+    launchOptions: browserExecutable ? { executablePath: browserExecutable } : undefined,
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
     video: 'retain-on-failure',
   },
   webServer: [
     {
-      command: `uv run --project backend uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`,
+      command: backendCommand,
       cwd: workspaceRoot,
       env: {
         ...inheritedEnvironment,
-        MANGA_LOCALIZER_DATA_DIR: path.join(
-          workspaceRoot,
-          'tests/e2e/.generated/runtime',
-        ),
+        MANGA_LOCALIZER_DATA_DIR: backendDataDir,
       },
       reuseExistingServer: false,
       timeout: 120_000,

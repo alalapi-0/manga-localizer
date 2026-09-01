@@ -13,6 +13,7 @@ from manga_localizer.evaluation.detection_ocr import (
     PageAnnotation,
     load_annotation_document,
 )
+from manga_localizer.model_bundle import apply_model_bundle
 from manga_localizer.providers.detection import (
     PPOCRTextDetectionProvider,
     UnionTextDetectionProvider,
@@ -86,16 +87,14 @@ def require_ignored_empty_output(path: Path) -> Path:
 
 
 def resolve_ppocr_model(explicit: Path | None) -> Path | None:
-    candidates: list[Path] = []
     if explicit is not None:
-        candidates.append(explicit.expanduser())
-    filename = "text_detection_cn_ppocrv3_2023may.onnx"
-    candidates.append(Path.cwd() / ".manga-localizer" / "models" / filename)
-    candidates.append(Settings().ppocr_detection_model_path)
-    for path in candidates:
-        if path.is_file():
-            return path
-    return candidates[0] if explicit is not None else None
+        return explicit.expanduser()
+    settings = Settings()
+    if settings.model_bundle is not None:
+        settings, _ = apply_model_bundle(settings)
+        path = settings.ppocr_detection_model_path
+        return path if path.is_file() else None
+    return None
 
 
 def collect_images(path: Path) -> list[Path]:

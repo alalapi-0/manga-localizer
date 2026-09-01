@@ -5,9 +5,11 @@ import {
   canNavigateAdjacent,
   imageHasTypesetOverflow,
   imageReviewState,
+  projectPagesAreLegacy,
   useWorkbenchStore,
   visibleImagePosition,
   visibleWorkbenchImages,
+  workflowPhase,
 } from '../store/workbench';
 import type { ImageAsset, ProviderCapability } from '../types';
 import { EmptyState, IconButton, ImportPhotosButton, ProviderBadge, StatusPill } from './Primitives';
@@ -42,6 +44,8 @@ function ImageRow({ image }: { image: ImageAsset }) {
   const selectImage = useWorkbenchStore((state) => state.selectImage);
   const toggleImageSelection = useWorkbenchStore((state) => state.toggleImageSelection);
   const reviewState = imageReviewState(image);
+  const workflowContext = useWorkbenchStore((state) => state.g4Contexts[image.id]);
+  const phase = workflowPhase(workflowContext);
   const detector = findProvider(providers, image.detectorProvider, 'detector');
   const ocr = findProvider(providers, image.ocrProvider, 'ocr');
   const translator = findProvider(providers, image.translatorProvider, 'translator');
@@ -80,6 +84,26 @@ function ImageRow({ image }: { image: ImageAsset }) {
             ) : (
               <StatusPill state={reviewState} label={reviewState === 'done' ? '已检查' : undefined} />
             )}
+            {workflowContext?.status === 'active' ? (
+              <span className={`status-pill ${phase === 'no-text' ? 'status-pill--no-text' : 'status-pill--needs-review'}`}>
+                <span />
+                {phase === 'G4'
+                  ? 'G4 区域'
+                  : phase === 'G5'
+                    ? 'G5 背景'
+                    : phase === 'G6'
+                      ? 'G6 OCR'
+                      : phase === 'G7'
+                        ? 'G7 蒙版'
+                      : phase === 'G8'
+                        ? 'G8 净版'
+                      : phase === 'no-text'
+                        ? '无文字终态'
+                        : '血缘锁定'}
+              </span>
+            ) : workflowContext?.status === 'loading' || workflowContext?.status === 'error' ? (
+              <span className="status-pill status-pill--needs-review"><span />血缘核对中</span>
+            ) : null}
             <span className="image-row__stages" aria-label="页面处理阶段">
               <span className={`stage-mini stage-mini--${image.status.detection}`}>检测</span>
               <span className={`stage-mini stage-mini--${image.status.ocr}`}>OCR</span>
@@ -122,13 +146,18 @@ export function Sidebar() {
   const selectAllVisibleImages = useWorkbenchStore((state) => state.selectAllVisibleImages);
   const clearImageSelection = useWorkbenchStore((state) => state.clearImageSelection);
   const navigateImage = useWorkbenchStore((state) => state.navigateImage);
+  const projectPagesLegacy = useWorkbenchStore(projectPagesAreLegacy);
   const [dialog, setDialog] = useState<'create' | 'open' | null>(null);
   const singleRef = useRef<HTMLInputElement>(null);
   const multipleRef = useRef<HTMLInputElement>(null);
   const folderRef = useRef<HTMLInputElement>(null);
 
+  const canImport = Boolean(project) && projectPagesLegacy;
+
   useEffect(() => {
-    const openImporter = () => multipleRef.current?.click();
+    const openImporter = () => {
+      if (canImport) multipleRef.current?.click();
+    };
     const openCreate = () => setDialog('create');
     window.addEventListener('manga-localizer:import', openImporter);
     window.addEventListener('manga-localizer:create-project', openCreate);
@@ -136,7 +165,7 @@ export function Sidebar() {
       window.removeEventListener('manga-localizer:import', openImporter);
       window.removeEventListener('manga-localizer:create-project', openCreate);
     };
-  }, []);
+  }, [canImport]);
 
   const visibleImages = useMemo(
     () => visibleWorkbenchImages({ images, imageFilter, imageSearch, activeImageId }),
@@ -158,6 +187,10 @@ export function Sidebar() {
     : '0 / 0';
 
   async function handleFiles(input: HTMLInputElement) {
+    if (!canImport) {
+      input.value = '';
+      return;
+    }
     const files = [...(input.files ?? [])].filter((file) => file.type.startsWith('image/'));
     await importFiles(files);
     input.value = '';
@@ -183,12 +216,16 @@ export function Sidebar() {
       </section>
 
       <section className="sidebar__imports" aria-label="导入图像">
-        <button className="button button--compact" disabled={!project} onClick={() => singleRef.current?.click()} type="button">单图</button>
-        <button className="button button--compact" disabled={!project} onClick={() => multipleRef.current?.click()} type="button">多图</button>
-        <button className="button button--compact sidebar__folder-import" disabled={!project} onClick={() => folderRef.current?.click()} type="button">文件夹</button>
+        <button className="button button--compact" disabled={!canImport} onClick={() => singleRef.current?.click()} type="button">单图</button>
+        <button className="button button--compact" disabled={!canImport} onClick={() => multipleRef.current?.click()} type="button">多图</button>
+        <button className="button button--compact sidebar__folder-import" disabled={!canImport} onClick={() => folderRef.current?.click()} type="button">文件夹</button>
+        {project && !projectPagesLegacy ? (
+          <p className="panel-hint" role="status">项目页面已有或尚未核清血缘，图像导入已锁定。</p>
+        ) : null}
         <input
           accept="image/*"
           className="sr-only"
+          disabled={!canImport}
           onChange={(event) => void handleFiles(event.currentTarget)}
           ref={singleRef}
           type="file"
@@ -196,6 +233,7 @@ export function Sidebar() {
         <input
           accept="image/*"
           className="sr-only"
+          disabled={!canImport}
           multiple
           onChange={(event) => void handleFiles(event.currentTarget)}
           ref={multipleRef}
@@ -204,6 +242,7 @@ export function Sidebar() {
         <input
           accept="image/*"
           className="sr-only"
+          disabled={!canImport}
           multiple
           onChange={(event) => void handleFiles(event.currentTarget)}
           ref={(element) => {

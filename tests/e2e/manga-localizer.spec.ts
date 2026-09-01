@@ -109,7 +109,9 @@ async function reviewVisualStage(
 
 test('creates, edits, renders, exports, and reopens a local project', async ({ page }) => {
   const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  const generatedRoot = path.resolve('tests/e2e/.generated');
+  const generatedRoot = path.resolve(
+    process.env.MANGA_LOCALIZER_E2E_GENERATED_ROOT || 'tests/e2e/.generated',
+  );
   const fixtureDirectory = path.join(generatedRoot, `input-${runId}`);
   const fixtureImage = path.join(fixtureDirectory, 'chapter-01', '001.png');
   const projectRoot = path.join(generatedRoot, `project-${runId}`);
@@ -120,8 +122,17 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
 
   mkdirSync(path.dirname(fixtureImage), { recursive: true });
   execFileSync(
-    'uv',
-    ['run', '--project', 'backend', 'python', 'scripts/generate_test_image.py', fixtureImage],
+    process.execPath,
+    [
+      'scripts/external-uv.mjs',
+      'run',
+      '--frozen',
+      '--offline',
+      '--no-sync',
+      'python',
+      'scripts/generate_test_image.py',
+      fixtureImage,
+    ],
     { cwd: process.cwd(), stdio: 'inherit' },
   );
   const originalChecksum = checksum(fixtureImage);
@@ -244,7 +255,9 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
 
 test('runs real local detection and Japanese OCR before review and export', async ({ page }) => {
   const runId = `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
-  const generatedRoot = path.resolve('tests/e2e/.generated');
+  const generatedRoot = path.resolve(
+    process.env.MANGA_LOCALIZER_E2E_GENERATED_ROOT || 'tests/e2e/.generated',
+  );
   const fixtureDirectory = path.join(generatedRoot, `ocr-input-${runId}`);
   const fixtureImage = path.join(fixtureDirectory, '日本語 章', '001.png');
   const projectRoot = path.join(generatedRoot, `ocr-project-${runId}`);
@@ -254,8 +267,17 @@ test('runs real local detection and Japanese OCR before review and export', asyn
 
   mkdirSync(path.dirname(fixtureImage), { recursive: true });
   execFileSync(
-    'uv',
-    ['run', '--project', 'backend', 'python', 'scripts/generate_test_image.py', fixtureImage],
+    process.execPath,
+    [
+      'scripts/external-uv.mjs',
+      'run',
+      '--frozen',
+      '--offline',
+      '--no-sync',
+      'python',
+      'scripts/generate_test_image.py',
+      fixtureImage,
+    ],
     { cwd: process.cwd(), stdio: 'inherit' },
   );
   const originalChecksum = checksum(fixtureImage);

@@ -11,11 +11,13 @@ from typing import Any
 
 import cv2
 import numpy as np
+from manga_localizer.config import Settings
 from manga_localizer.imaging import (
     OpenCVPillowPreprocessProvider,
     RealESRGANONNXPreprocessProvider,
 )
 from manga_localizer.imaging.preprocessing import PreprocessUnavailable
+from manga_localizer.model_bundle import apply_model_bundle
 from PIL import Image, ImageDraw
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
@@ -238,9 +240,6 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--input", nargs="+", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--data-dir", type=Path, default=Path.home() / ".manga-localizer"
-    )
     parser.add_argument("--model", type=Path)
     parser.add_argument("--factor", type=int, default=2, choices=(2, 3, 4))
     parser.add_argument("--tile-size", type=int, default=256)
@@ -248,11 +247,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def resolve_realesrgan_model(args: argparse.Namespace) -> Path:
+    if args.model is not None:
+        return args.model.expanduser()
+    settings = Settings()
+    if settings.model_bundle is not None:
+        settings, _ = apply_model_bundle(settings)
+        return settings.realesrgan_onnx_model_path
+    raise CompareError(
+        "Run through the guarded external runtime or pass --model explicitly"
+    )
+
+
 def run(args: argparse.Namespace) -> int:
     output = require_ignored_empty_output(args.output)
-    model_path = args.model or (
-        args.data_dir.expanduser() / "models" / "RealESRGAN_x4plus_anime_6B.onnx"
-    )
+    model_path = resolve_realesrgan_model(args)
     ai_provider = RealESRGANONNXPreprocessProvider(
         model_path,
         profile="off",

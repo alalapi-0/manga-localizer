@@ -3,7 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from '../App';
-import { api } from '../api/client';
+import { ApiError, api } from '../api/client';
+import { OCR_QC_CHECKS } from '../types';
+import type { OCRAttempt, PageGeneration, PageLineageEvent } from '../types';
 import {
   capabilitiesFixture,
   imageFixture,
@@ -13,6 +15,93 @@ import {
   seedWorkbench,
 } from '../test/fixtures';
 import { resetWorkbenchStore, useWorkbenchStore } from '../store/workbench';
+
+function activeG4Generation(nextSequence = 8): PageGeneration {
+  return {
+    id: 'generation-1',
+    runId: 'run-1',
+    projectId: 'project-1',
+    imageId: 'image-1',
+    restartFromSource: true,
+    parameterSetId: 'params-1',
+    parameterSetHash: 'a'.repeat(64),
+    sourceProjectId: 'project-1',
+    sourceImageId: 'image-1',
+    sourceChecksum: 'b'.repeat(64),
+    state: 'active',
+    nextSequence,
+    actor: { actorKind: 'codex', taskId: 'task-1', operationSource: 'api' },
+    createdAt: '2026-08-25T00:00:00Z',
+    closedAt: null,
+  };
+}
+
+function activeG4Event(sequence = 7): PageLineageEvent {
+  return {
+    id: `event-${sequence}`,
+    generationId: 'generation-1',
+    sequence,
+    operation: 'detect-job-completed',
+    gate: 'G4_regions',
+    state: 'pending',
+    actor: { actorKind: 'system', actorId: 'queue', operationSource: 'api' },
+    inputChecksum: 'c'.repeat(64),
+    outputChecksum: 'd'.repeat(64),
+    parentChecksum: 'c'.repeat(64),
+    stage: 'detection',
+    provider: 'tesseract',
+    modelVersion: null,
+    parameterHash: 'a'.repeat(64),
+    jobId: 'job-detect',
+    jobItemId: 'item-detect',
+    revisionId: null,
+    decision: 'job-completed',
+    reason: 'job-completed',
+    gitCommit: null,
+    evidence: { targetKind: 'region-set' },
+    startedAt: '2026-08-25T00:00:00Z',
+    finishedAt: '2026-08-25T00:00:01Z',
+    createdAt: '2026-08-25T00:00:01Z',
+  };
+}
+
+function ocrAttemptFixture(
+  inputVariant: OCRAttempt['inputVariant'],
+  confidence: number,
+): OCRAttempt {
+  return {
+    id: `attempt-${inputVariant}`,
+    regionId: 'region-1',
+    generationId: 'generation-1',
+    jobId: 'job-ocr',
+    jobItemId: 'item-ocr',
+    inputVariant,
+    parentChecksum: 'f'.repeat(64),
+    cropChecksum: (inputVariant === 'original' ? '1' : '2').repeat(64),
+    cropBox: { x: 10, y: 20, width: 80, height: 40 },
+    provider: 'tesseract',
+    modelVersion: 'tesseract-5',
+    parameterHash: '3'.repeat(64),
+    language: 'ja',
+    direction: 'vertical',
+    text: inputVariant === 'original' ? '原図の文' : '品質の文',
+    textChecksum: (inputVariant === 'original' ? '4' : '5').repeat(64),
+    confidence,
+    createdAt: '2026-08-25T00:00:02Z',
+  };
+}
+
+const ocrQCCheckLabelsForTest = {
+  'original-and-quality-compared': '已对照原图与增强图 OCR',
+  'source-text-characters-checked': '已逐字核对日文原文',
+  'punctuation-checked': '已核对标点与符号',
+  'direction-checked': '已核对横排 / 竖排方向',
+  'reading-order-checked': '已核对阅读顺序',
+  'empty-or-garbled-checked': '已排除空文本与乱码',
+  'duplicate-fragment-checked': '已排除重复片段',
+  'template-contamination-checked': '已排除模板污染',
+  'page-text-consistency-checked': '已核对本页文本一致性',
+} as const;
 
 describe('desktop workbench interactions', () => {
   afterEach(() => {
@@ -40,6 +129,35 @@ describe('desktop workbench interactions', () => {
 
     await user.click(screen.getByText('image-2.png'));
     expect(useWorkbenchStore.getState().activeImageId).toBe('image-2');
+  });
+
+  it('disables every image import entry when project lineage is active or unresolved', () => {
+    seedWorkbench();
+    useWorkbenchStore.setState((state) => ({
+      g4Contexts: {
+        ...state.g4Contexts,
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+        'image-2': {
+          status: 'error',
+          generation: null,
+          events: [],
+          error: 'lineage unavailable',
+          conflict: false,
+        },
+      },
+    }));
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: '单图' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '多图' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '文件夹' })).toBeDisabled();
+    expect(screen.getByText('项目页面已有或尚未核清血缘，图像导入已锁定。')).toBeInTheDocument();
   });
 
   it('opens the matching inspector when clicking a failed sidebar page', async () => {
@@ -350,6 +468,33 @@ describe('desktop workbench interactions', () => {
     expect(useWorkbenchStore.getState().drawerOpen).toBe(true);
     expect(screen.getByRole('dialog', { name: '批处理与导出' })).toBeInTheDocument();
     expect(screen.getByRole('article', { current: true })).toHaveTextContent('日文 OCR');
+  });
+
+  it('does not offer a legacy processing retry while page lineage is unavailable', () => {
+    seedWorkbench({
+      images: [
+        imageFixture('image-1', {
+          status: { ...imageFixture('image-1').status, ocr: 'failed' },
+          error: 'OCR failed',
+          processingErrors: [{ stage: 'ocr', error: 'OCR failed' }],
+        }),
+      ],
+    });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'error',
+          generation: null,
+          events: [],
+          error: 'lineage unavailable',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByText('日文 OCR 失败')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '重试本页 OCR' })).not.toBeInTheDocument();
   });
 
   it('opens the matching queue job from a page processing failure notice', async () => {
@@ -933,7 +1078,11 @@ describe('desktop workbench interactions', () => {
     const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
     await user.click(within(drawer).getByRole('checkbox', { name: /日文 OCR/ }));
     await user.click(within(drawer).getByRole('checkbox', { name: /翻译/ }));
-    expect(within(drawer).getByRole('status')).toHaveTextContent('1 个 OCR 文本框待信任确认');
+    const batchWarnings = within(drawer).getAllByRole('status')
+      .map((notice) => notice.textContent)
+      .join(' ');
+    expect(batchWarnings).toContain('OCR 后必须先人工确认');
+    expect(batchWarnings).toContain('1 个 OCR 文本框待信任确认');
     expect(within(drawer).getByRole('button', { name: /加入队列/ })).toBeDisabled();
   });
 
@@ -1584,8 +1733,8 @@ describe('desktop workbench interactions', () => {
       status: { ...imageFixture('image-1').status, inpaint: 'done' },
       inpaintCandidate: 'primary',
       inpaintCandidates: [
-        { id: 'primary', label: '当前 Provider 结果', anomalies: [] },
-        { id: 'lineart-guided', label: '线稿引导(结构+纹理)', anomalies: ['possible-smear'] },
+        { id: 'primary', label: '当前 Provider 结果', anomalies: [], originKind: 'direct-ai' },
+        { id: 'lineart-guided', label: '线稿引导(结构+纹理)', anomalies: ['possible-smear'], originKind: 'ai-derived' },
       ],
     });
     seedWorkbench({ images: [image] });
@@ -1600,8 +1749,165 @@ describe('desktop workbench interactions', () => {
     await user.click(screen.getByRole('tab', { name: '修复' }));
     expect(screen.getByRole('radiogroup', { name: '修复候选' })).toBeInTheDocument();
     expect(screen.getByText('可能涂抹过重')).toBeInTheDocument();
+    expect(screen.getByText('来源：AI 直接修复')).toBeInTheDocument();
+    expect(screen.getByText('来源：AI 派生修复')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '传统算法逐页兜底' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: /线稿引导/ }));
     expect(select).toHaveBeenCalledWith('image-1', 'lineart-guided', 1);
+  });
+
+  it('requires current-candidate AI rejection before approving and revoking one classical page', async () => {
+    const user = userEvent.setup();
+    const review = {
+      state: 'accepted' as const,
+      reviewedAt: '2026-08-23T12:00:00Z',
+      resultRevision: 3,
+      artifactChecksum: 'a'.repeat(64),
+      maskChecksum: 'b'.repeat(64),
+    };
+    const candidates = [
+      { id: 'ai-a', label: 'AI 候选 A', anomalies: ['possible-smear'], originKind: 'direct-ai' as const },
+      { id: 'ai-b', label: 'AI 候选 B', anomalies: [], originKind: 'ai-derived' as const },
+      { id: 'classical-clean', label: '纯净传统候选', anomalies: [], originKind: 'classical' as const },
+    ];
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      stageReviews: {},
+      inpaintCandidate: 'ai-a',
+      inpaintCandidateGenerationId: 'generation-a',
+      inpaintCandidates: candidates,
+      inpaintFallback: { state: 'pending' },
+    });
+    seedWorkbench({
+      images: [image],
+      project: projectFixture({
+        settings: {
+          ...projectFixture().settings,
+          requireAIInpaintBeforeDownstream: true,
+        },
+      }),
+    });
+    let revision = 1;
+    const rejectedAiCandidateIds = new Set<string>();
+    vi.spyOn(api, 'selectInpaintCandidate').mockImplementation(async (_imageId, candidateId) => {
+      revision += 1;
+      return {
+        ...image,
+        revision,
+        inpaintCandidate: candidateId,
+        inpaintAiRejectedCandidateIds: [...rejectedAiCandidateIds],
+        stageReviews: candidateId === 'classical-clean' ? { inpaint: review } : {},
+      };
+    });
+    const reviewAi = vi.spyOn(api, 'reviewSelectedInpaintAiCandidate').mockImplementation(
+      async (_imageId, state) => {
+        const current = useWorkbenchStore.getState().images[0]!;
+        const selectedId = current.inpaintCandidate!;
+        if (state === 'rejected') rejectedAiCandidateIds.add(selectedId);
+        else rejectedAiCandidateIds.delete(selectedId);
+        return {
+          ...current,
+          revision: ++revision,
+          inpaintAiRejectedCandidateIds: [...rejectedAiCandidateIds],
+        };
+      },
+    );
+    const fallback = vi.spyOn(api, 'setInpaintClassicalFallback').mockImplementation(
+      async (_imageId, state) => ({
+        ...image,
+        revision: ++revision,
+        inpaintCandidate: 'classical-clean',
+        inpaintAiRejectedCandidateIds: [...rejectedAiCandidateIds],
+        stageReviews: { inpaint: review },
+        inpaintFallback: state === 'approved'
+          ? { state, reason: 'ai-visible-artifacts' }
+          : { state },
+      }),
+    );
+    render(<App />);
+
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    expect(screen.getByText('来源：传统算法（Classical）')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '本页修复授权' })).toHaveTextContent('未批准');
+    const approve = screen.getByRole('button', { name: '批准本页传统算法兜底' });
+    expect(approve).toBeDisabled();
+    expect(reviewAi).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: '标记此 AI 候选不可接受' }));
+    expect(reviewAi).toHaveBeenLastCalledWith('image-1', 'rejected', 1);
+    expect(useWorkbenchStore.getState().images[0]?.inpaintAiRejectedCandidateIds).toEqual(['ai-a']);
+    await user.click(screen.getByRole('button', { name: '撤销此 AI 候选不可接受' }));
+    expect(reviewAi).toHaveBeenLastCalledWith('image-1', 'pending', 2);
+    expect(useWorkbenchStore.getState().images[0]?.inpaintAiRejectedCandidateIds).toEqual([]);
+    await user.click(screen.getByRole('button', { name: '标记此 AI 候选不可接受' }));
+    await user.click(screen.getByRole('radio', { name: /纯净传统候选/ }));
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: '传统算法兜底原因' }),
+      'ai-visible-artifacts',
+    );
+    expect(approve).toBeDisabled();
+
+    await user.click(screen.getByRole('radio', { name: /AI 候选 B/ }));
+    await user.click(screen.getByRole('button', { name: '标记此 AI 候选不可接受' }));
+    await user.click(screen.getByRole('radio', { name: /纯净传统候选/ }));
+    expect(approve).toBeEnabled();
+    await user.click(approve);
+
+    expect(fallback).toHaveBeenCalledWith('image-1', 'approved', 8, {
+      reason: 'ai-visible-artifacts',
+    });
+    expect(screen.getByRole('status', { name: '本页修复授权' })).toHaveTextContent(
+      '已批准：传统算法兜底',
+    );
+    expect(screen.getByText('原因：AI 候选存在明显伪影')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '撤销本页传统算法兜底' }));
+    expect(fallback).toHaveBeenLastCalledWith('image-1', 'pending', 9, {});
+    expect(screen.getByRole('status', { name: '本页修复授权' })).toHaveTextContent('未批准');
+  });
+
+  it('fails closed when the server clears untrusted candidate evidence', async () => {
+    const user = userEvent.setup();
+    const candidates = [
+      { id: 'ai-a', label: 'AI 候选 A', anomalies: [], originKind: 'direct-ai' as const },
+      { id: 'classical-clean', label: '传统候选', anomalies: [], originKind: 'classical' as const },
+    ];
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      inpaintCandidate: 'ai-a',
+      inpaintCandidateGenerationId: 'generation-a',
+      inpaintCandidates: candidates,
+      inpaintAiRejectedCandidateIds: ['ai-a'],
+    });
+    seedWorkbench({
+      images: [image],
+      project: projectFixture({
+        settings: {
+          ...projectFixture().settings,
+          requireAIInpaintBeforeDownstream: true,
+        },
+      }),
+    });
+    render(<App />);
+    await user.click(screen.getByRole('tab', { name: '修复' }));
+    expect(screen.getByRole('radiogroup', { name: '修复候选' })).toBeInTheDocument();
+
+    act(() => {
+      useWorkbenchStore.setState((state) => ({
+        images: state.images.map((entry) => entry.id === image.id ? {
+          ...entry,
+          revision: 2,
+          inpaintCandidate: undefined,
+          inpaintCandidateGenerationId: null,
+          inpaintCandidates: [],
+          inpaintAiRejectedCandidateIds: [],
+          inpaintFallback: { state: 'pending' },
+        } : entry),
+      }));
+    });
+
+    expect(screen.queryByRole('radiogroup', { name: '修复候选' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: '传统算法逐页兜底' })).not.toBeInTheDocument();
+    expect(screen.queryByText('来源：传统算法（Classical）')).not.toBeInTheDocument();
   });
 
   it('surfaces a successful safe-repair job that changed no image pixels', async () => {
@@ -1879,5 +2185,652 @@ describe('desktop workbench interactions', () => {
     const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
     expect(within(drawer).getByRole('radio', { name: /当前页/ })).toBeChecked();
     expect(within(drawer).getByRole('button', { name: /加入队列 · 1 张 · 2 步/ })).toBeEnabled();
+  });
+
+  it('shows only G4-owned editor fields for an active page generation', async () => {
+    const region = regionFixture('region-1', {
+      order: 0,
+      paragraphGroupId: 'paragraph-1',
+      contentDisposition: 'translate',
+      sourceText: '后续阶段原文',
+      translationText: '后续阶段译文',
+    });
+    seedWorkbench({ regions: [region], selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByRole('region', { name: 'G4 区域门禁' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'G4 内容处理决定' })).toHaveValue('translate');
+    expect(screen.getByRole('combobox', { name: 'G4 文本类型' })).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'G4 文本方向' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'G4 段落组' })).toHaveValue('paragraph-1');
+    expect(screen.queryByRole('textbox', { name: '日文原文' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: '中文译文' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: '确认此文本框' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: '排版' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: '修复' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: '项目' })).toBeDisabled();
+  });
+
+  it.each(['active', 'loading', 'error'] as const)(
+    'disables mask editing and exits a stale mask tool while lineage is %s',
+    async (status) => {
+      seedWorkbench({ selectedRegionIds: ['region-1'] });
+      useWorkbenchStore.setState({
+        canvasTool: 'mask-brush',
+        g4Contexts: {
+          'image-1': {
+            status,
+            generation: status === 'active' ? activeG4Generation() : null,
+            events: status === 'active' ? [activeG4Event()] : [],
+            error: status === 'error' ? 'historical lineage has no active generation' : '',
+            conflict: false,
+          },
+        },
+      });
+      render(<App />);
+
+      expect(screen.getByRole('button', { name: '蒙版画笔' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: '蒙版橡皮擦' })).toBeDisabled();
+      expect(screen.queryByRole('slider', { name: '蒙版画笔半径' })).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(useWorkbenchStore.getState().canvasTool).toBe('select');
+      });
+    },
+  );
+
+  it('keeps mask editing available for an explicitly legacy page', () => {
+    seedWorkbench({ selectedRegionIds: ['region-1'] });
+    render(<App />);
+
+    expect(screen.getByRole('button', { name: '蒙版画笔' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: '蒙版橡皮擦' })).toBeEnabled();
+  });
+
+  it('keeps detector candidates in the G4 audit trail instead of offering deletion', () => {
+    const region = regionFixture('region-1', {
+      order: 0,
+      paragraphGroupId: null,
+      contentDisposition: null,
+      detectorJobItemId: 'item-detect',
+      detectorCandidateIndex: 0,
+      detectorConfidence: 0.37,
+      recognition: {
+        version: 1,
+        detection: {
+          provider: 'ppocr-v3', inputVariant: 'preprocessed', language: 'ja', confidence: 0.37,
+        },
+      },
+      repair: { ...regionFixture('region-1').repair, detectedTextCandidate: '候補' },
+    });
+    seedWorkbench({ regions: [region], selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    const evidence = screen.getByRole('status', { name: 'G4 检测候选证据' });
+    expect(evidence).toHaveTextContent('任务项：item-detect · 候选序号：0');
+    expect(evidence).toHaveTextContent('Provider：ppocr-v3 · 检测置信度：37%');
+    expect(evidence).toHaveTextContent('输入：preprocessed · 语言：ja');
+    expect(evidence).toHaveTextContent('文字候选：候補');
+    expect(screen.queryByRole('button', { name: '删除这个 G4 文本框' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'G4 内容处理决定' })).toHaveValue('');
+  });
+
+  it('routes G4 decisions, detect, acceptance, and full-order actions to dedicated store commands', async () => {
+    const user = userEvent.setup();
+    const first = regionFixture('region-1', {
+      order: 0,
+      paragraphGroupId: 'paragraph-1',
+      contentDisposition: 'translate',
+    });
+    const second = regionFixture('region-2', {
+      order: 1,
+      paragraphGroupId: 'paragraph-2',
+      contentDisposition: 'translate',
+    });
+    seedWorkbench({ regions: [first, second], selectedRegionIds: ['region-1'] });
+    const updateRegion = vi.fn();
+    const moveG4Region = vi.fn(async () => true);
+    const startG4Detection = vi.fn(async () => true);
+    const acceptG4Regions = vi.fn(async () => true);
+    useWorkbenchStore.setState({
+      updateRegion,
+      moveG4Region,
+      startG4Detection,
+      acceptG4Regions,
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'G4 内容处理决定' }),
+      'false-positive',
+    );
+    await user.click(screen.getByRole('button', { name: '顺序下移' }));
+    await user.click(screen.getByRole('button', { name: '重新检测本页' }));
+    await user.click(screen.getByRole('button', { name: '接受全部区域决定' }));
+
+    expect(updateRegion).toHaveBeenCalledWith('region-1', {
+      contentDisposition: 'false-positive', rubyParentId: null,
+    });
+    expect(moveG4Region).toHaveBeenCalledWith('region-1', 1);
+    expect(startG4Detection).toHaveBeenCalledOnce();
+    expect(acceptG4Regions).toHaveBeenCalledOnce();
+  });
+
+  it('locks G4 editing and acceptance while detection is queued', () => {
+    const region = regionFixture('region-1', {
+      order: 0,
+      paragraphGroupId: 'paragraph-1',
+      contentDisposition: 'translate',
+    });
+    seedWorkbench({ regions: [region], selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.setState({
+      jobs: [jobFixture({
+        id: 'job-detect',
+        kind: 'detect',
+        status: 'queued',
+        items: [{
+          id: 'item-detect', imageId: 'image-1', label: 'image-1', status: 'queued', progress: 0,
+        }],
+      })],
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByText('检测运行中')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '检测进行中…' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '接受全部区域决定' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'G4 内容处理决定' })).toBeDisabled();
+  });
+
+  it('disables every legacy batch step when the selected page has active lineage', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+        'image-2': {
+          status: 'legacy', generation: null, events: [], error: '', conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: '批处理与导出' }));
+    const drawer = screen.getByRole('dialog', { name: '批处理与导出' });
+    expect(within(drawer).getByText('血缘页面请使用阶段专用入口')).toBeInTheDocument();
+    for (const label of ['图片增强', '文字检测', '日文 OCR', '擦字修复', '翻译', '嵌字排版', '安全导出']) {
+      expect(within(drawer).getByRole('checkbox', { name: new RegExp(label) })).toBeDisabled();
+    }
+    expect(within(drawer).getByRole('button', { name: /加入队列/ })).toBeDisabled();
+  });
+
+  it('hides visual-stage review and repair-candidate writes for an active G4 generation', () => {
+    const image = imageFixture('image-1', {
+      status: { ...imageFixture('image-1').status, inpaint: 'done' },
+      stageReviews: {
+        inpaint: {
+          state: 'accepted',
+          reviewedAt: '2026-08-25T00:00:00Z',
+          resultRevision: 7,
+          artifactChecksum: 'a'.repeat(64),
+          maskChecksum: 'b'.repeat(64),
+        },
+      },
+      inpaintCandidate: 'candidate-a',
+      inpaintCandidates: [
+        { id: 'candidate-a', label: '候选 A', anomalies: [], originKind: 'direct-ai' },
+        { id: 'candidate-b', label: '候选 B', anomalies: [], originKind: 'direct-ai' },
+      ],
+    });
+    seedWorkbench({ images: [image] });
+    useWorkbenchStore.setState({
+      canvasMode: 'erased',
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: '',
+          conflict: false,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.queryByRole('group', { name: '当前视觉阶段复核' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: '修复候选' })).not.toBeInTheDocument();
+  });
+
+  it('shows a manual reload action after a G4 sequence conflict', async () => {
+    const user = userEvent.setup();
+    seedWorkbench({ regions: [regionFixture('region-1')] });
+    const reloadActiveImage = vi.fn(async () => undefined);
+    useWorkbenchStore.setState({
+      reloadActiveImage,
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(),
+          events: [activeG4Event()],
+          error: 'Page lineage changed after the mutation was prepared',
+          conflict: true,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByText('G4 版本冲突')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '重载本页' }));
+    expect(reloadActiveImage).toHaveBeenCalledOnce();
+  });
+
+  it('renders G5 as selectable read-only geometry and saves confidence-zero evidence explicitly', async () => {
+    const user = userEvent.setup();
+    const image = imageFixture('image-1', {
+      revision: 10,
+      status: {
+        ...imageFixture('image-1').status,
+        preprocess: 'done',
+        inpaint: 'done',
+        typeset: 'done',
+      },
+    });
+    const region = regionFixture('region-1', {
+      order: 0,
+      paragraphGroupId: 'paragraph-1',
+      contentDisposition: 'translate',
+    });
+    seedWorkbench({ images: [image], regions: [region], selectedRegionIds: ['region-1'] });
+    const saveG5Background = vi.fn(async () => true);
+    const contentUrl = vi.spyOn(api, 'contentUrl');
+    useWorkbenchStore.setState({
+      canvasMode: 'typeset',
+      saveG5Background,
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(8),
+          events: [{
+            ...activeG4Event(7),
+            operation: 'regions-stage-review',
+            state: 'accepted',
+            outputChecksum: 'e'.repeat(64),
+          }],
+          phase: 'G5',
+          error: '',
+          conflict: false,
+        },
+      },
+      backgroundContexts: {
+        'image-1': {
+          imageId: 'image-1', imageRevision: 10, generationId: 'generation-1', nextSequence: 8,
+          g4Checksum: 'e'.repeat(64), backgroundChecksum: 'f'.repeat(64), state: 'pending',
+          eligibleRegionIds: ['region-1'], classifiedRegionIds: [],
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByRole('region', { name: 'G5 背景门禁' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'G4 区域门禁' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '蒙版画笔' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '擦除' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '成品' })).toBeDisabled();
+    await waitFor(() => expect(useWorkbenchStore.getState().canvasMode).toBe('original'));
+    expect(screen.getByTestId('canvas-surface')).toHaveAttribute('data-editable', 'false');
+    expect(screen.getByTestId('canvas-surface')).toHaveAttribute('data-selectable', 'true');
+    await user.click(screen.getByRole('button', { name: '对比' }));
+    await waitFor(() => {
+      expect(contentUrl.mock.calls.some((call) => call[1] === 'preprocessed')).toBe(true);
+    });
+    expect(contentUrl.mock.calls.some((call) => call[1] === 'erased' || call[1] === 'typeset')).toBe(false);
+    expect(screen.getByText('已接受质量底板')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'G5 背景类别' }), 'white-solid');
+    await user.type(screen.getByRole('spinbutton', { name: 'G5 背景置信度' }), '0');
+    await user.click(screen.getByRole('button', { name: '保存分类证据' }));
+    expect(saveG5Background).toHaveBeenCalledWith(
+      'region-1', 'white-solid', 0, ['uniform-near-white'],
+    );
+  });
+
+  it('keeps low-confidence G5 acceptance enabled and blocks mutation shortcuts', async () => {
+    const reviewer = {
+      actorKind: 'human' as const,
+      sessionId: 'reviewer-1',
+      operationSource: 'ui' as const,
+    };
+    const region = regionFixture('region-1', {
+      contentDisposition: 'translate',
+      backgroundCategory: 'complex-lineart',
+      backgroundConfidence: 0,
+      backgroundRationaleCodes: ['structural-lines-cross-region'],
+      backgroundReviewer: reviewer,
+      backgroundGenerationId: 'generation-1',
+    });
+    seedWorkbench({
+      images: [imageFixture('image-1', { revision: 10 })],
+      regions: [region],
+      selectedRegionIds: ['region-1'],
+    });
+    const acceptG5Background = vi.fn(async () => true);
+    const deleteSelectedRegions = vi.fn();
+    const nudgeSelectedRegions = vi.fn();
+    const startBatch = vi.fn(async () => true);
+    useWorkbenchStore.setState({
+      acceptG5Background,
+      deleteSelectedRegions,
+      nudgeSelectedRegions,
+      startBatch,
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(8),
+          events: [{
+            ...activeG4Event(7),
+            operation: 'regions-stage-review',
+            state: 'accepted',
+            outputChecksum: 'e'.repeat(64),
+          }],
+          phase: 'G5',
+          error: '',
+          conflict: false,
+        },
+      },
+      backgroundContexts: {
+        'image-1': {
+          imageId: 'image-1', imageRevision: 10, generationId: 'generation-1', nextSequence: 8,
+          g4Checksum: 'e'.repeat(64), backgroundChecksum: 'f'.repeat(64), state: 'pending',
+          eligibleRegionIds: ['region-1'], classifiedRegionIds: ['region-1'],
+        },
+      },
+    });
+    render(<App />);
+
+    const accept = screen.getByRole('button', { name: '接受全部背景分类' });
+    expect(accept).toBeEnabled();
+    await userEvent.click(accept);
+    expect(acceptG5Background).toHaveBeenCalledOnce();
+
+    for (const key of ['r', 'n', 'm', 'e', 't', '3', '4', 'Delete']) {
+      fireEvent.keyDown(window, { key });
+    }
+    fireEvent.keyDown(window, { key: 'ArrowRight', metaKey: true });
+    expect(useWorkbenchStore.getState().canvasTool).toBe('select');
+    expect(useWorkbenchStore.getState().canvasMode).toBe('original');
+    expect(deleteSelectedRegions).not.toHaveBeenCalled();
+    expect(nudgeSelectedRegions).not.toHaveBeenCalled();
+    expect(startBatch).not.toHaveBeenCalled();
+  });
+
+  it('switches a terminal G5 event to the read-only G6 gate', () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { revision: 11 })],
+      regions: [regionFixture('region-1', { contentDisposition: 'translate' })],
+    });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(9),
+          events: [
+            {
+              ...activeG4Event(7),
+              operation: 'regions-stage-review',
+              state: 'accepted',
+              outputChecksum: 'e'.repeat(64),
+            },
+            {
+              ...activeG4Event(8),
+              operation: 'background-stage-review',
+              gate: 'G5_background',
+              state: 'accepted',
+              decision: 'backgrounds-accepted',
+              outputChecksum: 'f'.repeat(64),
+            },
+          ],
+          phase: 'G6',
+          error: '',
+          conflict: false,
+        },
+      },
+      backgroundContexts: {
+        'image-1': {
+          imageId: 'image-1', imageRevision: 11, generationId: 'generation-1', nextSequence: 9,
+          g4Checksum: 'e'.repeat(64), backgroundChecksum: 'f'.repeat(64), state: 'accepted',
+          eligibleRegionIds: ['region-1'], classifiedRegionIds: ['region-1'],
+        },
+      },
+      ocrContexts: {
+        'image-1': {
+          imageId: 'image-1', imageRevision: 11, generationId: 'generation-1', nextSequence: 9,
+          g5Checksum: 'f'.repeat(64), ocrChecksum: '6'.repeat(64), state: 'pending',
+          eligibleRegionIds: ['region-1'], attemptedRegionIds: [], reviewedRegionIds: [], attempts: [],
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByRole('region', { name: 'G6 OCR 门禁' })).toHaveTextContent('G6 OCR');
+    expect(screen.getByRole('button', { name: '运行 G6 双路 OCR' })).toBeEnabled();
+    expect(screen.queryByRole('combobox', { name: 'G5 背景类别' })).not.toBeInTheDocument();
+  });
+
+  it('reviews dual G6 OCR attempts explicitly and never treats confidence zero as a blocker', () => {
+    const region = regionFixture('region-1', {
+      sourceText: '',
+      contentDisposition: 'translate',
+      type: 'dialogue',
+    });
+    const attempts = [ocrAttemptFixture('original', 0), ocrAttemptFixture('quality', 0.42)];
+    seedWorkbench({
+      images: [imageFixture('image-1', { revision: 12 })],
+      regions: [region],
+      selectedRegionIds: ['region-1'],
+    });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active', generation: activeG4Generation(10), events: [], phase: 'G6', error: '', conflict: false,
+        },
+      },
+      ocrContexts: {
+        'image-1': {
+          imageId: 'image-1', imageRevision: 12, generationId: 'generation-1', nextSequence: 10,
+          g5Checksum: 'f'.repeat(64), ocrChecksum: '6'.repeat(64), state: 'pending',
+          eligibleRegionIds: ['region-1'], attemptedRegionIds: ['region-1'], reviewedRegionIds: [], attempts,
+        },
+      },
+    });
+    render(<App />);
+
+    expect(screen.getByText('原图 OCR')).toBeInTheDocument();
+    expect(screen.getByText('增强图 OCR')).toBeInTheDocument();
+    expect(screen.getByText('置信度：0')).toBeInTheDocument();
+    expect(screen.getAllByText('Provider：tesseract · 模型：tesseract-5')).toHaveLength(2);
+    expect(screen.getByTitle('1'.repeat(64))).toHaveTextContent('裁剪校验和');
+    expect(screen.getByRole('button', { name: '保存原文复核证据' })).toBeDisabled();
+
+    expect(OCR_QC_CHECKS.map((check) => ocrQCCheckLabelsForTest[check])).toHaveLength(9);
+    document.querySelectorAll<HTMLInputElement>('.ocr-qc-list input').forEach((input) => {
+      fireEvent.click(input);
+    });
+    expect(screen.getByRole('button', { name: '保存原文复核证据' })).toBeEnabled();
+    expect(screen.getByRole('textbox', { name: 'G6 已核准日文原文' })).toHaveValue('品質の文');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'G6 原文来源模式' }), { target: { value: 'manual-correction' } });
+    expect(screen.getByRole('combobox', { name: 'G6 原文来源模式' })).toHaveValue('manual-correction');
+    expect(screen.getByRole('textbox', { name: 'G6 已核准日文原文' })).toBeEnabled();
+    expect(screen.getByRole('tab', { name: '排版' })).toBeDisabled();
+    expect(screen.getByRole('tab', { name: '修复' })).toBeDisabled();
+  });
+
+  it('accepts reviewed G6 pages, exposes zero-eligible N/A, and opens the strict G7 gate', () => {
+    const acceptG6OCR = vi.fn(async () => true);
+    const reviewer = { actorKind: 'human' as const, sessionId: 'reviewer-1', operationSource: 'ui' as const };
+    const reviewed = regionFixture('region-1', {
+      sourceText: '品質の文', contentDisposition: 'translate', type: 'dialogue',
+      ocrReview: {
+        sourceMode: 'quality-attempt', selectedAttemptId: 'attempt-quality',
+        sourceTextChecksum: '5'.repeat(64), qcChecks: OCR_QC_CHECKS, qcFlags: ['none'],
+      },
+      ocrReviewer: reviewer,
+      ocrGenerationId: 'generation-1',
+    });
+    seedWorkbench({ images: [imageFixture('image-1', { revision: 12 })], regions: [reviewed] });
+    useWorkbenchStore.setState({
+      acceptG6OCR,
+      g4Contexts: { 'image-1': { status: 'active', generation: activeG4Generation(11), events: [], phase: 'G6', error: '', conflict: false } },
+      ocrContexts: { 'image-1': {
+        imageId: 'image-1', imageRevision: 12, generationId: 'generation-1', nextSequence: 11,
+        g5Checksum: 'f'.repeat(64), ocrChecksum: '6'.repeat(64), state: 'pending',
+        eligibleRegionIds: ['region-1'], attemptedRegionIds: ['region-1'], reviewedRegionIds: ['region-1'],
+        attempts: [ocrAttemptFixture('original', 0), ocrAttemptFixture('quality', 0.42)],
+      } },
+    });
+    render(<App />);
+    const accept = screen.getByRole('button', { name: '接受全部原文复核' });
+    expect(accept).toBeEnabled();
+    expect(useWorkbenchStore.getState().acceptG6OCR).toBe(acceptG6OCR);
+
+    const currentOCR = useWorkbenchStore.getState().ocrContexts['image-1'];
+    expect(currentOCR).toBeDefined();
+    act(() => useWorkbenchStore.setState((state) => ({
+      regionsByImage: { ...state.regionsByImage, 'image-1': [regionFixture('region-2', { contentDisposition: 'ignore' })] },
+      ocrContexts: { ...state.ocrContexts, 'image-1': { ...currentOCR!, eligibleRegionIds: [], attemptedRegionIds: [], reviewedRegionIds: [] } },
+    })));
+    expect(screen.getByRole('button', { name: '确认本页 G6 不适用' })).toBeEnabled();
+
+    const currentPage = useWorkbenchStore.getState().g4Contexts['image-1'];
+    expect(currentPage).toBeDefined();
+    act(() => useWorkbenchStore.setState((state) => ({
+      g4Contexts: { ...state.g4Contexts, 'image-1': { ...currentPage!, phase: 'G7' } },
+      maskContexts: { 'image-1': {
+        imageId: 'image-1', imageRevision: 12, generationId: 'generation-1', nextSequence: 11,
+        g6Checksum: '6'.repeat(64), qualityChecksum: '7'.repeat(64), maskStateChecksum: '8'.repeat(64),
+        state: 'pending', eligibleRegionIds: [], rubyRegionIdsByPrimary: {},
+        draft: { revision: 0, stateChecksum: '9'.repeat(64), regions: [] },
+        artifacts: [], selectedArtifactId: null, review: null,
+      } },
+    })));
+    expect(screen.getByRole('region', { name: 'G7 蒙版门禁' })).toHaveTextContent('0 个不可变实际蒙版');
+    expect(screen.getByRole('button', { name: '确认 G7 不适用' })).toBeEnabled();
+  });
+
+  it('revalidates G6 trust on a cold G7 render and locks on a server conflict', async () => {
+    seedWorkbench({
+      images: [imageFixture('image-1', { revision: 12 })],
+      regions: [regionFixture('region-1', { contentDisposition: 'translate' })],
+    });
+    useWorkbenchStore.setState({
+      g4Contexts: {
+        'image-1': {
+          status: 'active',
+          generation: activeG4Generation(14),
+          events: [],
+          phase: 'G7',
+          error: '',
+          conflict: false,
+        },
+      },
+      ocrContexts: {},
+    });
+    const getOCR = vi.spyOn(api, 'getOCRGateContext').mockRejectedValue(
+      new ApiError('G6 terminal evidence is no longer current', 409),
+    );
+    render(<App />);
+
+    await waitFor(() => expect(getOCR).toHaveBeenCalledWith('image-1'));
+    await waitFor(() => expect(useWorkbenchStore.getState().g4Contexts['image-1']).toMatchObject({
+      error: 'G6 terminal evidence is no longer current',
+      conflict: true,
+    }));
+    expect(screen.getByText('本页工作流已锁定')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'G7 蒙版门禁' })).not.toBeInTheDocument();
+  });
+
+  it('requires all four checksum-bound G7 views before retaining a mask observation', async () => {
+    const image = imageFixture('image-1', { revision: 12, status: {
+      ...imageFixture('image-1').status, preprocess: 'done',
+    } });
+    const region = regionFixture('region-1', { contentDisposition: 'translate', type: 'dialogue' });
+    seedWorkbench({ images: [image], regions: [region], selectedRegionIds: ['region-1'] });
+    useWorkbenchStore.setState({
+      g4Contexts: { 'image-1': { status: 'active', generation: activeG4Generation(18), events: [], phase: 'G7', error: '', conflict: false } },
+      ocrContexts: { 'image-1': { imageId: 'image-1', imageRevision: 12, generationId: 'generation-1', nextSequence: 18,
+        g5Checksum: '1'.repeat(64), ocrChecksum: '2'.repeat(64), state: 'accepted', eligibleRegionIds: ['region-1'],
+        attemptedRegionIds: ['region-1'], reviewedRegionIds: ['region-1'], attempts: [] } },
+      maskContexts: { 'image-1': { imageId: 'image-1', imageRevision: 12, generationId: 'generation-1', nextSequence: 18,
+        g6Checksum: '2'.repeat(64), qualityChecksum: '3'.repeat(64), maskStateChecksum: '4'.repeat(64),
+        state: 'pending', eligibleRegionIds: ['region-1'], rubyRegionIdsByPrimary: { 'region-1': [] },
+        draft: { revision: 1, stateChecksum: '5'.repeat(64), regions: [{ regionId: 'region-1', maskMode: 'text',
+          polygon: null, padding: 4, dilation: 2, feather: 1, polarity: 'auto', maskEdits: { version: 1, strokes: [] } }] },
+        artifacts: [{ artifactId: 'artifact-1', sequence: 1, jobId: 'job-mask', jobItemId: 'item-mask',
+          parentChecksum: '2'.repeat(64), qualityChecksum: '3'.repeat(64), recipeChecksum: '5'.repeat(64),
+          maskChecksum: '6'.repeat(64), width: 1200, height: 1800, renderScale: 1,
+          provider: 'deterministic-mask', modelVersion: 'create-mask-v1', parameterHash: '7'.repeat(64),
+          nonzeroPixelCount: 42, bbox: { x: 1, y: 2, width: 3, height: 4 }, createdAt: '2026-08-25T00:00:00Z' }],
+        selectedArtifactId: null, review: null } },
+      selectedMaskArtifactIds: { 'image-1': 'artifact-1' },
+      maskBitmapObservations: { 'image-1': {
+        imageId: 'image-1', artifactId: 'artifact-1', imageRevision: 12,
+        checksum: '6'.repeat(64), width: 1200, height: 1800, state: 'ready',
+      } },
+    });
+    render(<App />);
+    expect(screen.getByText('原图 · mask-off')).toBeInTheDocument();
+    expect(screen.getByText('质量底板 · mask-off')).toBeInTheDocument();
+    expect(screen.getByText('原图 · mask-on')).toBeInTheDocument();
+    expect(screen.getByText('质量底板 · mask-on')).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'G7 不可变实际蒙版' })).toHaveValue('artifact-1');
+    expect(screen.getByRole('button', { name: '蒙版画笔' })).toBeEnabled();
+    expect(within(screen.getByRole('group', { name: 'G7 覆盖检查' })).getAllByRole('checkbox')).toHaveLength(5);
+    expect(within(screen.getByRole('group', { name: 'G7 误伤检查' })).getAllByRole('checkbox')).toHaveLength(5);
+    expect(screen.getByRole('button', { name: '接受当前实际蒙版' })).toBeDisabled();
+    await waitFor(() => expect(useWorkbenchStore.getState().maskBitmapObservations['image-1']).toBeUndefined());
   });
 });

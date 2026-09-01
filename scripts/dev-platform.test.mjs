@@ -5,11 +5,20 @@ import test from 'node:test';
 import { frontendLaunch, isLoopbackHost } from './dev-platform.mjs';
 
 test('frontend launcher invokes Vite through Node without a platform shell', () => {
-  const launch = frontendLaunch('C:\\work\\manga-localizer', '127.0.0.1', 5173, 'node.exe');
+  const root = 'C:\\work\\manga-localizer';
+  const nodeModules = path.join(root, 'external', 'node_modules');
+  const launch = frontendLaunch(
+    root,
+    '127.0.0.1',
+    5173,
+    'node.exe',
+    () => ({ nodeModules }),
+  );
 
   assert.equal(launch.command, 'node.exe');
   assert.equal(path.basename(launch.args[0]), 'vite.js');
-  assert.equal(launch.args[1], path.join('C:\\work\\manga-localizer', 'frontend'));
+  assert.equal(launch.args[0], path.join(nodeModules, 'vite', 'bin', 'vite.js'));
+  assert.equal(launch.args[1], path.join(root, 'frontend'));
   assert.deepEqual(launch.args.slice(2), ['--host', '127.0.0.1', '--port', '5173']);
   assert.ok(!launch.args.includes('npm.cmd'));
 });

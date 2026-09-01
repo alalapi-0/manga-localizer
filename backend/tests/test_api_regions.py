@@ -4,8 +4,11 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
+from sqlalchemy.exc import IntegrityError
 
 from manga_localizer.database import ImageAsset, TextRegion
+from manga_localizer.schemas import RegionPatch
 from manga_localizer.services.trust import with_detection_evidence, with_ocr_evidence
 
 from .conftest import create_project, upload_image
@@ -186,7 +189,7 @@ def test_recognition_trust_is_read_only_and_has_fail_closed_transitions(
     assert unignored.json()["trustReason"] == "trust-input-changed"
 
 
-def test_reconfirming_translation_only_edit_preserves_current_visual_reviews(
+def test_reconfirming_translation_does_not_revive_an_unaccepted_typeset_plate(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     project = create_project(client, tmp_path / "translation-layout-reconfirm")
@@ -237,8 +240,8 @@ def test_reconfirming_translation_only_edit_preserves_current_visual_reviews(
     assert after_translation["status"]["typeset"] == "pending"
     assert after_translation["stageReviews"]["inpaint"] == inpaint_review
 
-    # The operator may generate and accept the current typeset result before
-    # closing the separate page-review confirmation gate.
+    # A legacy or externally modified project may claim that typesetting was
+    # accepted before the translation-confirmation prerequisite was satisfied.
     with store.session() as session:
         asset = session.get(ImageAsset, image["id"])
         assert asset is not None
@@ -263,10 +266,10 @@ def test_reconfirming_translation_only_edit_preserves_current_visual_reviews(
     assert reconfirmed.json()["confirmed"] is True
     after_reconfirm = client.get(f"/api/projects/{project['id']}/images").json()[0]
     assert after_reconfirm["status"]["inpaint"] == "done"
-    assert after_reconfirm["status"]["typeset"] == "done"
+    assert after_reconfirm["status"]["typeset"] == "pending"
     assert after_reconfirm["status"]["export"] == "pending"
     assert after_reconfirm["stageReviews"]["inpaint"] == inpaint_review
-    assert after_reconfirm["stageReviews"]["typeset"] == typeset_review
+    assert "typeset" not in after_reconfirm["stageReviews"]
 
 
 def test_initial_trust_confirmation_invalidates_visual_artifacts(
@@ -523,6 +526,333 @@ def test_geometry_edit_discards_stale_polygon_from_a_full_frontend_snapshot(
     assert moved.status_code == 200, moved.text
     assert moved.json()["confirmed"] is False
     assert "maskPolygon" not in moved.json()["repair"]
+
+
+@pytest.mark.parametrize("ignored", [False, True])
+def test_legacy_repair_default_materialization_is_a_semantic_noop(
+    client: TestClient, app, tmp_path: Path, ignored: bool
+) -> None:
+    project = create_project(client, tmp_path / f"legacy-defaults-{ignored}")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    stage_review = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-22T00:00:00+00:00",
+        "resultRevision": 3,
+        "artifactChecksum": "a" * 64,
+        "maskChecksum": "b" * 64,
+    }
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        persisted.style = {}
+        persisted.repair = {}
+        persisted.ignored = ignored
+        persisted.confirmed = False
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "no-text-reviewed" if ignored else "reviewed",
+            "reviewedAt": "2026-08-22T00:01:00+00:00",
+            "stageReviews": {"inpaint": stage_review},
+        }
+        region_revision = persisted.revision
+        image_revision = asset.revision
+        status_before = dict(asset.status)
+
+    artifact = Path(project["rootPath"]) / "generated" / "inpainted" / image["relativePath"]
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_bytes(b"preserve legacy artifact")
+    revisions_before = client.get(f"/api/projects/{project['id']}/revisions").json()
+
+    materialized = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "repair": {
+                "method": "telea",
+                "maskMode": "text",
+                "textPolarity": "auto",
+                "maskPadding": 4,
+                "dilation": 2,
+                "feather": 2,
+                "radius": 3,
+                "fillColor": "#ffffff",
+            },
+            "expectedRevision": region_revision,
+        },
+    )
+
+    assert materialized.status_code == 200, materialized.text
+    assert materialized.json()["revision"] == region_revision
+    assert materialized.json()["style"] == {}
+    assert materialized.json()["repair"] == {}
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        assert persisted.revision == region_revision
+        assert asset.revision == image_revision
+        assert asset.status == status_before
+    assert artifact.read_bytes() == b"preserve legacy artifact"
+    assert client.get(f"/api/projects/{project['id']}/revisions").json() == revisions_before
+
+
+def test_hydrated_frontend_style_over_legacy_empty_style_invalidates_typeset(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "legacy-style-materialization")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    inpaint_review = {
+        "state": "accepted",
+        "reviewedAt": "2026-08-22T00:00:00+00:00",
+        "resultRevision": 3,
+        "artifactChecksum": "a" * 64,
+        "maskChecksum": "b" * 64,
+    }
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        persisted.style = {}
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-22T00:01:00+00:00",
+            "stageReviews": {"inpaint": inpaint_review},
+        }
+        image_revision = asset.revision
+
+    hydrated_style = {
+        "fontFamily": "system-ui",
+        "fontSize": 28,
+        "autoFit": True,
+        "color": "#171717",
+        "strokeColor": "#ffffff",
+        "strokeWidth": 1,
+        "lineHeight": 1.15,
+        "letterSpacing": 0,
+        "align": "center",
+        "padding": 8,
+    }
+    materialized = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"style": hydrated_style, "expectedRevision": region["revision"]},
+    )
+
+    assert materialized.status_code == 200, materialized.text
+    assert materialized.json()["revision"] == region["revision"] + 1
+    assert materialized.json()["style"] == hydrated_style
+    after = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after["revision"] == image_revision + 1
+    assert after["status"]["inpaint"] == "done"
+    assert after["status"]["typeset"] == "pending"
+    assert after["status"]["export"] == "pending"
+    assert after["status"]["reviewState"] == "pending"
+    assert after["stageReviews"]["inpaint"] == inpaint_review
+
+
+def test_real_sparse_style_and_repair_changes_still_invalidate_their_stages(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "real-style-repair-change")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        persisted.style = {}
+        persisted.repair = {}
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-22T00:01:00+00:00",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-22T00:00:00+00:00",
+                    "resultRevision": 3,
+                    "artifactChecksum": "a" * 64,
+                    "maskChecksum": "b" * 64,
+                }
+            },
+        }
+
+    restyled = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"style": {"fontSize": 32}, "expectedRevision": region["revision"]},
+    )
+    assert restyled.status_code == 200, restyled.text
+    assert restyled.json()["style"] == {"fontSize": 32}
+    after_style = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_style["status"]["inpaint"] == "done"
+    assert after_style["status"]["typeset"] == "pending"
+    assert after_style["stageReviews"]["inpaint"]["state"] == "accepted"
+
+    repaired = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "repair": {"textPolarity": "dark"},
+            "expectedRevision": restyled.json()["revision"],
+        },
+    )
+    assert repaired.status_code == 200, repaired.text
+    assert repaired.json()["repair"] == {"textPolarity": "dark"}
+    after_repair = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after_repair["status"]["inpaint"] == "pending"
+    assert "inpaint" not in after_repair["stageReviews"]
+
+
+@pytest.mark.parametrize("field", ["style", "repair"])
+def test_explicit_null_nested_region_patch_is_a_noop(
+    client: TestClient, app, tmp_path: Path, field: str
+) -> None:
+    project = create_project(client, tmp_path / f"null-{field}-patch")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-22T00:01:00+00:00",
+        }
+        region_revision = persisted.revision
+        image_revision = asset.revision
+        status_before = dict(asset.status)
+
+    response = client.patch(
+        f"/api/regions/{region['id']}",
+        json={field: None, "expectedRevision": region_revision},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["revision"] == region_revision
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        assert persisted.revision == region_revision
+        assert asset.revision == image_revision
+        assert asset.status == status_before
+
+
+def test_repair_tombstone_removes_override_and_invalidates_pixels(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "repair-tombstone")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        persisted.repair = {**persisted.repair, "inpainterProvider": "lama-onnx"}
+        asset.status = {
+            **asset.status,
+            "inpaint": "done",
+            "typeset": "done",
+            "export": "done",
+            "reviewState": "reviewed",
+            "reviewedAt": "2026-08-22T00:01:00+00:00",
+            "stageReviews": {
+                "inpaint": {
+                    "state": "accepted",
+                    "reviewedAt": "2026-08-22T00:00:00+00:00",
+                    "resultRevision": 3,
+                    "artifactChecksum": "a" * 64,
+                    "maskChecksum": "b" * 64,
+                }
+            },
+        }
+        image_revision = asset.revision
+
+    response = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"repair": {"inpainterProvider": None}, "expectedRevision": region["revision"]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["revision"] == region["revision"] + 1
+    assert "inpainterProvider" not in response.json()["repair"]
+    after = client.get(f"/api/projects/{project['id']}/images").json()[0]
+    assert after["revision"] == image_revision + 1
+    assert after["status"]["inpaint"] == "pending"
+    assert after["status"]["typeset"] == "pending"
+    assert after["status"]["reviewState"] == "pending"
+    assert "inpaint" not in after["stageReviews"]
+
+
+def test_default_equivalent_tombstone_normalizes_storage_without_invalidation(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "default-tombstone")
+    image = upload_image(client, project["id"])
+    region = _create_region(client, image["id"], 20, 30)
+    store = app.state.registry.get(project["id"])
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        assert persisted.repair["textPolarity"] == "auto"
+        status_before = dict(asset.status)
+        image_revision = asset.revision
+
+    response = client.patch(
+        f"/api/regions/{region['id']}",
+        json={"repair": {"textPolarity": None}, "expectedRevision": region["revision"]},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["revision"] == region["revision"]
+    assert "textPolarity" not in response.json()["repair"]
+    with store.session() as session:
+        persisted = session.get(TextRegion, region["id"])
+        asset = session.get(ImageAsset, image["id"])
+        assert persisted is not None and asset is not None
+        assert "textPolarity" not in persisted.repair
+        assert asset.revision == image_revision
+        assert asset.status == status_before
+
+
+def test_create_region_omits_nested_null_tombstones(client: TestClient, tmp_path: Path) -> None:
+    project = create_project(client, tmp_path / "create-tombstone")
+    image = upload_image(client, project["id"])
+    response = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 20,
+            "y": 30,
+            "width": 40,
+            "height": 50,
+            "style": {"customOverride": None},
+            "repair": {"inpainterProvider": None},
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["style"] == {}
+    assert "inpainterProvider" not in response.json()["repair"]
 
 
 def test_default_manga_reading_order_is_right_column_top_to_bottom(
@@ -921,3 +1251,274 @@ def test_region_rejects_conflicting_flags_and_invalid_mask_edits(
     assert autosaved_repair.json()["confirmed"] is False
     assert autosaved_repair.json()["trustDisposition"] == "trusted"
     assert autosaved_repair.json()["trustReason"] == "human-confirmed"
+
+
+def test_g4_region_fields_round_trip_and_nullable_fields_can_be_cleared(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "g4-fields")
+    image = upload_image(client, project["id"])
+    parent = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 20,
+            "y": 30,
+            "width": 80,
+            "height": 50,
+            "type": "dialogue",
+            "direction": "vertical",
+            "order": 0,
+            "paragraphGroupId": "paragraph-1",
+            "contentDisposition": "translate",
+        },
+    )
+    assert parent.status_code == 201, parent.text
+    parent_region = parent.json()
+    assert parent_region["paragraphGroupId"] == "paragraph-1"
+    assert parent_region["contentDisposition"] == "translate"
+    assert parent_region["rubyParentId"] is None
+    assert parent_region["detectorJobItemId"] is None
+    assert parent_region["detectorCandidateIndex"] is None
+
+    ruby = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 105,
+            "y": 30,
+            "width": 30,
+            "height": 30,
+            "type": "ruby",
+            "direction": "vertical",
+            "order": 1,
+            "paragraphGroupId": "paragraph-1",
+            "rubyParentId": parent_region["id"],
+            "contentDisposition": "ignore",
+        },
+    )
+    assert ruby.status_code == 201, ruby.text
+    ruby_region = ruby.json()
+    assert ruby_region["rubyParentId"] == parent_region["id"]
+
+    with pytest.raises(ValidationError):
+        RegionPatch(rotation=float("inf"))
+
+    cleared = client.patch(
+        f"/api/regions/{ruby_region['id']}",
+        json={
+            "paragraphGroupId": None,
+            "rubyParentId": None,
+            "contentDisposition": None,
+            "expectedRevision": ruby_region["revision"],
+        },
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["paragraphGroupId"] is None
+    assert cleared.json()["rubyParentId"] is None
+    assert cleared.json()["contentDisposition"] is None
+
+    forged_identity = client.post(
+        f"/api/images/{image['id']}/regions",
+        json={
+            "x": 140,
+            "y": 30,
+            "width": 30,
+            "height": 30,
+            "detectorJobItemId": "forged",
+            "detectorCandidateIndex": 0,
+        },
+    )
+    assert forged_identity.status_code == 422, forged_identity.text
+
+
+def test_ruby_relationships_reject_cross_page_nested_and_parent_delete(
+    client: TestClient, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "g4-ruby")
+    first_image = upload_image(client, project["id"], relative_path="page-1.png")
+    second_image = upload_image(client, project["id"], relative_path="page-2.png")
+    parent = client.post(
+        f"/api/images/{first_image['id']}/regions",
+        json={
+            "x": 20,
+            "y": 20,
+            "width": 80,
+            "height": 60,
+            "type": "dialogue",
+            "paragraphGroupId": "paragraph-1",
+        },
+    ).json()
+    child = client.post(
+        f"/api/images/{first_image['id']}/regions",
+        json={
+            "x": 105,
+            "y": 20,
+            "width": 30,
+            "height": 30,
+            "type": "ruby",
+            "paragraphGroupId": "paragraph-1",
+            "rubyParentId": parent["id"],
+            "contentDisposition": "ignore",
+        },
+    )
+    assert child.status_code == 201, child.text
+
+    blocked_delete = client.delete(
+        f"/api/regions/{parent['id']}",
+        params={"expectedRevision": parent["revision"]},
+    )
+    assert blocked_delete.status_code == 400, blocked_delete.text
+    assert "ruby children" in blocked_delete.json()["detail"]
+
+    cross_page = client.post(
+        f"/api/images/{second_image['id']}/regions",
+        json={
+            "x": 20,
+            "y": 20,
+            "width": 30,
+            "height": 30,
+            "type": "ruby",
+            "paragraphGroupId": "paragraph-1",
+            "rubyParentId": parent["id"],
+        },
+    )
+    assert cross_page.status_code == 400, cross_page.text
+    assert "same image" in cross_page.json()["detail"]
+
+    nested = client.patch(
+        f"/api/regions/{parent['id']}",
+        json={"type": "ruby", "expectedRevision": parent["revision"]},
+    )
+    assert nested.status_code == 400, nested.text
+    assert "parent cannot itself become" in nested.json()["detail"]
+
+    false_positive_parent = client.post(
+        f"/api/images/{second_image['id']}/regions",
+        json={
+            "x": 60,
+            "y": 20,
+            "width": 40,
+            "height": 30,
+            "type": "unknown",
+            "contentDisposition": "false-positive",
+        },
+    )
+    assert false_positive_parent.status_code == 201, false_positive_parent.text
+    false_positive_ruby = client.post(
+        f"/api/images/{second_image['id']}/regions",
+        json={
+            "x": 105,
+            "y": 20,
+            "width": 30,
+            "height": 30,
+            "type": "ruby",
+            "paragraphGroupId": "paragraph-false-positive",
+            "rubyParentId": false_positive_parent.json()["id"],
+            "contentDisposition": "ignore",
+        },
+    )
+    assert false_positive_ruby.status_code == 400, false_positive_ruby.text
+    assert "false-positive region" in false_positive_ruby.json()["detail"]
+
+    false_positive_update = client.patch(
+        f"/api/regions/{parent['id']}",
+        json={
+            "contentDisposition": "false-positive",
+            "expectedRevision": parent["revision"],
+        },
+    )
+    assert false_positive_update.status_code == 400, false_positive_update.text
+    assert "parent cannot become" in false_positive_update.json()["detail"]
+
+
+def test_g4_database_constraints_and_whole_page_cascade_are_enforced(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    project = create_project(client, tmp_path / "g4-database-constraints")
+    first_image = upload_image(client, project["id"], relative_path="page-1.png")
+    second_image = upload_image(client, project["id"], relative_path="page-2.png")
+
+    def create_pair(image_id: str, suffix: str) -> tuple[dict, dict]:
+        parent_response = client.post(
+            f"/api/images/{image_id}/regions",
+            json={
+                "x": 20,
+                "y": 20,
+                "width": 80,
+                "height": 60,
+                "type": "dialogue",
+                "paragraphGroupId": f"paragraph-{suffix}",
+                "contentDisposition": "translate",
+            },
+        )
+        assert parent_response.status_code == 201, parent_response.text
+        parent = parent_response.json()
+        child_response = client.post(
+            f"/api/images/{image_id}/regions",
+            json={
+                "x": 105,
+                "y": 20,
+                "width": 30,
+                "height": 30,
+                "type": "ruby",
+                "paragraphGroupId": f"paragraph-{suffix}",
+                "rubyParentId": parent["id"],
+                "contentDisposition": "ignore",
+            },
+        )
+        assert child_response.status_code == 201, child_response.text
+        return parent, child_response.json()
+
+    first_parent, first_child = create_pair(first_image["id"], "one")
+    second_parent, _second_child = create_pair(second_image["id"], "two")
+    store = app.state.registry.get(project["id"])
+
+    invalid_statements = [
+        (
+            "UPDATE text_regions SET region_disposition = 'invalid' WHERE id = ?",
+            (first_parent["id"],),
+        ),
+        (
+            "UPDATE text_regions SET detector_job_item_id = 'item-only' WHERE id = ?",
+            (first_parent["id"],),
+        ),
+        (
+            "UPDATE text_regions SET region_disposition = 'false-positive' WHERE id = ?",
+            (first_parent["id"],),
+        ),
+        (
+            "UPDATE text_regions SET ruby_parent_id = ? WHERE id = ?",
+            (second_parent["id"], first_child["id"]),
+        ),
+        (
+            "UPDATE text_regions SET image_id = ? WHERE id = ?",
+            (second_image["id"], first_parent["id"]),
+        ),
+        ("DELETE FROM text_regions WHERE id = ?", (first_parent["id"],)),
+    ]
+    for statement, parameters in invalid_statements:
+        with pytest.raises(IntegrityError):
+            with store.engine.begin() as connection:
+                connection.exec_driver_sql(statement, parameters)
+
+    with store.engine.begin() as connection:
+        connection.exec_driver_sql("DELETE FROM images WHERE id = ?", (first_image["id"],))
+        assert (
+            connection.exec_driver_sql(
+                "SELECT COUNT(*) FROM text_regions WHERE image_id = ?",
+                (first_image["id"],),
+            ).scalar_one()
+            == 0
+        )
+        assert (
+            connection.exec_driver_sql(
+                "SELECT COUNT(*) FROM text_regions WHERE image_id = ?",
+                (second_image["id"],),
+            ).scalar_one()
+            == 2
+        )
+
+    with store.engine.begin() as connection:
+        connection.exec_driver_sql("DELETE FROM projects WHERE id = ?", (project["id"],))
+        assert connection.exec_driver_sql("SELECT COUNT(*) FROM projects").scalar_one() == 0
+        assert connection.exec_driver_sql("SELECT COUNT(*) FROM images").scalar_one() == 0
+        assert connection.exec_driver_sql("SELECT COUNT(*) FROM text_regions").scalar_one() == 0

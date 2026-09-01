@@ -19,9 +19,12 @@ import { api } from '../api/client';
 import {
   activeImage,
   activeRegions,
+  g4EditingLocked,
+  g7EditingLocked,
   hasGeneratedPreview,
   regionHasTypesetOverflow,
   useWorkbenchStore,
+  workflowPhase,
 } from '../store/workbench';
 import type {
   CanvasMode,
@@ -42,6 +45,7 @@ import {
 } from './canvasGeometry';
 import type { Point, Viewport } from './canvasGeometry';
 import { loadCanonicalCanvasImage } from './canvasImage';
+import type { RequiredImageFormat } from './canvasImage';
 import { CreateLocalProjectButton, EmptyState, IconButton, ImportPhotosButton, LoadingState } from './Primitives';
 
 function canvasModeAvailable(image: ImageAsset | null | undefined, mode: CanvasMode): boolean {
@@ -71,6 +75,71 @@ type CanvasReviewObservation = Pick<StageReviewObservation, 'imageId' | 'stage' 
   | { state: 'ready'; artifactChecksum: string; maskChecksum?: string }
 );
 
+type G7ReviewViewKey = 'original-off' | 'quality-off' | 'original-on' | 'quality-on';
+type G8ReviewViewKey = 'original' | 'quality' | 'quality-mask' | 'candidate';
+type G10ReviewViewKey = 'original' | 'clean-plate' | 'candidate';
+
+interface G7ReviewViewObservation {
+  identity: string;
+  key: G7ReviewViewKey;
+  state: 'loading' | 'ready' | 'error';
+}
+
+interface G7ReviewViewExpectation {
+  identity: string;
+  key: G7ReviewViewKey;
+  expectedBaseChecksum: string;
+}
+
+const G7_REVIEW_VIEW_KEYS: G7ReviewViewKey[] = [
+  'original-off',
+  'quality-off',
+  'original-on',
+  'quality-on',
+];
+const G8_REVIEW_VIEW_KEYS: G8ReviewViewKey[] = [
+  'original', 'quality', 'quality-mask', 'candidate',
+];
+const G10_REVIEW_VIEW_KEYS: G10ReviewViewKey[] = ['original', 'clean-plate', 'candidate'];
+
+interface G8ReviewViewObservation {
+  identity: string;
+  key: G8ReviewViewKey;
+  state: 'loading' | 'ready' | 'error';
+}
+
+interface G8ReviewViewExpectation {
+  identity: string;
+  key: G8ReviewViewKey;
+  expectedChecksum: string;
+  expectedWidth: number;
+  expectedHeight: number;
+}
+
+interface G10ReviewViewObservation {
+  identity: string;
+  key: G10ReviewViewKey;
+  state: 'loading' | 'ready' | 'error';
+}
+
+interface G10ReviewViewExpectation {
+  identity: string;
+  key: G10ReviewViewKey;
+  expectedChecksum: string;
+  expectedWidth: number;
+  expectedHeight: number;
+}
+
+function allG7ReviewViewsReady(
+  observations: Partial<Record<G7ReviewViewKey, G7ReviewViewObservation>>,
+  identity: string,
+): boolean {
+  return Boolean(identity) && G7_REVIEW_VIEW_KEYS.every((key) => {
+    const observation = observations[key];
+    return observation?.identity === identity && observation.state === 'ready';
+  });
+}
+
 function useElementSize() {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
@@ -98,6 +167,7 @@ function useCanvasImage(
   src: string | null,
   expectedSize: { width: number; height: number },
   allowCanonicalScale = false,
+  requiredFormat?: RequiredImageFormat,
 ) {
   const expectedWidth = expectedSize.width;
   const expectedHeight = expectedSize.height;
@@ -124,7 +194,7 @@ function useCanvasImage(
     void loadCanonicalCanvasImage(src, {
       width: expectedWidth,
       height: expectedHeight,
-    }, controller.signal, allowCanonicalScale)
+    }, controller.signal, allowCanonicalScale, requiredFormat)
       .then((loaded) => {
         if (disposed) loaded.image.close();
         else {
@@ -154,7 +224,7 @@ function useCanvasImage(
       disposed = true;
       controller.abort();
     };
-  }, [allowCanonicalScale, expectedHeight, expectedWidth, src]);
+  }, [allowCanonicalScale, expectedHeight, expectedWidth, requiredFormat, src]);
 
   useEffect(() => {
     const loadedImage = result.image;
@@ -210,6 +280,7 @@ function RegionShape({
   region,
   image,
   selected,
+  selectable,
   editable,
   showOrder,
   showConfidence,
@@ -218,6 +289,7 @@ function RegionShape({
   region: Region;
   image: ImageAsset;
   selected: boolean;
+  selectable: boolean;
   editable: boolean;
   showOrder: boolean;
   showConfidence: boolean;
@@ -247,7 +319,7 @@ function RegionShape({
   const centeredGeometry = regionToCenteredNodeGeometry(region);
 
   function select(event: KonvaEventObject<MouseEvent | TouchEvent>) {
-    if (!editable) return;
+    if (!selectable) return;
     event.cancelBubble = true;
     const mouseEvent = event.evt as MouseEvent;
     selectRegion(region.id, mouseEvent.shiftKey || mouseEvent.metaKey || mouseEvent.ctrlKey);
@@ -362,19 +434,41 @@ function CanvasViewport({
   imageAsset,
   mode,
   editable,
+  selectable,
   zoomSignal,
   observationStage,
   onReviewObservation,
+  g7Mask,
+  g7ReviewView,
+  onG7ReviewViewObservation,
+  g8ReviewView,
+  onG8ReviewViewObservation,
+  g10ReviewView,
+  onG10ReviewViewObservation,
+  artifactOverride,
+  maskOn = false,
+  maskEditable = false,
 }: {
   imageAsset: ImageAsset;
   mode: CanvasMode;
   editable: boolean;
+  selectable: boolean;
   zoomSignal: { direction: -1 | 0 | 1; nonce: number };
   observationStage?: VisualStage | null;
   onReviewObservation?: (observation: CanvasReviewObservation) => void;
+  g7Mask?: { artifactId: string; checksum: string; width: number; height: number };
+  g7ReviewView?: G7ReviewViewExpectation;
+  onG7ReviewViewObservation?: (observation: G7ReviewViewObservation) => void;
+  g8ReviewView?: G8ReviewViewExpectation;
+  onG8ReviewViewObservation?: (observation: G8ReviewViewObservation) => void;
+  g10ReviewView?: G10ReviewViewExpectation;
+  onG10ReviewViewObservation?: (observation: G10ReviewViewObservation) => void;
+  artifactOverride?: { src: string };
+  maskOn?: boolean;
+  maskEditable?: boolean;
 }) {
   const { ref: containerRef, size } = useElementSize();
-  const source = api.contentUrl(imageAsset.id, mode, imageAsset.revision);
+  const source = artifactOverride?.src ?? api.contentUrl(imageAsset.id, mode, imageAsset.revision);
   const canonicalSize = { width: imageAsset.width, height: imageAsset.height };
   const {
     image,
@@ -382,9 +476,16 @@ function CanvasViewport({
     pixelWidth: artifactPixelWidth,
     pixelHeight: artifactPixelHeight,
     state: imageLoadState,
-  } = useCanvasImage(source, canonicalSize, mode !== 'original');
+  } = useCanvasImage(
+    source,
+    canonicalSize,
+    Boolean(artifactOverride) || mode !== 'original',
+    artifactOverride ? 'png' : undefined,
+  );
   const showMask = useWorkbenchStore((state) => state.showMask);
-  const maskSource = mode === 'erased'
+  const maskSource = g7Mask
+    ? api.maskArtifactUrl(imageAsset.id, g7Mask.artifactId)
+    : mode === 'erased'
     && (showMask || observationStage === 'inpaint')
     && imageAsset.status.inpaint === 'done'
     ? api.maskUrl(imageAsset.id, imageAsset.revision)
@@ -395,7 +496,7 @@ function CanvasViewport({
     pixelWidth: maskPixelWidth,
     pixelHeight: maskPixelHeight,
     state: maskLoadState,
-  } = useCanvasImage(maskSource, canonicalSize, true);
+  } = useCanvasImage(maskSource, canonicalSize, true, 'png');
   const regions = useWorkbenchStore(activeRegions);
   const selectedRegionIds = useWorkbenchStore((state) => state.selectedRegionIds);
   const tool = useWorkbenchStore((state) => state.canvasTool);
@@ -411,6 +512,8 @@ function CanvasViewport({
   const clearRegionSelection = useWorkbenchStore((state) => state.clearRegionSelection);
   const createRegion = useWorkbenchStore((state) => state.createRegion);
   const updateRegion = useWorkbenchStore((state) => state.updateRegion);
+  const g7Draft = useWorkbenchStore((state) => state.maskContexts[imageAsset.id]?.draft);
+  const appendG7MaskStroke = useWorkbenchStore((state) => state.appendG7MaskStroke);
   const [viewport, setViewport] = useState<Viewport>(() =>
     fitViewport(size, imageAsset.width, imageAsset.height),
   );
@@ -423,6 +526,113 @@ function CanvasViewport({
     ? regions.find((region) => region.id === selectedRegionIds[0])
     : undefined;
   const maskEditing = tool === 'mask-brush' || tool === 'mask-eraser';
+  const g7DraftStrokes: MaskEditStroke[] = maskEditable && selectedRegion
+    ? (g7Draft?.regions
+      .find((recipe) => recipe.regionId === selectedRegion.id)?.maskEdits.strokes ?? [])
+    : [];
+
+  useEffect(() => {
+    if (!g7ReviewView || !onG7ReviewViewObservation) return;
+    const needsMask = g7ReviewView.key.endsWith('-on');
+    const baseMismatch = imageLoadState === 'ready'
+      && artifactChecksum !== g7ReviewView.expectedBaseChecksum;
+    const maskMismatch = needsMask && maskLoadState === 'ready' && Boolean(
+      !g7Mask
+      || maskChecksum !== g7Mask.checksum
+      || maskPixelWidth !== g7Mask.width
+      || maskPixelHeight !== g7Mask.height
+      || (g7ReviewView.key === 'quality-on'
+        && (artifactPixelWidth !== maskPixelWidth || artifactPixelHeight !== maskPixelHeight)),
+    );
+    if (imageLoadState === 'error' || (needsMask && maskLoadState === 'error')
+      || baseMismatch || maskMismatch) {
+      onG7ReviewViewObservation({
+        identity: g7ReviewView.identity,
+        key: g7ReviewView.key,
+        state: 'error',
+      });
+      return;
+    }
+    if (imageLoadState !== 'ready' || !artifactChecksum
+      || (needsMask && (maskLoadState !== 'ready' || !maskChecksum))) {
+      onG7ReviewViewObservation({
+        identity: g7ReviewView.identity,
+        key: g7ReviewView.key,
+        state: 'loading',
+      });
+      return;
+    }
+    onG7ReviewViewObservation({
+      identity: g7ReviewView.identity,
+      key: g7ReviewView.key,
+      state: 'ready',
+    });
+  }, [
+    artifactChecksum,
+    artifactPixelHeight,
+    artifactPixelWidth,
+    g7Mask,
+    g7ReviewView,
+    imageLoadState,
+    maskChecksum,
+    maskLoadState,
+    maskPixelHeight,
+    maskPixelWidth,
+    onG7ReviewViewObservation,
+  ]);
+
+  useEffect(() => {
+    if (!g10ReviewView || !onG10ReviewViewObservation) return;
+    const mismatch = imageLoadState === 'ready' && Boolean(
+      artifactChecksum !== g10ReviewView.expectedChecksum
+      || artifactPixelWidth !== g10ReviewView.expectedWidth
+      || artifactPixelHeight !== g10ReviewView.expectedHeight,
+    );
+    const state = imageLoadState === 'error' || mismatch
+      ? 'error' : imageLoadState === 'ready' ? 'ready' : 'loading';
+    onG10ReviewViewObservation({ identity: g10ReviewView.identity, key: g10ReviewView.key, state });
+  }, [
+    artifactChecksum,
+    artifactPixelHeight,
+    artifactPixelWidth,
+    g10ReviewView,
+    imageLoadState,
+    onG10ReviewViewObservation,
+  ]);
+
+  useEffect(() => {
+    if (!g8ReviewView || !onG8ReviewViewObservation) return;
+    const needsMask = g8ReviewView.key === 'quality-mask';
+    const baseMismatch = imageLoadState === 'ready' && Boolean(
+      artifactChecksum !== g8ReviewView.expectedChecksum
+      || artifactPixelWidth !== g8ReviewView.expectedWidth
+      || artifactPixelHeight !== g8ReviewView.expectedHeight,
+    );
+    const maskMismatch = needsMask && maskLoadState === 'ready' && Boolean(
+      !g7Mask || maskChecksum !== g7Mask.checksum
+      || maskPixelWidth !== g7Mask.width || maskPixelHeight !== g7Mask.height
+      || artifactPixelWidth !== maskPixelWidth || artifactPixelHeight !== maskPixelHeight,
+    );
+    const state = imageLoadState === 'error' || (needsMask && maskLoadState === 'error')
+      || baseMismatch || maskMismatch
+      ? 'error'
+      : imageLoadState === 'ready' && (!needsMask || maskLoadState === 'ready')
+        ? 'ready'
+        : 'loading';
+    onG8ReviewViewObservation({ identity: g8ReviewView.identity, key: g8ReviewView.key, state });
+  }, [
+    artifactChecksum,
+    artifactPixelHeight,
+    artifactPixelWidth,
+    g7Mask,
+    g8ReviewView,
+    imageLoadState,
+    maskChecksum,
+    maskLoadState,
+    maskPixelHeight,
+    maskPixelWidth,
+    onG8ReviewViewObservation,
+  ]);
 
   useEffect(() => {
     if (!observationStage || !onReviewObservation) return;
@@ -513,10 +723,10 @@ function CanvasViewport({
       panStart.current = { pointer, viewport };
       return;
     }
-    if (!editable) return;
+    if (!editable && !(maskEditing && maskEditable)) return;
     if (maskEditing) {
       if (!selectedRegion) return;
-      const strokes = selectedRegion.repair.maskEdits?.strokes ?? [];
+      const strokes = maskEditable ? g7DraftStrokes : selectedRegion.repair.maskEdits?.strokes ?? [];
       const capacity = maskEditCapacity(strokes);
       if (!capacity.canAddStroke) {
         useWorkbenchStore.setState({
@@ -609,7 +819,9 @@ function CanvasViewport({
           )
         : undefined;
       if (region && completed.points.length) {
-        updateRegion(region.id, {
+        if (maskEditable) {
+          void appendG7MaskStroke(region.id, completed);
+        } else updateRegion(region.id, {
           repair: {
             ...region.repair,
             maskEdits: {
@@ -669,6 +881,7 @@ function CanvasViewport({
       aria-label={`${mode === 'original' ? '原图' : mode === 'preprocessed' ? '增强' : mode === 'erased' ? '擦除' : '成品'}画布`}
       className={`canvas-viewport canvas-viewport--${spacePressed ? 'hand' : tool}`}
       data-editable={editable ? 'true' : 'false'}
+      data-selectable={selectable ? 'true' : 'false'}
       data-testid="canvas-surface"
       ref={containerRef}
       role="application"
@@ -716,10 +929,9 @@ function CanvasViewport({
                 width={imageAsset.width}
               />
             ) : null}
-            {mode === 'erased'
-              && showMask
+            {(g7Mask ? maskOn : mode === 'erased' && showMask)
               && maskImage
-              && imageAsset.status.inpaint === 'done' ? (
+              && (g7Mask || imageAsset.status.inpaint === 'done') ? (
               <KonvaImage
                 globalCompositeOperation="difference"
                 height={imageAsset.height}
@@ -735,6 +947,7 @@ function CanvasViewport({
                 image={imageAsset}
                 key={region.id}
                 region={region}
+                selectable={selectable && tool === 'select' && !spacePressed}
                 selected={selectedRegionIds.includes(region.id)}
                 showConfidence={showConfidence}
                 showOrder={showOrder}
@@ -742,7 +955,7 @@ function CanvasViewport({
               />
             )) : null}
             {maskEditing && selectedRegion ? [
-              ...(selectedRegion.repair.maskEdits?.strokes ?? []),
+              ...(maskEditable ? g7DraftStrokes : selectedRegion.repair.maskEdits?.strokes ?? []),
               ...(maskDraft?.regionId === selectedRegion.id ? [maskDraft] : []),
             ].map((stroke, index) => {
               const color = stroke.mode === 'add' ? '#4ad7c8' : '#ff6b6b';
@@ -830,9 +1043,30 @@ function CanvasToolbar({
   const reviewActiveImageStage = useWorkbenchStore((state) => state.reviewActiveImageStage);
   const selectInpaintCandidate = useWorkbenchStore((state) => state.selectInpaintCandidate);
   const stageReviewSaving = useWorkbenchStore((state) => state.stageReviewSaving);
-  const compareAvailable = hasGeneratedPreview(image);
-  const maskToolAvailable = Boolean(image && selectedRegionIds.length === 1);
-  const maskToolActive = tool === 'mask-brush' || tool === 'mask-eraser';
+  const g4Locked = useWorkbenchStore((state) => g4EditingLocked(state));
+  const g7Locked = useWorkbenchStore((state) => g7EditingLocked(state));
+  const g4ContextStatus = useWorkbenchStore((state) => state.activeImageId
+    ? state.g4Contexts[state.activeImageId]?.status
+    : undefined);
+  const phase = useWorkbenchStore((state) => state.activeImageId
+    ? workflowPhase(state.g4Contexts[state.activeImageId])
+    : null);
+  const g4Active = g4ContextStatus === 'active';
+  const legacyStageControls = g4ContextStatus === 'legacy';
+  const g7Context = useWorkbenchStore((state) => state.activeImageId ? state.maskContexts[state.activeImageId] : undefined);
+  const backgroundReviewMode = phase === 'G5' || phase === 'G6' || phase === 'G7' || phase === 'G8' || phase === 'G9' || phase === 'G10';
+  const modeAvailable = (value: CanvasMode) => canvasModeAvailable(image, value)
+    && (!backgroundReviewMode || value === 'original' || value === 'preprocessed');
+  const compareAvailable = backgroundReviewMode
+    ? canvasModeAvailable(image, 'preprocessed')
+    : hasGeneratedPreview(image);
+  const maskToolAvailable = Boolean(
+    image && selectedRegionIds.length === 1 && (legacyStageControls || (
+      phase === 'G7' && !g7Locked && g7Context?.eligibleRegionIds.includes(selectedRegionIds[0]!)
+    ))
+  );
+  const maskToolActive = maskToolAvailable
+    && (tool === 'mask-brush' || tool === 'mask-eraser');
   const reviewStage = visualStageForMode(mode);
   const stageReviewState = reviewStage
     ? image?.stageReviews?.[reviewStage]?.state ?? 'pending'
@@ -856,7 +1090,8 @@ function CanvasToolbar({
       && reviewStage
       && image.status[reviewStage] === 'done'
       && observationReady
-      && (reviewStage !== 'inpaint' || showMask),
+      && (reviewStage !== 'inpaint' || showMask)
+      && !g4Active,
   );
   const stageReviewBusy = stageReviewSaving !== null;
   const submittedObservation: StageReviewObservation | undefined = observation?.state === 'ready'
@@ -906,10 +1141,10 @@ function CanvasToolbar({
           ['erased', '擦除'],
           ['typeset', '成品'],
         ] as const).map(([value, label]) => (
-          <button aria-pressed={mode === value} disabled={!canvasModeAvailable(image, value)} key={value} onClick={() => setCanvasMode(value)} title={!canvasModeAvailable(image, value) && value !== 'original' ? '尚未生成，请先运行对应步骤' : undefined} type="button">{label}</button>
+          <button aria-pressed={mode === value} disabled={!modeAvailable(value)} key={value} onClick={() => setCanvasMode(value)} title={!modeAvailable(value) && value !== 'original' ? backgroundReviewMode && (value === 'erased' || value === 'typeset') ? '严格门禁仅允许原图与已接受质量底板' : '尚未生成，请先运行对应步骤' : undefined} type="button">{label}</button>
         ))}
       </div>
-      {reviewStage ? (
+      {reviewStage && legacyStageControls ? (
         <div className="stage-review-controls" aria-busy={stageReviewBusy} aria-label="当前视觉阶段复核" role="group">
           <span aria-live="polite" className={`stage-review-state stage-review-state--${stageReviewState}`} role="status">
             {observationStatus}
@@ -929,7 +1164,7 @@ function CanvasToolbar({
           <button disabled={stageReviewBusy || stageReviewState === 'pending'} onClick={() => void reviewActiveImageStage(reviewStage, 'pending')} type="button">撤回复核</button>
         </div>
       ) : null}
-      {mode === 'erased' && (image?.inpaintCandidates?.length ?? 0) > 1 ? (
+      {legacyStageControls && mode === 'erased' && (image?.inpaintCandidates?.length ?? 0) > 1 ? (
         <label className="candidate-select">
           <span className="sr-only">修复候选</span>
           <select
@@ -949,9 +1184,9 @@ function CanvasToolbar({
       <span className="toolbar-divider" />
       <div className="tool-buttons" aria-label="编辑工具">
         <IconButton aria-label="选择工具" className={tool === 'select' ? 'is-active' : ''} onClick={() => setCanvasTool('select')} title="选择 V">↖</IconButton>
-        <IconButton aria-label="绘制文本框" className={tool === 'region' ? 'is-active' : ''} onClick={() => setCanvasTool('region')} title="绘制文本框 N">▢</IconButton>
+        <IconButton aria-label="绘制文本框" className={tool === 'region' ? 'is-active' : ''} disabled={g4Locked} onClick={() => setCanvasTool('region')} title="绘制文本框 N">▢</IconButton>
         <IconButton aria-label="平移工具" className={tool === 'hand' ? 'is-active' : ''} onClick={() => setCanvasTool('hand')} title="平移 H">✋</IconButton>
-        <IconButton aria-label="在中央快速新建文本框" disabled={!image} onClick={quickCreate} title="快速新建文本框">＋框</IconButton>
+        <IconButton aria-label="在中央快速新建文本框" disabled={!image || g4Locked} onClick={quickCreate} title="快速新建文本框">＋框</IconButton>
         <IconButton aria-label="蒙版画笔" className={tool === 'mask-brush' ? 'is-active' : ''} disabled={!maskToolAvailable} onClick={() => setCanvasTool('mask-brush')} title="向选中区域蒙版添加笔迹 M">画</IconButton>
         <IconButton aria-label="蒙版橡皮擦" className={tool === 'mask-eraser' ? 'is-active' : ''} disabled={!maskToolAvailable} onClick={() => setCanvasTool('mask-eraser')} title="从选中区域蒙版擦除笔迹 E">擦</IconButton>
       </div>
@@ -991,7 +1226,7 @@ function CanvasToolbar({
         className={`button button--compact ${compareMode && compareAvailable ? 'is-active' : ''}`}
         disabled={!compareAvailable}
         onClick={toggleCompareMode}
-        title={compareAvailable ? undefined : '尚无增强、擦除或成品可供对比'}
+        title={compareAvailable ? undefined : backgroundReviewMode ? '尚无已接受质量底板可供对比' : '尚无增强、擦除或成品可供对比'}
         type="button"
       >
         对比
@@ -1011,20 +1246,330 @@ export function CanvasWorkspace() {
   const regionsLoading = useWorkbenchStore((state) =>
     state.activeImageId ? state.regionsLoading[state.activeImageId] : false,
   );
+  const editingLocked = useWorkbenchStore((state) => g4EditingLocked(state));
+  const activeContext = useWorkbenchStore((state) => state.activeImageId
+    ? state.g4Contexts[state.activeImageId]
+    : undefined);
+  const phase = workflowPhase(activeContext);
+  const backgroundReviewMode = phase === 'G5' || phase === 'G6' || phase === 'G7' || phase === 'G8' || phase === 'G9' || phase === 'G10';
+  const regionSelectable = activeContext?.status === 'legacy'
+    || (activeContext?.status === 'active' && (
+      phase === 'G4' || phase === 'G5' || phase === 'G6' || phase === 'G7' || phase === 'G10'
+    ));
+  const legacyMaskEditingAllowed = useWorkbenchStore((state) => Boolean(
+    state.activeImageId && state.g4Contexts[state.activeImageId]?.status === 'legacy'
+  ));
+  const g7MaskEditingAllowed = useWorkbenchStore((state) => Boolean(
+    state.activeImageId && workflowPhase(state.g4Contexts[state.activeImageId]) === 'G7'
+      && !g7EditingLocked(state, state.activeImageId)
+  ));
+  const maskContext = useWorkbenchStore((state) => state.activeImageId ? state.maskContexts[state.activeImageId] : undefined);
+  const selectedArtifactId = useWorkbenchStore((state) => state.activeImageId ? state.selectedMaskArtifactIds[state.activeImageId] : undefined);
+  const selectedArtifact = maskContext?.artifacts.find((artifact) => artifact.artifactId === selectedArtifactId);
+  const g7Mask = useMemo(() => selectedArtifact ? {
+    artifactId: selectedArtifact.artifactId,
+    checksum: selectedArtifact.maskChecksum,
+    width: selectedArtifact.width,
+    height: selectedArtifact.height,
+  } : undefined, [selectedArtifact]);
+  const cleanPlateContext = useWorkbenchStore((state) => state.activeImageId
+    ? state.cleanPlateContexts[state.activeImageId] : undefined);
+  const translationContext = useWorkbenchStore((state) => state.activeImageId
+    ? state.translationContexts[state.activeImageId] : undefined);
+  const typesetContext = useWorkbenchStore((state) => state.activeImageId
+    ? state.typesetContexts[state.activeImageId] : undefined);
+  const selectedTypesetCandidateId = useWorkbenchStore((state) => state.activeImageId
+    ? state.selectedTypesetCandidateIds[state.activeImageId] : undefined);
+  const selectedTypesetCandidate = typesetContext?.candidates.find((candidate) =>
+    candidate.candidateId === selectedTypesetCandidateId);
+  const selectedCleanPlateCandidateId = useWorkbenchStore((state) => state.activeImageId
+    ? state.selectedCleanPlateCandidateIds[state.activeImageId] : undefined);
+  const selectedCleanPlateCandidate = cleanPlateContext?.candidates.find((candidate) =>
+    candidate.candidateId === selectedCleanPlateCandidateId);
+  const g8MaskArtifact = maskContext?.artifacts.find((artifact) =>
+    artifact.artifactId === cleanPlateContext?.maskArtifactId
+    && artifact.maskChecksum === cleanPlateContext.maskChecksum);
+  const g8AcceptedMask = useMemo(() => g8MaskArtifact ? {
+    artifactId: g8MaskArtifact.artifactId,
+    checksum: g8MaskArtifact.maskChecksum,
+    width: g8MaskArtifact.width,
+    height: g8MaskArtifact.height,
+  } : undefined, [g8MaskArtifact]);
+  const observeG8CleanPlateBitmap = useWorkbenchStore((state) => state.observeG8CleanPlateBitmap);
+  const observeG7MaskBitmap = useWorkbenchStore((state) => state.observeG7MaskBitmap);
+  const observeG10TypesetBitmap = useWorkbenchStore((state) => state.observeG10TypesetBitmap);
+  const g7ReviewIdentity = image && activeContext?.status === 'active' && activeContext.generation
+    && maskContext && selectedArtifact && phase === 'G7'
+    ? [
+        activeContext.generation.id,
+        image.id,
+        image.revision,
+        maskContext.imageRevision,
+        selectedArtifact.artifactId,
+        activeContext.generation.sourceChecksum,
+        maskContext.qualityChecksum,
+        selectedArtifact.maskChecksum,
+        selectedArtifact.width,
+        selectedArtifact.height,
+      ].join(':')
+    : '';
+  const [g7ReviewViews, setG7ReviewViews] = useState<Partial<
+    Record<G7ReviewViewKey, G7ReviewViewObservation>
+  >>({});
+  const g7ReviewIdentityRef = useRef(g7ReviewIdentity);
+  const g8ReviewIdentity = image && activeContext?.status === 'active' && activeContext.generation
+    && cleanPlateContext && selectedCleanPlateCandidate && g8AcceptedMask && phase === 'G8'
+    ? [
+        activeContext.generation.id,
+        activeContext.generation.nextSequence,
+        image.id,
+        image.revision,
+        cleanPlateContext.cleanPlateStateChecksum,
+        cleanPlateContext.g7Checksum,
+        selectedCleanPlateCandidate.candidateId,
+        selectedCleanPlateCandidate.candidateChecksum,
+        selectedCleanPlateCandidate.routeChecksum,
+        activeContext.generation.sourceChecksum,
+        cleanPlateContext.qualityChecksum,
+        g8AcceptedMask.artifactId,
+        g8AcceptedMask.checksum,
+        g8AcceptedMask.width,
+        g8AcceptedMask.height,
+        selectedCleanPlateCandidate.width,
+        selectedCleanPlateCandidate.height,
+      ].join(':')
+    : '';
+  const [g8ReviewViews, setG8ReviewViews] = useState<Partial<
+    Record<G8ReviewViewKey, G8ReviewViewObservation>
+  >>({});
+  const g8ReviewIdentityRef = useRef(g8ReviewIdentity);
+  const g10ReviewIdentity = image && activeContext?.status === 'active' && activeContext.generation
+    && typesetContext && selectedTypesetCandidate && phase === 'G10'
+    ? [
+        activeContext.generation.id,
+        activeContext.generation.nextSequence,
+        image.id,
+        image.revision,
+        typesetContext.g9TerminalChecksum,
+        typesetContext.cleanPlateChecksum,
+        selectedTypesetCandidate.candidateId,
+        selectedTypesetCandidate.candidateChecksum,
+        selectedTypesetCandidate.routeChecksum,
+        selectedTypesetCandidate.styleChecksum,
+        selectedTypesetCandidate.layoutChecksum,
+        activeContext.generation.sourceChecksum,
+        selectedTypesetCandidate.width,
+        selectedTypesetCandidate.height,
+        selectedTypesetCandidate.renderScale,
+      ].join(':')
+    : '';
+  const [g10ReviewViews, setG10ReviewViews] = useState<Partial<
+    Record<G10ReviewViewKey, G10ReviewViewObservation>
+  >>({});
+  const g10ReviewIdentityRef = useRef(g10ReviewIdentity);
+  const canvasTool = useWorkbenchStore((state) => state.canvasTool);
+  const setCanvasTool = useWorkbenchStore((state) => state.setCanvasTool);
   const [zoomSignal, setZoomSignal] = useState({ direction: 0 as -1 | 0 | 1, nonce: 0 });
   const [reviewObservation, setReviewObservation] = useState<CanvasReviewObservation | null>(null);
 
-  const mode: CanvasMode = canvasModeAvailable(image, requestedMode) ? requestedMode : 'original';
+  useLayoutEffect(() => {
+    g7ReviewIdentityRef.current = g7ReviewIdentity;
+  }, [g7ReviewIdentity]);
+
+  useLayoutEffect(() => {
+    g8ReviewIdentityRef.current = g8ReviewIdentity;
+  }, [g8ReviewIdentity]);
+
+  useLayoutEffect(() => {
+    g10ReviewIdentityRef.current = g10ReviewIdentity;
+  }, [g10ReviewIdentity]);
+
+  const handleG7ReviewViewObservation = useCallback((observation: G7ReviewViewObservation) => {
+    if (observation.identity !== g7ReviewIdentityRef.current) return;
+    setG7ReviewViews((current) => {
+      const previous = current[observation.key];
+      if (previous?.identity === observation.identity && previous.state === observation.state) {
+        return current;
+      }
+      return { ...current, [observation.key]: observation };
+    });
+  }, []);
+
+  const handleG8ReviewViewObservation = useCallback((observation: G8ReviewViewObservation) => {
+    if (observation.identity !== g8ReviewIdentityRef.current) return;
+    setG8ReviewViews((current) => {
+      const previous = current[observation.key];
+      if (previous?.identity === observation.identity && previous.state === observation.state) {
+        return current;
+      }
+      return { ...current, [observation.key]: observation };
+    });
+  }, []);
+
+  const handleG10ReviewViewObservation = useCallback((observation: G10ReviewViewObservation) => {
+    if (observation.identity !== g10ReviewIdentityRef.current) return;
+    setG10ReviewViews((current) => {
+      const previous = current[observation.key];
+      if (previous?.identity === observation.identity && previous.state === observation.state) {
+        return current;
+      }
+      return { ...current, [observation.key]: observation };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!image || !maskContext || !selectedArtifact || !g7ReviewIdentity) {
+      observeG7MaskBitmap(null);
+      return;
+    }
+    if (allG7ReviewViewsReady(g7ReviewViews, g7ReviewIdentity)) {
+      observeG7MaskBitmap({
+        imageId: image.id,
+        artifactId: selectedArtifact.artifactId,
+        imageRevision: image.revision,
+        checksum: selectedArtifact.maskChecksum,
+        width: selectedArtifact.width,
+        height: selectedArtifact.height,
+        state: 'ready',
+      });
+      return;
+    }
+    observeG7MaskBitmap(null);
+    if (G7_REVIEW_VIEW_KEYS.some((key) => {
+      const observation = g7ReviewViews[key];
+      return observation?.identity === g7ReviewIdentity && observation.state === 'error';
+    })) {
+      useWorkbenchStore.setState({
+        globalError: 'G7 四视图底图或实际蒙版的 checksum/像素网格读取失败；接受已锁定。',
+      });
+    }
+  }, [
+    g7ReviewIdentity,
+    g7ReviewViews,
+    image,
+    maskContext,
+    observeG7MaskBitmap,
+    selectedArtifact,
+  ]);
+
+  useEffect(() => {
+    if (!image || !activeContext?.generation || !cleanPlateContext || !g8AcceptedMask
+      || !selectedCleanPlateCandidate || !g8ReviewIdentity) {
+      observeG8CleanPlateBitmap(null);
+      return;
+    }
+    const ready = G8_REVIEW_VIEW_KEYS.every((key) => {
+      const observation = g8ReviewViews[key];
+      return observation?.identity === g8ReviewIdentity && observation.state === 'ready';
+    });
+    if (ready) {
+      observeG8CleanPlateBitmap({
+        imageId: image.id,
+        generationId: activeContext.generation.id,
+        nextSequence: activeContext.generation.nextSequence,
+        cleanPlateStateChecksum: cleanPlateContext.cleanPlateStateChecksum,
+        candidateId: selectedCleanPlateCandidate.candidateId,
+        imageRevision: image.revision,
+        sourceChecksum: activeContext.generation.sourceChecksum,
+        qualityChecksum: cleanPlateContext.qualityChecksum,
+        maskArtifactId: g8AcceptedMask.artifactId,
+        maskChecksum: g8AcceptedMask.checksum,
+        maskWidth: g8AcceptedMask.width,
+        maskHeight: g8AcceptedMask.height,
+        checksum: selectedCleanPlateCandidate.candidateChecksum,
+        width: selectedCleanPlateCandidate.width,
+        height: selectedCleanPlateCandidate.height,
+        state: 'ready',
+      });
+      return;
+    }
+    observeG8CleanPlateBitmap(null);
+    if (G8_REVIEW_VIEW_KEYS.some((key) => {
+      const observation = g8ReviewViews[key];
+      return observation?.identity === g8ReviewIdentity && observation.state === 'error';
+    })) {
+      useWorkbenchStore.setState({
+        globalError: 'G8 四视图底图、实际蒙版或候选 PNG 的 checksum/像素网格读取失败；复核已锁定。',
+      });
+    }
+  }, [
+    activeContext,
+    cleanPlateContext,
+    g8AcceptedMask,
+    g8ReviewIdentity,
+    g8ReviewViews,
+    image,
+    observeG8CleanPlateBitmap,
+    selectedCleanPlateCandidate,
+  ]);
+
+  useEffect(() => {
+    if (!image || !activeContext?.generation || !typesetContext
+      || !selectedTypesetCandidate || !g10ReviewIdentity) {
+      observeG10TypesetBitmap(null);
+      return;
+    }
+    const ready = G10_REVIEW_VIEW_KEYS.every((key) => {
+      const observation = g10ReviewViews[key];
+      return observation?.identity === g10ReviewIdentity && observation.state === 'ready';
+    });
+    if (ready) {
+      observeG10TypesetBitmap({
+        imageId: image.id,
+        generationId: activeContext.generation.id,
+        nextSequence: activeContext.generation.nextSequence,
+        candidateId: selectedTypesetCandidate.candidateId,
+        imageRevision: image.revision,
+        sourceChecksum: activeContext.generation.sourceChecksum,
+        cleanPlateChecksum: typesetContext.cleanPlateChecksum,
+        candidateChecksum: selectedTypesetCandidate.candidateChecksum,
+        routeChecksum: selectedTypesetCandidate.routeChecksum,
+        styleChecksum: selectedTypesetCandidate.styleChecksum,
+        layoutChecksum: selectedTypesetCandidate.layoutChecksum,
+        width: selectedTypesetCandidate.width,
+        height: selectedTypesetCandidate.height,
+        renderScale: selectedTypesetCandidate.renderScale,
+        state: 'ready',
+      });
+      return;
+    }
+    observeG10TypesetBitmap(null);
+    if (G10_REVIEW_VIEW_KEYS.some((key) => {
+      const observation = g10ReviewViews[key];
+      return observation?.identity === g10ReviewIdentity && observation.state === 'error';
+    })) {
+      useWorkbenchStore.setState({
+        globalError: 'G10 三视图原图、accepted clean plate 或最终候选 checksum/像素网格读取失败；复核已锁定。',
+      });
+    }
+  }, [
+    activeContext,
+    g10ReviewIdentity,
+    g10ReviewViews,
+    image,
+    observeG10TypesetBitmap,
+    selectedTypesetCandidate,
+    typesetContext,
+  ]);
+
+  const requestedModeAllowed = canvasModeAvailable(image, requestedMode)
+    && (!backgroundReviewMode || requestedMode === 'original' || requestedMode === 'preprocessed');
+  const mode: CanvasMode = requestedModeAllowed ? requestedMode : 'original';
   const resultMode = useMemo<CanvasMode>(() => {
+    if (backgroundReviewMode) {
+      return canvasModeAvailable(image, 'preprocessed') ? 'preprocessed' : 'original';
+    }
     if (mode !== 'original') return mode;
     if (canvasModeAvailable(image, 'typeset')) return 'typeset';
     if (canvasModeAvailable(image, 'erased')) return 'erased';
     if (canvasModeAvailable(image, 'preprocessed')) return 'preprocessed';
     return 'original';
-  }, [image, mode]);
-  const compareAvailable = hasGeneratedPreview(image);
+  }, [backgroundReviewMode, image, mode]);
+  const compareAvailable = backgroundReviewMode
+    ? canvasModeAvailable(image, 'preprocessed')
+    : hasGeneratedPreview(image);
   const showCompare = compareMode && compareAvailable;
-  const reviewStage = visualStageForMode(mode);
+  const reviewStage = backgroundReviewMode ? null : visualStageForMode(mode);
   const reviewIdentity = image && reviewStage
     ? `${image.id}:${image.revision}:${reviewStage}`
     : '';
@@ -1047,6 +1592,18 @@ export function CanvasWorkspace() {
   }, [mode, requestedMode, setCanvasMode]);
 
   useEffect(() => {
+    if (!legacyMaskEditingAllowed && !g7MaskEditingAllowed && (canvasTool === 'mask-brush' || canvasTool === 'mask-eraser')) {
+      setCanvasTool('select');
+    }
+  }, [canvasTool, g7MaskEditingAllowed, legacyMaskEditingAllowed, setCanvasTool]);
+
+  useEffect(() => {
+    if (activeContext?.status === 'active' && phase !== 'G4' && canvasTool === 'region') {
+      setCanvasTool('select');
+    }
+  }, [activeContext?.status, canvasTool, phase, setCanvasTool]);
+
+  useEffect(() => {
     if (compareMode && !compareAvailable) toggleCompareMode();
   }, [compareAvailable, compareMode, toggleCompareMode]);
 
@@ -1056,7 +1613,7 @@ export function CanvasWorkspace() {
         observation={reviewObservation}
         onZoom={(direction) => setZoomSignal((signal) => ({ direction, nonce: signal.nonce + 1 }))}
       />
-      <div className={`canvas-area ${showCompare ? 'canvas-area--compare' : ''}`}>
+      <div className={`canvas-area ${phase === 'G10' && selectedTypesetCandidate ? 'canvas-area--g10-grid' : (phase === 'G7' && g7Mask) || (phase === 'G8' && g8AcceptedMask && selectedCleanPlateCandidate) ? 'canvas-area--g7-grid' : phase === 'G9' ? 'canvas-area--compare' : showCompare ? 'canvas-area--compare' : ''}`}>
         {!image ? (
           <EmptyState
             icon="▧"
@@ -1070,31 +1627,60 @@ export function CanvasWorkspace() {
             }
             action={!project ? <CreateLocalProjectButton /> : hasLibrary ? undefined : <ImportPhotosButton />}
           />
+        ) : phase === 'G10' && typesetContext && selectedTypesetCandidate ? (
+          <>
+            <section className="compare-pane"><span className="compare-pane__label">不可变原图</span><CanvasViewport editable={false} g10ReviewView={{ identity: g10ReviewIdentity, key: 'original', expectedChecksum: activeContext?.generation?.sourceChecksum ?? '', expectedWidth: image.width, expectedHeight: image.height }} imageAsset={image} mode="original" onG10ReviewViewObservation={handleG10ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">G10 父项 · accepted clean plate</span><CanvasViewport artifactOverride={typesetContext.cleanPlateCandidateId ? { src: api.cleanPlateCandidateUrl(image.id, typesetContext.cleanPlateCandidateId) } : undefined} editable={false} g10ReviewView={{ identity: g10ReviewIdentity, key: 'clean-plate', expectedChecksum: typesetContext.cleanPlateChecksum, expectedWidth: selectedTypesetCandidate.width, expectedHeight: selectedTypesetCandidate.height }} imageAsset={image} mode="preprocessed" onG10ReviewViewObservation={handleG10ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">不可变最终候选</span><CanvasViewport artifactOverride={{ src: selectedTypesetCandidate.artifactUrl }} editable={false} g10ReviewView={{ identity: g10ReviewIdentity, key: 'candidate', expectedChecksum: selectedTypesetCandidate.candidateChecksum, expectedWidth: selectedTypesetCandidate.width, expectedHeight: selectedTypesetCandidate.height }} imageAsset={image} mode="preprocessed" onG10ReviewViewObservation={handleG10ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+          </>
+        ) : phase === 'G8' && g8AcceptedMask && selectedCleanPlateCandidate ? (
+          <>
+            <section className="compare-pane"><span className="compare-pane__label">原图</span><CanvasViewport editable={false} g8ReviewView={{ identity: g8ReviewIdentity, key: 'original', expectedChecksum: activeContext?.generation?.sourceChecksum ?? '', expectedWidth: image.width, expectedHeight: image.height }} imageAsset={image} mode="original" onG8ReviewViewObservation={handleG8ReviewViewObservation} selectable={false} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">质量底板</span><CanvasViewport editable={false} g8ReviewView={{ identity: g8ReviewIdentity, key: 'quality', expectedChecksum: cleanPlateContext?.qualityChecksum ?? '', expectedWidth: selectedCleanPlateCandidate.width, expectedHeight: selectedCleanPlateCandidate.height }} imageAsset={image} mode="preprocessed" onG8ReviewViewObservation={handleG8ReviewViewObservation} selectable={false} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">质量底板 · accepted mask</span><CanvasViewport editable={false} g7Mask={g8AcceptedMask} g8ReviewView={{ identity: g8ReviewIdentity, key: 'quality-mask', expectedChecksum: cleanPlateContext?.qualityChecksum ?? '', expectedWidth: selectedCleanPlateCandidate.width, expectedHeight: selectedCleanPlateCandidate.height }} imageAsset={image} maskOn mode="preprocessed" onG8ReviewViewObservation={handleG8ReviewViewObservation} selectable={false} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">不可变 clean plate 候选</span><CanvasViewport artifactOverride={{ src: api.cleanPlateCandidateUrl(image.id, selectedCleanPlateCandidate.candidateId) }} editable={false} g8ReviewView={{ identity: g8ReviewIdentity, key: 'candidate', expectedChecksum: selectedCleanPlateCandidate.candidateChecksum, expectedWidth: selectedCleanPlateCandidate.width, expectedHeight: selectedCleanPlateCandidate.height }} imageAsset={image} mode="preprocessed" onG8ReviewViewObservation={handleG8ReviewViewObservation} selectable={false} zoomSignal={zoomSignal} /></section>
+          </>
+        ) : phase === 'G9' && translationContext ? (
+          <>
+            <section className="compare-pane"><span className="compare-pane__label">不可变原图</span><CanvasViewport editable={false} imageAsset={image} mode="original" selectable={false} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">G9 父项 · accepted clean plate · {translationContext.cleanPlateChecksum.slice(0, 12)}</span><CanvasViewport artifactOverride={translationContext.cleanPlateCandidateId ? { src: api.cleanPlateCandidateUrl(image.id, translationContext.cleanPlateCandidateId) } : undefined} editable={false} imageAsset={image} mode="preprocessed" selectable={false} zoomSignal={zoomSignal} /></section>
+          </>
+        ) : phase === 'G7' && g7Mask ? (
+          <>
+            <section className="compare-pane"><span className="compare-pane__label">原图 · mask-off</span><CanvasViewport editable={false} g7ReviewView={{ identity: g7ReviewIdentity, key: 'original-off', expectedBaseChecksum: activeContext?.generation?.sourceChecksum ?? '' }} imageAsset={image} mode="original" onG7ReviewViewObservation={handleG7ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">质量底板 · mask-off</span><CanvasViewport editable={false} g7ReviewView={{ identity: g7ReviewIdentity, key: 'quality-off', expectedBaseChecksum: maskContext?.qualityChecksum ?? '' }} imageAsset={image} mode="preprocessed" onG7ReviewViewObservation={handleG7ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">原图 · mask-on</span><CanvasViewport editable={false} g7Mask={g7Mask} g7ReviewView={{ identity: g7ReviewIdentity, key: 'original-on', expectedBaseChecksum: activeContext?.generation?.sourceChecksum ?? '' }} imageAsset={image} maskEditable={g7MaskEditingAllowed} maskOn mode="original" onG7ReviewViewObservation={handleG7ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+            <section className="compare-pane"><span className="compare-pane__label">质量底板 · mask-on</span><CanvasViewport editable={false} g7Mask={g7Mask} g7ReviewView={{ identity: g7ReviewIdentity, key: 'quality-on', expectedBaseChecksum: maskContext?.qualityChecksum ?? '' }} imageAsset={image} maskEditable={g7MaskEditingAllowed} maskOn mode="preprocessed" onG7ReviewViewObservation={handleG7ReviewViewObservation} selectable={regionSelectable} zoomSignal={zoomSignal} /></section>
+          </>
         ) : showCompare ? (
           <>
             <section className="compare-pane">
               <span className="compare-pane__label">原图</span>
-              <CanvasViewport editable imageAsset={image} mode="original" zoomSignal={zoomSignal} />
+              <CanvasViewport editable={!editingLocked} imageAsset={image} maskEditable={g7MaskEditingAllowed} mode="original" selectable={regionSelectable} zoomSignal={zoomSignal} />
             </section>
             <section className="compare-pane">
-              <span className="compare-pane__label">{resultMode === 'preprocessed' ? '增强结果' : resultMode === 'erased' ? '擦除结果' : resultMode === 'typeset' ? '嵌字成品' : '原图'}</span>
+              <span className="compare-pane__label">{backgroundReviewMode ? '已接受质量底板' : resultMode === 'preprocessed' ? '增强结果' : resultMode === 'erased' ? '擦除结果' : resultMode === 'typeset' ? '嵌字成品' : '原图'}</span>
               <CanvasViewport
-                editable
+                editable={!editingLocked}
                 imageAsset={image}
+                maskEditable={g7MaskEditingAllowed}
                 mode={resultMode}
                 observationStage={reviewStage}
                 onReviewObservation={reviewStage ? handleReviewObservation : undefined}
+                selectable={regionSelectable}
                 zoomSignal={zoomSignal}
               />
             </section>
           </>
         ) : (
           <CanvasViewport
-            editable
+            editable={!editingLocked}
             imageAsset={image}
+            maskEditable={g7MaskEditingAllowed}
             mode={mode}
             observationStage={reviewStage}
             onReviewObservation={reviewStage ? handleReviewObservation : undefined}
+            selectable={regionSelectable}
             zoomSignal={zoomSignal}
           />
         )}

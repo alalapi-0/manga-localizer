@@ -3,7 +3,12 @@ import { useEffect, useState } from 'react';
 import { hasPendingChanges, useWorkbenchStore } from '../store/workbench';
 import { IconButton } from './Primitives';
 
-export function TopBar() {
+interface TopBarProps {
+  activeView?: 'workbench' | 'final-review';
+  onViewChange?: (view: 'workbench' | 'final-review') => void;
+}
+
+export function TopBar({ activeView = 'workbench', onViewChange }: TopBarProps) {
   const project = useWorkbenchStore((state) => state.currentProject);
   const theme = useWorkbenchStore((state) => state.theme);
   const saving = useWorkbenchStore((state) => state.saving);
@@ -59,7 +64,11 @@ export function TopBar() {
         <span className="topbar__project-name">{project?.name ?? '未打开项目'}</span>
         {project?.rootPath ? <span className="topbar__project-path">{project.rootPath}</span> : null}
       </div>
-      {companionUrl ? (
+      <nav className="topbar__views" aria-label="应用视图">
+        <button aria-current={activeView === 'workbench' ? 'page' : undefined} onClick={() => onViewChange?.('workbench')} type="button">工作台</button>
+        <button aria-current={activeView === 'final-review' ? 'page' : undefined} onClick={() => onViewChange?.('final-review')} type="button">最终验收</button>
+      </nav>
+      {activeView === 'workbench' && companionUrl ? (
         <div className="topbar__companion" aria-label="手机入口" role="status">
           <p>
             同一 Wi-Fi 的手机请在 Safari 打开
@@ -77,11 +86,11 @@ export function TopBar() {
           </button>
         </div>
       ) : null}
-      <div className="topbar__history" aria-label="编辑历史">
+      {activeView === 'workbench' ? <div className="topbar__history" aria-label="编辑历史">
         <IconButton aria-label="撤销" disabled={!canUndo} onClick={undo} title="撤销 ⌘Z">↶</IconButton>
         <IconButton aria-label="重做" disabled={!canRedo} onClick={redo} title="重做 ⇧⌘Z">↷</IconButton>
-      </div>
-      <button
+      </div> : null}
+      {activeView === 'workbench' ? <button
         className={`save-status ${saveError ? 'save-status--error' : dirty ? 'save-status--dirty' : ''}`}
         disabled={!dirty || saving}
         onClick={() => void flushAutosave()}
@@ -89,7 +98,7 @@ export function TopBar() {
       >
         <span aria-hidden="true">{saving ? '◌' : saveError ? '!' : dirty ? '●' : '✓'}</span>
         {saveLabel}
-      </button>
+      </button> : null}
       <div className="topbar__actions">
         <IconButton
           aria-label={theme === 'dark' ? '切换到浅色主题' : '切换到深色主题'}
@@ -98,15 +107,15 @@ export function TopBar() {
         >
           {theme === 'dark' ? '☀' : '☾'}
         </IconButton>
-        <IconButton aria-label="快捷键" onClick={() => setShortcutsOpen(true)} title="快捷键">⌨</IconButton>
-        <button
+        {activeView === 'workbench' ? <IconButton aria-label="快捷键" onClick={() => setShortcutsOpen(true)} title="快捷键">⌨</IconButton> : null}
+        {activeView === 'workbench' ? <button
           className="button button--accent topbar__batch"
           disabled={!project}
           onClick={() => setDrawerOpen(true)}
           type="button"
         >
           批处理与导出
-        </button>
+        </button> : null}
       </div>
     </header>
   );

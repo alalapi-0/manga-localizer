@@ -8,8 +8,11 @@ Run `tesseract --version` and `tesseract --list-langs`. Install both `jpn` and `
 
 ## The Mac application window did not open
 
-Double-click `Manga Localizer.app` from `dist/macos` or `~/Applications` after `npm run package:app`.
-That starts the bundled API and a dedicated window. `npm run app` still needs a built workbench
+For normal use, double-click `~/Applications/Manga Localizer.app`. That is the governed thin entry:
+it verifies the external-disk identity and starts the registered external runtime and model bundle,
+with no internal fallback. `npm run package:app` builds a separate heavy external artifact;
+`--install-user` does not copy that artifact, but asks the canonical maintenance installer to refresh
+an already-managed thin entry from its hash-bound template. `npm run app` still needs a built workbench
 (`frontend/dist`) and a loopback API; it uses Chrome, Edge, Chromium, or Brave for a dedicated window
 when the native helper is not present. The API remains on `127.0.0.1` unless you start
 `npm run app:lan` or launch the app binary with `--lan`.
@@ -19,7 +22,7 @@ when the native helper is not present. The API remains on `127.0.0.1` unless you
 The packaged app never downloads models at startup. Re-run `npm run package:app` so package-time
 checksum verification can copy the files into the bundle. `/api/health` reports `bundledModels`
 with `checksum mismatch` or `missing` when a bundled file is wrong. Developer checkouts can still
-use `npm run setup:models` into the data directory.
+use `npm run setup:models` to repair the guarded external model bundle.
 
 ## The phone cannot open the Mac companion URL
 
@@ -169,7 +172,7 @@ Install the backend `ai` extra and the checksum-verified anime ONNX model, then 
 
 ```bash
 npm run setup:models -- realesrgan
-uv sync --project backend --extra ai --group dev
+node scripts/external-uv.mjs sync --extra ai --group dev
 ```
 
 `realesrgan-onnx` is the local AI provider. `opencv-pillow` Lanczos is classic interpolation and will
@@ -184,11 +187,11 @@ Install the backend `mt` extra and both checksum-verified Argos packages, then r
 npm run setup:mt
 ```
 
-Or, with a repository data directory:
+Or install the runtime and guarded models as separate explicit steps:
 
 ```bash
-uv sync --project backend --extra mt --group dev
-npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
+node scripts/external-uv.mjs sync --extra mt --group dev
+npm run setup:models -- argos-ja-zh
 ```
 
 `argos-ja-zh` translates locally through English and currently produces Simplified Chinese. It does not

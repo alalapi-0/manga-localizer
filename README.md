@@ -24,15 +24,34 @@ inpainting, typesetting, review, and export as separate replaceable stages.
 - Versioned detector/OCR evidence with separate confidence values, provider/input/language provenance,
   OCR attempts retained across reruns, and a fail-closed human trust checkpoint; automatic proposals
   remain reviewable regardless of confidence, while preprocessing changes revoke dependent trust
+- Fresh page generations run strict whole-page G6 OCR over both immutable-original and accepted-quality
+  crops, require an explicit same-job source selection plus nine-item QC for every non-ruby `translate`
+  or `redraw-art` region, and keep queued/running jobs, incomplete pairs, stale checksums, or uncertain
+  writes locked
 - Manual, deterministic mock, local dictionary, and configurable OpenAI-compatible translation
 - Bounded same-page reading-order context, glossary controls, and remote privacy warnings
-- Text-aware or region masks with padding, dilation, feathering, a visible mask overlay, editable
-  region boundaries, persisted per-region brush/eraser strokes, safe repair gating, OpenCV fallback,
-  optional local LaMa ONNX restoration, and Pillow horizontal or vertical Chinese typesetting with
+- Strict G7 page generations keep a server-derived primary/ruby removal map, a checksum-bound mask
+  recipe, immutable actual-mask PNG attempts, and a ten-item coverage/collateral review. The operator
+  compares original and accepted-quality mask-on/mask-off views; changing the canonical bounded
+  brush/eraser recipe makes older attempts stale. The five coverage checks cover body glyphs,
+  punctuation, outlines/shadows, linked ruby, and antialias edges; the five collateral checks protect
+  bubble borders, characters, speed lines, screentone, and nearby artwork
+- Strict G8 routes every accepted-mask region from its reviewed G5 background class: solid fills,
+  controlled gradients, screentone-preserving repair, or AI redraw for complex art. Every immutable
+  candidate binds the G7 mask, accepted quality plate, route/provider/model manifest, exact PNG/grid,
+  and a recomputed zero outside-mask pixel-change count. The operator must inspect original, quality,
+  quality-plus-accepted-mask, and candidate bytes and record all seven clean-plate checks. Page-scoped
+  classical fallback stays disabled until all applicable same-generation AI candidates are explicitly
+  rejected and is always recorded as classical provenance. Legacy pages retain
+  text-aware or region masks, safe repair gating, OpenCV fallback, optional local LaMa ONNX restoration,
+  and Pillow horizontal or vertical Chinese typesetting with
   vertical punctuation forms, hanging comma/period glyphs, fragment clustering for adjacent small
   boxes, persisted overflow review, and inspector actions to retypeset overflowing or selected boxes
 - Persisted accept/reject review for enhanced, repaired, and typeset images; generated-image export
   requires accepted reviews that still match the exact image and repair-mask bytes
+- An integrated cross-project **最终验收** view with frozen previews, pending/approved/issues verdicts,
+  categorized feedback, repair handoff back to the workbench, revision-safe persistence, and
+  terminal all-approved export to a newly selected local directory
 - Persistent non-blocking batch jobs with a 1–8 item limit, progress, cooperative controls, failure
   details, and retry; export is serialized for conflict-safe naming
 - Safe single/batch export preserving relative folders and emitting original/translated text JSON
@@ -48,10 +67,11 @@ can leave a visible reconstruction band where lettering covers complex line work
 workflow requires explicit human trust before translation or image repair; confidence never grants
 that trust automatically. Human review remains required.
 
-The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, artistic
-sound-effect redraw, automatic font matching, reliable speech-bubble classification, PDF/EPUB import,
-native installers signed for the App Store, cloud sync, or collaboration. Local package-time copies
-of optional models stay out of git. See the
+The workbench also does **not** yet provide MangaOCR/PaddleOCR recognition adapters, curve-warp or local
+AI-generated art lettering, automatic font matching, reliable speech-bubble classification, PDF/EPUB
+import, native installers signed for the App Store, cloud sync, or collaboration. G10 does provide a
+bounded deterministic display-font/affine art-lettering route. Local package-time copies of optional
+models stay out of git. See the
 [real-data iteration report](docs/real-data-iteration-status.md) for measured trade-offs rather than
 accuracy claims without ground truth.
 
@@ -64,12 +84,13 @@ flowchart TB
   API --> Queue[persistent local job queue]
   Queue --> P[Optional image preprocessing]
   P --> D[Text detection]
-  D --> O[Japanese OCR provider]
-  O --> H[Confirm or ignore OCR proposals]
-  H --> R[Reading order]
-  R --> T[Translation provider]
-  T --> I[Inpainting provider]
-  I --> Y[Typesetting engine]
+  D --> R[Review regions, ruby, and background]
+  R --> O[Dual-crop Japanese OCR]
+  O --> H[Confirm trusted source text]
+  H --> M[Mask generation and review]
+  M --> I[Clean-plate generation and review]
+  I --> T[Translation and semantic review]
+  T --> Y[Typesetting engine]
   Y --> V[Human review]
   V --> E[Safe export]
 ```
@@ -108,7 +129,11 @@ Optional local providers add these requirements:
 
 ## Install and start
 
-Clone the repository, then run:
+The supported local commands assume a managed workstation has already provisioned the canonical
+storage-governance guard, its verified external runtime/model/artifact mappings, and the per-user
+maintenance installer. Those components deliberately live outside this repository. Without them,
+setup and launch fail closed; there is no repository-local heavy-runtime fallback. On that managed
+workstation, clone the repository, then run:
 
 ```bash
 npm install
@@ -126,7 +151,13 @@ weights into the bundle:
 npm run package:app
 ```
 
-That writes `dist/macos/Manga Localizer.app` and, on this Mac, also copies it to `~/Applications`.
+That writes the heavy package to the artifact destination returned by the verified guard. It never copies that
+heavy bundle to the internal disk. `npm run package:app -- --install-user` instead invokes the
+canonical per-user storage-governance maintenance installer, which refreshes the already-managed
+thin entry at `~/Applications/Manga Localizer.app` from its hash-bound template; it is not a general
+first installer and does not install the package output that was just built. Normal use starts that
+thin installed entry, and the storage identity guard then selects the external runtime and model
+bundle. A missing or wrong disk fails closed without an internal runtime fallback.
 The packaged app binds `127.0.0.1:8000` by default, serves the built frontend from inside the bundle,
 and never downloads models at ordinary startup. Missing or checksum-failed bundled files stay
 unavailable. The API is not exposed to the network unless you start `npm run app:lan` or launch the
@@ -159,14 +190,13 @@ To opt into the checked local ONNX models, run this explicitly before startup:
 npm run setup:ai
 ```
 
-This installs the backend AI extra and downloads PP-OCRv3, LaMa, and Real-ESRGAN anime ONNX
-weights into `~/.manga-localizer/models/`, verifying fixed SHA-256 checksums and printing each
-model's license. If your `.env` changes `MANGA_LOCALIZER_DATA_DIR`, point the model setup at the
-same directory instead:
+This installs the backend AI extra and places PP-OCRv3, LaMa, and Real-ESRGAN anime ONNX weights in
+the UUID-guarded external model bundle, verifying fixed SHA-256 checksums and printing each model's
+license. A missing or wrong external volume fails before the installer runs:
 
 ```bash
-npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
-uv sync --project backend --extra ai --group dev
+npm run setup:models -- ppocr lama realesrgan
+node scripts/external-uv.mjs sync --extra ai --group dev
 ```
 
 To opt into local Japanese-to-Chinese translation, install the `mt` extra and both Argos packages.
@@ -176,17 +206,21 @@ This is a separate explicit step and does not send text off-machine:
 npm run setup:mt
 ```
 
-If your `.env` changes `MANGA_LOCALIZER_DATA_DIR`, point the model setup at the same directory:
+The translation packages use that same guarded external bundle:
 
 ```bash
-uv sync --project backend --extra mt --group dev
-npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
+node scripts/external-uv.mjs sync --extra mt --group dev
+npm run setup:models -- argos-ja-zh
 ```
 
-Model installation is always a user-invoked action. The default application and test suite remain
+Model installation is always a user-invoked action. Use `npm run setup:models`; the lower-level
+Python model tool requires an explicit destination and independently confirms that it is below a
+guard-verified external models or artifacts root. The default application and test suite remain
 offline and usable with Tesseract/OpenCV/Pillow only.
 
 ### macOS
+
+These commands apply after the managed storage-governance prerequisite above has been provisioned:
 
 ```bash
 brew install node uv tesseract tesseract-lang
@@ -197,32 +231,15 @@ npm run dev
 
 ### Windows
 
-Install Node.js 22.22.2 or newer, uv, and a current Tesseract build containing Japanese trained data. Ensure
-`tesseract.exe` is on `PATH`, then use PowerShell:
-
-```powershell
-npm install
-npm run setup
-npm run dev
-```
-
-If Tesseract is elsewhere, set `MANGA_LOCALIZER_TESSERACT_COMMAND` to its full executable path in
-your local `.env`.
+The governed launcher/runtime route is currently provisioned only on its managed macOS workstation.
+Windows source compatibility is retained in application code, but this repository intentionally does
+not provide an unmanaged local-runtime fallback or a supported fresh-clone launch recipe.
 
 ### Linux (Debian/Ubuntu)
 
-```bash
-# Install Node.js 22.22.2+ with its official installer or a version manager first.
-sudo apt-get update
-sudo apt-get install -y fonts-noto-cjk tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert
-curl -LsSf https://astral.sh/uv/install.sh | sh
-npm install
-npm run setup
-npm run dev
-```
-
-Package names differ between distributions; verify `tesseract --list-langs` contains both `jpn` and
-`jpn_vert`. Distribution-provided Node.js packages may be older than this project's requirement.
+Linux is exercised by GitHub CI with an explicit two-variable CI-local dependency opt-in and a
+runner-temporary Python environment. That exception is CI-only. This repository intentionally does
+not turn a missing workstation guard into a general Linux local-runtime fallback.
 
 ## First project
 
@@ -232,16 +249,38 @@ Package names differ between distributions; verify `tesseract --list-langs` cont
 3. Import images or a folder. Folder import removes the selected root folder itself and preserves all
    paths beneath it, so selecting `input/` retains `chapter-01/001.png`.
 4. Optionally run preprocessing, compare the enhanced image with the original, then detect and OCR.
-5. Review every numbered OCR proposal in the canvas and Text panel, then explicitly confirm or ignore
-   it. Confidence is evidence only and never authorizes translation or default safe repair.
-6. Enter Chinese manually or choose a configured translation provider. Only trusted text and trusted
-   bounded same-page context reach a translator. Automatic translation that changes the translated text
-   clears the current content confirmation, so inspect the result and confirm the region again before
-   completing page review.
-7. Inspect the real mask overlay, choose text/full-region masking and an available inpainter, adjust
-   the selected region with the mask brush/eraser, then rerun repair and typesetting as needed.
-8. Confirm or ignore each text region, explicitly accept the enhanced/repair/typeset results you will
-   keep, then export. Original files are never replaced.
+   A fresh page-generation workflow runs both original and accepted-quality crops for each eligible box.
+5. Review every numbered OCR proposal in the canvas and Text panel. For strict G6 pages, choose the
+   trusted attempt or a manual correction and complete all nine QC checks before accepting the page.
+   Confidence, including zero, is evidence only and never authorizes translation or default safe repair.
+6. On strict pages, save the G7 recipe, generate an immutable actual mask, compare the four
+   original/quality mask-on/mask-off views, and record every coverage and collateral check. A rejected
+   mask defect that is local to coverage must be revised and regenerated in G7. If review instead exposes
+   wrong G4 geometry, paragraph/ruby ownership, or semantic disposition, preserve the rejected generation
+   and restart from the immutable source in a fresh generation/workspace before correcting G4; never
+   rewrite the accepted upstream history in place.
+7. In G8, generate a background-routed immutable clean-plate candidate. Compare original, accepted
+   quality, quality plus the exact accepted mask, and the candidate; all seven checks and the actual
+   candidate checksum/grid must match before acceptance. Complex art uses AI first. Classical fallback
+   is page-scoped and becomes available only after every applicable AI candidate is explicitly rejected.
+8. On strict pages, G9 starts only from terminal G8 evidence. Generate one whole-page automatic
+   candidate set with a canonical supported provider, or create per-region manual, Agent, or dictionary
+   revisions. Review every immutable candidate against all ten translation QC checks; rejected candidates
+   remain in history and a later revision must supersede them. Non-ruby `redraw-art` sound effects and
+   other art text follow the same trusted-source and semantic-review path as `translate`, then G10 renders
+   them through a separate art-lettering route. Only an explicit page-level accepted or not-applicable
+   terminal decision completes G9.
+9. G10 freezes one whole-page route, region, style, and font contract against the exact G9 terminal and
+   accepted clean plate. Bubble and ordinary text use an explicitly checksummed installed CJK font;
+   `redraw-art` requires a checksummed display font plus the declared fill/stroke, rotation, non-uniform
+   scale, shear, opacity, visual-centre, alignment, and line-spacing capability. `keep-art` and `ignore`
+   remain non-rendering routes. Compare immutable original, accepted clean plate, and immutable final
+   candidate together, then record all eight visual checks. Acceptance requires zero server-observed
+   overflow/anomalies; rejection preserves the candidate and preloads its exact styles for a later retry.
+   The legacy render and stage-review paths cannot authorize a strict generation.
+10. Legacy pages may still enter Chinese manually or use a configured translation provider, then use the
+   combined mask/inpaint control. Confirm or ignore each text region, explicitly accept the
+   enhanced/repair/typeset results you will keep, then export. Original files are never replaced.
 
 Default project output resembles:
 
@@ -250,9 +289,12 @@ output/
 ├── source/chapter-01/001.png
 ├── generated/
 │   ├── preprocessed/chapter-01/001.png
+│   ├── lineage-masks/<page-generation-id>/<artifact-id>.png
+│   ├── lineage-clean-plates/<page-generation-id>/<candidate-id>.png
+│   ├── lineage-typesets/<page-generation-id>/<candidate-id>.png
 │   ├── inpainted/chapter-01/001.png
 │   ├── typeset/chapter-01/001.png
-│   └── masks/chapter-01/001.png
+│   └── masks/chapter-01/001.png  # legacy combined mask/inpaint only
 ├── translated/chapter-01/001.png
 ├── original-text/chapter-01/001.json
 ├── translated-text/chapter-01/001.json
@@ -262,17 +304,124 @@ output/
     └── project.sqlite3
 ```
 
+Every strict page generation, including a native non-repair generation, must replay its sole creation G0
+before artifact work, strict reads, or export. Replay requires a contiguous event sequence, exact actor,
+source/target checksums, creation `Revision`, parameter set, run ID, and source references; these checks are
+not limited to final-review repair pages. Canonical SQLite triggers `revisions_g0_no_update` and
+`revisions_g0_no_delete` make every G0-linked creation Revision append-only, including existing generic
+G0 records with their five-key evidence shape; `page_lineage_events_no_update` and
+`page_lineage_events_no_delete` do the same for lineage events. The validator still replays exact content,
+so an event cannot drift together with its generation, actor, or target. Service replay verifies all four
+trigger definitions in `sqlite_master`; any missing, altered, or same-name weakened guard fails closed.
+Generic and final-review repair G0 creators run that exact check before any file or database write, returning
+a zero-write 4xx instead of publishing 201 and waiting for a later read to discover the missing protection.
+
+Strict G7 authority is the immutable `generated/lineage-masks/<page-generation-id>/<artifact-id>.png`
+artifact plus its database checksum and review history. Both `generated/masks/<relative-stem>.png` and
+the exported `masks/<relative-stem>.png` are legacy combined-workflow paths and must not be used to
+authorize a strict G8 consumer.
+
+Strict G8 authority is the accepted append-only candidate row and
+`generated/lineage-clean-plates/<page-generation-id>/<candidate-id>.png`, together with the exact
+candidate, route, quality, and accepted-mask checksums plus its seven-result review. The legacy
+`generated/inpainted/<relative-path>` output never authorizes a strict active generation, and the
+legacy inpaint stage-review endpoint is rejected for every active generation. AI provider aliases are
+normalized to their canonical runtime identity before route evidence is frozen.
+
+Strict G9 authority is the append-only region candidate/review history plus one immutable page terminal
+review bound to the exact terminal G8 checksum. Model candidates are published by one whole-page job;
+manual, Agent, and dictionary changes use the dedicated revision path and never rewrite an earlier
+candidate. Acceptance requires all ten QC checks, no computed or reviewer-reported defect, and a current
+accepted latest candidate for every eligible non-ruby `translate` or `redraw-art` region. `keep-art`,
+`ignore`, and ruby remain outside the translation target set. Only accepted candidates are copied into
+the legacy region translation fields; pending and rejected text never becomes a downstream compatibility
+projection.
+
+Strict G10 authority is one immutable whole-page candidate and its accepted review, both bound to the
+exact terminal G9, clean plate, derived routes, region geometry, checksummed installed fonts, styles,
+layouts, raster checksum, and eight visual checks. Bubble/ordinary and art-lettering routes stay
+distinct; keep/ignore routes preserve the clean pixels. Legacy render output or stage review cannot
+authorize a strict generation.
+
 `source/` is an immutable project-owned copy, never the user's original file. A custom export directory
 receives the same reopenable, source-bearing project snapshot; share only `translated/` when recipients
 should not receive source artwork. The exported SQLite copy removes machine-only original/project/output
 paths, exact import boundaries, and job `outputPath` options, then runs `VACUUM` before publication into
 the bundle.
 
+## Final review
+
+Use the top-bar **最终验收** view after project processing is complete. A final-review batch can combine
+accepted pages from multiple projects while preserving each page's `(projectId, imageId)` source link.
+New batches are strict-only snapshots: every page freezes an immutable original, accepted quality plate,
+mask, clean plate, and final image for one artifact revision. A stage can be explicitly not applicable;
+only legacy evidence that never existed is shown as unavailable. The comparison tabs use revisioned URLs,
+so reopening an older review revision never falls through to a live project artifact. Batch creation locks
+every open project store in stable store-root order across strict replay, evidence freezing, database
+commit, atomic publication, and the successful 201 response. For every page,
+choose **待审核**, **无问题**, or **有问题**. Problem pages support multiple categories such as typesetting,
+translation, mask, AI inpainting, preprocessing, missing text, and other, plus a free-form note that is
+stored only in the batch database. The backend permits a transition to **无问题** only when the recorded
+actor is human; Codex, Cursor, and system actors may report issues or perform repair operations but cannot
+approve a final-review item.
+
+**回到工作台修复** creates or reuses an isolated repair page from the immutable source and opens that
+page in the workbench. The handoff is bound to the exact review item revision and a checksum of its private
+feedback; raw feedback is not copied into public lineage. After the repair page has a newly accepted strict
+final result, return to final review and explicitly synchronize it. Synchronization freezes a new artifact
+revision, keeps old revisions readable, appends history, and resets the item to pending. Frozen previews
+never change merely because a source project changes. Existing format-v1 batches remain readable without
+an implicit migration: reviewed legacy items stay locked, while an issue item can enter this repair path
+and becomes strict after a successful synchronization. Legacy final evidence exposes only its frozen
+revision URL, checksum, and relative path; unavailable grid/resolution and producer/terminal fields remain
+honestly null and are validated as that exact v1 shape during conflict recovery.
+The client accepts a repair handoff only when it remains in the source project, points to a different
+ImageAsset than the immutable source item, and matches the exact default G0 run/parameter contract.
+Idempotent reuse additionally requires the request to match the parameter ID/hash already persisted on
+that generation, and the response is derived from those stored fields rather than relabeling it with retry
+parameters. Lookup first collects every G0 candidate bound to the same item ID, item revision, and feedback
+checksum: exactly one may be reused, while multiple matches fail closed. Repair and strict refresh share
+one validator that replays the complete generation, unique G0, creation revision, immutable source, repair
+target metadata and bytes, decoded grid, physical source/target separation, and contiguous event sequence.
+Every strict item that retains a repair handoff replays that validator and confirms the same generation and
+image on refresh, even after its verdict becomes pending or approved. G0 and creation `Revision` JSON use
+exact field and scalar types; boolean/integer and integer/float lookalikes are not interchangeable. Both
+`parameterSetId` and `parameterSetHash` are frozen in that G0/Revision evidence and carried into the
+post-refresh handoff; generation-parameter drift blocks retry, refresh, and export even for an approved
+item. Strict refresh locks final review before the source project and holds the source lock through artifact
+reading, freezing, and the final review CAS, so success cannot describe evidence that was already stale
+when returned.
+
+The final-review export action unlocks only after every page is **无问题** and the authoritative batch has
+zero pending/problem pages. Choose a new directory that does not already exist; strict review writes and
+all repair, synchronization, and export operations use item/batch revision guards plus actor provenance.
+Immediately before atomic publication, the application rechecks the all-approved counts, batch revision,
+and every frozen artifact/evidence checksum. Name collisions are safely renamed; terminal export never
+skips an approved item. OCR/translation text and private feedback are excluded from the exported manifest.
+A successful response is accepted only when its resolved output directory matches the requested target and
+its manifest is exactly `manifest.json` inside that directory.
+A conflicting or unverifiable mutation keeps repair, synchronization, and export locked until a
+non-regressing reload proves the exact batch, counts, items, and active item. This workflow is part of
+Manga Localizer itself and does not replace the ordinary project workbench or its stage-review database.
+Strict response validation recomputes each canonical grid digest and the complete frozen-evidence digest
+(excluding only response URLs added after storage), so a syntactically valid but false SHA-256 cannot clear
+that lock.
+Terminal export likewise locks every open project store in stable store-root order from the initial
+currentness check through copying and atomic publication, with a final currentness recheck before rename.
+This covers cross-project upstream sources as well as the directly referenced project, so a newly accepted
+artifact cannot race into a stale final export.
+
 ## OCR providers
 
 Tesseract remains the default detector and recognizer because it starts without Python model downloads
 and has maintained cross-platform packages. Install Japanese horizontal and vertical data and check
 provider health in Project Settings.
+
+Strict page-lineage OCR accepts only a canonical local provider and a Japanese source-language
+declaration. It records the provider-observed model version rather than trusting a client label, binds
+each crop to the immutable original or accepted quality checksum, and preserves every rerun as
+append-only evidence. A failed run can be retried, but source review and G6 acceptance wait until no OCR
+item is queued or running.
 
 `ppocr-v3` is an optional, local detection-only provider using OpenCV DNN and the official OpenCV Zoo
 PP-OCRv3 ONNX model. It returns polygon geometry; Tesseract then recognizes each detected region.
@@ -324,6 +473,12 @@ reconstruct line work hidden entirely by the original glyphs and may still need 
 - **Dictionary:** applies a local exact-match glossary without a language model.
 - **OpenAI-compatible:** uses a configurable base URL, model, and process/session API key.
 
+For a strict active generation, manual and dictionary providers are revision-only and cannot create an
+automatic translation job. Automatic jobs freeze the server-observed canonical provider/model and
+bounded context policy before insertion; supported local identities are mock and Argos
+Japanese-to-Chinese, while OpenAI-compatible use requires explicit per-job remote authorization and a
+valid configured credential. The worker rechecks the frozen identity before any provider call.
+
 Copy `.env.example` to `.env` for process configuration, or enter an API key in Project Settings for
 the current backend session only. Never paste a production credential into a project manifest. Each
 remote request contains one explicitly trusted current text, a bounded number of explicitly trusted
@@ -367,6 +522,10 @@ and [Security](SECURITY.md) before enabling remote services.
 - Export files and the portable manifest/database pair use atomic replacement. A job-scoped owner marker
   permits recovery of only that job's partial bundle, including SQLite temporary sidecars. An export job
   remains nonterminal until bundle finalization succeeds.
+- Portable bundles retain every G7 mask, G8 clean plate, and G10 typeset raster referenced by the
+  retained database, plus only catalog-validated public font capability tokens. Credential-like values
+  remain scrubbed, and one project writer lock spans asset discovery, copy, verification, and SQLite
+  backup so the files and database describe the same snapshot.
 - A relative custom export path is resolved and persisted against the project root before work starts,
   not against a later process working directory.
 

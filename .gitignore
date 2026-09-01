@@ -19,9 +19,10 @@ __pycache__/
 .coverage
 htmlcov/
 .venv/
+!backend/.venv
 
 # Node
-node_modules/
+node_modules
 dist/
 *.app
 coverage/

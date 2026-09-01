@@ -576,10 +576,12 @@ def _horizontal_fit(
     stroke_width: int,
     letter_spacing: float,
     auto_wrap: bool,
+    max_attempts: int | None = None,
 ) -> tuple[ImageFont.ImageFont, list[str], bool, float]:
     measuring = ImageDraw.Draw(Image.new("L", (1, 1)))
     chosen: tuple[ImageFont.ImageFont, list[str], bool, float] | None = None
-    for size in range(max_size, min_size - 1, -1):
+
+    def evaluate(size: int) -> tuple[ImageFont.ImageFont, list[str], bool, float]:
         font = _load_font(font_path, size, font_family)
         lines = _horizontal_lines(
             text,
@@ -596,11 +598,35 @@ def _horizontal_fit(
             _text_width(measuring, line, font, stroke_width, letter_spacing) <= width
             for line in lines
         )
-        chosen = (font, lines, not fits, line_height)
-        if fits:
-            return chosen
-    assert chosen is not None
-    return chosen
+        return font, lines, not fits, line_height
+
+    if max_attempts is None:
+        for size in range(max_size, min_size - 1, -1):
+            chosen = evaluate(size)
+            if not chosen[2]:
+                return chosen
+        assert chosen is not None
+        return chosen
+    low, high = min_size, max_size
+    fallback: tuple[ImageFont.ImageFont, list[str], bool, float] | None = None
+    attempts = 0
+    while low <= high:
+        if attempts >= max_attempts:
+            raise ValueError("Bounded horizontal font fitting exhausted its attempt budget")
+        size = (low + high) // 2
+        result = evaluate(size)
+        attempts += 1
+        if size == min_size:
+            fallback = result
+        if result[2]:
+            high = size - 1
+        else:
+            chosen = result
+            low = size + 1
+    if chosen is not None:
+        return chosen
+    assert fallback is not None
+    return fallback
 
 
 def _vertical_fit(
@@ -613,20 +639,46 @@ def _vertical_fit(
     min_size: int,
     max_size: int,
     line_spacing: float,
+    max_attempts: int | None = None,
 ) -> tuple[ImageFont.ImageFont, list[list[str]], bool, int]:
     characters = list(verticalize_punctuation(text).replace("\n", ""))
     chosen: tuple[ImageFont.ImageFont, list[list[str]], bool, int] | None = None
-    for size in range(max_size, min_size - 1, -1):
+
+    def evaluate(size: int) -> tuple[ImageFont.ImageFont, list[list[str]], bool, int]:
         font = _load_font(font_path, size, font_family)
         cell = max(1, math.ceil(size * (1 + line_spacing)))
         rows = max(1, height // cell)
         columns = [characters[index : index + rows] for index in range(0, len(characters), rows)]
         fits = max(1, len(columns)) * cell <= width
-        chosen = (font, columns or [[]], not fits, cell)
-        if fits:
-            return chosen
-    assert chosen is not None
-    return chosen
+        return font, columns or [[]], not fits, cell
+
+    if max_attempts is None:
+        for size in range(max_size, min_size - 1, -1):
+            chosen = evaluate(size)
+            if not chosen[2]:
+                return chosen
+        assert chosen is not None
+        return chosen
+    low, high = min_size, max_size
+    fallback: tuple[ImageFont.ImageFont, list[list[str]], bool, int] | None = None
+    attempts = 0
+    while low <= high:
+        if attempts >= max_attempts:
+            raise ValueError("Bounded vertical font fitting exhausted its attempt budget")
+        size = (low + high) // 2
+        result = evaluate(size)
+        attempts += 1
+        if size == min_size:
+            fallback = result
+        if result[2]:
+            high = size - 1
+        else:
+            chosen = result
+            low = size + 1
+    if chosen is not None:
+        return chosen
+    assert fallback is not None
+    return fallback
 
 
 def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dict[str, Any]]:
@@ -673,7 +725,15 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
     align = str(style.get("align", "center"))
     if align not in {"start", "center", "end"}:
         align = "center"
+    vertical_align = str(style.get("verticalAlign", "start"))
+    if vertical_align not in {"start", "center", "end"}:
+        vertical_align = "start"
     auto_wrap = bool(_style_value(style, "autoWrap", "auto_wrap", True))
+    fit_attempt_limit = style.get("_g10FitAttemptLimit")
+    if fit_attempt_limit is not None and (
+        type(fit_attempt_limit) is not int or not 1 <= fit_attempt_limit <= 64
+    ):
+        raise ValueError("G10 fit attempt limit must be an integer from 1 to 64")
     opacity = min(1.0, max(0.0, float(style.get("opacity", 1.0))))
     direction = region.get("direction", "vertical")
     background = style.get("backgroundColor", style.get("background_color"))
@@ -696,6 +756,7 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
             stroke_width=stroke_width,
             letter_spacing=letter_spacing,
             auto_wrap=auto_wrap,
+            max_attempts=fit_attempt_limit,
         )
         total_height = line_height * len(lines) + line_height * line_spacing * (len(lines) - 1)
         y = padding + max(0, (content_height - total_height) / 2)
@@ -730,6 +791,7 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
             min_size=min_size,
             max_size=max_size,
             line_spacing=line_spacing,
+            max_attempts=fit_attempt_limit,
         )
         block_width = max(1, len(columns)) * cell
         x = (
@@ -739,8 +801,17 @@ def _draw_region(text: str, region: Mapping[str, Any]) -> tuple[Image.Image, dic
             if align == "end"
             else padding + max(0, (content_width + block_width) / 2) - cell
         )
+        block_height = max((len(column) for column in columns), default=0) * cell
+        free_height = max(0, content_height - block_height)
+        start_y = (
+            padding + free_height
+            if vertical_align == "end"
+            else padding + free_height / 2
+            if vertical_align == "center"
+            else padding
+        )
         for column in columns:
-            y = padding
+            y = start_y
             for character in column:
                 box = draw.textbbox((0, 0), character, font=font, stroke_width=stroke_width)
                 glyph_width = box[2] - box[0]

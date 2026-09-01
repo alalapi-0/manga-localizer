@@ -6,7 +6,16 @@ import { EmptyState, IconButton, LoadingState } from './components/Primitives';
 import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { Sidebar } from './components/Sidebar';
 import { TopBar } from './components/TopBar';
-import { hasPendingChanges, overflowingRegionIds, useWorkbenchStore } from './store/workbench';
+import { FinalReviewPage, RepairContextBanner } from './finalReview/FinalReviewPage';
+import { finalReviewDraftDirty, useFinalReviewStore } from './finalReview/store';
+import {
+  hasPendingChanges,
+  g7EditingLocked,
+  maskRegionRequired,
+  overflowingRegionIds,
+  useWorkbenchStore,
+  workflowPhase,
+} from './store/workbench';
 
 const CanvasWorkspace = lazy(async () => {
   const module = await import('./components/CanvasWorkspace');
@@ -20,12 +29,24 @@ function isEditableTarget(target: EventTarget | null): boolean {
   );
 }
 
-function useGlobalShortcuts() {
+function useGlobalShortcuts(active: boolean) {
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
+      if (!active) return;
       const state = useWorkbenchStore.getState();
       const modifier = event.metaKey || event.ctrlKey;
       const editable = isEditableTarget(event.target);
+      const context = state.activeImageId ? state.g4Contexts[state.activeImageId] : undefined;
+      const phase = workflowPhase(context);
+      const legacyPage = context?.status === 'legacy';
+      const g4Page = context?.status === 'active' && phase === 'G4';
+      const regionMutationAllowed = legacyPage || g4Page;
+      const backgroundReadOnly = phase === 'G5' || phase === 'G6' || phase === 'G7' || phase === 'G8';
+      const selectedMaskRegion = state.activeImageId && state.selectedRegionIds.length === 1
+        ? (state.regionsByImage[state.activeImageId] ?? []).find((region) => region.id === state.selectedRegionIds[0])
+        : undefined;
+      const g7MaskEdit = phase === 'G7' && !g7EditingLocked(state)
+        && Boolean(selectedMaskRegion && maskRegionRequired(selectedMaskRegion));
 
       if (modifier && event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -63,6 +84,7 @@ function useGlobalShortcuts() {
           || event.key === 'ArrowUp'
           || event.key === 'ArrowDown')
       ) {
+        if (!regionMutationAllowed) return;
         event.preventDefault();
         const step = event.shiftKey ? 10 : 1;
         state.nudgeSelectedRegions(
@@ -72,11 +94,13 @@ function useGlobalShortcuts() {
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (!regionMutationAllowed) return;
         event.preventDefault();
         state.deleteSelectedRegions();
         return;
       }
       if (event.key === 'Enter') {
+        if (!legacyPage) return;
         const regionId = state.selectedRegionIds[0];
         if (regionId) {
           event.preventDefault();
@@ -135,6 +159,7 @@ function useGlobalShortcuts() {
         return;
       }
       if (!modifier && event.key.toLowerCase() === 't') {
+        if (!legacyPage) return;
         const image = state.images.find((entry) => entry.id === state.activeImageId);
         if (!image) return;
         const exportOptions = {
@@ -165,21 +190,22 @@ function useGlobalShortcuts() {
       switch (event.key.toLowerCase()) {
         case 'v': state.setCanvasTool('select'); break;
         case 'n':
-        case 'r': state.setCanvasTool('region'); break;
+        case 'r': if (regionMutationAllowed) state.setCanvasTool('region'); break;
         case 'h': state.setCanvasTool('hand'); break;
-        case 'm': state.setCanvasTool('mask-brush'); break;
-        case 'e': state.setCanvasTool('mask-eraser'); break;
+        case 'm': if (legacyPage || g7MaskEdit) state.setCanvasTool('mask-brush'); break;
+        case 'e': if (legacyPage || g7MaskEdit) state.setCanvasTool('mask-eraser'); break;
         case 'f': state.requestFit(); break;
         case 'g': state.focusSelectedRegions(); break;
         case 'b': state.toggleCompareMode(); break;
         case '1': state.setCanvasMode('original'); break;
         case '2': state.setCanvasMode('preprocessed'); break;
-        case '3': state.setCanvasMode('erased'); break;
-        case '4': state.setCanvasMode('typeset'); break;
+        case '3': if (!backgroundReadOnly) state.setCanvasMode('erased'); break;
+        case '4': if (!backgroundReadOnly) state.setCanvasMode('typeset'); break;
       }
     }
 
     function onKeyUp(event: KeyboardEvent) {
+      if (!active) return;
       if (event.code === 'Space') useWorkbenchStore.getState().setSpacePressed(false);
     }
 
@@ -195,7 +221,7 @@ function useGlobalShortcuts() {
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', clearTemporaryTools);
     };
-  }, []);
+  }, [active]);
 }
 
 function StartupState() {
@@ -245,9 +271,32 @@ export default function App() {
   const dirty = useWorkbenchStore(hasPendingChanges);
   const flushAutosave = useWorkbenchStore((state) => state.flushAutosave);
   const [shellPane, setShellPane] = useState<'pages' | 'canvas' | 'inspect'>('canvas');
+  const [activeView, setActiveView] = useState<'workbench' | 'final-review'>('workbench');
   const drawerOpen = useWorkbenchStore((state) => state.drawerOpen);
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
-  useGlobalShortcuts();
+  useGlobalShortcuts(activeView === 'workbench');
+
+  function changeView(next: 'workbench' | 'final-review') {
+    if (next === activeView) return;
+    if (activeView === 'final-review') {
+      const finalState = useFinalReviewStore.getState();
+      if (finalState.operation || finalState.conflict) return;
+    }
+    if (activeView === 'final-review' && finalReviewDraftDirty(useFinalReviewStore.getState())
+      && !window.confirm('当前终审标注尚未保存，确定离开终审页面吗？')) return;
+    setActiveView(next);
+  }
+
+  async function returnToFinalReview() {
+    const finalState = useFinalReviewStore.getState();
+    const context = finalState.repairContext;
+    if (!context) {
+      setActiveView('final-review');
+      return;
+    }
+    setActiveView('final-review');
+    await finalState.loadBatch(context.batchId, context.itemId);
+  }
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -282,13 +331,22 @@ export default function App() {
   }, [dirty, flushAutosave]);
 
   if ((loadState === 'loading' || loadState === 'idle' || loadState === 'error') && !project) {
-    return <StartupState />;
+    return (
+      <div className="app-shell">
+        <TopBar activeView={activeView} onViewChange={changeView} />
+        {activeView === 'final-review'
+          ? <FinalReviewPage onOpenWorkbench={() => setActiveView('workbench')} />
+          : <StartupState />}
+      </div>
+    );
   }
 
   return (
     <div className="app-shell">
-      <TopBar />
-      <ErrorBanner />
+      <TopBar activeView={activeView} onViewChange={changeView} />
+      {activeView === 'workbench' ? <ErrorBanner /> : null}
+      {activeView === 'workbench' ? <RepairContextBanner onReturn={() => void returnToFinalReview()} /> : null}
+      {activeView === 'final-review' ? <FinalReviewPage onOpenWorkbench={() => setActiveView('workbench')} /> : <>
       <nav className="mobile-panes" aria-label="工作台分区">
         <button
           aria-pressed={shellPane === 'pages'}
@@ -333,6 +391,7 @@ export default function App() {
       </div>
       {drawerOpen ? <BatchDrawer /> : null}
       <ShortcutsDialog />
+      </>}
     </div>
   );
 }

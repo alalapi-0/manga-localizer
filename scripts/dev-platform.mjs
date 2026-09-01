@@ -1,6 +1,8 @@
 import path from 'node:path';
 import process from 'node:process';
 
+import { resolveActiveFrontendRuntime } from './storage-frontend-route.mjs';
+
 export function isLoopbackHost(host) {
   const normalized = host.trim().replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
   return normalized === 'localhost'
@@ -10,11 +12,18 @@ export function isLoopbackHost(host) {
     || /^127(?:\.[0-9]{1,3}){3}$/.test(normalized);
 }
 
-export function frontendLaunch(root, host, port, nodeExecutable = process.execPath) {
+export function frontendLaunch(
+  root,
+  host,
+  port,
+  nodeExecutable = process.execPath,
+  resolveFrontend = resolveActiveFrontendRuntime,
+) {
+  const route = resolveFrontend({ projectRoot: root });
   return {
     command: nodeExecutable,
     args: [
-      path.join(root, 'frontend', 'node_modules', 'vite', 'bin', 'vite.js'),
+      path.join(route.nodeModules, 'vite', 'bin', 'vite.js'),
       path.join(root, 'frontend'),
       '--host',
       host,

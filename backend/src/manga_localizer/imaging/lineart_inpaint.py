@@ -381,17 +381,25 @@ def public_candidate_records(candidates: Sequence[Mapping[str, Any]]) -> list[di
         if candidate_id not in CANDIDATE_IDS:
             continue
         anomalies = item.get("anomalies", [])
-        records.append(
-            {
-                "id": candidate_id,
-                "label": CANDIDATE_LABELS.get(candidate_id, candidate_id),
-                "anomalies": [
-                    str(flag)
-                    for flag in anomalies
-                    if flag in {ANOMALY_MASK_OUTSIDE, ANOMALY_CHROMA, ANOMALY_SMEAR}
-                ]
-                if isinstance(anomalies, list)
-                else [],
-            }
-        )
+        record = {
+            "id": candidate_id,
+            "label": CANDIDATE_LABELS.get(candidate_id, candidate_id),
+            "anomalies": [
+                str(flag)
+                for flag in anomalies
+                if flag in {ANOMALY_MASK_OUTSIDE, ANOMALY_CHROMA, ANOMALY_SMEAR}
+            ]
+            if isinstance(anomalies, list)
+            else [],
+        }
+        origin_kind = item.get("originKind")
+        if origin_kind in {
+            "direct-ai",
+            "ai-derived",
+            "classical",
+            "deterministic-postprocess",
+            "mixed",
+        }:
+            record["originKind"] = origin_kind
+        records.append(record)
     return records

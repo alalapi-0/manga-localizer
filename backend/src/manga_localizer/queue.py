@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import io
+import json
 import logging
 import math
 import uuid
@@ -16,7 +17,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from manga_localizer.config import Settings
-from manga_localizer.database import ImageAsset, Job, JobItem, JobStatus, TextRegion
+from manga_localizer.database import (
+    ImageAsset,
+    Job,
+    JobItem,
+    JobStatus,
+    PageGeneration,
+    PageLineageEvent,
+    RegionOCRAttempt,
+    TextRegion,
+)
 from manga_localizer.imaging import (
     DEFAULT_REPAIR_SETTINGS,
     expand_typeset_region_ids,
@@ -45,10 +55,12 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
+from manga_localizer.services.clean_plates import publish_clean_plate_candidate
 from manga_localizer.services.exporting import (
     choose_export_root,
     ensure_project_bundle,
     export_image,
+    require_strict_generated_export_inpaint,
     validate_image_export_readiness,
     write_json_export_summary,
 )
@@ -65,6 +77,24 @@ from manga_localizer.services.inpaint_candidates import (
     inpaint_candidate_manifest_digest,
     prepare_page_inpaint_candidates,
     write_page_inpaint_candidates,
+)
+from manga_localizer.services.masks import publish_mask_artifact
+from manga_localizer.services.page_lineage import (
+    JobMutationBinding,
+    PageLineageConflict,
+    g4_region_state_checksum,
+    g6_ocr_state_checksum,
+    job_mutation_binding,
+    normalize_job_lineage,
+    record_detect_regions_produced,
+    record_job_artifact_produced,
+    record_job_enqueued_events,
+    record_job_item_finished,
+    record_ocr_attempts_produced,
+    require_current_background_classifications,
+    require_current_text_present_quality_plate,
+    require_job_lineage_for_execution,
+    require_supported_lineage_job_kind,
 )
 from manga_localizer.services.projects import (
     ProjectError,
@@ -182,11 +212,7 @@ class PersistentJobQueue:
             job_kind = job.kind
             job_options = dict(job.options)
             concurrency = self._job_concurrency(job_kind, job_options)
-            item_ids = [
-                item.id
-                for item in job.items
-                if item.status not in {JobStatus.COMPLETED.value, JobStatus.CANCELLED.value}
-            ]
+            item_ids = [item.id for item in job.items if item.status == JobStatus.QUEUED.value]
         for offset in range(0, len(item_ids), concurrency):
             batch = item_ids[offset : offset + concurrency]
             started: list[str] = []
@@ -252,6 +278,7 @@ class PersistentJobQueue:
                     return
                 if finished_job.options.get("bundleFinalized") is True:
                     return
+                require_job_lineage_for_execution(store, session, finished_job)
                 stale_items = [
                     item
                     for item in finished_job.items
@@ -263,6 +290,22 @@ class PersistentJobQueue:
                         "retry with overwrite or start a new export job"
                     )
             export_format = str(job_options.get("format", "both"))
+            image_variant = str(job_options.get("imageVariant", "typeset"))
+            if export_format in {"images", "both"}:
+                for item in finished_job.items:
+                    if item.image_id is None:
+                        raise ProjectError("Export job item has no image")
+                    if require_strict_generated_export_inpaint(
+                        store,
+                        item.image_id,
+                        export_format=export_format,
+                    ):
+                        validate_image_export_readiness(
+                            store,
+                            item.image_id,
+                            export_format=export_format,
+                            image_variant=image_variant,
+                        )
             include_assets = export_format == "both"
             export_root = choose_export_root(
                 store,
@@ -364,6 +407,28 @@ class PersistentJobQueue:
         return ids
 
     @staticmethod
+    def _require_translation_acceptance(
+        image_id: str,
+        regions: list[TextRegion],
+    ) -> None:
+        active = [region for region in regions if not region.ignored]
+        mismatches: list[str] = []
+        if any(not is_region_trusted(region) for region in active):
+            mismatches.append("untrusted-region")
+        if any(not region.confirmed for region in active):
+            mismatches.append("unconfirmed-translation")
+        if any(not (region.translation_text or "").strip() for region in active):
+            mismatches.append("missing-translation")
+        if mismatches:
+            raise StagePrerequisiteConflict(
+                "Every typeset region must have a trusted, confirmed, non-empty translation",
+                resource=f"image:{image_id}",
+                stage="translation",
+                reason="translation-review-required",
+                mismatches=mismatches,
+            )
+
+    @staticmethod
     def _job_concurrency(kind: str, options: dict[str, Any]) -> int:
         raw = options.get("concurrency", 1)
         if isinstance(raw, bool):
@@ -397,7 +462,19 @@ class PersistentJobQueue:
             if job.status != JobStatus.RUNNING.value:
                 return False
             item.status = JobStatus.RUNNING.value
-            item.started_at = datetime.now(UTC)
+            published_typeset = bool(
+                job.kind == "typeset"
+                and item.started_at is not None
+                and session.scalar(
+                    select(PageLineageEvent.id).where(
+                        PageLineageEvent.job_id == job.id,
+                        PageLineageEvent.job_item_id == item.id,
+                        PageLineageEvent.operation == "typeset-candidate-produced",
+                    )
+                )
+            )
+            if not published_typeset:
+                item.started_at = datetime.now(UTC)
             item.error = None
             return True
 
@@ -448,7 +525,11 @@ class PersistentJobQueue:
                     )
                 item.status = JobStatus.FAILED.value
                 item.error = safe_error(error).replace(str(store.root), "<project>")
-                if image is not None and not isinstance(error, StaleJobResult):
+                if (
+                    image is not None
+                    and not isinstance(error, (StaleJobResult, PageLineageConflict))
+                    and not (job.kind == "inpaint" and job.lineage_context is not None)
+                ):
                     processing_errors = list(image.processing_errors or [])
                     processing_errors.append(
                         {
@@ -473,6 +554,14 @@ class PersistentJobQueue:
                         status[stage] = "failed"
                         image.status = status
                     image.revision += 1
+            record_job_item_finished(
+                store,
+                session,
+                job=job,
+                item=item,
+                output=output,
+                error=error,
+            )
             self._recompute_in_session(job)
 
     @staticmethod
@@ -529,11 +618,13 @@ class PersistentJobQueue:
         image_ids: list[str],
         region_ids: list[str],
         options: dict[str, Any],
+        lineage: dict[str, Any] | None = None,
     ) -> Job:
         if kind not in {
             "preprocess",
             "detect",
             "ocr",
+            "mask",
             "translate",
             "render",
             "export",
@@ -543,9 +634,27 @@ class PersistentJobQueue:
             raise ProjectError(f"Unsupported job kind: {kind}")
         if len(set(image_ids)) != len(image_ids) or len(set(region_ids)) != len(region_ids):
             raise ProjectError("Job targets must not contain duplicate ids")
+        if (
+            lineage is not None
+            and kind in {"ocr", "mask", "inpaint", "translate", "typeset"}
+            and (region_ids or not image_ids)
+        ):
+            raise PageLineageConflict(
+                "Strict OCR/mask/inpaint/translate/typeset jobs require whole-page image targets",
+                resource="job-lineage",
+                reason={
+                    "ocr": "g6-whole-page-required",
+                    "mask": "g7-whole-page-required",
+                    "inpaint": "g8-whole-page-required",
+                    "translate": "g9-whole-page-required",
+                    "typeset": "g10-whole-page-required",
+                }[kind],
+            )
         safe_options = normalize_remote_endpoints(without_secrets(options))
         safe_options.pop("regionIds", None)
         safe_options.pop("region_ids", None)
+        if lineage is not None and kind == "inpaint":
+            safe_options["ownerMaskStrategy"] = "connected-contract-union-v1"
         if region_ids and kind == "typeset":
             safe_options["regionIds"] = list(region_ids)
         if kind == "export":
@@ -626,41 +735,102 @@ class PersistentJobQueue:
                 targets = [(image_id, None) for image_id in image_ids]
             if not targets:
                 raise ProjectError("A job must contain at least one image or region")
+            normalized_lineage, active_generations = normalize_job_lineage(
+                store,
+                session,
+                project_id=project.id,
+                target_image_ids={
+                    target_image_id for target_image_id, _region_id in targets if target_image_id
+                },
+                lineage=lineage,
+            )
+            if normalized_lineage is not None:
+                if kind == "render":
+                    raise PageLineageConflict(
+                        "Strict G10 render remains blocked; use the typeset gate",
+                        resource="job-kind:render",
+                        reason="g10-render-blocked",
+                    )
+                require_supported_lineage_job_kind(kind)
+            if kind == "translate" and normalized_lineage is not None:
+                from manga_localizer.services.translations import (
+                    resolve_translation_job_options,
+                )
+
+                safe_options = resolve_translation_job_options(
+                    dict(project.settings), safe_options, self.providers.translation
+                )
+            if kind == "typeset" and normalized_lineage is not None:
+                from manga_localizer.services.typesets import resolve_typeset_job_options
+
+                # ``fontToken`` is a public installed-font capability id, not a
+                # credential. The generic secret scrubber intentionally removes
+                # token-shaped keys, so validate the strict G10 whitelist against
+                # the original request before persisting its frozen style draft.
+                safe_options = resolve_typeset_job_options(dict(options))
+            if kind == "export" and safe_options["format"] in {"images", "both"}:
+                for target_image_id in sorted({target[0] for target in targets if target[0]}):
+                    require_strict_generated_export_inpaint(
+                        store,
+                        target_image_id,
+                        export_format=str(safe_options["format"]),
+                    )
             if kind in {"translate", "typeset", "render"}:
                 for target_image_id in sorted({target[0] for target in targets if target[0]}):
                     target_image = available_images[target_image_id]
-                    if kind == "translate":
+                    if kind == "translate" and normalized_lineage is None:
                         require_current_accepted_stage_review(
                             store,
                             target_image,
                             "inpaint",
                             require_ai=require_ai_inpaint,
                         )
-                    else:
+                    elif kind == "typeset" and normalized_lineage is not None:
+                        continue
+                    elif kind != "translate":
                         self._accepted_inpaint_render_source(
                             store,
                             target_image,
                             require_ai=require_ai_inpaint,
+                        )
+                        page_regions = [
+                            region
+                            for region in available_regions.values()
+                            if region.image_id == target_image_id
+                        ]
+                        self._require_translation_acceptance(
+                            target_image_id,
+                            page_regions,
                         )
             job = Job(
                 project_id=project.id,
                 kind=kind,
                 status=JobStatus.QUEUED.value,
                 options=safe_options,
+                lineage_context=normalized_lineage,
                 total=len(targets),
             )
             session.add(job)
             session.flush()
+            items: list[JobItem] = []
             for position, (image_id, region_id) in enumerate(targets):
-                session.add(
-                    JobItem(
-                        job_id=job.id,
-                        image_id=image_id,
-                        region_id=region_id,
-                        position=position,
-                    )
+                item = JobItem(
+                    job_id=job.id,
+                    image_id=image_id,
+                    region_id=region_id,
+                    position=position,
                 )
+                session.add(item)
+                items.append(item)
             session.flush()
+            record_job_enqueued_events(
+                store,
+                session,
+                job=job,
+                items=items,
+                generations=active_generations,
+                project_settings=dict(project.settings),
+            )
             job_id = job.id
         store.write_snapshot()
         return self.get_job(store, job_id)
@@ -684,11 +854,21 @@ class PersistentJobQueue:
                 ).all()
             )
 
+    @staticmethod
+    def _require_supported_job_action(job: Job) -> None:
+        if job.lineage_context is not None:
+            raise PageLineageConflict(
+                "Lineage-bound job actions require new actor evidence",
+                resource=f"job:{job.id}",
+                reason="lineage-action-not-supported",
+            )
+
     def pause(self, store: ProjectStore, job_id: str) -> Job:
         with store.session() as session:
             job = session.get(Job, job_id)
             if job is None:
                 raise ProjectError("Job was not found")
+            self._require_supported_job_action(job)
             if job.status not in {JobStatus.QUEUED.value, JobStatus.RUNNING.value}:
                 raise JobConflict(f"Cannot pause a {job.status} job")
             job.status = JobStatus.PAUSED.value
@@ -697,34 +877,59 @@ class PersistentJobQueue:
 
     def resume(self, store: ProjectStore, job_id: str) -> Job:
         with store.session() as session:
-            job = session.get(Job, job_id)
-            if job is None:
-                raise ProjectError("Job was not found")
-            if job.status != JobStatus.PAUSED.value:
-                raise JobConflict(f"Cannot resume a {job.status} job")
-            job.status = JobStatus.QUEUED.value
-        store.write_snapshot()
-        return self.get_job(store, job_id)
-
-    def cancel(self, store: ProjectStore, job_id: str) -> Job:
-        with store.session() as session:
             job = session.scalar(
                 select(Job).options(selectinload(Job.items)).where(Job.id == job_id)
             )
             if job is None:
                 raise ProjectError("Job was not found")
-            if job.status in {
-                JobStatus.COMPLETED.value,
-                JobStatus.FAILED.value,
-                JobStatus.CANCELLED.value,
-            }:
-                raise JobConflict(f"Cannot cancel a {job.status} job")
-            job.status = JobStatus.CANCELLED.value
-            for item in job.items:
-                if item.status == JobStatus.QUEUED.value:
-                    item.status = JobStatus.CANCELLED.value
-                    item.finished_at = datetime.now(UTC)
-            self._recompute_in_session(job)
+            self._require_supported_job_action(job)
+            if job.status != JobStatus.PAUSED.value:
+                raise JobConflict(f"Cannot resume a {job.status} job")
+            require_job_lineage_for_execution(store, session, job)
+            job.status = JobStatus.QUEUED.value
+        store.write_snapshot()
+        return self.get_job(store, job_id)
+
+    def cancel(self, store: ProjectStore, job_id: str) -> Job:
+        # Serialize cancellation with immutable G7 publication. Once a mask row/event
+        # exists, completion is the only safe terminal transition for that item.
+        with store.lock:
+            with store.session() as session:
+                job = session.scalar(
+                    select(Job).options(selectinload(Job.items)).where(Job.id == job_id)
+                )
+                if job is None:
+                    raise ProjectError("Job was not found")
+                self._require_supported_job_action(job)
+                if job.status in {
+                    JobStatus.COMPLETED.value,
+                    JobStatus.FAILED.value,
+                    JobStatus.CANCELLED.value,
+                }:
+                    raise JobConflict(f"Cannot cancel a {job.status} job")
+                if job.kind in {"mask", "inpaint", "typeset"} and session.scalar(
+                    select(PageLineageEvent.id)
+                    .where(
+                        PageLineageEvent.job_id == job.id,
+                        PageLineageEvent.operation.in_(
+                            (
+                                "mask-artifact-produced",
+                                "clean-plate-candidate-produced",
+                                "typeset-candidate-produced",
+                            )
+                        ),
+                    )
+                    .limit(1)
+                ):
+                    raise JobConflict(
+                        f"Cannot cancel a {job.kind} job after immutable artifact publication"
+                    )
+                job.status = JobStatus.CANCELLED.value
+                for item in job.items:
+                    if item.status == JobStatus.QUEUED.value:
+                        item.status = JobStatus.CANCELLED.value
+                        item.finished_at = datetime.now(UTC)
+                self._recompute_in_session(job)
         store.write_snapshot()
         return self.get_job(store, job_id)
 
@@ -735,8 +940,10 @@ class PersistentJobQueue:
             )
             if job is None:
                 raise ProjectError("Job was not found")
+            self._require_supported_job_action(job)
             if job.status not in {JobStatus.FAILED.value, JobStatus.CANCELLED.value}:
                 raise JobConflict(f"Cannot retry a {job.status} job")
+            require_job_lineage_for_execution(store, session, job)
             stale_completed: list[JobItem] = []
             if job.kind == "export":
                 stale_completed = [
@@ -779,6 +986,8 @@ class PersistentJobQueue:
             item = session.get(JobItem, item_id)
             if job is None or item is None:
                 raise ProjectError("Job item disappeared")
+            active_generations = require_job_lineage_for_execution(store, session, job)
+            mutation_binding = job_mutation_binding(job, item, active_generations)
             kind = job.kind
             options = dict(job.options)
             image_id = item.image_id
@@ -786,13 +995,86 @@ class PersistentJobQueue:
         if image_id is None:
             raise ProjectError("Job item has no image")
         if kind == "preprocess":
-            return self._process_preprocess(store, image_id, options)
+            return self._process_preprocess(
+                store,
+                image_id,
+                options,
+                lineage_binding=mutation_binding,
+            )
         if kind == "detect":
-            return self._process_detect(store, image_id, options)
+            return self._process_detect(
+                store,
+                image_id,
+                options,
+                lineage_binding=mutation_binding,
+            )
         if kind == "ocr":
-            return self._process_ocr(store, image_id, region_id, options)
+            return self._process_ocr(
+                store,
+                image_id,
+                region_id,
+                options,
+                lineage_binding=mutation_binding,
+            )
+        if kind == "mask":
+            if mutation_binding is None:
+                raise PageLineageConflict(
+                    "Strict G7 mask requires lineage",
+                    resource=f"image:{image_id}",
+                    reason="active-generation-missing",
+                )
+            with store.session() as session:
+                current_job = session.get(Job, job_id)
+                current_item = session.get(JobItem, item_id)
+                if current_job is None or current_item is None:
+                    raise ProjectError("Mask job item disappeared")
+                return publish_mask_artifact(
+                    store, job=current_job, item=current_item, binding=mutation_binding
+                )
+        if kind == "inpaint" and mutation_binding is not None:
+            with store.session() as session:
+                current_job = session.get(Job, job_id)
+                current_item = session.get(JobItem, item_id)
+                if current_job is None or current_item is None:
+                    raise ProjectError("Clean-plate job item disappeared")
+                return publish_clean_plate_candidate(
+                    store,
+                    job=current_job,
+                    item=current_item,
+                    binding=mutation_binding,
+                    inpainter=self.providers.inpainter,
+                )
         if kind == "translate":
+            if mutation_binding is not None:
+                from manga_localizer.services.translations import publish_translation_candidates
+
+                with store.session() as session:
+                    current_job = session.get(Job, job_id)
+                    current_item = session.get(JobItem, item_id)
+                    if current_job is None or current_item is None:
+                        raise ProjectError("Translation job item disappeared")
+                return publish_translation_candidates(
+                    store,
+                    job=current_job,
+                    item=current_item,
+                    binding=mutation_binding,
+                    translator_factory=self.providers.translation,
+                )
             return self._process_translation(store, image_id, region_id, options)
+        if kind == "typeset" and mutation_binding is not None:
+            from manga_localizer.services.typesets import publish_typeset_candidate
+
+            with store.session() as session:
+                current_job = session.get(Job, job_id)
+                current_item = session.get(JobItem, item_id)
+                if current_job is None or current_item is None:
+                    raise ProjectError("Typeset job item disappeared")
+            return publish_typeset_candidate(
+                store,
+                job=current_job,
+                item=current_item,
+                binding=mutation_binding,
+            )
         if kind in {"render", "inpaint", "typeset"}:
             return self._process_render(store, image_id, options, kind)
         if kind == "export":
@@ -1200,6 +1482,8 @@ class PersistentJobQueue:
         store: ProjectStore,
         image_id: str,
         options: dict[str, Any],
+        *,
+        lineage_binding: JobMutationBinding | None = None,
     ) -> dict[str, Any]:
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
@@ -1282,6 +1566,16 @@ class PersistentJobQueue:
                 if error.get("stage") != "preprocess"
             ]
             image.revision += 1
+            record_job_artifact_produced(
+                store,
+                session,
+                binding=lineage_binding,
+                stage="preprocess",
+                input_checksum=image.checksum,
+                output_checksum=hashlib.sha256(artifact).hexdigest(),
+                provider=provider_name,
+                image_revision=image.revision,
+            )
         return {
             "provider": provider_name,
             "profile": preprocess_options.get("profile", "off"),
@@ -1349,6 +1643,8 @@ class PersistentJobQueue:
         store: ProjectStore,
         image_id: str,
         options: dict[str, Any],
+        *,
+        lineage_binding: JobMutationBinding | None = None,
     ) -> dict[str, Any]:
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
@@ -1361,10 +1657,52 @@ class PersistentJobQueue:
                 or project.settings.get("detectorProvider")
                 or "tesseract"
             )
-            source, scale_x, scale_y, input_variant = self._processing_source(store, image)
+            quality_checksum: str | None = None
+            g3_sequence: int | None = None
+            if lineage_binding is not None:
+                generation = session.get(
+                    PageGeneration,
+                    lineage_binding["generationId"],
+                )
+                if generation is None or generation.image_id != image.id:
+                    raise PageLineageConflict(
+                        "Detector job has no matching active page generation",
+                        resource=f"job-item:{lineage_binding['jobItemId']}",
+                        reason="generation-mismatch",
+                    )
+                quality, g3_event = require_current_text_present_quality_plate(
+                    store,
+                    session,
+                    image,
+                    generation,
+                )
+                source = quality["path"]
+                try:
+                    with Image.open(source) as opened:
+                        processed_width, processed_height = opened.size
+                except (OSError, ValueError) as error:
+                    raise PageLineageConflict(
+                        "Accepted detector quality plate could not be opened",
+                        resource=f"image:{image.id}",
+                        reason="quality-artifact-unreadable",
+                    ) from error
+                if processed_width <= 0 or processed_height <= 0:
+                    raise PageLineageConflict(
+                        "Accepted detector quality plate has invalid dimensions",
+                        resource=f"image:{image.id}",
+                        reason="quality-artifact-invalid",
+                    )
+                scale_x = processed_width / image.width
+                scale_y = processed_height / image.height
+                input_variant = quality["targetKind"]
+                quality_checksum = quality["checksum"]
+                g3_sequence = g3_event.sequence
+            else:
+                source, scale_x, scale_y, input_variant = self._processing_source(store, image)
             image_width = image.width
             image_height = image.height
             expected_image_revision = image.revision
+            expected_region_versions = self._region_versions(session, image_id)
         try:
             detector = self.providers.detector(requested_provider_name)
         except ValueError as error:
@@ -1431,14 +1769,61 @@ class PersistentJobQueue:
                 session,
                 image_id,
                 expected_image_revision,
-                None,
+                expected_region_versions,
                 "text detection",
             )
+            if lineage_binding is not None:
+                generation = session.get(
+                    PageGeneration,
+                    lineage_binding["generationId"],
+                )
+                if generation is None or generation.image_id != image.id:
+                    raise PageLineageConflict(
+                        "Detector page generation changed while the provider was running",
+                        resource=f"job-item:{lineage_binding['jobItemId']}",
+                        reason="generation-mismatch",
+                    )
+                current_quality, current_g3 = require_current_text_present_quality_plate(
+                    store,
+                    session,
+                    image,
+                    generation,
+                )
+                if (
+                    current_quality["checksum"] != quality_checksum
+                    or current_g3.sequence != g3_sequence
+                ):
+                    raise PageLineageConflict(
+                        "Detector input gate changed while the provider was running",
+                        resource=f"job-item:{lineage_binding['jobItemId']}",
+                        reason="detect-input-changed",
+                    )
             existing = list(
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
             for region in list(existing):
-                if not self._is_stale_auto_detection(region, image.width, image.height):
+                replace = self._is_stale_auto_detection(region, image.width, image.height)
+                if lineage_binding is not None:
+                    owned_by_item = region.detector_job_item_id == lineage_binding["jobItemId"]
+                    if owned_by_item and (
+                        region.content_disposition is not None
+                        or region.revision != 1
+                        or bool((region.source_text or "").strip())
+                        or bool((region.translation_text or "").strip())
+                        or region.confirmed
+                        or region.ignored
+                    ):
+                        raise PageLineageConflict(
+                            "Detector retry candidates changed after their prior publication",
+                            resource=f"job-item:{lineage_binding['jobItemId']}",
+                            reason="detect-retry-candidates-changed",
+                        )
+                    replace = owned_by_item or (
+                        region.detector_job_item_id is not None
+                        and region.content_disposition is None
+                        and replace
+                    )
+                if not replace:
                     continue
                 add_revision(
                     session,
@@ -1451,6 +1836,7 @@ class PersistentJobQueue:
                 )
                 session.delete(region)
                 existing.remove(region)
+            session.flush()
             kept = [
                 OCRRegion(
                     x=int(region.x),
@@ -1484,6 +1870,10 @@ class PersistentJobQueue:
                     direction=detection.direction,
                     region_type="unknown",
                     reading_order=next_reading_order + offset,
+                    detector_job_item_id=(
+                        lineage_binding["jobItemId"] if lineage_binding is not None else None
+                    ),
+                    detector_candidate_index=(offset if lineage_binding is not None else None),
                     repair={
                         **DEFAULT_REPAIR_SETTINGS,
                         "detectorGenerated": True,
@@ -1533,6 +1923,23 @@ class PersistentJobQueue:
                 session.scalars(select(TextRegion).where(TextRegion.image_id == image_id)).all()
             )
             disposition_counts, reason_counts = self._trust_counts(all_regions)
+            if lineage_binding is not None:
+                if quality_checksum is None:
+                    raise PageLineageConflict(
+                        "Detector quality checksum was not retained",
+                        resource=f"job-item:{lineage_binding['jobItemId']}",
+                        reason="detect-input-changed",
+                    )
+                record_detect_regions_produced(
+                    store,
+                    session,
+                    binding=lineage_binding,
+                    input_checksum=quality_checksum,
+                    output_checksum=g4_region_state_checksum(session, image.id),
+                    provider=provider_name,
+                    image_revision=image.revision,
+                    region_count=len(all_regions),
+                )
         return {
             "provider": provider_name,
             "inputVariant": input_variant,
@@ -1545,13 +1952,437 @@ class PersistentJobQueue:
             "reasonCounts": reason_counts,
         }
 
+    @staticmethod
+    def _canonical_crop_box(box: dict[str, float], width: int, height: int) -> dict[str, int]:
+        rounded = {key: round(float(box[key])) for key in ("x", "y", "width", "height")}
+        if (
+            rounded["x"] < 0
+            or rounded["y"] < 0
+            or rounded["width"] < 1
+            or rounded["height"] < 1
+            or rounded["x"] + rounded["width"] > width
+            or rounded["y"] + rounded["height"] > height
+        ):
+            raise ProjectError("OCR crop is outside its bound input image")
+        return rounded
+
+    @staticmethod
+    def _crop_checksum(path: Path, box: dict[str, int]) -> str:
+        try:
+            with Image.open(path) as opened:
+                source = opened.convert("RGBA")
+                crop = source.crop(
+                    (
+                        box["x"],
+                        box["y"],
+                        box["x"] + box["width"],
+                        box["y"] + box["height"],
+                    )
+                )
+                header = f"RGBA:{crop.width}x{crop.height}:".encode()
+                return hashlib.sha256(header + crop.tobytes()).hexdigest()
+        except (OSError, ValueError) as error:
+            raise ProjectError("OCR input crop could not be read") from error
+
+    @staticmethod
+    def _ocr_model_version(provider: object) -> str | None:
+        # Strict provenance is provider-observed. A request body must never be
+        # able to relabel the executable/model that actually produced OCR.
+        for method_name in ("health_check", "get_capabilities"):
+            capabilities = getattr(provider, method_name, None)
+            if not callable(capabilities):
+                continue
+            try:
+                payload = capabilities()
+            except Exception:
+                continue
+            if isinstance(payload, dict):
+                value = payload.get("version") or payload.get("modelVersion")
+                if isinstance(value, str) and value and len(value) <= 128:
+                    return value
+        return None
+
+    def _process_lineage_ocr(
+        self,
+        store: ProjectStore,
+        image_id: str,
+        region_id: str | None,
+        options: dict[str, Any],
+        *,
+        lineage_binding: JobMutationBinding,
+    ) -> dict[str, Any]:
+        if region_id is not None:
+            raise PageLineageConflict(
+                "Strict G6 OCR does not allow targeted region jobs",
+                resource=f"region:{region_id}",
+                reason="g6-whole-page-required",
+            )
+        with store.session() as session:
+            image = session.get(ImageAsset, image_id)
+            generation = session.get(PageGeneration, lineage_binding["generationId"])
+            if image is None or generation is None or generation.image_id != image.id:
+                raise PageLineageConflict(
+                    "Strict OCR page generation disappeared",
+                    resource=f"image:{image_id}",
+                    reason="generation-mismatch",
+                )
+            produced = session.scalar(
+                select(PageLineageEvent)
+                .where(
+                    PageLineageEvent.generation_id == generation.id,
+                    PageLineageEvent.job_item_id == lineage_binding["jobItemId"],
+                    PageLineageEvent.operation == "ocr-attempts-produced",
+                )
+                .order_by(PageLineageEvent.sequence.desc())
+                .limit(1)
+            )
+            existing_attempts = list(
+                session.scalars(
+                    select(RegionOCRAttempt).where(
+                        RegionOCRAttempt.job_item_id == lineage_binding["jobItemId"]
+                    )
+                ).all()
+            )
+            if produced is not None:
+                if (
+                    not existing_attempts
+                    or produced.output_checksum
+                    != g6_ocr_state_checksum(session, image.id, generation.id)
+                    or (produced.evidence or {}).get("ocrAttemptCount") != len(existing_attempts)
+                ):
+                    raise PageLineageConflict(
+                        "Recovered OCR publication does not match stored attempts",
+                        resource=f"job-item:{lineage_binding['jobItemId']}",
+                        reason="g6-attempt-publication-mismatch",
+                    )
+                return {
+                    "provider": produced.provider,
+                    "modelVersion": produced.model_version,
+                    "parameterHash": produced.parameter_hash,
+                    "inputVariant": "original+quality",
+                    "count": int((produced.evidence or {}).get("eligibleRegionCount", 0)),
+                    "attemptCount": len(existing_attempts),
+                    "recoveredPublication": True,
+                }
+            if existing_attempts:
+                raise PageLineageConflict(
+                    "Stored OCR attempts are missing their atomic publication event",
+                    resource=f"job-item:{lineage_binding['jobItemId']}",
+                    reason="g6-attempt-publication-mismatch",
+                )
+            quality, _g3_event = require_current_text_present_quality_plate(
+                store, session, image, generation
+            )
+            require_current_background_classifications(store, session, image, generation)
+            project = store.project(session)
+            requested_provider_name = str(
+                options.get("provider")
+                or options.get("ocrProvider")
+                or project.settings.get("ocrProvider")
+                or "tesseract"
+            )
+            requested_language = options.get("language")
+            if requested_language is not None and (
+                not isinstance(requested_language, str)
+                or requested_language not in {"ja", "ja-JP", "japanese", "jpn", "jpn_vert"}
+            ):
+                raise ProjectError(
+                    "Strict G6 OCR only accepts a Japanese source-language declaration"
+                )
+            project_source_language = project.settings.get("sourceLanguage", "ja")
+            if project_source_language not in {"ja", "ja-JP", "japanese", "jpn"}:
+                raise PageLineageConflict(
+                    "G6 OCR requires the project's Japanese source-language contract",
+                    resource=f"image:{image.id}",
+                    reason="g6-source-language-invalid",
+                )
+            original_source = image_path(store, image)
+            quality_source = quality["path"]
+            try:
+                with Image.open(original_source) as opened:
+                    original_width, original_height = opened.size
+                with Image.open(quality_source) as opened:
+                    quality_width, quality_height = opened.size
+            except (OSError, ValueError) as error:
+                raise ProjectError("Strict OCR input images could not be opened") from error
+            if original_width != image.width or original_height != image.height:
+                raise PageLineageConflict(
+                    "Immutable source dimensions changed before OCR",
+                    resource=f"image:{image.id}",
+                    reason="source-identity-changed",
+                )
+            scale_x = quality_width / image.width
+            scale_y = quality_height / image.height
+            if (
+                not math.isfinite(scale_x)
+                or not math.isfinite(scale_y)
+                or min(scale_x, scale_y) <= 0
+            ):
+                raise ProjectError("Accepted quality plate has invalid dimensions")
+            targets = list(
+                session.scalars(
+                    select(TextRegion)
+                    .where(
+                        TextRegion.image_id == image.id,
+                        TextRegion.region_type != "ruby",
+                        TextRegion.content_disposition.in_(("translate", "redraw-art")),
+                    )
+                    .order_by(TextRegion.reading_order, TextRegion.id)
+                ).all()
+            )
+            if not targets:
+                raise PageLineageConflict(
+                    "A page without translatable regions must use the G6 not-applicable gate",
+                    resource=f"image:{image.id}",
+                    reason="g6-no-translatable-regions",
+                )
+            expected_image_revision = image.revision
+            expected_region_versions = self._region_versions(session, image.id)
+            target_snapshots: list[dict[str, Any]] = []
+            for target in targets:
+                if target.direction not in {"horizontal", "vertical"}:
+                    raise PageLineageConflict(
+                        "G6 OCR requires the accepted G4 direction",
+                        resource=f"region:{target.id}",
+                        reason="g6-direction-invalid",
+                    )
+                original_float_box = self._clamp_box(
+                    {
+                        "x": target.x,
+                        "y": target.y,
+                        "width": target.width,
+                        "height": target.height,
+                    },
+                    original_width,
+                    original_height,
+                )
+                quality_float_box = self._clamp_box(
+                    {
+                        "x": original_float_box["x"] * scale_x,
+                        "y": original_float_box["y"] * scale_y,
+                        "width": original_float_box["width"] * scale_x,
+                        "height": original_float_box["height"] * scale_y,
+                    },
+                    quality_width,
+                    quality_height,
+                )
+                original_box = self._canonical_crop_box(
+                    original_float_box, original_width, original_height
+                )
+                quality_box = self._canonical_crop_box(
+                    quality_float_box, quality_width, quality_height
+                )
+                target_snapshots.append(
+                    {
+                        "id": target.id,
+                        "direction": target.direction,
+                        "language": "jpn_vert" if target.direction == "vertical" else "jpn",
+                        "originalBox": original_box,
+                        "qualityBox": quality_box,
+                        "originalCropChecksum": self._crop_checksum(original_source, original_box),
+                        "qualityCropChecksum": self._crop_checksum(quality_source, quality_box),
+                    }
+                )
+        try:
+            ocr_provider = self.providers.ocr_provider(requested_provider_name)
+        except ValueError as error:
+            raise ProjectError(str(error)) from None
+        provider_name = str(getattr(ocr_provider, "name", requested_provider_name))
+        model_version = self._ocr_model_version(ocr_provider)
+        parameter_payload = {
+            "version": 1,
+            "provider": provider_name,
+            "modelVersion": model_version,
+            "generationParameterHash": generation.parameter_set_hash,
+            "qualityChecksum": quality["checksum"],
+            "regions": [
+                {
+                    "id": target["id"],
+                    "direction": target["direction"],
+                    "language": target["language"],
+                }
+                for target in target_snapshots
+            ],
+        }
+        parameter_hash = hashlib.sha256(
+            json.dumps(
+                parameter_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        computed: list[dict[str, Any]] = []
+        for target in target_snapshots:
+            for variant, source, box, parent_checksum, crop_checksum in (
+                (
+                    "original",
+                    original_source,
+                    target["originalBox"],
+                    generation.source_checksum,
+                    target["originalCropChecksum"],
+                ),
+                (
+                    "quality",
+                    quality_source,
+                    target["qualityBox"],
+                    quality["checksum"],
+                    target["qualityCropChecksum"],
+                ),
+            ):
+                result = ocr_provider.recognize_region(
+                    source,
+                    box,
+                    direction=str(target["direction"]),
+                    language=target["language"],
+                )
+                if (
+                    not isinstance(result.text, str)
+                    or result.direction != target["direction"]
+                    or isinstance(result.confidence, bool)
+                    or (
+                        result.confidence is not None
+                        and (
+                            not math.isfinite(float(result.confidence))
+                            or float(result.confidence) < 0
+                            or float(result.confidence) > 1
+                        )
+                    )
+                ):
+                    raise ProjectError("OCR provider returned invalid strict attempt evidence")
+                computed.append(
+                    {
+                        "regionId": target["id"],
+                        "inputVariant": variant,
+                        "parentChecksum": parent_checksum,
+                        "cropChecksum": crop_checksum,
+                        "cropBox": box,
+                        "language": target["language"],
+                        "direction": target["direction"],
+                        "text": result.text,
+                        "textChecksum": hashlib.sha256(result.text.encode("utf-8")).hexdigest(),
+                        "confidence": (
+                            float(result.confidence) if result.confidence is not None else None
+                        ),
+                    }
+                )
+        with store.session() as session:
+            image = self._assert_image_unchanged(
+                session,
+                image_id,
+                expected_image_revision,
+                expected_region_versions,
+                "OCR",
+            )
+            generation = session.get(PageGeneration, lineage_binding["generationId"])
+            if generation is None:
+                raise PageLineageConflict(
+                    "Strict OCR generation disappeared before publication",
+                    resource=f"image:{image.id}",
+                    reason="generation-mismatch",
+                )
+            quality_now, _g3_event = require_current_text_present_quality_plate(
+                store, session, image, generation
+            )
+            require_current_background_classifications(store, session, image, generation)
+            if quality_now["checksum"] != quality["checksum"]:
+                raise StaleJobResult("Accepted quality plate changed during OCR; retry the job")
+            for attempt in computed:
+                source_path = (
+                    original_source if attempt["inputVariant"] == "original" else quality_source
+                )
+                if self._crop_checksum(source_path, attempt["cropBox"]) != attempt["cropChecksum"]:
+                    raise StaleJobResult("OCR crop changed before publication; retry the job")
+            before_checksum = g6_ocr_state_checksum(session, image.id, generation.id)
+            for attempt in computed:
+                session.add(
+                    RegionOCRAttempt(
+                        region_id=attempt["regionId"],
+                        image_id=image.id,
+                        generation_id=generation.id,
+                        job_id=lineage_binding["jobId"],
+                        job_item_id=lineage_binding["jobItemId"],
+                        input_variant=attempt["inputVariant"],
+                        parent_checksum=attempt["parentChecksum"],
+                        crop_checksum=attempt["cropChecksum"],
+                        crop_box=attempt["cropBox"],
+                        provider=provider_name,
+                        model_version=model_version,
+                        parameter_hash=parameter_hash,
+                        language=attempt["language"],
+                        direction=attempt["direction"],
+                        text=attempt["text"],
+                        text_checksum=attempt["textChecksum"],
+                        confidence=attempt["confidence"],
+                    )
+                )
+            invalidate_image_pipeline(store, image, {"translation", "inpaint", "typeset", "export"})
+            reset_image_review(image)
+            status = dict(image.status or {})
+            status["ocr"] = "done"
+            status["ocrProvider"] = provider_name
+            image.status = status
+            image.processing_errors = [
+                error for error in (image.processing_errors or []) if error.get("stage") != "ocr"
+            ]
+            image.revision += 1
+            session.flush()
+            project = store.project(session)
+            revision = add_revision(
+                session,
+                project,
+                entity_type="ocr-attempt-set",
+                entity_id=lineage_binding["jobItemId"],
+                operation="publish",
+                before={"ocrChecksum": before_checksum, "jobItemAttemptCount": 0},
+                after={
+                    "jobItemAttemptCount": len(computed),
+                    "eligibleRegionCount": len(target_snapshots),
+                },
+            )
+            session.flush()
+            after_checksum = g6_ocr_state_checksum(session, image.id, generation.id)
+            record_ocr_attempts_produced(
+                store,
+                session,
+                binding=lineage_binding,
+                input_checksum=before_checksum,
+                output_checksum=after_checksum,
+                provider=provider_name,
+                model_version=model_version,
+                parameter_hash=parameter_hash,
+                image_revision=image.revision,
+                region_count=len(target_snapshots),
+                attempt_count=len(computed),
+                revision_id=revision.id,
+            )
+        return {
+            "provider": provider_name,
+            "modelVersion": model_version,
+            "parameterHash": parameter_hash,
+            "inputVariant": "original+quality",
+            "count": len(target_snapshots),
+            "attemptCount": len(computed),
+            "recoveredPublication": False,
+        }
+
     def _process_ocr(
         self,
         store: ProjectStore,
         image_id: str,
         region_id: str | None,
         options: dict[str, Any],
+        *,
+        lineage_binding: JobMutationBinding | None = None,
     ) -> dict[str, Any]:
+        if lineage_binding is not None:
+            return self._process_lineage_ocr(
+                store,
+                image_id,
+                region_id,
+                options,
+                lineage_binding=lineage_binding,
+            )
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
             if image is None:
@@ -2025,6 +2856,11 @@ class PersistentJobQueue:
                     .order_by(TextRegion.reading_order)
                 ).all()
             )
+            if kind in {"typeset", "render"}:
+                self._require_translation_acceptance(
+                    image_id,
+                    regions,
+                )
             render_scale = self._render_scale(scale_x, scale_y)
             rendered_size = [round(image.width * scale_x), round(image.height * scale_y)]
             relative = safe_relative_path(image.relative_path).with_suffix(".png")
@@ -2570,6 +3406,9 @@ class PersistentJobQueue:
                 atomic_write_bytes(typeset_path, typeset_bytes)
             if inpainted_bytes is not None or typeset_bytes is not None:
                 reset_image_review(current)
+            if inpainted_bytes is not None:
+                current.inpaint_classical_approval = None
+                current.inpaint_ai_candidate_reviews = None
             invalidate_image_pipeline(
                 store,
                 current,

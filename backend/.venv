@@ -1,0 +1,3 @@
+MANGA_LOCALIZER_EXTERNAL_RUNTIME_REQUIRED
+Use `node scripts/external-uv.mjs --check` and the guarded package scripts.
+This regular file intentionally prevents uv from creating an internal project environment.

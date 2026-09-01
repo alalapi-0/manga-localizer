@@ -13,7 +13,19 @@ from typing import Any
 from PIL import Image
 from sqlalchemy import select
 
-from manga_localizer.database import ImageAsset, ImportBoundary, Job, JobStatus, TextRegion
+from manga_localizer.database import (
+    ImageAsset,
+    ImportBoundary,
+    Job,
+    JobStatus,
+    PageCleanPlateCandidate,
+    PageCloudFullPageCandidate,
+    PageCloudFullPageReview,
+    PageGeneration,
+    PageMaskArtifact,
+    PageTypesetCandidate,
+    TextRegion,
+)
 from manga_localizer.logging_utils import redact, without_secrets
 from manga_localizer.security import (
     UnsafePathError,
@@ -25,7 +37,14 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
-from manga_localizer.services.images import stage_artifact_checksums, stage_reviews
+from manga_localizer.services.clean_plates import require_current_clean_plate_acceptance
+from manga_localizer.services.images import (
+    _current_ai_candidate_reviews_metadata,
+    current_inpaint_provenance,
+    require_current_accepted_stage_review,
+    stage_artifact_checksums,
+    stage_reviews,
+)
 from manga_localizer.services.projects import ProjectError, ProjectStore
 from manga_localizer.services.trust import recognition_payload
 
@@ -190,7 +209,7 @@ def _portable_image_status(
                 continue
             keys = ["state", "reviewedAt", "resultRevision", "artifactChecksum"]
             if stage == "inpaint":
-                keys.append("maskChecksum")
+                keys.extend(("maskChecksum", "provenanceDigest"))
             retained[stage] = {key: record[key] for key in keys if key in record}
         if retained:
             status["stageReviews"] = retained
@@ -218,6 +237,68 @@ def _portable_assets(
 ]:
     with store.session() as session:
         images = list(session.scalars(select(ImageAsset)).all())
+        lineage_rasters = [
+            (
+                row.relative_path,
+                (Path("generated") / "lineage-masks" / row.generation_id / f"{row.id}.png"),
+                row.mask_checksum,
+                "G7 mask artifact",
+            )
+            for row in session.scalars(select(PageMaskArtifact)).all()
+        ]
+        accepted_cloud_ids = set(
+            session.scalars(
+                select(PageCloudFullPageReview.candidate_id).where(
+                    PageCloudFullPageReview.state == "accepted"
+                )
+            ).all()
+        )
+        lineage_rasters.extend(
+            (
+                row.relative_path,
+                (Path("generated") / "lineage-clean-plates" / row.generation_id / f"{row.id}.png"),
+                row.candidate_checksum,
+                "G8 clean-plate candidate",
+            )
+            for row in session.scalars(select(PageCleanPlateCandidate)).all()
+        )
+        lineage_rasters.extend(
+            (
+                row.normalized_relative_path,
+                Path("generated")
+                / "lineage-cloud-full-pages"
+                / row.generation_id
+                / row.id
+                / "normalized.png",
+                row.normalized_checksum,
+                "G8 cloud full-page normalized candidate",
+            )
+            for row in session.scalars(select(PageCloudFullPageCandidate)).all()
+            if row.id in accepted_cloud_ids
+        )
+        lineage_rasters.extend(
+            (
+                row.raw_relative_path,
+                Path("generated")
+                / "lineage-cloud-full-pages"
+                / row.generation_id
+                / row.id
+                / "raw.bin",
+                row.raw_checksum,
+                "G8 cloud full-page raw candidate",
+            )
+            for row in session.scalars(select(PageCloudFullPageCandidate)).all()
+            if row.id in accepted_cloud_ids
+        )
+        lineage_rasters.extend(
+            (
+                row.relative_path,
+                (Path("generated") / "lineage-typesets" / row.generation_id / f"{row.id}.png"),
+                row.candidate_checksum,
+                "G10 typeset candidate",
+            )
+            for row in session.scalars(select(PageTypesetCandidate)).all()
+        )
     sources: list[tuple[Path, Path, str]] = []
     generated: list[tuple[Path | None, Path, str | None]] = []
     available_stages: dict[str, set[str]] = {}
@@ -277,7 +358,82 @@ def _portable_assets(
                     str(expected) if included else None,
                 )
             )
+        if "inpaint" in current:
+            checksums = stage_artifact_checksums(store, image, "inpaint")
+            provenance = current_inpaint_provenance(store, image, checksums)
+            if provenance is not None and provenance[0]["originKind"] != "no-op":
+                from manga_localizer.services.inpaint_candidates import (
+                    _internal_base_path,
+                    _read_internal_candidate_manifest,
+                    candidate_image_path,
+                    candidate_manifest_path,
+                    validate_inpaint_candidate_evidence,
+                )
+
+                relative = image_relative
+                manifest = _read_internal_candidate_manifest(store, relative)
+                validate_inpaint_candidate_evidence(store, relative, manifest)
+                evidence_paths = [candidate_manifest_path(store, relative)]
+                evidence_paths.extend(
+                    candidate_image_path(store, relative, str(record["id"]))
+                    for record in manifest["candidates"]
+                )
+                evidence_paths.extend(
+                    _internal_base_path(store, relative, str(record["id"]))
+                    for record in manifest.get("internalBases", [])
+                )
+                for evidence_path in evidence_paths:
+                    evidence_relative = evidence_path.relative_to(store.root)
+                    generated.append((evidence_path, evidence_relative, _sha256(evidence_path)))
+                if _current_ai_candidate_reviews_metadata(store, image) is not None:
+                    current.add("ai-candidate-reviews")
+                if (
+                    image.inpaint_classical_approval is not None
+                    and provenance[0]["originKind"] == "classical"
+                ):
+                    try:
+                        require_current_accepted_stage_review(
+                            store, image, "inpaint", require_ai=True
+                        )
+                    except ProjectError:
+                        pass
+                    else:
+                        current.add("classical-fallback")
+    for stored_relative, expected_relative, checksum, label in lineage_rasters:
+        try:
+            relative = safe_relative_path(stored_relative)
+        except UnsafePathError as error:
+            raise ProjectError(f"Portable {label} path is invalid") from error
+        if relative != expected_relative:
+            raise ProjectError(f"Portable {label} path is not canonical")
+        source = resolve_write_target(
+            store.root,
+            relative,
+            protected_roots=(store.source_root,),
+        )
+        if not source.is_file() or _sha256(source) != checksum:
+            raise ProjectError(f"Portable {label} is missing or changed")
+        generated.append((source, relative, checksum))
     return sources, generated, available_stages
+
+
+def _portable_job_options(
+    kind: str,
+    encoded_lineage: str | None,
+    value: object,
+) -> object:
+    sanitized = redact(without_secrets(value))
+    if kind != "typeset" or encoded_lineage is None:
+        return sanitized
+    if not isinstance(value, dict):
+        raise ProjectError("Strict G10 job options are not a valid object")
+    from manga_localizer.services.page_lineage import PageLineageConflict
+    from manga_localizer.services.typesets import sanitized_typeset_job_options
+
+    try:
+        return sanitized_typeset_job_options(value)
+    except PageLineageConflict as error:
+        raise ProjectError("Strict G10 job options are not portable") from error
 
 
 def _verify_portable_assets(
@@ -515,6 +671,16 @@ def _sanitize_portable_database(
                 "UPDATE images SET status = ? WHERE id = ?",
                 (json.dumps(portable_status, ensure_ascii=False), image_id),
             )
+            if "classical-fallback" not in (available_stages or {}).get(image_id, set()):
+                database.execute(
+                    "UPDATE images SET inpaint_classical_approval = NULL WHERE id = ?",
+                    (image_id,),
+                )
+            if "ai-candidate-reviews" not in (available_stages or {}).get(image_id, set()):
+                database.execute(
+                    "UPDATE images SET inpaint_ai_candidate_reviews = NULL WHERE id = ?",
+                    (image_id,),
+                )
         for project_id, encoded_settings in database.execute(
             "SELECT id, settings FROM projects"
         ).fetchall():
@@ -529,9 +695,37 @@ def _sanitize_portable_database(
                 "UPDATE images SET processing_errors = ? WHERE id = ?",
                 (sanitize_json(encoded_errors), image_id),
             )
+        protected_revision_ids = {
+            row[0]
+            for row in database.execute(
+                "SELECT revision_id FROM page_lineage_events WHERE revision_id IS NOT NULL "
+                "UNION SELECT revision_id FROM region_translation_candidates "
+                "UNION SELECT revision_id FROM region_translation_reviews "
+                "UNION SELECT revision_id FROM page_translation_reviews "
+                "UNION SELECT revision_id FROM page_typeset_candidates "
+                "UNION SELECT revision_id FROM page_typeset_reviews"
+            ).fetchall()
+        }
         for revision_id, before, after in database.execute(
             "SELECT id, before, after FROM revisions"
         ).fetchall():
+            if revision_id in protected_revision_ids:
+                sanitized_before = sanitize_json(before) if before is not None else None
+                sanitized_after = sanitize_json(after) if after is not None else None
+                original_before = json.loads(before) if before is not None else None
+                original_after = json.loads(after) if after is not None else None
+                if (
+                    json.loads(sanitized_before) if sanitized_before is not None else None
+                ) != original_before or (
+                    json.loads(sanitized_after) if sanitized_after is not None else None
+                ) != original_after:
+                    # Exact replay owns these payloads. Never copy credentials
+                    # verbatim and never rewrite immutable evidence into a
+                    # different history merely to make it portable.
+                    raise ProjectError(
+                        "Immutable lineage revision contains non-portable secret material"
+                    )
+                continue
             database.execute(
                 "UPDATE revisions SET before = ?, after = ? WHERE id = ?",
                 (
@@ -540,13 +734,15 @@ def _sanitize_portable_database(
                     revision_id,
                 ),
             )
-        for job_id, encoded_options in database.execute("SELECT id, options FROM jobs").fetchall():
+        for job_id, kind, encoded_lineage, encoded_options in database.execute(
+            "SELECT id, kind, lineage_context, options FROM jobs"
+        ).fetchall():
             try:
                 options = json.loads(encoded_options) if encoded_options else {}
             except (TypeError, json.JSONDecodeError):
                 options = {}
             if isinstance(options, dict):
-                options = redact(without_secrets(options))
+                options = _portable_job_options(kind, encoded_lineage, options)
                 options = {
                     key: value
                     for key, value in options.items()
@@ -561,6 +757,16 @@ def _sanitize_portable_database(
                     json.dumps(options, ensure_ascii=False),
                     finalized_job_id,
                     finalized_job_id,
+                    job_id,
+                ),
+            )
+        for job_id, encoded_lineage in database.execute(
+            "SELECT id, lineage_context FROM jobs"
+        ).fetchall():
+            database.execute(
+                "UPDATE jobs SET lineage_context = ? WHERE id = ?",
+                (
+                    sanitize_json(encoded_lineage) if encoded_lineage is not None else None,
                     job_id,
                 ),
             )
@@ -758,7 +964,25 @@ def ensure_project_bundle(
     *,
     finalized_job_id: str | None = None,
 ) -> None:
-    """Place a sanitized, reopenable project snapshot and its local image assets."""
+    """Place one writer-excluded DB-and-raster snapshot in a portable bundle."""
+    # Every lineage publisher and ProjectStore session uses this RLock. Hold it
+    # across discovery, raster copying, verification, and SQLite backup so the
+    # copied files and the retained database rows cannot describe two different
+    # moments in the project history.
+    with store.lock:
+        _ensure_project_bundle_locked(
+            store,
+            export_root,
+            finalized_job_id=finalized_job_id,
+        )
+
+
+def _ensure_project_bundle_locked(
+    store: ProjectStore,
+    export_root: Path,
+    *,
+    finalized_job_id: str | None,
+) -> None:
     if export_root.resolve() == store.root.resolve():
         store.write_snapshot()
         return
@@ -770,6 +994,13 @@ def ensure_project_bundle(
     protection = _input_protection(store)
     assets = _portable_assets(store)
     _sources, _generated, available_stages = assets
+    for image_id, stages in available_stages.items():
+        if "inpaint" in stages:
+            require_strict_generated_export_inpaint(
+                store,
+                image_id,
+                export_format="images",
+            )
     project_root = _export_write_target(store, export_root, "project")
     project_root.mkdir(parents=True, exist_ok=True)
     if finalized_job_id is not None:
@@ -916,6 +1147,64 @@ def _write_json(payload: dict[str, Any], target: Path, conflict: str) -> tuple[P
     return destination, resolution
 
 
+def _current_export_clean_acceptance(store: ProjectStore, image: ImageAsset):
+    with store.session() as session:
+        current = session.get(ImageAsset, image.id)
+        generation = session.scalar(
+            select(PageGeneration).where(
+                PageGeneration.image_id == image.id,
+                PageGeneration.project_id == image.project_id,
+                PageGeneration.state == "active",
+            )
+        )
+        if current is None:
+            raise ProjectError("Export image does not exist")
+        if generation is None:
+            return None
+        return require_current_clean_plate_acceptance(store, session, current, generation)
+
+
+def _current_export_clean_path(store: ProjectStore, image: ImageAsset) -> Path:
+    acceptance = _current_export_clean_acceptance(store, image)
+    if acceptance is not None:
+        return acceptance[1]
+    return resolve_write_target(
+        store.root,
+        Path("generated")
+        / "inpainted"
+        / safe_relative_path(image.relative_path).with_suffix(".png"),
+        protected_roots=(store.source_root,),
+    )
+
+
+def _current_export_mask_path(store: ProjectStore, image: ImageAsset) -> Path:
+    acceptance = _current_export_clean_acceptance(store, image)
+    if acceptance is not None and isinstance(acceptance[2], PageCloudFullPageCandidate):
+        candidate = acceptance[2]
+        with store.session() as session:
+            artifact = session.get(PageMaskArtifact, candidate.mask_artifact_id)
+            if (
+                artifact is None
+                or artifact.image_id != image.id
+                or artifact.generation_id != candidate.generation_id
+                or artifact.mask_checksum != candidate.mask_checksum
+            ):
+                raise ProjectError("Accepted cloud clean plate lost its exact G7 mask")
+            path = resolve_write_target(
+                store.root,
+                artifact.relative_path,
+                protected_roots=(store.source_root,),
+            )
+        if not path.is_file() or _sha256(path) != candidate.mask_checksum:
+            raise ProjectError("Accepted cloud clean-plate mask is missing or changed")
+        return path
+    return resolve_write_target(
+        store.root,
+        Path("generated") / "masks" / safe_relative_path(image.relative_path).with_suffix(".png"),
+        protected_roots=(store.source_root,),
+    )
+
+
 def validate_image_export_readiness(
     store: ProjectStore,
     image_id: str,
@@ -926,10 +1215,18 @@ def validate_image_export_readiness(
     """Fail a generated-image export before any destination path is created."""
     if export_format not in {"images", "both"}:
         return {}
+    require_strict_generated_export_inpaint(store, image_id, export_format=export_format)
     with store.session() as session:
         image = session.get(ImageAsset, image_id)
         if image is None:
             raise ProjectError(f"Export image does not exist: {image_id}")
+    clean_acceptance = _current_export_clean_acceptance(store, image)
+    cloud_clean = (
+        clean_acceptance
+        if clean_acceptance is not None
+        and isinstance(clean_acceptance[2], PageCloudFullPageCandidate)
+        else None
+    )
     source_relative = safe_relative_path(image.relative_path)
     required_reviews = (
         ["inpaint", "typeset"]
@@ -939,27 +1236,33 @@ def validate_image_export_readiness(
         else ["inpaint", "typeset"]
     )
     for stage in required_reviews:
-        if image.status.get(stage) != "done":
+        if stage != "inpaint" or cloud_clean is None:
+            stage_done = image.status.get(stage) == "done"
+        else:
+            # The cloud lane publishes its immutable acceptance in the strict
+            # G8 lineage instead of fabricating the legacy mutable status
+            # projection.  A replayed acceptance is the authoritative gate.
+            stage_done = True
+        if not stage_done:
             label = "Rendered" if stage == "typeset" else "Inpainted"
             raise ProjectError(
                 f"{label} output is stale for {image.relative_path}; page was not exported"
             )
-        directory = "typeset" if stage == "typeset" else "inpainted"
-        generated = resolve_write_target(
-            store.root,
-            Path("generated") / directory / source_relative.with_suffix(".png"),
-            protected_roots=(store.source_root,),
+        generated = (
+            resolve_write_target(
+                store.root,
+                Path("generated") / "typeset" / source_relative.with_suffix(".png"),
+                protected_roots=(store.source_root,),
+            )
+            if stage == "typeset"
+            else _current_export_clean_path(store, image)
         )
         if not generated.is_file():
             label = "Typeset" if stage == "typeset" else "Inpainted"
             raise ProjectError(
                 f"{label} output is missing for {image.relative_path}; page was not exported"
             )
-    generated_mask = resolve_write_target(
-        store.root,
-        Path("generated") / "masks" / source_relative.with_suffix(".png"),
-        protected_roots=(store.source_root,),
-    )
+    generated_mask = _current_export_mask_path(store, image)
     if not generated_mask.is_file():
         raise ProjectError(
             f"Render mask is missing for {image.relative_path}; page was not exported"
@@ -971,7 +1274,15 @@ def validate_image_export_readiness(
         raise ProjectError(
             f"Page review is pending for {image.relative_path}; page was not exported"
         )
-    reviews = stage_reviews(image)
+    reviews = dict(stage_reviews(image))
+    if cloud_clean is not None:
+        cloud_state, cloud_path, cloud_candidate = cloud_clean
+        reviews["inpaint"] = {
+            "state": "accepted",
+            "artifactChecksum": _sha256(cloud_path),
+            "maskChecksum": cloud_candidate.mask_checksum,
+            "provenanceDigest": cloud_state,
+        }
     missing_reviews = [
         stage
         for stage in required_reviews
@@ -983,14 +1294,23 @@ def validate_image_export_readiness(
             f"Stage review must be accepted for {labels} before exporting "
             f"{image.relative_path}; page was not exported"
         )
-    stale_reviews = [
-        stage
-        for stage in required_reviews
-        if any(
-            reviews[stage].get(key) != value
-            for key, value in stage_artifact_checksums(store, image, stage).items()
-        )
-    ]
+    stale_reviews = []
+    for stage in required_reviews:
+        if stage == "inpaint":
+            acceptance = cloud_clean or _current_export_clean_acceptance(store, image)
+            if acceptance is not None:
+                _state, clean_path, clean_candidate = acceptance
+                checksums = {"artifactChecksum": _sha256(clean_path)}
+                if clean_candidate is not None:
+                    checksums["maskChecksum"] = clean_candidate.mask_checksum
+                else:
+                    checksums.update(stage_artifact_checksums(store, image, stage))
+            else:
+                checksums = stage_artifact_checksums(store, image, stage)
+        else:
+            checksums = stage_artifact_checksums(store, image, stage)
+        if any(reviews[stage].get(key) != value for key, value in checksums.items()):
+            stale_reviews.append(stage)
     if stale_reviews:
         labels = ", ".join(stale_reviews)
         raise ProjectError(
@@ -998,6 +1318,50 @@ def validate_image_export_readiness(
             f"review {image.relative_path} again before exporting"
         )
     return reviews
+
+
+def require_strict_generated_export_inpaint(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    export_format: str,
+) -> bool:
+    """Apply the central strict AI-inpaint gate without moving ordinary export readiness."""
+    if export_format not in {"images", "both"}:
+        return False
+    with store.session() as session:
+        image = session.get(ImageAsset, image_id)
+        if image is None:
+            raise ProjectError(f"Export image does not exist: {image_id}")
+        project = store.project(session)
+        require_ai_inpaint = project.settings.get(
+            "requireAIInpaintBeforeDownstream",
+            False,
+        )
+        if type(require_ai_inpaint) is not bool:
+            raise ProjectError("requireAIInpaintBeforeDownstream must be a boolean")
+        if not require_ai_inpaint:
+            return False
+        generation = session.scalar(
+            select(PageGeneration).where(
+                PageGeneration.image_id == image.id,
+                PageGeneration.project_id == image.project_id,
+                PageGeneration.state == "active",
+            )
+        )
+        if generation is not None:
+            _state, _path, clean_candidate = require_current_clean_plate_acceptance(
+                store, session, image, generation
+            )
+            if isinstance(clean_candidate, PageCloudFullPageCandidate):
+                return True
+        require_current_accepted_stage_review(
+            store,
+            image,
+            "inpaint",
+            require_ai=True,
+        )
+        return True
 
 
 def write_json_export_summary(
@@ -1107,10 +1471,6 @@ def export_image(
     if export_format in {"images", "both"}:
         image_sources: list[tuple[str, str, Path]] = []
         if image_variant in {"typeset", "both"}:
-            if image.status.get("typeset") != "done" or image.status.get("inpaint") != "done":
-                raise ProjectError(
-                    f"Rendered output is stale for {image.relative_path}; page was not exported"
-                )
             image_sources.append(
                 (
                     "translatedImage",
@@ -1123,26 +1483,14 @@ def export_image(
                 )
             )
         if image_variant in {"inpainted", "both"}:
-            if image.status.get("inpaint") != "done":
-                raise ProjectError(
-                    f"Inpainted output is stale for {image.relative_path}; page was not exported"
-                )
             image_sources.append(
                 (
                     "cleanImage",
                     "clean",
-                    resolve_write_target(
-                        store.root,
-                        Path("generated") / "inpainted" / source_relative.with_suffix(".png"),
-                        protected_roots=(store.source_root,),
-                    ),
+                    _current_export_clean_path(store, image),
                 )
             )
-        generated_mask = resolve_write_target(
-            store.root,
-            Path("generated") / "masks" / source_relative.with_suffix(".png"),
-            protected_roots=(store.source_root,),
-        )
+        generated_mask = _current_export_mask_path(store, image)
         for output_key, directory, generated in image_sources:
             image_target = _export_write_target(
                 store,

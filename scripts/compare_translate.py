@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from manga_localizer.config import Settings
+from manga_localizer.model_bundle import apply_model_bundle
 from manga_localizer.providers.translation import (
     TranslationProviderError,
     TranslationUnavailable,
@@ -74,16 +75,21 @@ def parse_args() -> argparse.Namespace:
         )
     )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument(
-        "--data-dir", type=Path, default=Path.home() / ".manga-localizer"
-    )
     parser.add_argument("--label", default="translate-compare")
     return parser.parse_args()
 
 
+def resolve_settings() -> Settings:
+    settings = Settings()
+    if settings.model_bundle is None:
+        raise CompareError("Run through the guarded external runtime")
+    settings, _ = apply_model_bundle(settings)
+    return settings
+
+
 def run(args: argparse.Namespace) -> int:
     output = require_ignored_empty_output(args.output)
-    settings = Settings(data_dir=args.data_dir.expanduser())
+    settings = resolve_settings()
     provider = ArgosJaZhTranslationProvider(
         settings.argos_ja_en_model_path,
         settings.argos_en_zh_model_path,

@@ -123,13 +123,14 @@ def validate_mask_edits(
     return validated
 
 
-def _apply_mask_edits(
+def apply_mask_edits(
     mask: np.ndarray,
     regions: Sequence[Mapping[str, Any]],
     *,
-    mode: str,
+    mode: str | None,
     render_scale: int = 1,
 ) -> None:
+    """Mutate ``mask`` with validated strokes in region/stroke order."""
     height, width = mask.shape
     for region in regions:
         raw_edits = region.get("maskEdits", region.get("mask_edits"))
@@ -141,9 +142,9 @@ def _apply_mask_edits(
             height=height,
             render_scale=render_scale,
         ):
-            if stroke["mode"] != mode:
+            if mode is not None and stroke["mode"] != mode:
                 continue
-            color = 255 if mode == "add" else 0
+            color = 255 if stroke["mode"] == "add" else 0
             radius = max(1, round(stroke["radius"]))
             points = np.rint(np.asarray(stroke["points"], dtype=np.float64)).astype(np.int32)
             for start, end in pairwise(points):
@@ -313,7 +314,7 @@ def create_mask(
     if dilation > 0:
         size = dilation * 2 + 1
         mask = cv2.dilate(mask, np.ones((size, size), dtype=np.uint8), iterations=1)
-    _apply_mask_edits(
+    apply_mask_edits(
         mask,
         automatic_regions,
         mode="add",
@@ -324,16 +325,18 @@ def create_mask(
         mask = cv2.GaussianBlur(mask, (size, size), 0)
     if manual_regions:
         manual_mask = np.zeros_like(mask)
-        _apply_mask_edits(
+        apply_mask_edits(
             manual_mask,
             manual_regions,
             mode="add",
             render_scale=render_scale,
         )
         mask = np.maximum(mask, manual_mask)
-    # Erase strokes are the final authority: their zeroes cannot be
-    # repopulated by feathering automatic or explicitly added mask pixels.
-    _apply_mask_edits(mask, regions, mode="erase", render_scale=render_scale)
+    # Automatic add strokes participate in base feathering and manual adds
+    # remain binary. Replaying every stroke afterward makes persisted order
+    # the final pixel authority: a later add can restore an earlier erase,
+    # while a later erase remains zero after all morphology and feathering.
+    apply_mask_edits(mask, regions, mode=None, render_scale=render_scale)
     return mask
 
 

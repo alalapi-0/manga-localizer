@@ -3,10 +3,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
+import subprocess
 import tempfile
 import urllib.request
 import zipfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -123,6 +126,100 @@ def file_sha256(path: Path) -> str:
         for chunk in iter(lambda: source.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _guarded_path(
+    key: str,
+    *,
+    environ: Mapping[str, str] | None = None,
+    run_guard=subprocess.run,
+) -> Path:
+    active_environ = os.environ if environ is None else environ
+    home = active_environ.get("HOME", "").strip()
+    configured = active_environ.get("STORAGE_GOVERNANCE_GUARD", "").strip()
+    guard = (
+        Path(configured)
+        if configured
+        else Path(home) / ".config/storage-governance/guard.sh"
+    )
+    if not home or not guard.is_absolute():
+        raise RuntimeError("storage governance guard path is missing or not absolute")
+    if (
+        not guard.exists()
+        or guard.is_symlink()
+        or not guard.is_file()
+        or guard.resolve() != guard
+        or not os.access(guard, os.X_OK)
+    ):
+        raise RuntimeError(
+            "storage governance guard is not a canonical executable file"
+        )
+    result = run_guard(
+        [str(guard), "--get-path", key],
+        capture_output=True,
+        text=True,
+        env=active_environ,
+        check=False,
+    )
+    if result.returncode != 0:
+        detail = result.stderr.strip()
+        suffix = f": {detail}" if detail else ""
+        raise RuntimeError(
+            f"storage governance guard rejected model destination{suffix}"
+        )
+    lines = result.stdout.rstrip("\n").splitlines()
+    if len(lines) != 1 or not Path(lines[0]).is_absolute():
+        raise RuntimeError(
+            f"storage mapping {key} is missing, ambiguous, or not absolute"
+        )
+    root = Path(lines[0])
+    if root.is_symlink() or not root.is_dir() or root.resolve() != root:
+        raise RuntimeError(f"storage mapping {key} is not a canonical real directory")
+    return root
+
+
+def validate_guarded_bundle_destination(
+    destination: Path,
+    *,
+    environ: Mapping[str, str] | None = None,
+    run_guard=subprocess.run,
+) -> Path:
+    expanded = destination.expanduser()
+    if not expanded.is_absolute():
+        raise RuntimeError("model bundle destination must be absolute")
+    candidate = Path(os.path.normpath(expanded))
+    if candidate != expanded:
+        raise RuntimeError("model bundle destination must be canonical")
+    roots = (
+        _guarded_path("roots.models", environ=environ, run_guard=run_guard),
+        _guarded_path("roots.artifacts", environ=environ, run_guard=run_guard),
+    )
+    for root in roots:
+        if candidate == root or not candidate.is_relative_to(root):
+            continue
+        root_device = root.stat().st_dev
+        cursor = root
+        for part in candidate.relative_to(root).parts:
+            cursor /= part
+            if not cursor.exists() and not cursor.is_symlink():
+                break
+            info = cursor.lstat()
+            if cursor.is_symlink():
+                raise RuntimeError(
+                    "model bundle destination must not contain symbolic links"
+                )
+            if info.st_dev != root_device:
+                raise RuntimeError(
+                    "model bundle destination escaped the verified external filesystem"
+                )
+            if not cursor.is_dir():
+                raise RuntimeError(
+                    "model bundle destination contains a non-directory component"
+                )
+        return candidate
+    raise RuntimeError(
+        "model bundle destination is outside the verified external roots"
+    )
 
 
 def verify_file(path: Path, sha256: str) -> bool:
@@ -289,15 +386,15 @@ def package_root(extracted: Path) -> Path:
     raise RuntimeError("Argos archive did not contain metadata.json")
 
 
-def _copy_from_data_dirs(
+def _copy_from_model_dirs(
     name: str,
     filename: str,
     sha256: str,
     target: Path,
-    copy_from: tuple[Path, ...],
+    model_dirs: tuple[Path, ...],
 ) -> bool:
-    for data_dir in copy_from:
-        source = data_dir.expanduser() / "models" / filename
+    for model_dir in model_dirs:
+        source = model_dir.expanduser() / filename
         if source.resolve() == target.resolve():
             continue
         if verify_file(source, sha256):
@@ -313,7 +410,7 @@ def install_model(
     target_dir: Path,
     *,
     force: bool,
-    copy_from: tuple[Path, ...] = (),
+    copy_from_model_dirs: tuple[Path, ...] = (),
     no_download: bool = False,
 ) -> None:
     target = target_dir / spec.filename
@@ -324,8 +421,8 @@ def install_model(
         print(f"[{name}] already verified: {target}")
         return
     target_dir.mkdir(parents=True, exist_ok=True)
-    if not force and _copy_from_data_dirs(
-        name, spec.filename, spec.sha256, target, copy_from
+    if not force and _copy_from_model_dirs(
+        name, spec.filename, spec.sha256, target, copy_from_model_dirs
     ):
         print(f"[{name}] installed and verified: {target}")
         print(f"[{name}] sha256: {spec.sha256}")
@@ -357,7 +454,7 @@ def install_archive(
     target_dir: Path,
     *,
     force: bool,
-    copy_from: tuple[Path, ...] = (),
+    copy_from_model_dirs: tuple[Path, ...] = (),
     no_download: bool = False,
 ) -> None:
     archive_path = target_dir / spec.filename
@@ -371,8 +468,8 @@ def install_archive(
         return
     target_dir.mkdir(parents=True, exist_ok=True)
     if not force:
-        for data_dir in copy_from:
-            source_models = data_dir.expanduser() / "models"
+        for source_models in copy_from_model_dirs:
+            source_models = source_models.expanduser()
             source_archive = source_models / spec.filename
             source_extract = source_models / spec.extract_dir
             if source_archive.resolve() == archive_path.resolve():
@@ -437,8 +534,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--data-dir",
         type=Path,
-        default=Path.home() / ".manga-localizer",
-        help="Application data directory (models are written below its models/ folder)",
+        default=None,
+        help="Deprecated and rejected as a model destination; use the guarded --bundle-dest route",
     )
     parser.add_argument(
         "--copy-from",
@@ -446,6 +543,13 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=[],
         help="Existing data directories to copy verified models from before downloading",
+    )
+    parser.add_argument(
+        "--copy-from-models-dir",
+        action="append",
+        type=Path,
+        default=[],
+        help="Existing model directories to copy verified models from before downloading",
     )
     parser.add_argument(
         "--bundle-dest",
@@ -471,7 +575,15 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="print license and checksum metadata without downloading",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.print_specs:
+        if args.data_dir is not None:
+            parser.error(
+                "--data-dir is not a supported model destination; use --bundle-dest"
+            )
+        if args.bundle_dest is None:
+            parser.error("model setup requires an explicit guarded --bundle-dest")
+    return args
 
 
 def print_spec(name: str) -> None:
@@ -498,11 +610,7 @@ def main() -> int:
         for name in selected:
             print_spec(name)
         return 0
-    target_dir = (
-        args.bundle_dest.expanduser().resolve()
-        if args.verify_only and args.bundle_dest is not None
-        else args.data_dir.expanduser().resolve() / "models"
-    )
+    target_dir = validate_guarded_bundle_destination(args.bundle_dest)
     if args.verify_only:
         failed = 0
         for name in selected:
@@ -512,7 +620,9 @@ def main() -> int:
             if not result["available"]:
                 failed += 1
         return 1 if failed else 0
-    copy_from = tuple(path.expanduser() for path in args.copy_from)
+    copy_from_model_dirs = tuple(
+        path.expanduser() / "models" for path in args.copy_from
+    ) + tuple(path.expanduser() for path in args.copy_from_models_dir)
     for name in selected:
         if name in MODELS:
             install_model(
@@ -520,7 +630,7 @@ def main() -> int:
                 MODELS[name],
                 target_dir,
                 force=args.force,
-                copy_from=copy_from,
+                copy_from_model_dirs=copy_from_model_dirs,
                 no_download=args.no_download,
             )
             continue
@@ -529,7 +639,7 @@ def main() -> int:
             ARCHIVES[name],
             target_dir,
             force=args.force,
-            copy_from=copy_from,
+            copy_from_model_dirs=copy_from_model_dirs,
             no_download=args.no_download,
         )
     if args.bundle_dest is not None:

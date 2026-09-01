@@ -6,13 +6,22 @@ Use Node.js 22.22.2 or newer and Python 3.12.
 
 ```bash
 npm install
-uv sync --project backend --group dev
-npm --prefix frontend install
+node scripts/external-uv.mjs sync --group dev
+node scripts/external-frontend.mjs install
 npx playwright install chromium
 ```
 
 `npm run setup` installs the application dependencies without downloading a browser. Use
 `npm run setup:test` when preparing to run Playwright. The backend intentionally targets Python 3.12.
+
+On the governed local workstation, backend commands resolve `UV_PROJECT_ENVIRONMENT`, the uv cache, and
+the frontend dependency tree only after the external SSD passes the shared Volume/Container UUID guard.
+Run `npm run storage:check` to verify those routes. The local `backend/.venv` is intentionally a small
+regular-file sentinel, while `frontend/node_modules` is the exact registered external link: unwrapped
+fallbacks fail instead of silently recreating large internal environments. GitHub CI opts into a
+repository-local frontend tree only when both `CI=true` and
+`MANGA_LOCALIZER_CI_LOCAL_RUNTIME=1` are set, and routes uv to the runner's temporary directory.
+Other missing-guard hosts fail closed; there is no implicit local fallback.
 
 ## Run
 
@@ -31,39 +40,37 @@ target automatically unless `VITE_DEV_API_TARGET` is set.
 ### Optional local models
 
 Developer bootstrap and ordinary application startup still do not download models.
-`npm run package:app` may download the same checksum-verified files at *package*
-time and copy them into `Manga Localizer.app`; those weights stay out of git.
+`npm run package:app` copies checksum-verified files from the UUID-guarded external model bundle
+into `Manga Localizer.app`; it does not depend on a repository or home-directory model cache.
 The packaged app reads `Contents/Resources/models/manifest.json` and reports
 unavailable when a bundled file is missing or the SHA-256 does not match.
 
-To install the PP-OCR and LaMa models explicitly for a source checkout with
-fixed SHA-256 verification, target the same data directory used by the application:
+To install the PP-OCR and LaMa models explicitly with fixed SHA-256 verification:
 
 ```bash
-npm run setup:models -- --data-dir .manga-localizer ppocr lama realesrgan
-uv sync --project backend --extra ai --group dev
+npm run setup:models -- ppocr lama realesrgan
+node scripts/external-uv.mjs sync --extra ai --group dev
 ```
 
 Install the optional local Japanese-to-Chinese translator separately. It is not part of `setup:ai`:
 
 ```bash
-npm run setup:models -- --data-dir .manga-localizer argos-ja-zh
-uv sync --project backend --extra mt --group dev
+npm run setup:models -- argos-ja-zh
+node scripts/external-uv.mjs sync --extra mt --group dev
 ```
 
-Without a repository `.env`, omit `--data-dir .manga-localizer` to use the normal
-`~/.manga-localizer` default, or run `npm run setup:ai`. `realesrgan-onnx` is the local AI
-upscaler once that model and the `ai` extra are installed. `realesrgan-ncnn` still wraps a separately
+The guarded model bundle is independent of `MANGA_LOCALIZER_DATA_DIR`; that setting continues to
+control catalogs and project data only. `realesrgan-onnx` is the local AI upscaler once that model
+and the `ai` extra are installed. `realesrgan-ncnn` still wraps a separately
 installed `realesrgan-ncnn-vulkan` executable; place the binary under the data directory or set
 `MANGA_LOCALIZER_REALESRGAN_NCNN_COMMAND`.
 
 Compare classic Lanczos against AI upscaling into an ignored output directory:
 
 ```bash
-uv run --project backend --extra ai python scripts/compare_upscale.py \
+node scripts/external-uv.mjs run --with-guarded-models --extra ai python scripts/compare_upscale.py \
   --input tests/real-data/<dataset>/input \
   --output tests/real-data/<dataset>/runs/<new-run> \
-  --data-dir .manga-localizer \
   --factor 2
 ```
 
@@ -71,19 +78,17 @@ Compare local inpainting candidates on a public synthetic line-art page, or on p
 explicit mask, into an ignored output directory:
 
 ```bash
-uv run --project backend --extra ai python scripts/compare_inpaint.py \
+node scripts/external-uv.mjs run --with-guarded-models --extra ai python scripts/compare_inpaint.py \
   --synthetic \
-  --output tests/real-data/<dataset>/runs/<new-inpaint-run> \
-  --data-dir .manga-localizer
+  --output tests/real-data/<dataset>/runs/<new-inpaint-run>
 ```
 
 Compare the local Argos Japanese-to-Chinese translator on public synthetic phrases into an ignored
 directory. The summary stores character counts and CJK ratios, not translations or private OCR text:
 
 ```bash
-uv run --project backend --extra mt python scripts/compare_translate.py \
-  --output tests/real-data/<dataset>/runs/<new-translate-run> \
-  --data-dir .manga-localizer
+node scripts/external-uv.mjs run --with-guarded-models --extra mt python scripts/compare_translate.py \
+  --output tests/real-data/<dataset>/runs/<new-translate-run>
 ```
 
 Promote ignored detector-draft annotation JSON after local visual review. Progress prints aggregate
@@ -91,9 +96,9 @@ counts only. `--list-pending` prints page IDs for local use and must not be past
 Accept/reject copies into a new ignored directory and never auto-promotes empty pages:
 
 ```bash
-uv run --project backend python scripts/review_detection_annotations.py \
+node scripts/external-uv.mjs run python scripts/review_detection_annotations.py \
   --annotations tests/real-data/<dataset>/annotations/<draft-set>
-uv run --project backend python scripts/review_detection_annotations.py \
+node scripts/external-uv.mjs run python scripts/review_detection_annotations.py \
   --annotations tests/real-data/<dataset>/annotations/<draft-set> \
   --output tests/real-data/<dataset>/annotations/<reviewed-set> \
   --accept <page-id> --reject <page-id>
@@ -107,17 +112,20 @@ Node tests in the unified `npm run check` gate, including the macOS `.app` skele
 npm run package:app
 ```
 
-builds `dist/macos/Manga Localizer.app`. On Darwin it also copies the app to `~/Applications`.
-Pass `--no-install-user` to keep the copy only under `dist/`. Pass `--skip-download` only when
-every required model is already verified in a `--copy-from` data directory. The `.app` and model
-weights are gitignored.
+builds the app at the artifact destination returned by the guard only after the registered external
+volume passes the storage identity check. `--install-user` never copies this
+heavy bundle internally: it delegates to the canonical per-user maintenance installer, which refreshes
+the existing governed thin entry at `~/Applications/Manga Localizer.app` from its fixed verified
+template and fails if that managed entry or installer is unavailable. Pass `--skip-download` only when
+every required model is already verified in the external model bundle. The `.app` and model weights
+are gitignored.
 
 ## Verify
 
 ```bash
-uv run --project backend ruff check backend
-uv run --project backend ruff format --check backend
-uv run --project backend pytest backend/tests
+node scripts/external-uv.mjs run ruff check backend
+node scripts/external-uv.mjs run ruff format --check backend
+node scripts/external-uv.mjs run pytest backend/tests
 npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 npm --prefix frontend run test -- --run
@@ -136,7 +144,7 @@ before processing; never hard-code a personal source path. The evaluator exercis
 stores aggregate/per-file metrics without OCR text:
 
 ```bash
-uv run --project backend --extra ai python scripts/evaluate_real_data.py \
+node scripts/external-uv.mjs run --extra ai python scripts/evaluate_real_data.py \
   --input tests/real-data/<dataset>/input \
   --output tests/real-data/<dataset>/runs/<new-run> \
   --stages preprocess,detect,ocr,inpaint,typeset,export \
@@ -156,11 +164,11 @@ Detection/OCR box evaluation is separate. Generate or point at annotation JSON, 
 report that omits transcriptions, filenames, checksums, and paths:
 
 ```bash
-uv run --project backend python scripts/evaluate_detection_ocr.py \
+node scripts/external-uv.mjs run --with-guarded-models python scripts/evaluate_detection_ocr.py \
   --synthetic \
   --detector ppocr-v3 \
   --output tests/real-data/synthetic-stress/runs/<new-run>
-uv run --project backend python scripts/bootstrap_detection_annotations.py \
+node scripts/external-uv.mjs run --with-guarded-models python scripts/bootstrap_detection_annotations.py \
   --input tests/real-data/<dataset>/input \
   --output tests/real-data/<dataset>/annotations/<new-draft> \
   --detector ppocr-v3 \

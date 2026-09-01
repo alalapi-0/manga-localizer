@@ -4,10 +4,16 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { applicationBindHost, desktopWindowLaunch, firstPrivateLanIPv4 } from './app-platform.mjs';
+import { resolveCanonicalUv } from './external-uv.mjs';
+import { resolveGuardedModelBundle } from './storage-model-route.mjs';
+import { resolveGuardedRuntimeEnvironment } from './storage-runtime-route.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(root, '.env');
 if (existsSync(envFile)) process.loadEnvFile(envFile);
+process.env.MANGA_LOCALIZER_MODEL_BUNDLE = resolveGuardedModelBundle();
+const runtimeEnvironment = resolveGuardedRuntimeEnvironment().environment;
+const canonicalUv = resolveCanonicalUv();
 
 const lanAccess = process.argv.includes('--lan')
   || process.env.MANGA_LOCALIZER_LAN_ACCESS === '1'
@@ -22,7 +28,7 @@ const apiPort = process.env.MANGA_LOCALIZER_PORT || '8000';
 const frontendDist = path.join(root, 'frontend', 'dist');
 const appUrl = `http://${apiHost}:${apiPort}`;
 const environment = {
-  ...process.env,
+  ...runtimeEnvironment,
   MANGA_LOCALIZER_HOST: apiHost,
   MANGA_LOCALIZER_PORT: apiPort,
   MANGA_LOCALIZER_LAN_ACCESS: lanAccess ? '1' : '0',
@@ -41,7 +47,7 @@ if (!existsSync(path.join(environment.MANGA_LOCALIZER_FRONTEND_DIST, 'index.html
 }
 
 const api = spawn(
-  'uv',
+  canonicalUv,
   [
     'run',
     '--project',

@@ -151,16 +151,16 @@ current artifacts (and the inpaint mask), while JSON-only export remains indepen
 
 ## Optional model setup
 
-The repository contains no weights. Run the explicit checksum-verifying installer, targeting the same
-data directory used by the application:
+The repository contains no weights. Run the explicit checksum-verifying installer; it writes only to
+the UUID-guarded external model bundle:
 
 ```bash
 npm run setup:models -- ppocr
 npm run setup:models -- lama
 npm run setup:models -- realesrgan
 npm run setup:models -- argos-ja-zh
-uv sync --project backend --extra ai --group dev  # required by LaMa and Real-ESRGAN ONNX
-uv sync --project backend --extra mt --group dev  # required by Argos local translation
+node scripts/external-uv.mjs sync --extra ai --group dev  # required by LaMa and Real-ESRGAN ONNX
+node scripts/external-uv.mjs sync --extra mt --group dev  # required by Argos local translation
 ```
 
 Or install the listed models plus the runtime with `npm run setup:ai`. Local Japanese-to-Chinese

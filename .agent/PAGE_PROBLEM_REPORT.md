@@ -1,15 +1,155 @@
 # Manga Localizer — one-page reprocess problem report
 
-Updated: 2026-08-22
+Updated: 2026-08-23
 
 Public operator log for the one-page full-reprocess loop. No private
 page images, OCR text, or personal paths.
 
 ## Open findings
 
-None.
+### P-36 — no strict-AI clean plate candidate is visually acceptable
+
+- Kind: `quality / restoration strategy`
+- Recovery checkpoint: sidebar 2, 1166×540
+- What happened: after correcting the page to one trusted vertical dialogue
+  region and expanding the authoritative support to cover the complete visible
+  lettering, five mask/geometry variants were compared. Every direct or derived
+  LaMa candidate left visible gray or dark blocks inside the otherwise white
+  speech balloon. OpenCV Navier-Stokes and Telea produced a visually clean white
+  cavity with zero changes outside the mask, but their honest `classical`
+  provenance is correctly rejected by the project's strict AI gate.
+- Expected: the accepted clean plate has no readable source lettering or visible
+  reconstruction dirt, changes nothing outside the reviewed mask, and satisfies
+  an honest persisted provenance policy. A temporary project-setting change,
+  relabelling OpenCV as AI, or allowing a later typeset/export to conceal the
+  failed clean plate is not acceptable.
+- Evidence: the full mask was reviewed on the accepted 4× preprocessing grid;
+  the two classical candidates passed visual inspection while no AI-qualified
+  candidate did. No inpaint review was accepted and no corrected-page
+  translation, typesetting, page review, or export was allowed to proceed.
+- Decision boundary: the recommended continuation is a default-off, explicit,
+  revocable page approval for an honestly labelled classical fallback after all
+  same-generation AI candidates were compared and rejected. Keeping the current
+  AI-only meaning instead requires a different allowed AI restoration path that
+  produces a visually acceptable result.
+- Owner decision (2026-08-23): the owner explicitly authorized the page-scoped
+  classical fallback and asked Codex to perform the visual checks and approval
+  clicks through the normal user interface instead of requiring the owner to
+  operate every page. TASK_CONTRACT v4 freezes honest `classical` provenance,
+  AI-first per-generation comparison, default-off page scope, revocation on any
+  bound-evidence change, and reuse of one central downstream/export eligibility
+  check. Synthetic implementation and review are in progress; real-page writes
+  remain stopped until the exact candidate receives fresh Judge and Governor
+  approval.
 
 ## Cleared findings
+
+### P-38 — short vertical balloon text was pinned to the top of its region
+
+- Kind: `quality / typesetting / replay compatibility`
+- What happened: the ordinary vertical renderer always began at the region's top padding. A short
+  replacement could therefore match the source glyph size and remain inside the balloon while leaving an
+  obviously unbalanced lower cavity. An independent visual review rejected both the smaller candidate and
+  the source-sized but top-heavy retry.
+- Expected: an explicitly centered short vertical run preserves the source hierarchy and visual center,
+  while old frozen candidates continue replaying byte-identically.
+- Fix: bubble and ordinary routes now accept an optional bounded `verticalAlign` value (`start`, `center`,
+  or `end`). Omitted styles retain the legacy `start` behavior; art-lettering and invalid values fail
+  closed. The explicit value is frozen into the candidate style manifest and checksum.
+- Verification: the legacy candidate chain replayed after restart; the accepted retry changed no pixels
+  outside its frozen text box and passed all eight G10 checks. The centering regression, the end-to-end G10
+  persistence test, all 54 imaging tests, all 608 backend tests, Ruff, format checking, and a fresh
+  read-only Judge passed.
+
+### P-37 — a committed G4 reorder could omit its lineage event
+
+- Kind: `function / audit durability / transaction ordering`
+- What happened: the reorder path retained only a Revision id before the session's final flush. Because
+  the id was still unset, the region Revisions committed but the matching append-only G4 event was skipped,
+  leaving strict replay unable to advance.
+- Expected: every committed reading-order change has one checksum- and Revision-bound event, or the whole
+  write rolls back.
+- Fix: the writer now keeps the final Revision object, flushes it, and only then constructs the event. A
+  narrow append-only recovery recognizes solely the exact historical residue: current sequence/CAS,
+  contiguous reorder-only Revision suffix, backward checksum replay, expected image revision, no later
+  gate, and the explicitly observed current order must all match.
+- Verification: normal event, atomic rollback, recovery, idempotency, post-acceptance, and unrelated-suffix
+  rejection tests passed. The real residue recovered one public `recovered=true` event without changing
+  project revision or region state; the page-lineage suites, full backend suite, Ruff, and a fresh Judge
+  passed.
+
+### P-35 — strict generated-image export omitted the AI provenance gate
+
+- Kind: `security / workflow / export`
+- Recovery checkpoint: sidebar 2, discovered during the P-36 strategy audit
+- What happened: strict AI provenance was checked when translation, typesetting,
+  or render jobs were submitted, but generated-image export validated only page
+  review, visual-stage state, and artifact/mask checksums. A previously accepted
+  classical clean plate could therefore be exported directly, or through an
+  already generated typeset plate, while the project still claimed strict AI
+  downstream enforcement.
+- Expected: every strict generated-image export reuses the same current accepted
+  inpaint provenance gate at submission, immediately before the worker's first
+  copy, from direct export-service calls, and again before portable bundle
+  publication. JSON-only export and projects with strict mode disabled retain
+  their existing behavior.
+- Fix: generated export now delegates to the central checksum-, manifest-,
+  provider-, and review-digest-bound inpaint gate. Submission performs only the
+  strict generated-image policy check, preserving ordinary non-strict queue
+  behavior; worker/direct-service readiness and portable finalization recheck the
+  same evidence. No classical fallback, provenance relabelling, or weaker export-
+  specific predicate was introduced.
+- Verification: synthetic regressions cover classical submission rejection with
+  no job or destination, queued-then-ineligible failure before the first copy,
+  unchanged pre-existing destination bytes, direct-service rejection, actual
+  artifact/review/manifest/provenance tampering, portable finalization failure,
+  direct AI, validated AI-derived output, zero masks, strict-disabled generated
+  export, strict JSON-only export, and typeset/both dependency checks. Root passed
+  all 109 job-test instances and the complete 9-launcher / 381-backend /
+  197-frontend repository gate. A fresh Judge passed and a fresh Governor
+  approved exact combined candidate
+  `e65f86cfa9f7fe73c7c3fd131e0a99e31d7557a88eb0a7f82d1dbbb0c97bfa23`;
+  its protected restart preserved project revision 4797, sidebar-2 revision 68,
+  and zero active jobs.
+- Repro: accept an OpenCV clean plate in a non-strict project, enable
+  `requireAIInpaintBeforeDownstream`, and request an inpainted-image export. The
+  broken path created an export job instead of returning the central
+  `ai-inpaint-required` prerequisite conflict.
+
+### P-34 — hydrated full-region autosave invalidated completed page reviews
+
+- Kind: `function / review persistence`
+- Recovery checkpoint: sidebar 2, 1166×540
+- What happened: on 2026-08-22, the workbench hydrated legacy region records and
+  saved complete region snapshots even when the operator changed only one field.
+  The snapshots mixed genuinely default-equivalent repair additions with style
+  values that differ from the renderer's behavior when style is absent. Those
+  unintended style writes were substantive and therefore invalidated typeset
+  artifacts and page reviews across previously checked pages. The historical
+  `58/130` operator log no longer matched the canonical database, which retained
+  only 14 non-pending page reviews.
+- Expected: the workbench sends only fields the operator actually changes. The
+  backend suppresses actual semantic no-ops, including legacy repair mappings
+  that merely acquire ordinary repair defaults, while genuine geometry,
+  recognition, repair, or renderer-changing style edits retain their existing
+  invalidation behavior.
+- Fix: the workbench sends sparse nested patches with explicit
+  removal markers, rebases queued edits safely, and canonicalizes only
+  default-equivalent repair mappings. Style is compared against stored rendering
+  data, so a real style change still invalidates dependent output.
+- Same-page verification: a live sparse repair-field removal changed only that
+  stored key. The accepted 4× preprocess checksum and completed upstream stages
+  remained unchanged, and a full application reload emitted no compensating
+  PATCH. The corrected one-region page persisted through the subsequent mask and
+  inpaint comparisons. Sidebar 2 is still unfinished because of the independent
+  P-36 restoration-policy decision, not because P-34 remains reproducible.
+- Checks: focused backend/frontend race, no-op, deletion/undo, and reload
+  regressions passed; the complete repository gate passed 9 launcher, 381
+  backend, and 197 frontend tests plus formatting, lint, typecheck, production
+  build, and `git diff --check`.
+- Repro: load a legacy region whose repair/style mapping omits hydrated inspector
+  values, edit one unrelated field, and inspect the autosave payload. The broken
+  client sends the whole hydrated snapshot instead of only the operator's edit.
 
 ### P-33 — the local application service disappeared between page rounds
 
@@ -943,7 +1083,10 @@ None.
 
 - Corpus: 130-page full book first, then remaining real books.
 - Synthetic catalog leftovers are out of scope.
-- Finished pages this loop: 58.
+- Historical page-loop notes: 58 pages visually checked before P-34 was found.
+- Canonical recovery baseline: 14/130 first-book pages currently retain a
+  non-pending page review; every page must still satisfy the full persisted gate.
+- Current recovery page: sidebar 2, the earliest invalidated page.
 - Finished: sidebar 1, 1184×701, no-text path after quality pass.
 - Finished: sidebar 2, 1166×540, text path after quality pass.
 - Finished: sidebar 3, 627×1843, no-text path after quality pass
@@ -1129,6 +1272,8 @@ None.
   marks were retained as artwork, while full-page scan, no-text confirmation,
   reload persistence, zero active jobs, and cleared batch selection passed
   without translation, repair, typesetting, or private image export).
-- Next page: sidebar 59 of the 130-page book.
+- Next page under the historical sequence was sidebar 59. P-34 supersedes that
+  pointer: recovery resumes at sidebar 2 and may advance only after its persisted
+  gate passes.
 - Earlier realpages-loop “已检查” pages are not a skip; this loop
   reprocesses from the first page.

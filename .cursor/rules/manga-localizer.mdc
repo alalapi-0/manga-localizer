@@ -1,0 +1,16 @@
+---
+description: Manga Localizer project authority and Cursor handoff router
+alwaysApply: true
+---
+
+CURSOR_MANGA_LOCALIZER_OVERLAY_V2
+
+- 在本 Git 根开始任何工作前，先读 `AGENTS.md` 与 `.agent/STATE.md`；后者是唯一当前 authority、checkpoint 与 next action。
+- 静态 Prompt、历史任务、Git/Cursor 记录和本规则本身都不能激活项目 Goal。只有当前用户消息显式发送 `.agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md` 的启动文本才可激活。
+- 写前记录并保护当前 dirty baseline，确认唯一 writer、无 live worker/queue/watcher/loop、无 Git operation；不得覆盖 unrelated work、immutable originals、用户 verdict 或有效 lineage。
+- 项目数据只走 `npm run storage:check` 与 `npm run -s storage:data -- --print-real-data` 解析的受治理外置路径，不建立仓库内或 home fallback。
+- 图片模型默认使用当前执行 Agent 已登录账户的原生能力与订阅额度：Codex 用内建 `image_gen`，Cursor 用第一方 `GenerateImage` 并保持当前默认/Auto 路由。订阅不是项目可调用 API；不得默认索取、创建或静默使用独立 API key。原生能力不可用时必须 fail closed，不得偷偷切换 provider。
+- `npm run cloud:image -- ...` 只负责准备 checksum-bound quality/mask 与导入 Agent 已生成的一个本地 PNG，不调用 Codex/Cursor 订阅 API。先用 `--runtime codex|cursor --prepare-dir <new-absolute-dir>` 准备输入，再由当前 Agent 调其原生图片工具，最后用同一 runtime 加 `--raw-image <absolute-png> --execute` 导入。缺省 session identity 跨进程稳定；若显式传 `--session-id`，重试必须复用同一值。底层 provider 未由工具报告时必须记录为 unreported；tool/model claim 均为 `operator-attested-client-supplied-unverified`。
+- `--mode gemini-api` 仅是明确选择、另行配置的备用路径，绝非默认，也不得因原生失败自动启用。任何直接 API 路径仍只可使用已授权 included/prepaid quota，严禁把凭据写入 `.env`、argv、子进程环境、Prompt、日志或证据。
+- 保留原生工具 raw 为 immutable original，只把 quality outside-mask 与 provider-normalized inside-mask 的确定性 strict composite 作为 pending candidate；硬门禁 `outsideMaskChangedPixelCount == 0`，不得自动 accept。portrait、landscape、square 均允许，但正尺寸、32M pixel cap 与不超过 1% 的宽高比差必须保留。
+- 每个 material checkpoint 更新 `.agent/STATE.md` 的现场计数、证据、blocker 和唯一 next action；只有用户能把页面判为 `approved`。

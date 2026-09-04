@@ -1,0 +1,1 @@
+/goal 在当前 Manga Localizer Git 根恢复并完成 199 页真实图片终审与语料重建。先读 `AGENTS.md` 和 `.agent/STATE.md`，按其路由使用 `$manga-final-review-loop`，从唯一 checkpoint 跨轮推进；每轮持久化证据、blocker 和唯一 next action，不重复加载或复述完整协议。持续完成所有可执行工作，直到 `199 approved` 且重建、导出、校验全部通过；仅在需要用户判定或真实外部条件时，保存精确停点后等待。

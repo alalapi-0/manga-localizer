@@ -74,6 +74,9 @@ project/
 generated/
 exports/
 
+# Local Goal prepare/QA trees (quality/mask/raw copies; not product source)
+.agent/audits/
+
 # Editors / OS
 .DS_Store
 .idea/

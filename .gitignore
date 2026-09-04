@@ -81,4 +81,5 @@ exports/
 .DS_Store
 .idea/
 .vscode/
+.playwright-mcp/
 *.swp

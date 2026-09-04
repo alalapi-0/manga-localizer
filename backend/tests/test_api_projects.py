@@ -693,7 +693,11 @@ def test_openai_session_key_enables_provider_without_persisting_or_returning_sec
     assert secret not in captured.err
 
 
-def test_runtime_environment_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runtime_environment_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("MANGA_LOCALIZER_DATA_DIR", str(tmp_path / "catalog"))
     monkeypatch.setenv("HOST", "127.0.0.2")
     monkeypatch.setenv("PORT", "8123")
     monkeypatch.setenv("LOG_LEVEL", "debug")
@@ -715,21 +719,34 @@ def test_runtime_environment_aliases(monkeypatch: pytest.MonkeyPatch) -> None:
         Settings()
 
 
-def test_lan_access_binds_private_ipv4_only() -> None:
+def test_runtime_data_dir_has_no_implicit_internal_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from pydantic import ValidationError
 
     from manga_localizer.config import Settings
 
+    monkeypatch.delenv("MANGA_LOCALIZER_DATA_DIR")
+    with pytest.raises(ValidationError, match="data_dir"):
+        Settings()
+
+
+def test_lan_access_binds_private_ipv4_only(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    from manga_localizer.config import Settings
+
+    data_dir = tmp_path / "catalog"
     with pytest.raises(ValidationError, match="loopback"):
-        Settings(host="192.168.1.20")
-    settings = Settings(host="192.168.1.20", lan_access=True)
+        Settings(data_dir=data_dir, host="192.168.1.20")
+    settings = Settings(data_dir=data_dir, host="192.168.1.20", lan_access=True)
     assert settings.host == "192.168.1.20"
     with pytest.raises(ValidationError, match="loopback"):
-        Settings(host="0.0.0.0", lan_access=True)
+        Settings(data_dir=data_dir, host="0.0.0.0", lan_access=True)
     with pytest.raises(ValidationError, match="loopback"):
-        Settings(host="8.8.8.8", lan_access=True)
+        Settings(data_dir=data_dir, host="8.8.8.8", lan_access=True)
     with pytest.raises(ValidationError, match="loopback"):
-        Settings(host="169.254.1.1", lan_access=True)
+        Settings(data_dir=data_dir, host="169.254.1.1", lan_access=True)
 
 
 def test_health_config_and_sanitized_portable_project(client: TestClient, tmp_path: Path) -> None:

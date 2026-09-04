@@ -319,6 +319,8 @@ test('app skeleton writes a double-clickable wrapper without model URLs', (t) =>
   const wrapper = readFileSync(layout.executable, 'utf8');
   assert.match(wrapper, /^#!/);
   assert.match(wrapper, /MODEL_BUNDLE/);
+  assert.match(wrapper, /mappings\.manga_localizer\.app_data_root/);
+  assert.doesNotMatch(wrapper, /\.manga-localizer|export MANGA_LOCALIZER_DATA_DIR="\$\{/);
   assert.doesNotMatch(wrapper, /huggingface|argos-net/);
   assert.equal(path.basename(layout.app), APP_BUNDLE_NAME);
   mkdirSync(layout.frontend, { recursive: true });
@@ -332,6 +334,8 @@ test('clean source includes every fail-closed storage route and the backend sent
     'scripts/external-frontend.mjs',
     'scripts/external-uv.mjs',
     'scripts/setup-models.mjs',
+    'scripts/storage-data-route.mjs',
+    'scripts/storage-data-route.test.mjs',
     'scripts/storage-frontend-route.mjs',
     'scripts/storage-frontend-route.test.mjs',
     'scripts/storage-model-route.mjs',
@@ -361,5 +365,9 @@ test('clean source includes every fail-closed storage route and the backend sent
   assert.doesNotMatch(
     readFileSync(path.join(sourceRoot, 'scripts', 'package-app.mjs'), 'utf8'),
     /copyTree\(layout\.app,\s*installed\)/,
+  );
+  assert.doesNotMatch(
+    readFileSync(path.join(sourceRoot, 'scripts', 'macos_app_launcher.py'), 'utf8'),
+    /Path\.home\(\)\s*\/\s*["']\.manga-localizer["']/,
   );
 });

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -8,8 +10,13 @@ import pytest
 from fastapi.testclient import TestClient
 from PIL import Image, ImageDraw
 
-from manga_localizer.config import Settings
-from manga_localizer.main import create_app
+# The production setting is intentionally required. Test collection imports the
+# module-level ASGI app, so give that unused instance an explicit ephemeral route.
+_TEST_DATA_DIRECTORY = tempfile.TemporaryDirectory(prefix="manga-localizer-tests-")
+os.environ.setdefault("MANGA_LOCALIZER_DATA_DIR", _TEST_DATA_DIRECTORY.name)
+
+from manga_localizer.config import Settings  # noqa: E402
+from manga_localizer.main import create_app  # noqa: E402
 
 
 def png_bytes(

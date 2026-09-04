@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import os
 import re
 import shutil
 import sqlite3
@@ -300,12 +299,14 @@ def _freeze_evidence_bundle(
 ) -> tuple[dict[str, dict[str, Any]], str, str]:
     relative_root = Path("images") / item_id / f"r{artifact_revision:06d}"
     destination_root = root / relative_root
-    if destination_root.exists():
-        raise ProjectError("Final-review artifact revision already exists")
-    temporary = destination_root.with_name(f".{destination_root.name}.{uuid.uuid4().hex}.tmp")
+    # Exclusive creation establishes cleanup ownership, including when a competing
+    # file or dangling symlink occupies the revision path. The DB publishes the bundle.
+    try:
+        destination_root.mkdir(parents=True, exist_ok=False)
+    except FileExistsError as error:
+        raise ProjectError("Final-review artifact revision already exists") from error
     sanitized: dict[str, dict[str, Any]] = {}
     try:
-        temporary.mkdir(parents=True)
         for kind in _ARTIFACT_KINDS:
             descriptor = dict(descriptors[kind])
             source_value = descriptor.pop("path", None)
@@ -324,7 +325,7 @@ def _freeze_evidence_bundle(
                 }:
                     suffix = ".png"
                 relative = relative_root / f"{kind}{suffix}"
-                target = temporary / f"{kind}{suffix}"
+                target = destination_root / f"{kind}{suffix}"
                 shutil.copyfile(source, target)
                 if _sha256(target) != descriptor["checksum"] or _resolution(target) != (
                     descriptor["grid"]["width"],
@@ -337,11 +338,9 @@ def _freeze_evidence_bundle(
             sanitized[kind] = descriptor
         final_source = Path(str(descriptors["final"]["path"])).resolve(strict=True)
         thumbnail_relative = relative_root / "thumbnail.jpg"
-        _snapshot_thumbnail(final_source, temporary / "thumbnail.jpg", thumbnail_size)
-        thumbnail_checksum = _sha256(temporary / "thumbnail.jpg")
-        os.replace(temporary, destination_root)
+        _snapshot_thumbnail(final_source, destination_root / "thumbnail.jpg", thumbnail_size)
+        thumbnail_checksum = _sha256(destination_root / "thumbnail.jpg")
     except Exception:
-        shutil.rmtree(temporary, ignore_errors=True)
         shutil.rmtree(destination_root, ignore_errors=True)
         raise
     return sanitized, thumbnail_relative.as_posix(), thumbnail_checksum
@@ -378,8 +377,6 @@ def _artifact_for_image(
 ) -> tuple[Path, str, str]:
     lineaged_quality = require_current_no_text_quality_plate(store, session, image)
     if lineaged_quality is not None:
-        if lineaged_quality["targetKind"] != "preprocessed":
-            raise ProjectError("This quality-plate variant is not supported by final review yet")
         return lineaged_quality["path"], "preprocess", lineaged_quality["checksum"]
     relative = safe_relative_path(image.relative_path).with_suffix(".png")
     if image.status.get("typeset") == "done":
@@ -489,21 +486,37 @@ def _strict_artifacts_for_image(
     if (
         quality_event is None
         or quality_event.gate != "G2_reconstruction"
-        or quality_event.operation != "reconstruction-decision"
+        or quality_event.operation
+        != (
+            "reconstruction-candidate-reviewed"
+            if quality["targetKind"] == "reconstruction"
+            else "reconstruction-decision"
+        )
         or quality_event.state != "accepted"
         or quality_event.revision_id is None
         or quality_event.output_checksum != quality["checksum"]
         or (quality_event.evidence or {}).get("targetKind") != quality["targetKind"]
     ):
         raise ProjectError("Strict final-review quality event is unavailable")
+    reconstructed = quality["targetKind"] == "reconstruction"
+    quality_parent = quality_event.input_checksum if reconstructed else generation.source_checksum
     quality_producer_event = session.scalar(
         select(PageLineageEvent)
         .where(
             PageLineageEvent.generation_id == generation.id,
-            PageLineageEvent.gate == "G1_baselineUpscale",
-            PageLineageEvent.operation == "preprocess-artifact-produced",
+            PageLineageEvent.gate
+            == ("G2_reconstruction" if reconstructed else "G1_baselineUpscale"),
+            PageLineageEvent.operation
+            == (
+                "reconstruction-candidate-produced"
+                if reconstructed
+                else "preprocess-artifact-produced"
+            ),
             PageLineageEvent.output_checksum == quality["checksum"],
             PageLineageEvent.sequence < quality_event.sequence,
+            PageLineageEvent.id == quality_event.evidence.get("producerEventId")
+            if reconstructed
+            else True,
         )
         .order_by(PageLineageEvent.sequence.desc())
         .limit(1)
@@ -511,19 +524,25 @@ def _strict_artifacts_for_image(
     if (
         quality_producer_event is None
         or quality_producer_event.state != "pending"
-        or quality_producer_event.input_checksum != generation.source_checksum
-        or quality_producer_event.parent_checksum != generation.source_checksum
+        or quality_producer_event.input_checksum != quality_parent
+        or quality_producer_event.parent_checksum != quality_parent
         or quality_producer_event.job_id is None
         or quality_producer_event.job_item_id is None
-        or quality_producer_event.revision_id is not None
-        or (quality_producer_event.evidence or {}).get("targetKind") != "image"
+        or reconstructed != (quality_producer_event.revision_id is not None)
+        or (
+            not reconstructed
+            and (quality_producer_event.evidence or {}).get("targetKind") != "image"
+        )
     ):
         raise ProjectError("Strict final-review quality publication event is unavailable")
     quality_completion_events = list(
         session.scalars(
             select(PageLineageEvent).where(
                 PageLineageEvent.generation_id == generation.id,
-                PageLineageEvent.operation == "preprocess-job-completed",
+                PageLineageEvent.operation
+                == (
+                    "reconstruction-job-completed" if reconstructed else "preprocess-job-completed"
+                ),
                 PageLineageEvent.job_id == quality_producer_event.job_id,
                 PageLineageEvent.job_item_id == quality_producer_event.job_item_id,
                 PageLineageEvent.output_checksum == quality["checksum"],
@@ -1214,8 +1233,6 @@ class FinalReviewStore:
                     return True
                 lineaged_quality = require_current_no_text_quality_plate(store, session, image)
                 if lineaged_quality is not None:
-                    if lineaged_quality["targetKind"] != "preprocessed":
-                        return True
                     current_variant = "preprocess"
                     current_checksum = lineaged_quality["checksum"]
                 else:
@@ -1649,8 +1666,10 @@ class FinalReviewStore:
                     final_review_item_id=item_id,
                     final_review_item_revision=expected_revision,
                     feedback_checksum=feedback_checksum,
-                    parameter_set_id=parameter_set_id,
-                    parameter_set_hash=parameter_set_hash,
+                    parameter_set_id=parameter_set_id if retry_from_generation_id is None else None,
+                    parameter_set_hash=(
+                        parameter_set_hash if retry_from_generation_id is None else None
+                    ),
                 )
                 if existing is not None:
                     target, generation = existing
@@ -1674,6 +1693,14 @@ class FinalReviewStore:
                         )
                     if generation.id != retry_from_generation_id:
                         if retry_parent == retry_from_generation_id:
+                            if (
+                                generation.parameter_set_id != parameter_set_id
+                                or generation.parameter_set_hash != parameter_set_hash
+                            ):
+                                raise ProjectError(
+                                    "Existing repair handoff parameter set "
+                                    "does not match this request"
+                                )
                             return self._repair_result(
                                 row,
                                 batch["revision"],
@@ -2022,7 +2049,10 @@ class FinalReviewStore:
                     )
                     connection.commit()
             except Exception:
-                shutil.rmtree(revision_root, ignore_errors=True)
+                # The helper cleans up its partial failures. A returned bundle
+                # transfers ownership here until the database transaction commits.
+                if frozen is not None:
+                    shutil.rmtree(revision_root, ignore_errors=True)
                 raise
         return {
             "item": self.item(item_id),

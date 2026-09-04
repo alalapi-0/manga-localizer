@@ -39,6 +39,10 @@ test('macOS app bundle layout and wrapper stay loopback by default', () => {
   const wrapper = macosWrapperScript();
   assert.match(wrapper, /MANGA_LOCALIZER_MODEL_BUNDLE/);
   assert.match(wrapper, /MANGA_LOCALIZER_FRONTEND_DIST/);
+  assert.match(wrapper, /STORAGE_GOVERNANCE_GUARD/);
+  assert.match(wrapper, /mappings\.manga_localizer\.app_data_root/);
+  assert.match(wrapper, /conflicts with the registered app-data root/);
+  assert.doesNotMatch(wrapper, /\.manga-localizer|export MANGA_LOCALIZER_DATA_DIR="\$\{/);
   assert.match(wrapper, /macos_app_launcher.py/);
   assert.doesNotMatch(wrapper, /huggingface|argos-net|setup_optional_models/);
 

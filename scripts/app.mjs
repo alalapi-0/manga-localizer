@@ -4,15 +4,20 @@ import path from 'node:path';
 import process from 'node:process';
 
 import { applicationBindHost, desktopWindowLaunch, firstPrivateLanIPv4 } from './app-platform.mjs';
+import { backendUvicornArgs } from './dev-platform.mjs';
 import { resolveCanonicalUv } from './external-uv.mjs';
+import { resolveGuardedProjectData } from './storage-data-route.mjs';
 import { resolveGuardedModelBundle } from './storage-model-route.mjs';
 import { resolveGuardedRuntimeEnvironment } from './storage-runtime-route.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const envFile = path.join(root, '.env');
 if (existsSync(envFile)) process.loadEnvFile(envFile);
-process.env.MANGA_LOCALIZER_MODEL_BUNDLE = resolveGuardedModelBundle();
-const runtimeEnvironment = resolveGuardedRuntimeEnvironment().environment;
+const dataEnvironment = resolveGuardedProjectData().environment;
+dataEnvironment.MANGA_LOCALIZER_MODEL_BUNDLE = resolveGuardedModelBundle({
+  env: dataEnvironment,
+});
+const runtimeEnvironment = resolveGuardedRuntimeEnvironment({ env: dataEnvironment }).environment;
 const canonicalUv = resolveCanonicalUv();
 
 const lanAccess = process.argv.includes('--lan')
@@ -48,17 +53,7 @@ if (!existsSync(path.join(environment.MANGA_LOCALIZER_FRONTEND_DIST, 'index.html
 
 const api = spawn(
   canonicalUv,
-  [
-    'run',
-    '--project',
-    'backend',
-    'uvicorn',
-    'manga_localizer.main:app',
-    '--host',
-    apiHost,
-    '--port',
-    apiPort,
-  ],
+  backendUvicornArgs({ host: apiHost, port: apiPort }),
   { cwd: root, env: environment, stdio: 'inherit' },
 );
 

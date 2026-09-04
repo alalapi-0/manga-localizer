@@ -14,12 +14,15 @@
     "app:lan": "node scripts/app.mjs --lan",
     "package:app": "node scripts/package-app.mjs",
     "check": "npm run check:launcher && npm run check:backend && npm run check:frontend",
-    "check:launcher": "node --test scripts/dev-platform.test.mjs scripts/app-platform.test.mjs scripts/package-app.test.mjs scripts/storage-frontend-route.test.mjs scripts/storage-model-route.test.mjs scripts/storage-runtime-route.test.mjs",
+    "check:launcher": "node --test scripts/dev-platform.test.mjs scripts/app-platform.test.mjs scripts/package-app.test.mjs scripts/storage-data-route.test.mjs scripts/storage-frontend-route.test.mjs scripts/storage-model-route.test.mjs scripts/storage-runtime-route.test.mjs",
     "check:backend": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff format --check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m pytest backend/tests",
     "check:frontend": "npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run test -- --run && npm --prefix frontend run build",
     "test:e2e": "playwright test",
     "audit:release": "node scripts/external-uv.mjs run --frozen --offline --no-sync python scripts/audit_release.py",
-    "storage:check": "node scripts/external-uv.mjs --check && node scripts/external-frontend.mjs --check"
+    "cloud:image": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -m manga_localizer.cloud_image_cli",
+    "g2:image": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -m manga_localizer.reconstruction_cli",
+    "storage:data": "node scripts/external-data.mjs",
+    "storage:check": "node scripts/external-uv.mjs --check && node scripts/external-frontend.mjs --check && node scripts/external-data.mjs --check"
   },
   "devDependencies": {
     "@playwright/test": "^1.55.0"

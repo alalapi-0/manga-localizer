@@ -1146,7 +1146,7 @@ def find_final_review_repair_generation(
     parameter_set_id: str | None = None,
     parameter_set_hash: str | None = None,
 ) -> tuple[ImageAsset, PageGeneration] | None:
-    """Return the one fully bound repair handoff, or ``None`` when none exists.
+    """Return the fully bound repair chain head, or ``None`` when none exists.
 
     Identity is discovered from every G0 event in the project rather than from
     mutable generation source columns.  Any duplicate identity, malformed
@@ -1208,10 +1208,6 @@ def find_final_review_repair_generation(
     chain.sort(key=lambda entry: entry[0])
     if [entry[0] for entry in chain] != list(range(1, len(chain) + 1)):
         raise ProjectError("Final-review repair retry chain is ambiguous")
-    current_parameter_identity = (
-        chain[-1][3].parameter_set_id,
-        chain[-1][3].parameter_set_hash,
-    )
     for index, (attempt, retry_from, _candidate, candidate_generation) in enumerate(chain):
         predecessor_id = chain[index - 1][3].id if index else None
         is_head = index == len(chain) - 1
@@ -1231,11 +1227,6 @@ def find_final_review_repair_generation(
             or candidate_generation.next_sequence < 2
             or not _PARAMETER_SET_ID_RE.fullmatch(candidate_generation.parameter_set_id)
             or not _SHA256_RE.fullmatch(candidate_generation.parameter_set_hash)
-            or (
-                candidate_generation.parameter_set_id,
-                candidate_generation.parameter_set_hash,
-            )
-            != current_parameter_identity
             or (
                 is_head
                 and (
@@ -1322,143 +1313,148 @@ def find_final_review_repair_generation(
     ):
         raise ProjectError("Existing repair handoff parameter set does not match this request")
 
-    expected_run_id = f"final-review-{final_review_item_id[:8]}-r{final_review_item_revision}"
-    if attempt > 1:
-        expected_run_id = f"{expected_run_id}-a{attempt}"
-    if (
-        generation.run_id != expected_run_id
-        or generation.project_id != source_project_id
-        or generation.source_project_id != source_project_id
-        or generation.source_image_id != source.id
-        or generation.source_checksum != source.checksum
-        or generation.source_relative_path != source.relative_path
-        or generation.restart_from_source is not True
-        or generation.created_at is None
-        or generation.next_sequence < 2
-        or not _PARAMETER_SET_ID_RE.fullmatch(generation.parameter_set_id)
-        or not _SHA256_RE.fullmatch(generation.parameter_set_hash)
-    ):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
+    # Each immutable attempt binds its own parameter identity. A changed recipe
+    # may start a successor; it must never rewrite or weaken historical evidence.
+    for attempt, retry_from_generation_id, g0, generation in chain:
+        expected_run_id = f"final-review-{final_review_item_id[:8]}-r{final_review_item_revision}"
+        if attempt > 1:
+            expected_run_id = f"{expected_run_id}-a{attempt}"
+        if (
+            generation.run_id != expected_run_id
+            or generation.project_id != source_project_id
+            or generation.source_project_id != source_project_id
+            or generation.source_image_id != source.id
+            or generation.source_checksum != source.checksum
+            or generation.source_relative_path != source.relative_path
+            or generation.restart_from_source is not True
+            or generation.created_at is None
+            or generation.next_sequence < 2
+            or not _PARAMETER_SET_ID_RE.fullmatch(generation.parameter_set_id)
+            or not _SHA256_RE.fullmatch(generation.parameter_set_hash)
+        ):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
 
-    events = list(
-        session.scalars(
-            select(PageLineageEvent)
-            .where(PageLineageEvent.generation_id == generation.id)
-            .order_by(PageLineageEvent.sequence)
-        ).all()
-    )
-    if [event.sequence for event in events] != list(range(1, generation.next_sequence)):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
-    generation_g0_events = [event for event in events if event.gate == "G0_identity"]
-    if len(generation_g0_events) != 1 or generation_g0_events[0].id != g0.id:
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
+        events = list(
+            session.scalars(
+                select(PageLineageEvent)
+                .where(PageLineageEvent.generation_id == generation.id)
+                .order_by(PageLineageEvent.sequence)
+            ).all()
+        )
+        if [event.sequence for event in events] != list(range(1, generation.next_sequence)):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+        generation_g0_events = [event for event in events if event.gate == "G0_identity"]
+        if len(generation_g0_events) != 1 or generation_g0_events[0].id != g0.id:
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
 
-    target = session.get(ImageAsset, generation.image_id)
-    if target is None or target.id == source.id:
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
-    expected_relative = _final_review_repair_relative_path(
-        source,
-        final_review_item_id,
-        final_review_item_revision,
-        attempt,
-    )
-    expected_source_path = (Path("source") / expected_relative).as_posix()
-    if (
-        target.project_id != source_project_id
-        or target.name != expected_relative.name
-        or target.relative_path != expected_relative.as_posix()
-        or target.source_path != expected_source_path
-        or target.source_kind != "final-review-repair"
-        or target.input_path is not None
-        or target.width != source.width
-        or target.height != source.height
-        or target.media_type != source.media_type
-        or target.checksum != source.checksum
-    ):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
-    target_path = _immutable_image_path(store, target)
-    expected_target_path = resolve_write_target(store.source_root, expected_relative)
-    try:
-        physically_distinct = target_path != source_path and not target_path.samefile(source_path)
-    except OSError as error:
-        raise ProjectError("Existing repair handoff target could not be inspected") from error
-    if (
-        target_path != expected_target_path
-        or not physically_distinct
-        or _sha256_file(target_path) != target.checksum
-        or _decoded_image_resolution(target_path) != (target.width, target.height)
-    ):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
-
-    try:
-        actor_matches = _public_actor(generation) == _public_actor(g0)
-    except ProjectError as error:
-        raise ProjectError("Existing repair handoff provenance is inconsistent") from error
-    expected_evidence = _final_review_repair_g0_evidence(
-        generation=generation,
-        target=target,
-        source=source,
-        final_review_item_id=final_review_item_id,
-        final_review_item_revision=final_review_item_revision,
-        feedback_checksum=feedback_checksum,
-        repair_attempt=attempt,
-        retry_from_generation_id=retry_from_generation_id,
-    )
-    if (
-        g0.sequence != 1
-        or g0.operation != "generation-created"
-        or g0.state != "accepted"
-        or g0.input_checksum != source.checksum
-        or g0.output_checksum != source.checksum
-        or g0.parent_checksum is not None
-        or g0.stage is not None
-        or g0.provider is not None
-        or g0.model_version is not None
-        or g0.parameter_hash != generation.parameter_set_hash
-        or g0.job_id is not None
-        or g0.job_item_id is not None
-        or g0.revision_id is None
-        or g0.decision != "restart-from-immutable-source"
-        or g0.reason != "final-review-issue-repair"
-        or g0.git_commit is not None
-        or not _json_values_equal(g0.evidence, expected_evidence)
-        or g0.started_at is None
-        or g0.finished_at is None
-        or g0.started_at != g0.finished_at
-        or g0.created_at is None
-        or not actor_matches
-    ):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
-
-    creation_revisions = list(
-        session.scalars(
-            select(Revision).where(
-                Revision.project_id == source_project_id,
-                Revision.entity_type == "page-generation",
-                Revision.entity_id == generation.id,
-                Revision.operation == "create-final-review-repair",
+        target = session.get(ImageAsset, generation.image_id)
+        if target is None or target.id == source.id:
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+        expected_relative = _final_review_repair_relative_path(
+            source,
+            final_review_item_id,
+            final_review_item_revision,
+            attempt,
+        )
+        expected_source_path = (Path("source") / expected_relative).as_posix()
+        if (
+            target.project_id != source_project_id
+            or target.name != expected_relative.name
+            or target.relative_path != expected_relative.as_posix()
+            or target.source_path != expected_source_path
+            or target.source_kind != "final-review-repair"
+            or target.input_path is not None
+            or target.width != source.width
+            or target.height != source.height
+            or target.media_type != source.media_type
+            or target.checksum != source.checksum
+        ):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+        target_path = _immutable_image_path(store, target)
+        expected_target_path = resolve_write_target(store.source_root, expected_relative)
+        try:
+            physically_distinct = target_path != source_path and not target_path.samefile(
+                source_path
             )
-        ).all()
-    )
-    expected_revision_after = _final_review_repair_revision_after(
-        generation=generation,
-        target=target,
-        source=source,
-        final_review_item_id=final_review_item_id,
-        final_review_item_revision=final_review_item_revision,
-        feedback_checksum=feedback_checksum,
-        repair_attempt=attempt,
-        retry_from_generation_id=retry_from_generation_id,
-    )
-    if (
-        len(creation_revisions) != 1
-        or creation_revisions[0].id != g0.revision_id
-        or creation_revisions[0].before is not None
-        or not _json_values_equal(creation_revisions[0].after, expected_revision_after)
-        or creation_revisions[0].project_revision < 1
-        or creation_revisions[0].created_at is None
-    ):
-        raise ProjectError("Existing repair handoff provenance is inconsistent")
+        except OSError as error:
+            raise ProjectError("Existing repair handoff target could not be inspected") from error
+        if (
+            target_path != expected_target_path
+            or not physically_distinct
+            or _sha256_file(target_path) != target.checksum
+            or _decoded_image_resolution(target_path) != (target.width, target.height)
+        ):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+
+        try:
+            actor_matches = _public_actor(generation) == _public_actor(g0)
+        except ProjectError as error:
+            raise ProjectError("Existing repair handoff provenance is inconsistent") from error
+        expected_evidence = _final_review_repair_g0_evidence(
+            generation=generation,
+            target=target,
+            source=source,
+            final_review_item_id=final_review_item_id,
+            final_review_item_revision=final_review_item_revision,
+            feedback_checksum=feedback_checksum,
+            repair_attempt=attempt,
+            retry_from_generation_id=retry_from_generation_id,
+        )
+        if (
+            g0.sequence != 1
+            or g0.operation != "generation-created"
+            or g0.state != "accepted"
+            or g0.input_checksum != source.checksum
+            or g0.output_checksum != source.checksum
+            or g0.parent_checksum is not None
+            or g0.stage is not None
+            or g0.provider is not None
+            or g0.model_version is not None
+            or g0.parameter_hash != generation.parameter_set_hash
+            or g0.job_id is not None
+            or g0.job_item_id is not None
+            or g0.revision_id is None
+            or g0.decision != "restart-from-immutable-source"
+            or g0.reason != "final-review-issue-repair"
+            or g0.git_commit is not None
+            or not _json_values_equal(g0.evidence, expected_evidence)
+            or g0.started_at is None
+            or g0.finished_at is None
+            or g0.started_at != g0.finished_at
+            or g0.created_at is None
+            or not actor_matches
+        ):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+
+        creation_revisions = list(
+            session.scalars(
+                select(Revision).where(
+                    Revision.project_id == source_project_id,
+                    Revision.entity_type == "page-generation",
+                    Revision.entity_id == generation.id,
+                    Revision.operation == "create-final-review-repair",
+                )
+            ).all()
+        )
+        expected_revision_after = _final_review_repair_revision_after(
+            generation=generation,
+            target=target,
+            source=source,
+            final_review_item_id=final_review_item_id,
+            final_review_item_revision=final_review_item_revision,
+            feedback_checksum=feedback_checksum,
+            repair_attempt=attempt,
+            retry_from_generation_id=retry_from_generation_id,
+        )
+        if (
+            len(creation_revisions) != 1
+            or creation_revisions[0].id != g0.revision_id
+            or creation_revisions[0].before is not None
+            or not _json_values_equal(creation_revisions[0].after, expected_revision_after)
+            or creation_revisions[0].project_revision < 1
+            or creation_revisions[0].created_at is None
+        ):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
     return target, generation
 
 
@@ -1520,8 +1516,6 @@ def create_final_review_repair_generation(
                 final_review_item_id=final_review_item_id,
                 final_review_item_revision=final_review_item_revision,
                 feedback_checksum=feedback_checksum,
-                parameter_set_id=parameter_set_id,
-                parameter_set_hash=parameter_set_hash,
             )
             if existing is None or existing[1].id != retry_from_generation_id:
                 raise PageLineageConflict(
@@ -2505,6 +2499,20 @@ def require_current_quality_plate(
     ):
         raise PageLineageConflict(
             "G2 accepted evidence is stale or does not descend from G1",
+            resource=f"page-generation:{generation.id}",
+            reason="g2-lineage-mismatch",
+        )
+    if target_kind == "reconstruction":
+        from manga_localizer.services.reconstructions import accepted_quality
+
+        return accepted_quality(store, session, image, generation, event)
+    if (
+        target_kind != "preprocessed"
+        or event.operation != "reconstruction-decision"
+        or event.decision != "further-reconstruction-no"
+    ):
+        raise PageLineageConflict(
+            "G2 baseline acceptance requires an explicit no-reconstruction decision",
             resource=f"page-generation:{generation.id}",
             reason="g2-lineage-mismatch",
         )
@@ -5159,7 +5167,12 @@ def _g4_validation_issues(image: ImageAsset, rows: list[TextRegion]) -> list[str
             if row.ruby_parent_id is not None:
                 issues.add("ruby-parent-on-non-ruby")
             continue
-        if row.content_disposition != "ignore":
+        # Ruby never becomes an independent OCR/translation target.  Most ruby
+        # is removed with its translated parent (``ignore``), while
+        # ``keep-art`` records the less common editorial decision to retain the
+        # original annotation pixels.  The latter still keeps the semantic
+        # parent link and paragraph grouping required for G4 auditability.
+        if row.content_disposition not in {"ignore", "keep-art"}:
             issues.add("ruby-disposition-invalid")
         parent = by_id.get(row.ruby_parent_id or "")
         if row.ruby_parent_id == row.id:

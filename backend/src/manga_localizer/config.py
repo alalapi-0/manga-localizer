@@ -17,7 +17,7 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
-    data_dir: Path = Field(default_factory=lambda: Path.home() / ".manga-localizer")
+    data_dir: Path
     host: str = Field(
         default="127.0.0.1",
         validation_alias=AliasChoices("MANGA_LOCALIZER_HOST", "HOST"),

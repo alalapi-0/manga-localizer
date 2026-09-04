@@ -300,6 +300,103 @@ def _sqlite_logical_snapshot(database: Path) -> tuple[list[tuple], dict[str, lis
     return schema, rows
 
 
+def _artifact_tree_snapshot(root: Path) -> dict[str, tuple]:
+    return {
+        path.relative_to(root).as_posix(): (
+            path.lstat().st_mode,
+            path.lstat().st_ino,
+            str(path.readlink())
+            if path.is_symlink()
+            else path.read_bytes()
+            if path.is_file()
+            else None,
+        )
+        for path in [root, *sorted(root.rglob("*"))]
+    }
+
+
+@pytest.fixture
+def freeze_bundle_input(tmp_path: Path) -> tuple[Path, dict]:
+    source = tmp_path / "source.png"
+    source.write_bytes(png_bytes())
+    descriptors = {
+        kind: final_review_service._evidence_descriptor(
+            kind,
+            path=source,
+            availability="available",
+            generation_id="generation",
+            producer_id="producer",
+            terminal_id="terminal",
+            artifact_revision=2,
+        )
+        for kind in final_review_service._ARTIFACT_KINDS
+    }
+    root = tmp_path / "review"
+    sibling = root / "images/item/r000001"
+    sibling.mkdir(parents=True)
+    (sibling / "final.png").write_bytes(png_bytes(color="black"))
+    return root, descriptors
+
+
+@pytest.mark.parametrize("failure", ["copy", "validation", "thumbnail"])
+def test_freeze_failure_removes_only_owned_partial_bundle(
+    freeze_bundle_input: tuple[Path, dict], monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    root, descriptors = freeze_bundle_input
+    before = _artifact_tree_snapshot(root)
+    destination = root / "images/item/r000002"
+    real_copy = final_review_service.shutil.copyfile
+    copies = 0
+
+    def copy_with_failure(source, target):
+        nonlocal copies
+        copies += 1
+        result = real_copy(source, target)
+        if copies == 2:
+            if failure == "copy":
+                raise OSError("injected partial copy failure")
+            if failure == "validation":
+                Path(target).write_bytes(png_bytes(color="red"))
+        return result
+
+    def fail_thumbnail(_source, target, _size):
+        target.write_bytes(b"partial thumbnail")
+        raise OSError("injected thumbnail failure")
+
+    monkeypatch.setattr(final_review_service.shutil, "copyfile", copy_with_failure)
+    if failure == "thumbnail":
+        monkeypatch.setattr(final_review_service, "_snapshot_thumbnail", fail_thumbnail)
+    error = final_review_service.ProjectError if failure == "validation" else OSError
+    with pytest.raises(error, match=r"inconsistent|injected"):
+        final_review_service._freeze_evidence_bundle(root, "item", 2, descriptors, 96)
+    assert copies >= 2
+    assert not destination.exists()
+    assert _artifact_tree_snapshot(root) == before
+
+
+def test_freeze_exclusive_creation_race_preserves_competing_directory(
+    freeze_bundle_input: tuple[Path, dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, descriptors = freeze_bundle_input
+    destination = root / "images/item/r000002"
+    real_mkdir = Path.mkdir
+    competing_snapshot = None
+
+    def competing_mkdir(path, *args, **kwargs):
+        nonlocal competing_snapshot
+        if path.parent == destination.parent and competing_snapshot is None:
+            real_mkdir(destination)
+            (destination / "owned-by-another-operation").write_bytes(b"preserve me")
+            competing_snapshot = _artifact_tree_snapshot(root)
+        return real_mkdir(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", competing_mkdir)
+    with pytest.raises(final_review_service.ProjectError, match="revision already exists"):
+        final_review_service._freeze_evidence_bundle(root, "item", 2, descriptors, 96)
+    assert competing_snapshot is not None
+    assert _artifact_tree_snapshot(root) == competing_snapshot
+
+
 def test_new_batch_is_strict_v2_with_five_immutable_evidence_routes(
     app, client: TestClient, tmp_path: Path
 ) -> None:
@@ -979,6 +1076,147 @@ def test_issue_repair_explicit_retry_is_linear_audited_and_idempotent(
             if event.evidence.get("finalReviewItemId") == item["id"]
         ]
     assert len(identity_events) == 2
+
+
+def test_issue_repair_parameter_variant_retry_preserves_history_and_exact_replay(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    batch, item, request, first = _create_issue_repair(app, client, tmp_path)
+    endpoint = f"/api/final-review-items/{item['id']}/repair"
+    store = app.state.registry.get(item["sourceProjectId"])
+    initial_events = client.get(f"/api/page-generations/{first['pageGenerationId']}/events").json()
+    original_batch = client.get(f"/api/final-review-batches/{batch['id']}").json()
+    variant = {
+        **request,
+        "parameterSetId": "native-registration-v1",
+        "parameterSetHash": "a" * 64,
+        "retryFromGenerationId": first["pageGenerationId"],
+    }
+    created = client.post(endpoint, json=variant)
+    assert created.status_code == 201, created.text
+    second = created.json()
+    assert second["repairAttempt"] == 2
+    assert second["parameterSetId"] == variant["parameterSetId"]
+    assert second["parameterSetHash"] == variant["parameterSetHash"]
+    before = _sqlite_logical_snapshot(store.database_path)
+    for matching in [
+        variant,
+        {key: value for key, value in variant.items() if key != "retryFromGenerationId"},
+    ]:
+        response = client.post(endpoint, json=matching)
+        assert response.status_code == 201, response.text
+        assert response.json() == {**second, "idempotent": True}
+        assert _sqlite_logical_snapshot(store.database_path) == before
+    for mismatched in [
+        request,
+        {**request, "retryFromGenerationId": first["pageGenerationId"]},
+        {**variant, "parameterSetHash": "b" * 64},
+        {**variant, "parameterSetId": "other-variant-v1"},
+    ]:
+        response = client.post(endpoint, json=mismatched)
+        assert response.status_code == 400, response.text
+        assert _sqlite_logical_snapshot(store.database_path) == before
+
+    third_request = {
+        **request,
+        "parameterSetId": "another-explicit-recipe-v1",
+        "parameterSetHash": "c" * 64,
+        "retryFromGenerationId": second["pageGenerationId"],
+    }
+    response = client.post(endpoint, json=third_request)
+    assert response.status_code == 201, response.text
+    third = response.json()
+    assert third["repairAttempt"] == 3
+    after = _sqlite_logical_snapshot(store.database_path)
+    assert client.post(endpoint, json=variant).status_code == 400  # stale ancestor
+    assert _sqlite_logical_snapshot(store.database_path) == after
+    assert client.post(endpoint, json=third_request).json() == {**third, "idempotent": True}
+    assert _sqlite_logical_snapshot(store.database_path) == after
+    assert client.get(f"/api/final-review-batches/{batch['id']}").json() == original_batch
+    events = client.get(f"/api/page-generations/{first['pageGenerationId']}/events").json()
+    assert events[:-1] == initial_events
+    with store.session() as session:
+        source = session.get(ImageAsset, item["sourceImageId"])
+        assert source is not None
+        source_bytes = (store.root / source.source_path).read_bytes()
+        for handoff in (first, second, third):
+            generation = session.get(PageGeneration, handoff["pageGenerationId"])
+            image = session.get(ImageAsset, handoff["repairImageId"])
+            assert generation is not None and image is not None
+            assert (store.root / image.source_path).read_bytes() == source_bytes
+            g0 = session.scalar(
+                select(PageLineageEvent).where(
+                    PageLineageEvent.generation_id == generation.id,
+                    PageLineageEvent.gate == "G0_identity",
+                )
+            )
+            assert g0 is not None
+            creation = session.get(Revision, g0.revision_id)
+            assert creation is not None
+            assert (
+                generation.parameter_set_id
+                == g0.evidence["parameterSetId"]
+                == handoff["parameterSetId"]
+            )
+            assert generation.parameter_set_hash == g0.parameter_hash == handoff["parameterSetHash"]
+            assert creation.after["parameterSetId"] == handoff["parameterSetId"]
+            assert creation.after["parameterSetHash"] == handoff["parameterSetHash"]
+
+
+@pytest.mark.parametrize(
+    "corruption", ["generation-id", "generation-hash", "creation-revision", "source-copy"]
+)
+def test_parameter_variant_retry_rejects_historical_drift_without_writes(
+    app, client: TestClient, tmp_path: Path, corruption: str
+) -> None:
+    _batch, item, request, first = _create_issue_repair(app, client, tmp_path)
+    endpoint = f"/api/final-review-items/{item['id']}/repair"
+    store = app.state.registry.get(item["sourceProjectId"])
+    variant = {
+        **request,
+        "parameterSetId": "variant-v1",
+        "parameterSetHash": "a" * 64,
+        "retryFromGenerationId": first["pageGenerationId"],
+    }
+    response = client.post(endpoint, json=variant)
+    assert response.status_code == 201, response.text
+    second = response.json()
+    with store.session() as session:
+        generation = session.get(PageGeneration, first["pageGenerationId"])
+        assert generation is not None
+        g0 = session.scalar(
+            select(PageLineageEvent).where(
+                PageLineageEvent.generation_id == generation.id,
+                PageLineageEvent.gate == "G0_identity",
+            )
+        )
+        assert g0 is not None
+        creation = session.get(Revision, g0.revision_id)
+        image = session.get(ImageAsset, first["repairImageId"])
+        assert creation is not None and image is not None
+        revision_id = creation.id
+        corrupt_after = {**creation.after, "parameterSetHash": "b" * 64}
+        source_path = store.root / image.source_path
+        if corruption == "generation-id":
+            generation.parameter_set_id = "tampered-v1"
+        elif corruption == "generation-hash":
+            generation.parameter_set_hash = "b" * 64
+    if corruption == "creation-revision":
+        _preset_corrupt_g0_revision(store, revision_id, corrupt_after)
+    elif corruption == "source-copy":
+        source_path.write_bytes(b"corrupt synthetic source")
+    before = _sqlite_logical_snapshot(store.database_path)
+    before_files = {
+        str(path): path.read_bytes() for path in store.source_root.rglob("*") if path.is_file()
+    }
+    for body in [variant, {**variant, "retryFromGenerationId": second["pageGenerationId"]}]:
+        rejected = client.post(endpoint, json=body)
+        assert rejected.status_code == 400, rejected.text
+        assert "pageGenerationId" not in rejected.json()
+        assert _sqlite_logical_snapshot(store.database_path) == before
+        assert {
+            str(path): path.read_bytes() for path in store.source_root.rglob("*") if path.is_file()
+        } == before_files
 
 
 def _insert_repair_identity_decoy(
@@ -1704,6 +1942,10 @@ def test_two_v1_items_refresh_in_order_preserves_each_r1_and_rolls_back_second_f
     )
 
     database = manifest.parent / "final-review.sqlite3"
+    sibling = review_root / "images" / second["id"] / "r000003"
+    sibling.mkdir(parents=True)
+    (sibling / "sentinel").write_bytes(b"unrelated later artifact")
+    artifacts_before_failure = _artifact_tree_snapshot(review_root / "images")
     before_failed_refresh = _sqlite_logical_snapshot(database)
     real_history_payload = final_review_service.FinalReviewStore._history_payload
     history_calls = 0
@@ -1733,6 +1975,7 @@ def test_two_v1_items_refresh_in_order_preserves_each_r1_and_rolls_back_second_f
             )
     assert history_calls == 2
     assert _sqlite_logical_snapshot(database) == before_failed_refresh
+    assert _artifact_tree_snapshot(review_root / "images") == artifacts_before_failure
     assert not (review_root / f"images/{second['id']}/r000002").exists()
     assert client.get(old_urls[second["id"]]).content == old_bytes[second["id"]]
 
@@ -1748,6 +1991,19 @@ def test_two_v1_items_refresh_in_order_preserves_each_r1_and_rolls_back_second_f
     second_result = second_refresh.json()
     assert second_result["item"]["artifactRevision"] == 2
     assert second_result["item"]["strictEvidence"] is True
+    artifacts_after_success = _artifact_tree_snapshot(review_root / "images")
+    database_after_success = _sqlite_logical_snapshot(database)
+    stale_refresh = client.post(
+        f"/api/final-review-items/{second['id']}/refresh",
+        json={
+            "expectedRevision": second["revision"],
+            "expectedBatchRevision": current_batch["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert stale_refresh.status_code == 409, stale_refresh.text
+    assert _sqlite_logical_snapshot(database) == database_after_success
+    assert _artifact_tree_snapshot(review_root / "images") == artifacts_after_success
 
     refreshed_items = {
         item["id"]: item
@@ -1848,6 +2104,85 @@ def test_two_v1_items_refresh_in_order_preserves_each_r1_and_rolls_back_second_f
                 evidence["final"]["checksum"]
                 == hashlib.sha256(old_bytes[row["item_id"]]).hexdigest()
             )
+
+
+@pytest.mark.parametrize(
+    "collision",
+    [
+        "nonempty-directory",
+        "empty-directory",
+        "file",
+        "directory-link",
+        "file-link",
+        "dangling-link",
+    ],
+)
+def test_refresh_collision_preserves_existing_revision_and_database(
+    app, client: TestClient, tmp_path: Path, collision: str
+) -> None:
+    project, image = _strict_project(app, client, tmp_path / "source")
+    root = tmp_path / "legacy-collision"
+    manifest = _legacy_review(
+        root,
+        source_project_id=project["id"],
+        source_image_id=image["id"],
+        verdict="issues",
+    )
+    opened_response = client.post(
+        "/api/final-review-batches/open", json={"manifestPath": str(manifest)}
+    )
+    assert opened_response.status_code == 200, opened_response.text
+    opened = opened_response.json()
+    item = opened["items"][0]
+    handoff = client.post(
+        f"/api/final-review-items/{item['id']}/repair",
+        json={
+            "expectedRevision": item["revision"],
+            "expectedBatchRevision": opened["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert handoff.status_code == 201, handoff.text
+    _complete_repair_g10(app, client, tmp_path / "collision-repair", handoff.json())
+    destination = root / "images" / item["id"] / "r000002"
+    destination.parent.mkdir()
+    protected = tmp_path / "protected"
+    protected.mkdir()
+    if collision.endswith("directory"):
+        destination.mkdir()
+        if collision == "nonempty-directory":
+            (destination / "sentinel").write_bytes(b"existing revision")
+    elif collision == "file":
+        destination.write_bytes(b"existing file")
+    else:
+        target = protected / "target"
+        if collision == "directory-link":
+            target.mkdir()
+            (target / "sentinel").write_bytes(b"linked revision")
+        elif collision == "file-link":
+            target.write_bytes(b"linked file")
+        destination.symlink_to(target)
+    artifacts_before = _artifact_tree_snapshot(root / "images")
+    protected_before = _artifact_tree_snapshot(protected)
+    database = manifest.parent / "final-review.sqlite3"
+    database_before = _sqlite_logical_snapshot(database)
+    old_url = item["evidence"]["final"]["url"]
+    old_bytes = client.get(old_url).content
+
+    response = client.post(
+        f"/api/final-review-items/{item['id']}/refresh",
+        json={
+            "expectedRevision": item["revision"],
+            "expectedBatchRevision": opened["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert response.status_code == 400, response.text
+    assert "Final-review artifact revision already exists" in response.text
+    assert _sqlite_logical_snapshot(database) == database_before
+    assert _artifact_tree_snapshot(root / "images") == artifacts_before
+    assert _artifact_tree_snapshot(protected) == protected_before
+    assert client.get(old_url).content == old_bytes
 
 
 def test_legacy_refresh_failure_rolls_back_lazy_schema_rows_and_orphan(

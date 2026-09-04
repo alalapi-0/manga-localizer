@@ -12,6 +12,35 @@ export function isLoopbackHost(host) {
     || /^127(?:\.[0-9]{1,3}){3}$/.test(normalized);
 }
 
+export function backendUvicornArgs({
+  host,
+  port,
+  reload = false,
+} = {}) {
+  if (!host || port == null || port === '') {
+    throw new Error('backend uvicorn launch requires host and port');
+  }
+  return [
+    'run',
+    '--project',
+    'backend',
+    '--frozen',
+    '--offline',
+    '--no-sync',
+    'python',
+    '-m',
+    'uvicorn',
+    'manga_localizer.main:app',
+    ...(reload
+      ? ['--reload', '--reload-dir', 'backend']
+      : []),
+    '--host',
+    String(host),
+    '--port',
+    String(port),
+  ];
+}
+
 export function frontendLaunch(
   root,
   host,

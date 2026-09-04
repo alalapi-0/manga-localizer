@@ -36,13 +36,13 @@ inpainting, typesetting, review, and export as separate replaceable stages.
   brush/eraser recipe makes older attempts stale. The five coverage checks cover body glyphs,
   punctuation, outlines/shadows, linked ruby, and antialias edges; the five collateral checks protect
   bubble borders, characters, speed lines, screentone, and nearby artwork
-- Strict G8 routes every accepted-mask region from its reviewed G5 background class: solid fills,
-  controlled gradients, screentone-preserving repair, or AI redraw for complex art. Every immutable
-  candidate binds the G7 mask, accepted quality plate, route/provider/model manifest, exact PNG/grid,
-  and a recomputed zero outside-mask pixel-change count. The operator must inspect original, quality,
-  quality-plus-accepted-mask, and candidate bytes and record all seven clean-plate checks. Page-scoped
-  classical fallback stays disabled until all applicable same-generation AI candidates are explicitly
-  rejected and is always recorded as classical provenance. Legacy pages retain
+- New strict G8 uses native cloud image generation directly. Reviewed G5 backgrounds guide the prompt
+  and visual checks, not local algorithm selection. LaMa/local AI, deterministic local fills and
+  classical fallback production and candidate review are retired; new API requests and old queued
+  jobs fail closed with `g8-native-cloud-required`. No local attempt is required before cloud use.
+  Candidates still bind accepted quality, G7 mask, raw/provenance, exact PNG/grid and a recomputed
+  zero outside-mask change count; cloud success alone is not visual acceptance. Historical local
+  artifacts/reviews remain readable and replayable without regeneration. Legacy non-strict pages retain
   text-aware or region masks, safe repair gating, OpenCV fallback, optional local LaMa ONNX restoration,
   and Pillow horizontal or vertical Chinese typesetting with
   vertical punctuation forms, hanging comma/period glyphs, fragment clustering for adjacent small
@@ -250,6 +250,9 @@ not turn a missing workstation guard into a general Linux local-runtime fallback
    paths beneath it, so selecting `input/` retains `chapter-01/001.png`.
 4. Optionally run preprocessing, compare the enhanced image with the original, then detect and OCR.
    A fresh page-generation workflow runs both original and accepted-quality crops for each eligible box.
+   When G1 still lacks illustration detail, native G2 reconstruction is available through
+   `npm run g2:image -- prepare|import`; see [the G2 workflow](docs/development.md#native-g2-reconstruction).
+   It preserves lettering and requires explicit visual acceptance before downstream processing.
 5. Review every numbered OCR proposal in the canvas and Text panel. For strict G6 pages, choose the
    trusted attempt or a manual correction and complete all nine QC checks before accepting the page.
    Confidence, including zero, is evidence only and never authorizes translation or default safe repair.
@@ -259,10 +262,12 @@ not turn a missing workstation guard into a general Linux local-runtime fallback
    wrong G4 geometry, paragraph/ruby ownership, or semantic disposition, preserve the rejected generation
    and restart from the immutable source in a fresh generation/workspace before correcting G4; never
    rewrite the accepted upstream history in place.
-7. In G8, generate a background-routed immutable clean-plate candidate. Compare original, accepted
-   quality, quality plus the exact accepted mask, and the candidate; all seven checks and the actual
-   candidate checksum/grid must match before acceptance. Complex art uses AI first. Classical fallback
-   is page-scoped and becomes available only after every applicable AI candidate is explicitly rejected.
+7. In G8, use the executing Agent's native cloud image tool directly (`image_gen` in Codex), then
+   import its immutable result through `cloud:image --mode native`. Compare original, accepted quality,
+   the exact accepted mask and candidate; all native-route visual checks and checksum/grid bindings
+   must pass. No new LaMa/local/classical candidates or local fallback reviews are allowed. Cloud
+   failure remains a blocker, never a silent fallback. G1, OCR, masks, geometric normalization,
+   strict compositing, typesetting and exact artifact-free G8 N/A remain available locally.
 8. On strict pages, G9 starts only from terminal G8 evidence. Generate one whole-page automatic
    candidate set with a canonical supported provider, or create per-region manual, Agent, or dictionary
    revisions. Review every immutable candidate against all ten translation QC checks; rejected candidates
@@ -604,9 +609,9 @@ Configure a font you are licensed to use. This repository does not ship fonts.
 ### Where are my projects?
 
 The output root you chose contains the portable database and JSON manifest. If you leave it blank,
-projects are created below `MANGA_LOCALIZER_DATA_DIR/projects/`; that data directory defaults to
-`~/.manga-localizer`. Copying `.env.example` intentionally overrides it with the repository-relative
-`.manga-localizer` directory unless you edit that value. A local catalog there remembers recent project
+projects are created below the required `MANGA_LOCALIZER_DATA_DIR/projects/`. Guarded launchers inject
+that value from `mappings.manga_localizer.app_data_root`; there is no repository-relative or home-directory
+fallback. A catalog there remembers recent project
 manifests. The JSON snapshot is inspectable, but reopening still requires the adjacent SQLite database.
 
 ### The OCR health check fails

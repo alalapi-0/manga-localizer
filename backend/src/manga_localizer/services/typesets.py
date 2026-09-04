@@ -33,6 +33,7 @@ from manga_localizer.imaging.typesetting import (
     default_cjk_font,
     discover_system_fonts,
     typeset_image,
+    verticalize_punctuation,
 )
 from manga_localizer.logging_utils import redact, without_secrets
 from manga_localizer.security import atomic_write_bytes, resolve_write_target
@@ -125,7 +126,12 @@ _STYLE_KEYS = {
     "lineSpacing",
     "letterSpacing",
     "autoFit",
+    "verticalQuoteLayout",
+    "bodyStrokeWidth",
+    "quoteScaleX",
+    "quoteScaleY",
 }
+_COMPACT_CORNER_QUOTES = "compact-corner-quotes-v1"
 _UNSUPPORTED_ART_KEYS = {"curveWarp", "curve", "warp", "aiProvider", "aiModel"}
 _PUBLIC_FONT_TOKEN_RE = re.compile(r"^installed-font-[0-9a-f]{24}$")
 _ART_LAYER_MAX_SIDE = 16_384
@@ -459,6 +465,30 @@ def _normalize_style(route: str, override: object) -> dict[str, Any]:
                 reason="g10-art-lettering-capability-required",
             )
     style = _base_style(route)
+    if "verticalQuoteLayout" in override:
+        if route != "art-lettering" or override["verticalQuoteLayout"] != _COMPACT_CORNER_QUOTES:
+            raise PageLineageConflict(
+                "Compact corner quotes require the versioned art-lettering route",
+                resource="typeset-style",
+                reason="g10-style-invalid",
+            )
+        style["verticalQuoteLayout"] = _COMPACT_CORNER_QUOTES
+    for field, minimum, maximum, integer in (
+        ("bodyStrokeWidth", 0, 32, True),
+        ("quoteScaleX", 0.25, 4, False),
+        ("quoteScaleY", 0.25, 4, False),
+    ):
+        if field not in override:
+            continue
+        if style.get("verticalQuoteLayout") != _COMPACT_CORNER_QUOTES:
+            raise PageLineageConflict(
+                "Title weight and quote proportions require compact corner quotes",
+                resource="typeset-style",
+                reason="g10-style-invalid",
+            )
+        style[field] = _bounded_number(
+            override[field], field=field, minimum=minimum, maximum=maximum, integer=integer
+        )
     catalog = _font_catalog_by_token()
     if "fontToken" in override:
         token = override["fontToken"]
@@ -843,6 +873,18 @@ def _job_contract(
         session, image, bindings["acceptedByRegion"]
     )
     style_manifest = _style_manifest(route_manifest, options.get("regionStyles", {}))
+    regions_by_id = {entry["regionId"]: entry for entry in region_manifest}
+    for entry in style_manifest:
+        style = entry["style"]
+        if style is not None and "verticalQuoteLayout" in style:
+            region_id = entry["regionId"]
+            body = _compact_quote_body(
+                bindings["acceptedByRegion"][region_id].translation_text,
+                direction=regions_by_id[region_id]["direction"],
+                mode=style["verticalQuoteLayout"],
+            )
+            font = ImageFont.truetype(str(_font_path(style, route="art-lettering")), size=36)
+            _require_compact_quote_glyphs(font, body)
     route_checksum = _digest(route_manifest)
     style_checksum = _digest(style_manifest)
     parameter_hash = _digest(
@@ -961,6 +1003,297 @@ def _scaled_normal_style(style: Mapping[str, Any], scale: float, *, route: str) 
     }
 
 
+def _compact_quote_body(text: str, *, direction: str, mode: object) -> str:
+    if (
+        mode != _COMPACT_CORNER_QUOTES
+        or direction != "vertical"
+        or len(text) < 3
+        or not text.startswith("『")
+        or not text.endswith("』")
+        or text.splitlines() != [text]
+        or not text[1:-1].strip()
+        or any(char in "『』「」﹃﹄﹁﹂" for char in text[1:-1])
+    ):
+        raise PageLineageConflict(
+            "Compact corner quotes require one vertical, balanced nonempty title",
+            resource="typeset-route:art-lettering",
+            reason="g10-style-invalid",
+        )
+    if len(text) > _NORMAL_MAX_REGION_GLYPHS:
+        raise PageLineageConflict(
+            "Compact corner quote title exceeds the render budget",
+            resource="typeset-route:art-lettering",
+            reason="g10-art-lettering-resource-limit",
+        )
+    return text[1:-1]
+
+
+def _require_compact_quote_glyphs(font: ImageFont.FreeTypeFont, body: str) -> None:
+    # Use the same face and rasterizer as rendering. Missing characters map to
+    # the font's .notdef glyph; include dimensions to avoid bitmap ambiguity.
+    missing = font.getmask(chr(0x10FFFF), mode="L")
+    missing_signature = (missing.size, bytes(missing))
+    for char in sorted(set(body + "﹃﹄") - {" "}):
+        mask = font.getmask(char, mode="L")
+        if mask.getbbox() is None or (mask.size, bytes(mask)) == missing_signature:
+            raise PageLineageConflict(
+                "Selected display font lacks a required compact-title glyph",
+                resource="typeset-route:art-lettering",
+                reason="g10-art-lettering-capability-required",
+            )
+
+
+def _measure_compact_quote_text(
+    text: str,
+    *,
+    font_path: Path,
+    font_size: int,
+    direction: str,
+    stroke_width: int,
+    line_spacing: float,
+    align: str,
+    mode: str,
+) -> dict[str, Any]:
+    body = _compact_quote_body(text, direction=direction, mode=mode)
+    margin = stroke_width + 3
+    spacing = max(0, round(font_size * line_spacing))
+    _guard_art_layer(font_size + margin * 2, font_size + margin * 2)
+    font = ImageFont.truetype(str(font_path), size=max(1, font_size))
+    rendered = "﹃" + body + "﹄"
+    metric_boxes = [font.getbbox(char, stroke_width=stroke_width) for char in rendered]
+    quote_gap = max(1, round(font_size * 0.035))
+    _guard_art_layer(
+        max(box[2] - box[0] for box in metric_boxes) + margin * 2,
+        sum(box[3] - box[1] for box in metric_boxes)
+        + max(0, len(body) - 1) * spacing
+        + quote_gap * 2
+        + margin * 2,
+    )
+    _require_compact_quote_glyphs(font, body)
+    glyphs: list[dict[str, Any]] = []
+    for index, char in enumerate(rendered):
+        mask, offset = font.getmask2(char, mode="L", stroke_width=stroke_width)
+        ink = mask.getbbox()
+        if ink is None:  # A literal internal space retains a body-sized advance.
+            bbox = (0, 0, 0, font_size)
+        else:
+            bbox = tuple(ink[i] + offset[i % 2] for i in range(4))
+        glyphs.append(
+            {"text": char, "bbox": bbox, "role": "quote" if index in {0, len(text) - 1} else "body"}
+        )
+    ink_width = max(glyph["bbox"][2] - glyph["bbox"][0] for glyph in glyphs)
+    cursor = margin
+    for index, glyph in enumerate(glyphs):
+        left, top, right, bottom = glyph["bbox"]
+        spare = ink_width - (right - left)
+        glyph["x"] = margin + {"start": 0, "center": spare // 2, "end": spare}[align] - left
+        glyph["y"] = cursor - top
+        cursor += bottom - top
+        if index < len(glyphs) - 1:
+            cursor += quote_gap if index in {0, len(glyphs) - 2} else spacing
+    width, height = ink_width + margin * 2, cursor + margin
+    _guard_art_layer(width, height)
+    return {
+        "font": font,
+        "glyphs": glyphs,
+        "verticalQuoteLayout": mode,
+        "margin": margin,
+        "width": width,
+        "height": height,
+    }
+
+
+def _compact_modifier_values(
+    mode: object,
+    *,
+    body_stroke_width: int | None,
+    quote_scale_x: float | None,
+    quote_scale_y: float | None,
+) -> dict[str, int | float] | None:
+    if all(value is None for value in (body_stroke_width, quote_scale_x, quote_scale_y)):
+        return None
+    if mode != _COMPACT_CORNER_QUOTES:
+        raise PageLineageConflict(
+            "Title weight and quote proportions require compact corner quotes",
+            resource="typeset-style",
+            reason="g10-style-invalid",
+        )
+    values = {
+        "bodyStrokeWidth": _bounded_number(
+            0 if body_stroke_width is None else body_stroke_width,
+            field="bodyStrokeWidth",
+            minimum=0,
+            maximum=_ART_LAYER_MAX_SIDE,
+            integer=True,
+        ),
+        "quoteScaleX": _bounded_number(
+            1 if quote_scale_x is None else quote_scale_x,
+            field="quoteScaleX",
+            minimum=0.25,
+            maximum=4,
+        ),
+        "quoteScaleY": _bounded_number(
+            1 if quote_scale_y is None else quote_scale_y,
+            field="quoteScaleY",
+            minimum=0.25,
+            maximum=4,
+        ),
+    }
+    # Neutral overrides change the frozen style, but not the old raster path.
+    return values if values != {"bodyStrokeWidth": 0, "quoteScaleX": 1, "quoteScaleY": 1} else None
+
+
+def _measure_styled_compact_quote_text(
+    text: str,
+    *,
+    font_path: Path,
+    font_size: int,
+    direction: str,
+    stroke_width: int,
+    line_spacing: float,
+    align: str,
+    mode: str,
+    modifiers: Mapping[str, int | float],
+    pixel_work_limit: int,
+    measurement_budget: dict[str, int] | None,
+) -> dict[str, Any]:
+    body = _compact_quote_body(text, direction=direction, mode=mode)
+    budget = (
+        measurement_budget if measurement_budget is not None else {"remaining": pixel_work_limit}
+    )
+    if type(budget.get("remaining")) is not int or budget["remaining"] < 0:
+        raise ValueError("G10 compact measurement budget must be a non-negative integer")
+    extra_work = 0
+
+    def reserve(work: int) -> None:
+        nonlocal extra_work
+        if work > budget["remaining"]:
+            raise PageLineageConflict(
+                "Compact title measurement exceeds its pixel-work budget",
+                resource="typeset-route:art-lettering",
+                reason="g10-art-lettering-resource-limit",
+            )
+        # Failed size/affine probes do not refund work already performed.
+        budget["remaining"] -= work
+        extra_work += work
+
+    body_stroke = int(modifiers["bodyStrokeWidth"])
+    # Each native ink bbox already includes the expanded body stroke. Keep the
+    # original outer clearance instead of shrinking the title a second time.
+    margin = stroke_width + 3
+    _guard_art_layer(font_size + margin * 2, font_size + margin * 2)
+    font = ImageFont.truetype(str(font_path), size=max(1, font_size))
+    # Character support is a face property; a small same-face probe avoids
+    # rasterizing every unique character at the potentially much larger fit size.
+    probe_size = min(max(1, font_size), 36)
+    support_work = (len(set(body + "﹃﹄")) + 1) * (probe_size * 2) ** 2
+    reserve(support_work)
+    _require_compact_quote_glyphs(font.font_variant(size=probe_size), body)
+    spacing = max(0, round(font_size * line_spacing))
+    quote_gap = max(1, round(font_size * 0.035))
+    glyphs: list[dict[str, Any]] = []
+    cursor = margin
+    ink_width = 0
+    rendered = "﹃" + body + "﹄"
+    for index, char in enumerate(rendered):
+        is_quote = index in {0, len(rendered) - 1}
+        inner_stroke = 0 if is_quote else body_stroke
+        outer_stroke = stroke_width + inner_stroke
+        sx = float(modifiers["quoteScaleX"]) if is_quote else 1.0
+        sy = float(modifiers["quoteScaleY"]) if is_quote else 1.0
+        metric = font.getbbox(char, stroke_width=outer_stroke)
+        mw, mh = max(1, metric[2] - metric[0]), max(1, metric[3] - metric[1])
+        sw, sh = max(1, round(mw * sx)), max(1, round(mh * sy))
+        _guard_art_layer(mw, mh)
+        _guard_art_layer(sw, sh)
+        # Charge measurement, temporary RGBA tiles, two-pass body drawing and
+        # quote resizing before allocating their rasters. The caller also charges
+        # the final layer and its outer affine transforms as before.
+        reserve(5 * mw * mh + 2 * sw * sh)
+        mask, offset = font.getmask2(char, mode="L", stroke_width=outer_stroke)
+        ink = mask.getbbox()
+        del mask
+        bbox = (
+            tuple(ink[i] + offset[i % 2] for i in range(4))
+            if ink is not None
+            else (0, 0, 0, font_size)
+        )
+        native_width, native_height = bbox[2] - bbox[0], bbox[3] - bbox[1]
+        width = max(1, round(native_width * sx))
+        height = max(1, round(native_height * sy))
+        glyphs.append(
+            {
+                "text": char,
+                "bbox": bbox,
+                "role": "quote" if is_quote else "body",
+                "width": width,
+                "height": height,
+                "outerStrokeWidth": outer_stroke,
+                "innerStrokeWidth": inner_stroke,
+                "blank": ink is None,
+                "y": cursor,
+            }
+        )
+        ink_width = max(ink_width, width)
+        cursor += height
+        if index < len(rendered) - 1:
+            cursor += quote_gap if index in {0, len(rendered) - 2} else spacing
+        _guard_art_layer(ink_width + margin * 2, cursor + margin)
+    for glyph in glyphs:
+        spare = ink_width - glyph["width"]
+        glyph["x"] = margin + {"start": 0, "center": spare // 2, "end": spare}[align]
+    return {
+        "font": font,
+        "glyphs": glyphs,
+        "verticalQuoteLayout": mode,
+        "compactModifiers": dict(modifiers),
+        "extraPixelWork": extra_work,
+        "prechargedPixelWork": extra_work if measurement_budget is not None else 0,
+        "margin": margin,
+        "width": ink_width + margin * 2,
+        "height": cursor + margin,
+    }
+
+
+def _draw_styled_compact_quote_text(
+    measurement: Mapping[str, Any], *, fill: str, stroke_color: str
+) -> Image.Image:
+    layer = Image.new("RGBA", (measurement["width"], measurement["height"]), (0, 0, 0, 0))
+    ink_color = ImageColor.getcolor(fill, "RGBA")
+    outline_color = ImageColor.getcolor(stroke_color, "RGBA")
+    for glyph in measurement["glyphs"]:
+        if glyph["blank"]:
+            continue
+        left, top, right, bottom = glyph["bbox"]
+        tile = Image.new("RGBA", (right - left, bottom - top), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(tile)
+        draw.text(
+            (-left, -top),
+            glyph["text"],
+            font=measurement["font"],
+            fill=ink_color,
+            stroke_width=glyph["outerStrokeWidth"],
+            stroke_fill=outline_color,
+        )
+        if glyph["innerStrokeWidth"]:
+            draw.text(
+                (-left, -top),
+                glyph["text"],
+                font=measurement["font"],
+                fill=ink_color,
+                stroke_width=glyph["innerStrokeWidth"],
+                stroke_fill=ink_color,
+            )
+        target = (glyph["width"], glyph["height"])
+        if tile.size != target:
+            resized = tile.resize(target, resample=Image.Resampling.BICUBIC)
+            tile.close()
+            tile = resized
+        layer.alpha_composite(tile, (glyph["x"], glyph["y"]))
+        tile.close()
+    return layer
+
+
 def _measure_art_text(
     text: str,
     *,
@@ -973,8 +1306,47 @@ def _measure_art_text(
     letter_spacing: float,
     line_spacing: float,
     align: str,
+    vertical_quote_layout: str | None = None,
+    body_stroke_width: int | None = None,
+    quote_scale_x: float | None = None,
+    quote_scale_y: float | None = None,
+    pixel_work_limit: int = _ART_TOTAL_PIXEL_WORK_BUDGET,
+    measurement_budget: dict[str, int] | None = None,
 ) -> dict[str, Any]:
+    modifiers = _compact_modifier_values(
+        vertical_quote_layout,
+        body_stroke_width=body_stroke_width,
+        quote_scale_x=quote_scale_x,
+        quote_scale_y=quote_scale_y,
+    )
+    if vertical_quote_layout is not None:
+        if modifiers is not None:
+            return _measure_styled_compact_quote_text(
+                text,
+                font_path=font_path,
+                font_size=font_size,
+                direction=direction,
+                stroke_width=stroke_width,
+                line_spacing=line_spacing,
+                align=align,
+                mode=vertical_quote_layout,
+                modifiers=modifiers,
+                pixel_work_limit=pixel_work_limit,
+                measurement_budget=measurement_budget,
+            )
+        return _measure_compact_quote_text(
+            text,
+            font_path=font_path,
+            font_size=font_size,
+            direction=direction,
+            stroke_width=stroke_width,
+            line_spacing=line_spacing,
+            align=align,
+            mode=vertical_quote_layout,
+        )
     compact = text.replace("\n", "")
+    if direction == "vertical":
+        compact = verticalize_punctuation(compact)
     margin = stroke_width + 3
     cell = max(1, math.ceil(font_size * (1 + line_spacing) + abs(letter_spacing)))
     if direction == "vertical":
@@ -1032,7 +1404,19 @@ def _draw_art_text(
     line_spacing: float,
     align: str,
     _measurement: Mapping[str, Any] | None = None,
+    vertical_quote_layout: str | None = None,
+    body_stroke_width: int | None = None,
+    quote_scale_x: float | None = None,
+    quote_scale_y: float | None = None,
 ) -> Image.Image:
+    modifiers = _compact_modifier_values(
+        vertical_quote_layout,
+        body_stroke_width=body_stroke_width,
+        quote_scale_x=quote_scale_x,
+        quote_scale_y=quote_scale_y,
+    )
+    if vertical_quote_layout is not None:
+        _compact_quote_body(text, direction=direction, mode=vertical_quote_layout)
     measurement = dict(
         _measurement
         or _measure_art_text(
@@ -1046,8 +1430,38 @@ def _draw_art_text(
             letter_spacing=letter_spacing,
             line_spacing=line_spacing,
             align=align,
+            vertical_quote_layout=vertical_quote_layout,
+            body_stroke_width=body_stroke_width,
+            quote_scale_x=quote_scale_x,
+            quote_scale_y=quote_scale_y,
         )
     )
+    if vertical_quote_layout is not None:
+        if (
+            measurement.get("verticalQuoteLayout") != vertical_quote_layout
+            or measurement.get("compactModifiers") != modifiers
+        ):
+            raise PageLineageConflict(
+                "Compact quote measurement does not match its rendering mode",
+                resource="typeset-route:art-lettering",
+                reason="g10-style-invalid",
+            )
+        if modifiers is not None:
+            return _draw_styled_compact_quote_text(
+                measurement, fill=fill, stroke_color=stroke_color
+            )
+        layer = Image.new("RGBA", (measurement["width"], measurement["height"]), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(layer)
+        for glyph in measurement["glyphs"]:
+            draw.text(
+                (glyph["x"], glyph["y"]),
+                glyph["text"],
+                font=measurement["font"],
+                fill=ImageColor.getcolor(fill, "RGBA"),
+                stroke_width=stroke_width,
+                stroke_fill=ImageColor.getcolor(stroke_color, "RGBA"),
+            )
+        return layer
     font = measurement["font"]
     rendered = str(measurement["rendered"])
     spacing = int(measurement["spacing"])
@@ -1190,6 +1604,17 @@ def _render_art_region(
         "line_spacing": float(style["lineSpacing"]),
         "align": str(style["align"]),
     }
+    if "verticalQuoteLayout" in style:
+        draw_parameters["vertical_quote_layout"] = style["verticalQuoteLayout"]
+    for field, argument in (
+        ("bodyStrokeWidth", "body_stroke_width"),
+        ("quoteScaleX", "quote_scale_x"),
+        ("quoteScaleY", "quote_scale_y"),
+    ):
+        if field in style:
+            draw_parameters[argument] = (
+                round(float(style[field]) * scale) if field == "bodyStrokeWidth" else style[field]
+            )
 
     def evaluate(font_size: int) -> tuple[Image.Image | None, bool]:
         nonlocal attempts
@@ -1201,7 +1626,9 @@ def _render_art_region(
             )
         attempts += 1
         try:
-            measurement = _measure_art_text(font_size=font_size, **draw_parameters)
+            measurement = _measure_art_text(
+                font_size=font_size, measurement_budget=budget, **draw_parameters
+            )
             plan = _art_transform_plan(
                 int(measurement["width"]),
                 int(measurement["height"]),
@@ -1213,6 +1640,9 @@ def _render_art_region(
                 raise
             return None, True
         estimated_work = int(measurement["width"]) * int(measurement["height"])
+        estimated_work += int(measurement.get("extraPixelWork", 0)) - int(
+            measurement.get("prechargedPixelWork", 0)
+        )
         estimated_work += sum(
             dimensions[0] * dimensions[1] for dimensions in plan if dimensions is not None
         )
@@ -1318,6 +1748,16 @@ def _render_art_region(
         "visualCenterX": float(style["visualCenterX"]),
         "visualCenterY": float(style["visualCenterY"]),
         "align": style["align"],
+        **(
+            {"verticalQuoteLayout": style["verticalQuoteLayout"]}
+            if "verticalQuoteLayout" in style
+            else {}
+        ),
+        **{
+            field: style[field]
+            for field in ("bodyStrokeWidth", "quoteScaleX", "quoteScaleY")
+            if field in style
+        },
     }
 
 

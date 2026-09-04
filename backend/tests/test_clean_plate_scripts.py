@@ -522,6 +522,31 @@ def test_macos_app_launcher_prefers_bundled_window_and_does_not_download() -> No
     assert script.application_bind_host(lan_access=False, requested_host="127.0.0.1") == "127.0.0.1"
 
 
+def test_macos_app_launcher_requires_guarded_canonical_data_dir(tmp_path: Path) -> None:
+    script = load_script("macos_app_launcher.py")
+    app_data = tmp_path / "app-data"
+    app_data.mkdir()
+    assert script.application_data_dir({"MANGA_LOCALIZER_DATA_DIR": str(app_data)}) == app_data
+
+    for configured in (None, "", "relative/app-data", str(tmp_path / "missing")):
+        env = {} if configured is None else {"MANGA_LOCALIZER_DATA_DIR": configured}
+        try:
+            script.application_data_dir(env)
+        except SystemExit:
+            pass
+        else:
+            raise AssertionError(f"unsafe app-data route was accepted: {configured!r}")
+
+    redirected = tmp_path / "redirected-app-data"
+    redirected.symlink_to(app_data, target_is_directory=True)
+    try:
+        script.application_data_dir({"MANGA_LOCALIZER_DATA_DIR": str(redirected)})
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("symlinked app-data route was accepted")
+
+
 def test_compare_upscale_writes_relative_metrics_without_source_mutation(
     tmp_path: Path,
     monkeypatch,

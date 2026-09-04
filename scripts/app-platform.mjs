@@ -124,12 +124,36 @@ export function infoPlistXml({
 export function macosWrapperScript() {
   return `#!/bin/bash
 set -euo pipefail
+
+fail_storage_route() {
+  echo "Manga Localizer storage route: $*" >&2
+  exit 78
+}
+
 CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES="$CONTENTS/Resources"
+GUARD="\${STORAGE_GOVERNANCE_GUARD:-$HOME/.config/storage-governance/guard.sh}"
+[[ "$GUARD" == /* && -f "$GUARD" && ! -L "$GUARD" && -x "$GUARD" ]] || \
+  fail_storage_route "storage governance guard is missing or unsafe"
+GUARD_REAL="$(cd -P "$(dirname "$GUARD")" && pwd)/$(basename "$GUARD")"
+[[ "$GUARD_REAL" == "$GUARD" ]] || fail_storage_route "storage governance guard is not canonical"
+APP_DATA="$("$GUARD" --get-path mappings.manga_localizer.app_data_root)" || \
+  fail_storage_route "cannot resolve the registered app-data root"
+[[ "$APP_DATA" == /* && "$APP_DATA" != *$'\\n'* ]] || \
+  fail_storage_route "registered app-data root is missing, ambiguous, or not absolute"
+[[ -d "$APP_DATA" && ! -L "$APP_DATA" ]] || \
+  fail_storage_route "registered app-data root is not a real directory"
+APP_DATA_REAL="$(cd -P "$APP_DATA" && pwd)" || \
+  fail_storage_route "cannot canonicalize the registered app-data root"
+[[ "$APP_DATA_REAL" == "$APP_DATA" ]] || \
+  fail_storage_route "registered app-data root is not canonical"
+if [[ -n "\${MANGA_LOCALIZER_DATA_DIR:-}" && "$MANGA_LOCALIZER_DATA_DIR" != "$APP_DATA" ]]; then
+  fail_storage_route "MANGA_LOCALIZER_DATA_DIR conflicts with the registered app-data root"
+fi
 export MANGA_LOCALIZER_RESOURCES="$RESOURCES"
 export MANGA_LOCALIZER_FRONTEND_DIST="\${MANGA_LOCALIZER_FRONTEND_DIST:-$RESOURCES/frontend}"
 export MANGA_LOCALIZER_MODEL_BUNDLE="\${MANGA_LOCALIZER_MODEL_BUNDLE:-$RESOURCES/models}"
-export MANGA_LOCALIZER_DATA_DIR="\${MANGA_LOCALIZER_DATA_DIR:-$HOME/.manga-localizer}"
+export MANGA_LOCALIZER_DATA_DIR="$APP_DATA"
 export MANGA_LOCALIZER_WINDOW_HELPER="\${MANGA_LOCALIZER_WINDOW_HELPER:-$CONTENTS/MacOS/WorkbenchWindow}"
 PYTHON="$RESOURCES/backend/.venv/bin/python"
 if [ ! -x "$PYTHON" ]; then

@@ -113,6 +113,20 @@ def _is_sha256(value: object) -> bool:
     )
 
 
+def require_local_clean_plate_write(resource: str) -> None:
+    """Retire local G8 production/review; historical replay stays read-only.
+
+    There is deliberately no config/provider/fallback switch around this policy.
+    G1, mask calculation, cloud normalization/compositing, and artifact-free N/A
+    are not local clean-plate production and do not call this guard.
+    """
+    raise PageLineageConflict(
+        "Local G8 generation and candidate review are retired; use native cloud clean plates",
+        resource=resource,
+        reason="g8-native-cloud-required",
+    )
+
+
 def _require_legacy_route_mutable(session, generation: PageGeneration) -> None:
     cloud_candidate_id = session.scalar(
         select(PageCloudFullPageCandidate.id)
@@ -1527,6 +1541,7 @@ def prepare_clean_plate_enqueue(
     job: Job,
     item: JobItem,
 ) -> dict[str, Any]:
+    require_local_clean_plate_write(f"image:{image.id}")
     _require_legacy_route_mutable(session, generation)
     replay = _g8_replay(store, session, image, generation)
     if replay["terminal"] is not None:
@@ -1817,6 +1832,7 @@ def publish_clean_plate_candidate(
     binding: JobMutationBinding,
     inpainter: Callable[[str], Any],
 ) -> dict[str, Any]:
+    require_local_clean_plate_write(f"job-item:{item.id}")
     if item.image_id is None:
         raise ProjectError("Clean-plate job item has no image")
     candidate_id = str(
@@ -2122,6 +2138,8 @@ def clean_plate_completion_evidence(
     item: JobItem,
     succeeded: bool,
 ) -> dict[str, Any]:
+    if succeeded:
+        require_local_clean_plate_write(f"job-item:{item.id}")
     if item.image_id is None:
         raise PageLineageConflict(
             "Clean-plate completion has no image",
@@ -2353,6 +2371,7 @@ def record_clean_plate_fallback(
     expected_revision: int,
     lineage: dict[str, Any],
 ) -> dict[str, Any]:
+    require_local_clean_plate_write(f"image:{image_id}")
     with store.lock:
         with store.session() as session:
             image = session.get(ImageAsset, image_id)
@@ -2540,6 +2559,16 @@ def record_clean_plate_review(
     expected_revision: int,
     lineage: dict[str, Any],
 ) -> tuple[ImageAsset, PageLineageEvent]:
+    if not (
+        decision == "not-applicable"
+        and reason == "no-clean-plate-required"
+        and candidate_id is None
+        and observed_candidate_checksum is None
+        and observed_width is None
+        and observed_height is None
+        and not checks
+    ):
+        require_local_clean_plate_write(f"image:{image_id}")
     with store.lock:
         with store.session() as session:
             image = session.get(ImageAsset, image_id)

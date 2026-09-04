@@ -69,6 +69,7 @@ from manga_localizer.services.page_lineage import (
 from manga_localizer.services.projects import ProjectError, add_revision
 
 from .conftest import create_project, png_bytes, upload_image
+from .legacy_g8_fixture import historical_local_g8
 
 _PARAMETER_HASH = "a" * 64
 _RUN_ID = "rebuild-r1-test-run"
@@ -397,6 +398,7 @@ def _prepare_g4_accepted_page(
     region_type: str = "dialogue",
     extra_dispositions: tuple[str, ...] = (),
     include_ruby: bool = False,
+    ruby_disposition: str = "ignore",
     accept_g4: bool = True,
     rotation: float = 0,
     prepared: dict[str, object] | None = None,
@@ -475,7 +477,7 @@ def _prepare_g4_accepted_page(
                 "order": next_order,
                 "paragraphGroupId": "paragraph-1",
                 "rubyParentId": region["id"],
-                "contentDisposition": "ignore",
+                "contentDisposition": ruby_disposition,
                 "expectedImageRevision": current_image["revision"],
                 "lineage": _mutation_lineage(generation_id, generation["nextSequence"]),
             },
@@ -520,6 +522,7 @@ def _prepare_g5_accepted_page(
     region_type: str = "dialogue",
     extra_dispositions: tuple[str, ...] = (),
     include_ruby: bool = False,
+    ruby_disposition: str = "ignore",
     background_category: str = "white-solid",
     rotation: float = 0,
     prepared: dict[str, object] | None = None,
@@ -532,6 +535,7 @@ def _prepare_g5_accepted_page(
         region_type=region_type,
         extra_dispositions=extra_dispositions,
         include_ruby=include_ruby,
+        ruby_disposition=ruby_disposition,
         rotation=rotation,
         prepared=prepared,
     )
@@ -609,6 +613,7 @@ def _prepare_g6_accepted_page(
     region_type: str = "dialogue",
     extra_dispositions: tuple[str, ...] = (),
     include_ruby: bool = False,
+    ruby_disposition: str = "ignore",
     background_category: str = "white-solid",
     ocr_provider=None,
     rotation: float = 0,
@@ -622,6 +627,7 @@ def _prepare_g6_accepted_page(
         region_type=region_type,
         extra_dispositions=extra_dispositions,
         include_ruby=include_ruby,
+        ruby_disposition=ruby_disposition,
         background_category=background_category,
         rotation=rotation,
         prepared=prepared,
@@ -2764,6 +2770,43 @@ def test_g4_validation_rejects_ruby_parented_to_a_false_positive() -> None:
     assert page_lineage._g4_validation_issues(image, rows) == ["ruby-parent-false-positive"]
 
 
+def test_g4_validation_allows_keep_art_ruby_but_rejects_translated_ruby() -> None:
+    image = ImageAsset(id="image-g4-ruby-preservation", width=240, height=320)
+    parent = TextRegion(
+        id="translated-parent",
+        image_id=image.id,
+        x=80,
+        y=20,
+        width=60,
+        height=160,
+        rotation=0,
+        region_type="narration",
+        direction="vertical",
+        reading_order=0,
+        paragraph_group_id="paragraph-ruby",
+        content_disposition="translate",
+    )
+    ruby = TextRegion(
+        id="preserved-ruby",
+        image_id=image.id,
+        x=65,
+        y=20,
+        width=15,
+        height=60,
+        rotation=0,
+        region_type="ruby",
+        direction="vertical",
+        reading_order=1,
+        paragraph_group_id="paragraph-ruby",
+        ruby_parent_id=parent.id,
+        content_disposition="keep-art",
+    )
+
+    assert page_lineage._g4_validation_issues(image, [parent, ruby]) == []
+    ruby.content_disposition = "translate"
+    assert page_lineage._g4_validation_issues(image, [parent, ruby]) == ["ruby-disposition-invalid"]
+
+
 def test_worker_rechecks_generation_before_mutation_and_fails_closed(
     client: TestClient, app, tmp_path: Path
 ) -> None:
@@ -4816,6 +4859,7 @@ _TRANSLATION_CHECKS = [
 ]
 
 
+@historical_local_g8()
 def _prepare_g8_accepted_page(
     client: TestClient,
     app,
@@ -5967,7 +6011,8 @@ def test_g8_outside_mask_count_is_rgba_exact() -> None:
     assert clean_plate_service._outside_mask_change_count(source, inside_changed, mask) == 0
 
 
-def test_g8_duplicate_workers_cannot_overwrite_published_candidate(
+@historical_local_g8()
+def test_historical_g8_duplicate_workers_cannot_overwrite_published_candidate(
     client: TestClient, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     prepared = _prepare_g7_accepted_page(client, app, tmp_path)
@@ -6029,7 +6074,8 @@ def test_g8_duplicate_workers_cannot_overwrite_published_candidate(
     assert context.json()["candidates"][0]["completed"] is True
 
 
-def test_g8_candidate_validator_recomputes_outside_mask_pixels(
+@historical_local_g8()
+def test_historical_g8_candidate_validator_recomputes_outside_mask_pixels(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     prepared = _prepare_g7_accepted_page(client, app, tmp_path)
@@ -6084,7 +6130,8 @@ def test_g8_candidate_validator_recomputes_outside_mask_pixels(
             clean_plate_service._validate_candidate_file(store, forged, session=session)
 
 
-def test_g8_deterministic_candidate_is_immutable_reviewed_and_consumable(
+@historical_local_g8()
+def test_historical_g8_deterministic_candidate_is_immutable_reviewed_and_consumable(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     prepared = _prepare_g7_accepted_page(client, app, tmp_path)
@@ -6560,7 +6607,8 @@ def test_g8_classified_solid_route_has_distinct_audit_identity(
     assert classified_normalized["routeChecksum"] != opaque_normalized["routeChecksum"]
 
 
-def test_g8_lama_alias_uses_canonical_real_registry_identity(
+@historical_local_g8()
+def test_historical_g8_lama_alias_uses_canonical_real_registry_identity(
     client: TestClient, app, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     prepared = _prepare_g7_accepted_page(
@@ -6610,7 +6658,8 @@ def test_g8_lama_alias_uses_canonical_real_registry_identity(
     assert candidate["completed"] is True
 
 
-def test_g8_replay_rejects_fallback_enabled_before_ai_rejection(
+@historical_local_g8()
+def test_historical_g8_replay_rejects_fallback_enabled_before_ai_rejection(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     prepared = _prepare_g7_accepted_page(
@@ -6717,7 +6766,8 @@ def test_g8_replay_rejects_fallback_enabled_before_ai_rejection(
     assert response.json()["detail"]["reason"] == "g8-clean-plate-replay-invalid"
 
 
-def test_g8_replay_binds_candidate_provenance_to_its_enqueue_route(
+@historical_local_g8()
+def test_historical_g8_replay_binds_candidate_provenance_to_its_enqueue_route(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     prepared = _prepare_g7_accepted_page(
@@ -6829,7 +6879,8 @@ def test_g8_replay_binds_candidate_provenance_to_its_enqueue_route(
     assert response.json()["detail"]["reason"] == "g8-clean-plate-replay-invalid"
 
 
-def test_g8_classical_fallback_is_page_scoped_and_requires_ai_rejection(
+@historical_local_g8()
+def test_historical_g8_classical_fallback_is_page_scoped_and_requires_ai_rejection(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     prepared = _prepare_g7_accepted_page(
@@ -6943,7 +6994,8 @@ def test_g8_classical_fallback_is_page_scoped_and_requires_ai_rejection(
     assert fake.calls == 1
 
 
-def test_g8_layered_acceptance_rechecks_current_fallback_without_failed_write(
+@historical_local_g8()
+def test_historical_g8_layered_acceptance_rechecks_current_fallback_without_failed_write(
     client: TestClient, app, tmp_path: Path
 ) -> None:
     data, source_project, source_image, target_project, target_image = _source_and_target(
@@ -8960,6 +9012,29 @@ def test_g7_four_x_scales_manual_strokes_and_forces_linked_ruby_target(
     assert ruby["x"] == ruby_row["x"] * 4
     context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
     assert context["artifacts"][0]["renderScale"] == 4
+
+
+def test_g7_keep_art_ruby_stays_linked_but_is_not_a_mask_target(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g6_accepted_page(
+        client,
+        app,
+        tmp_path,
+        include_ruby=True,
+        ruby_disposition="keep-art",
+    )
+    image = prepared["targetImage"]
+    assert isinstance(image, dict)
+    regions = client.get(f"/api/images/{image['id']}/regions").json()
+    ruby = next(row for row in regions if row["type"] == "ruby")
+    primary = next(row for row in regions if row["id"] == ruby["rubyParentId"])
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask")
+
+    assert context.status_code == 200, context.text
+    assert primary["id"] in context.json()["eligibleRegionIds"]
+    assert context.json()["rubyRegionIdsByPrimary"][primary["id"]] == []
+    assert ruby["contentDisposition"] == "keep-art"
 
 
 def test_g7_page_wide_stroke_order_can_erase_an_overlapping_region(

@@ -55,6 +55,7 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
+from manga_localizer.services import clean_plates
 from manga_localizer.services.clean_plates import publish_clean_plate_candidate
 from manga_localizer.services.exporting import (
     choose_export_root,
@@ -620,6 +621,8 @@ class PersistentJobQueue:
         options: dict[str, Any],
         lineage: dict[str, Any] | None = None,
     ) -> Job:
+        if kind == "inpaint" and lineage is not None:
+            clean_plates.require_local_clean_plate_write("job-lineage")
         if kind not in {
             "preprocess",
             "detect",

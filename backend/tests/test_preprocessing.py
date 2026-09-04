@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -208,7 +209,8 @@ def test_realesrgan_fake_cli_success_preserves_alpha_and_chains_postprocessing(
 ) -> None:
     executable = tmp_path / "fake-realesrgan"
     executable.write_text(
-        f"""#!{sys.executable}
+        f"""#!/bin/sh
+exec {shlex.quote(sys.executable)} - "$@" <<'PYTHON'
 import sys
 from pathlib import Path
 from PIL import Image
@@ -221,6 +223,7 @@ with Image.open(input_path) as source:
     source.convert('RGB').resize(
         (source.width * scale, source.height * scale), Image.Resampling.NEAREST
     ).save(output_path, format='PNG')
+PYTHON
 """,
         encoding="utf-8",
     )

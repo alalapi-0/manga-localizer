@@ -2,7 +2,42 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import { frontendLaunch, isLoopbackHost } from './dev-platform.mjs';
+import { backendUvicornArgs, frontendLaunch, isLoopbackHost } from './dev-platform.mjs';
+
+test('backend launcher uses python -m uvicorn so zsh wrapper shebangs cannot nest', () => {
+  assert.deepEqual(
+    backendUvicornArgs({ host: '127.0.0.1', port: 8000, reload: true }),
+    [
+      'run',
+      '--project',
+      'backend',
+      '--frozen',
+      '--offline',
+      '--no-sync',
+      'python',
+      '-m',
+      'uvicorn',
+      'manga_localizer.main:app',
+      '--reload',
+      '--reload-dir',
+      'backend',
+      '--host',
+      '127.0.0.1',
+      '--port',
+      '8000',
+    ],
+  );
+  const packaged = backendUvicornArgs({ host: '127.0.0.1', port: '8000' });
+  assert.deepEqual(packaged.slice(packaged.indexOf('python'), packaged.indexOf('python') + 3), [
+    'python',
+    '-m',
+    'uvicorn',
+  ]);
+  assert.equal(packaged[packaged.indexOf('python') - 1], '--no-sync');
+  assert.ok(!packaged.includes('--reload'));
+  assert.ok(!packaged.includes('--reload-dir'));
+  assert.throws(() => backendUvicornArgs({ host: '', port: 8000 }), /host and port/);
+});
 
 test('frontend launcher invokes Vite through Node without a platform shell', () => {
   const root = 'C:\\work\\manga-localizer';

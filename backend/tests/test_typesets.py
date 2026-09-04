@@ -7,12 +7,13 @@ import sqlite3
 import threading
 from datetime import UTC, datetime
 from io import BytesIO
+from itertools import pairwise
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from sqlalchemy import func, select
 
 from manga_localizer.config import Settings
@@ -81,6 +82,8 @@ def _prepare_g9_terminal(
 def _complete_g9_terminal(
     client: TestClient,
     prepared: dict[str, object],
+    *,
+    translation_text: str | None = None,
 ) -> dict[str, object]:
     image = prepared["targetImage"]
     generation_id = str(prepared["generationId"])
@@ -93,7 +96,9 @@ def _complete_g9_terminal(
             generation_id=generation_id,
             context=context,
             region=region,
-            translation_text=f"第{index + 1}句合规译文",
+            translation_text=(
+                translation_text if translation_text is not None else f"第{index + 1}句合规译文"
+            ),
         )
     for candidate in list(context["candidates"]):
         context = client.get(f"/api/images/{image['id']}/page-gates/translation").json()
@@ -457,6 +462,646 @@ def test_g10_redraw_art_route_affine_pixels_and_capability_fail_closed(
     assert blocked_font.json()["detail"]["reason"] == "g10-art-lettering-capability-required"
 
 
+def _compact_display_font() -> dict:
+    for record in typeset_service._display_fonts():
+        font = ImageFont.truetype(str(record["path"]), size=36)
+        missing = font.getmask(chr(0x10FFFF), mode="L")
+        if all(
+            font.getmask(char, mode="L").getbbox() is not None
+            and (font.getmask(char, mode="L").size, bytes(font.getmask(char, mode="L")))
+            != (missing.size, bytes(missing))
+            for char in "缩地﹃﹄"
+        ):
+            return record
+    pytest.skip("No installed display font covers the compact-title fixture")
+
+
+def _compact_draw_options(scale: int = 1) -> dict:
+    return {
+        "font_path": _compact_display_font()["path"],
+        "font_size": 40 * scale,
+        "direction": "vertical",
+        "fill": "#000000",
+        "stroke_color": "#ffffff",
+        "stroke_width": 2 * scale,
+        "letter_spacing": 0,
+        "line_spacing": 0.15,
+        "align": "center",
+        "vertical_quote_layout": "compact-corner-quotes-v1",
+    }
+
+
+def _compact_glyph_tiles(measured: dict, rendered: Image.Image) -> list[Image.Image]:
+    boxes = []
+    for glyph in measured["glyphs"]:
+        if measured.get("compactModifiers") is not None:
+            boxes.append(
+                (glyph["x"], glyph["y"], glyph["x"] + glyph["width"], glyph["y"] + glyph["height"])
+            )
+        else:
+            boxes.append(tuple(glyph["bbox"][i] + glyph["xy"[i % 2]] for i in range(4)))
+    return [rendered.crop(box) for box in boxes]
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+def test_compact_modifiers_neutral_values_keep_original_pixels_and_style_defaults(
+    scale: int,
+) -> None:
+    options = _compact_draw_options(scale)
+    old_plan = typeset_service._measure_art_text("『缩地』", **options)
+    neutral = options | {"body_stroke_width": 0, "quote_scale_x": 1, "quote_scale_y": 1}
+    neutral_plan = typeset_service._measure_art_text("『缩地』", **neutral)
+    old = typeset_service._draw_art_text("『缩地』", _measurement=old_plan, **options)
+    current = typeset_service._draw_art_text("『缩地』", _measurement=neutral_plan, **neutral)
+    assert old.size == current.size and old.tobytes() == current.tobytes()
+    assert "compactModifiers" not in neutral_plan and "extraPixelWork" not in neutral_plan
+    assert {k: v for k, v in old_plan.items() if k != "font"} == {
+        k: v for k, v in neutral_plan.items() if k != "font"
+    }
+    absent = typeset_service._normalize_style(
+        "art-lettering", {"verticalQuoteLayout": "compact-corner-quotes-v1"}
+    )
+    explicit = typeset_service._normalize_style(
+        "art-lettering",
+        {
+            "verticalQuoteLayout": "compact-corner-quotes-v1",
+            "bodyStrokeWidth": 0,
+            "quoteScaleX": 1,
+            "quoteScaleY": 1,
+        },
+    )
+    assert not {"bodyStrokeWidth", "quoteScaleX", "quoteScaleY"} & absent.keys()
+    assert typeset_service._digest(absent) != typeset_service._digest(explicit)
+    assert absent == {
+        k: v
+        for k, v in explicit.items()
+        if k not in {"bodyStrokeWidth", "quoteScaleX", "quoteScaleY"}
+    }
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+def test_compact_modifiers_body_weight_increases_ink_without_changing_quotes(scale: int) -> None:
+    options = _compact_draw_options(scale)
+    old_plan = typeset_service._measure_art_text("『缩地』", **options)
+    old = typeset_service._draw_art_text("『缩地』", _measurement=old_plan, **options)
+    weighted = options | {"body_stroke_width": 2 * scale}
+    plan = typeset_service._measure_art_text("『缩地』", **weighted)
+    assert plan["margin"] == old_plan["margin"]
+    rendered = typeset_service._draw_art_text("『缩地』", _measurement=plan, **weighted)
+    before, after = _compact_glyph_tiles(old_plan, old), _compact_glyph_tiles(plan, rendered)
+
+    def count_color(tile: Image.Image, color: tuple[int, int, int]) -> int:
+        raw = tile.tobytes()
+        return sum(
+            tuple(raw[i : i + 3]) == color and raw[i + 3] == 255 for i in range(0, len(raw), 4)
+        )
+
+    for index in (0, 3):
+        assert before[index].size == after[index].size
+        assert before[index].tobytes() == after[index].tobytes()
+    for index in (1, 2):
+        assert count_color(after[index], (0, 0, 0)) > count_color(before[index], (0, 0, 0))
+        assert count_color(after[index], (255, 255, 255)) > 0
+        assert after[index].width > before[index].width
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+@pytest.mark.parametrize("stroke", [0, 2, 8])
+def test_compact_modifiers_tiles_match_unclipped_reference_and_scaled_quote_layout(
+    scale: int, stroke: int
+) -> None:
+    options = _compact_draw_options(scale) | {
+        "stroke_width": stroke * scale,
+        "body_stroke_width": 2 * scale,
+        "quote_scale_x": 0.65,
+        "quote_scale_y": 0.45,
+    }
+    measured = typeset_service._measure_art_text("『缩地』", **options)
+    rendered = typeset_service._draw_art_text("『缩地』", _measurement=measured, **options)
+    tiles = _compact_glyph_tiles(measured, rendered)
+    for glyph, tile in zip(measured["glyphs"], tiles, strict=True):
+        # An independently oversized drawing canvas detects any clipping in the
+        # measured ink bbox, including the second black stroke over the outline.
+        pad = 3 * options["font_size"]
+        reference = Image.new("RGBA", (pad * 3, pad * 3))
+        draw = ImageDraw.Draw(reference)
+        draw.text(
+            (pad, pad),
+            glyph["text"],
+            font=measured["font"],
+            fill="black",
+            stroke_width=glyph["outerStrokeWidth"],
+            stroke_fill="white",
+        )
+        if glyph["role"] == "body":
+            draw.text(
+                (pad, pad),
+                glyph["text"],
+                font=measured["font"],
+                fill="black",
+                stroke_width=2 * scale,
+                stroke_fill="black",
+            )
+        ink = reference.getchannel("A").getbbox()
+        assert ink is not None
+        reference = reference.crop(ink)
+        assert reference.size == (
+            glyph["bbox"][2] - glyph["bbox"][0],
+            glyph["bbox"][3] - glyph["bbox"][1],
+        )
+        if glyph["role"] == "quote":
+            assert tile.size == (
+                max(1, round(reference.width * 0.65)),
+                max(1, round(reference.height * 0.45)),
+            )
+            reference = reference.resize(tile.size, Image.Resampling.BICUBIC)
+        # Match placement onto a transparent layer: alpha compositing removes
+        # undefined RGB bytes under zero alpha left by bicubic interpolation.
+        placed = Image.new("RGBA", reference.size)
+        placed.alpha_composite(reference)
+        reference = placed
+        assert tile.size == reference.size and tile.tobytes() == reference.tobytes()
+    glyphs = measured["glyphs"]
+    assert (
+        glyphs[1]["y"] - glyphs[0]["y"] - glyphs[0]["height"]
+        == glyphs[3]["y"] - glyphs[2]["y"] - glyphs[2]["height"]
+        > 0
+    )
+    assert all(a["y"] + a["height"] <= b["y"] for a, b in pairwise(glyphs))
+    ink = rendered.getchannel("A").getbbox()
+    assert ink is not None
+    assert ink[0] >= measured["margin"] and ink[1] >= measured["margin"]
+    assert (
+        ink[2] <= rendered.width - measured["margin"]
+        and ink[3] <= rendered.height - measured["margin"]
+    )
+
+
+@pytest.mark.parametrize("quote_scale", [0.25, 0.6, 4])
+def test_compact_modifiers_quote_scaling_does_not_resize_body(quote_scale: float) -> None:
+    options = _compact_draw_options()
+    old_plan = typeset_service._measure_art_text("『缩地』", **options)
+    old = typeset_service._draw_art_text("『缩地』", _measurement=old_plan, **options)
+    changed = options | {"quote_scale_x": quote_scale, "quote_scale_y": quote_scale}
+    plan = typeset_service._measure_art_text("『缩地』", **changed)
+    rendered = typeset_service._draw_art_text("『缩地』", _measurement=plan, **changed)
+    before, after = _compact_glyph_tiles(old_plan, old), _compact_glyph_tiles(plan, rendered)
+    for index in (1, 2):
+        assert before[index].size == after[index].size
+        assert before[index].tobytes() == after[index].tobytes()
+    for index in (0, 3):
+        assert after[index].size == (
+            max(1, round(before[index].width * quote_scale)),
+            max(1, round(before[index].height * quote_scale)),
+        )
+        assert after[index].getchannel("A").getbbox() is not None
+
+
+@pytest.mark.parametrize("field", ["bodyStrokeWidth", "quoteScaleX", "quoteScaleY"])
+@pytest.mark.parametrize("value", [None, False, True, "1", -1, 33, float("nan"), float("inf")])
+def test_compact_modifiers_reject_invalid_values_and_noncompact_routes(
+    field: str, value: object
+) -> None:
+    with pytest.raises(PageLineageConflict):
+        typeset_service._normalize_style(
+            "art-lettering", {"verticalQuoteLayout": "compact-corner-quotes-v1", field: value}
+        )
+    for route in ("bubble", "ordinary", "art-lettering"):
+        with pytest.raises(PageLineageConflict):
+            typeset_service._normalize_style(route, {field: 1})
+
+
+def test_compact_modifiers_require_compact_mode_and_matching_measurement() -> None:
+    options = _compact_draw_options()
+    for field in ("body_stroke_width", "quote_scale_x", "quote_scale_y"):
+        with pytest.raises(PageLineageConflict):
+            typeset_service._draw_art_text(
+                "『缩地』", **(options | {"vertical_quote_layout": None, field: 1})
+            )
+    changed = options | {"body_stroke_width": 2}
+    plan = typeset_service._measure_art_text("『缩地』", **changed)
+    with pytest.raises(PageLineageConflict, match="does not match"):
+        typeset_service._draw_art_text("『缩地』", _measurement=plan, **options)
+    with pytest.raises(PageLineageConflict):
+        typeset_service._normalize_style(
+            "art-lettering",
+            {"verticalQuoteLayout": "compact-corner-quotes-v1", "bodyStrokeWidth": 0.5},
+        )
+    for field in ("quoteScaleX", "quoteScaleY"):
+        with pytest.raises(PageLineageConflict):
+            typeset_service._normalize_style(
+                "art-lettering", {"verticalQuoteLayout": "compact-corner-quotes-v1", field: 0.24}
+            )
+
+
+def test_compact_modifiers_failed_probes_consume_budget_before_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options = _compact_draw_options() | {"body_stroke_width": 2}
+    measured = typeset_service._measure_art_text("『缩地』", **options)
+    partial = {"remaining": measured["extraPixelWork"] // 2}
+    initial = partial["remaining"]
+    with pytest.raises(PageLineageConflict):
+        typeset_service._measure_art_text("『缩地』", measurement_budget=partial, **options)
+    assert 0 <= partial["remaining"] < initial
+    with pytest.raises(ValueError):
+        typeset_service._measure_art_text("『缩地』", pixel_work_limit=True, **options)
+    budget = {"remaining": 2_000_000}
+    spent = []
+    measure = typeset_service._measure_art_text
+
+    def counted_measure(*args, **kwargs):
+        result = measure(*args, **kwargs)
+        spent.append(result["extraPixelWork"])
+        return result
+
+    def reject_transform(*args, **kwargs):
+        raise PageLineageConflict(
+            "test oversized transform",
+            resource="typeset",
+            reason="g10-art-lettering-resource-limit",
+        )
+
+    style = typeset_service._normalize_style(
+        "art-lettering",
+        {
+            "fontToken": _compact_display_font()["token"],
+            "fontSize": 80,
+            "minFontSize": 6,
+            "bodyStrokeWidth": 2,
+            "verticalQuoteLayout": "compact-corner-quotes-v1",
+        },
+    )
+    region = {
+        "regionId": "compact",
+        "geometry": {"x": 10, "y": 10, "width": 180, "height": 360, "rotation": 0},
+        "direction": "vertical",
+        "readingOrder": 0,
+        "paragraphGroupId": None,
+    }
+    monkeypatch.setattr(typeset_service, "_measure_art_text", counted_measure)
+    monkeypatch.setattr(typeset_service, "_art_transform_plan", reject_transform)
+    with pytest.raises(PageLineageConflict):
+        typeset_service._render_art_region(
+            Image.new("RGBA", (400, 400)),
+            text="『缩地』",
+            region=region,
+            style=style,
+            scale=1,
+            work_budget=budget,
+        )
+    assert len(spent) > 1
+    assert budget["remaining"] == 2_000_000 - sum(spent)
+    assert 0 <= budget["remaining"] < 2_000_000
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+def test_compact_modifiers_extreme_strokes_and_quote_scales_remain_bounded(scale: int) -> None:
+    options = _compact_draw_options(scale) | {
+        "stroke_width": 32 * scale,
+        "body_stroke_width": 32 * scale,
+        "quote_scale_x": 4,
+        "quote_scale_y": 0.25,
+    }
+    measured = typeset_service._measure_art_text("『缩地』", **options)
+    rendered = typeset_service._draw_art_text("『缩地』", _measurement=measured, **options)
+    assert rendered.width < typeset_service._ART_LAYER_MAX_SIDE
+    assert rendered.height < typeset_service._ART_LAYER_MAX_SIDE
+    assert rendered.width * rendered.height < typeset_service._ART_LAYER_MAX_PIXELS
+    assert rendered.getchannel("A").getbbox() is not None
+
+
+def test_compact_modifiers_exhausted_budget_rejects_before_glyph_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options = _compact_draw_options() | {"body_stroke_width": 2}
+    calls = []
+
+    def forbidden_probe(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError("exhausted budget must reject before rasterizing glyphs")
+
+    monkeypatch.setattr(typeset_service, "_require_compact_quote_glyphs", forbidden_probe)
+    with pytest.raises(PageLineageConflict) as captured:
+        typeset_service._measure_art_text("『缩地』", pixel_work_limit=0, **options)
+    assert captured.value.reason == "g10-art-lettering-resource-limit"
+    assert calls == []
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+def test_compact_corner_quotes_use_complete_ink_bounds_and_equal_end_gaps(scale: int) -> None:
+    options = _compact_draw_options(scale)
+    measured = typeset_service._measure_art_text("『缩地』", **options)
+    rendered = typeset_service._draw_art_text("『缩地』", _measurement=measured, **options)
+    repeated = typeset_service._draw_art_text("『缩地』", **options)
+    legacy = typeset_service._draw_art_text(
+        "『缩地』", **(options | {"vertical_quote_layout": None})
+    )
+    assert rendered.tobytes() == repeated.tobytes()
+    assert rendered.height < legacy.height
+    assert "".join(g["text"] for g in measured["glyphs"]) == "﹃缩地﹄"
+    alpha = rendered.getchannel("A")
+    ink = alpha.getbbox()
+    assert ink is not None
+    assert ink[0] >= measured["margin"] and ink[1] >= measured["margin"]
+    assert ink[2] <= rendered.width - measured["margin"]
+    assert ink[3] <= rendered.height - measured["margin"]
+    boxes = [
+        (g["x"] + g["bbox"][0], g["y"] + g["bbox"][1], g["x"] + g["bbox"][2], g["y"] + g["bbox"][3])
+        for g in measured["glyphs"]
+    ]
+    for box in boxes:
+        assert alpha.crop(box).getbbox() is not None
+    assert boxes[1][1] - boxes[0][3] == boxes[3][1] - boxes[2][3]
+    assert boxes[1][1] - boxes[0][3] > 0
+    assert all(a[3] <= b[1] for a, b in pairwise(boxes))
+
+
+def test_compact_corner_quotes_respect_column_alignment_and_safe_large_size() -> None:
+    options = _compact_draw_options()
+    plans = {
+        align: typeset_service._measure_art_text("『缩地』", **(options | {"align": align}))
+        for align in ("start", "center", "end")
+    }
+    assert plans["start"]["glyphs"][0]["x"] < plans["end"]["glyphs"][0]["x"]
+    # Four full cells at 3*font_size would incorrectly reject this safe layer.
+    large = typeset_service._measure_art_text(
+        "『缩地』", **(options | {"font_size": 2048, "stroke_width": 8})
+    )
+    assert large["width"] * large["height"] < typeset_service._ART_LAYER_MAX_PIXELS
+    assert large["height"] < typeset_service._ART_LAYER_MAX_SIDE
+
+
+@pytest.mark.parametrize("route", ["bubble", "ordinary", "art-lettering"])
+def test_compact_corner_quotes_are_never_a_default_style(route: str) -> None:
+    assert "verticalQuoteLayout" not in typeset_service._normalize_style(route, {})
+    assert typeset_service.TYPESET_MODEL_VERSION == "g10-typeset-v1"
+    assert typeset_service.TYPESET_CONTRACT_VERSION == "g10-typeset-v1"
+    if route != "art-lettering":
+        with pytest.raises(PageLineageConflict, match="versioned art-lettering"):
+            typeset_service._normalize_style(
+                route, {"verticalQuoteLayout": "compact-corner-quotes-v1"}
+            )
+
+
+@pytest.mark.parametrize("value", [None, False, True, 1, "", "future-v2", [], {}])
+def test_compact_corner_quotes_reject_invalid_mode_values(value: object) -> None:
+    with pytest.raises(PageLineageConflict):
+        typeset_service._normalize_style("art-lettering", {"verticalQuoteLayout": value})
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "缩地",
+        "『缩地",
+        "缩地』",
+        "『』",
+        "『 』",
+        "『缩\n地』",
+        "『缩\r地』",
+        "『「缩」地』",
+        "「缩地」",
+    ],
+)
+@pytest.mark.parametrize("modifiers", [{}, {"body_stroke_width": 2}])
+def test_compact_corner_quotes_reject_unsupported_title_structure(
+    text: str, modifiers: dict
+) -> None:
+    with pytest.raises(PageLineageConflict) as error:
+        typeset_service._draw_art_text(text, **(_compact_draw_options() | modifiers))
+    assert error.value.reason == "g10-style-invalid"
+
+
+@pytest.mark.parametrize("modifiers", [{}, {"body_stroke_width": 2}])
+def test_compact_corner_quotes_reject_horizontal_missing_glyph_and_oversized_title(
+    modifiers: dict,
+) -> None:
+    options = _compact_draw_options() | modifiers
+    with pytest.raises(PageLineageConflict) as error:
+        typeset_service._draw_art_text("『缩地』", **(options | {"direction": "horizontal"}))
+    assert error.value.reason == "g10-style-invalid"
+    with pytest.raises(PageLineageConflict) as error:
+        typeset_service._draw_art_text("『缩" + chr(0x10FFFF) + "』", **options)
+    assert error.value.reason == "g10-art-lettering-capability-required"
+    with pytest.raises(PageLineageConflict) as error:
+        typeset_service._draw_art_text("『" + "缩" * 2048 + "』", **options)
+    assert error.value.reason == "g10-art-lettering-resource-limit"
+    font = ImageFont.truetype(str(options["font_path"]), size=36)
+
+    class MissingPresentationQuote:
+        def getmask(self, char, **kwargs):
+            return font.getmask(chr(0x10FFFF) if char == "﹃" else char, **kwargs)
+
+    with pytest.raises(PageLineageConflict) as error:
+        typeset_service._require_compact_quote_glyphs(MissingPresentationQuote(), "缩地")
+    assert error.value.reason == "g10-art-lettering-capability-required"
+
+
+@pytest.mark.parametrize("scale", [1, 2, 4])
+@pytest.mark.parametrize(
+    "modifiers", [{}, {"bodyStrokeWidth": 2, "quoteScaleX": 0.7, "quoteScaleY": 0.45}]
+)
+def test_compact_corner_quotes_autofit_and_affine_remain_bounded(
+    scale: int, modifiers: dict
+) -> None:
+    display = _compact_display_font()
+    style = typeset_service._normalize_style(
+        "art-lettering",
+        {
+            "fontToken": display["token"],
+            "fontSize": 128,
+            "minFontSize": 6,
+            "padding": 0,
+            "rotation": 5,
+            "scaleX": 1.05,
+            "scaleY": 1.1,
+            "shearX": 0.02,
+            "verticalQuoteLayout": "compact-corner-quotes-v1",
+            **modifiers,
+        },
+    )
+    region = {
+        "regionId": "compact",
+        "geometry": {"x": 20, "y": 20, "width": 100, "height": 260, "rotation": 0},
+        "direction": "vertical",
+        "readingOrder": 0,
+        "paragraphGroupId": None,
+    }
+    canvas = Image.new("RGBA", (400 * scale, 400 * scale), "white")
+    budget = {"remaining": typeset_service._ART_TOTAL_PIXEL_WORK_BUDGET}
+    layout = typeset_service._render_art_region(
+        canvas, text="『缩地』", region=region, style=style, scale=scale, work_budget=budget
+    )
+    assert not layout["overflow"]
+    assert layout["verticalQuoteLayout"] == "compact-corner-quotes-v1"
+    assert 0 <= budget["remaining"] < typeset_service._ART_TOTAL_PIXEL_WORK_BUDGET
+    for increment in (0, 1):
+        options = _compact_draw_options(scale) | {
+            "font_size": layout["fontSize"] + increment,
+            "stroke_width": round(style["strokeWidth"] * scale),
+        }
+        if modifiers:
+            options.update(body_stroke_width=2 * scale, quote_scale_x=0.7, quote_scale_y=0.45)
+            assert all(layout[field] == value for field, value in modifiers.items())
+        raw = typeset_service._draw_art_text("『缩地』", **options)
+        transformed = typeset_service._art_transform(raw, style, rotation=5)
+        fits = transformed.width <= 100 * scale and transformed.height <= 260 * scale
+        assert fits == (increment == 0)
+
+
+@pytest.mark.parametrize(
+    "field,tamper",
+    [
+        (field, tamper)
+        for field in ("verticalQuoteLayout", "bodyStrokeWidth", "quoteScaleX", "quoteScaleY")
+        for tamper in ("remove", "value")
+    ],
+)
+def test_compact_corner_quotes_http_replay_and_retry_binding(
+    client: TestClient, app, tmp_path: Path, field: str, tamper: str
+) -> None:
+    prepared = _prepare_g8_accepted_page(
+        client, app, tmp_path, disposition="redraw-art", region_type="title"
+    )
+    prepared = _complete_g9_terminal(client, prepared, translation_text="『缩地』")
+    image, store = prepared["targetImage"], prepared["store"]
+    initial = client.get(f"/api/images/{image['id']}/page-gates/typeset").json()
+    region_id = initial["routeManifest"][0]["regionId"]
+    override = {
+        "fontToken": _compact_display_font()["token"],
+        "fontSize": 24,
+        "minFontSize": 6,
+        "padding": 0,
+        "verticalQuoteLayout": "compact-corner-quotes-v1",
+    }
+    if field != "verticalQuoteLayout":
+        override.update(bodyStrokeWidth=1, quoteScaleX=0.7, quoteScaleY=0.45)
+    job, context = _run_typeset(
+        client, app, prepared, options={"regionStyles": {region_id: override}}
+    )
+    candidate = context["candidates"][0]
+    assert (
+        candidate["styleManifest"][0]["style"]["verticalQuoteLayout"] == "compact-corner-quotes-v1"
+    )
+    assert candidate["layoutManifest"][0]["verticalQuoteLayout"] == "compact-corner-quotes-v1"
+    assert client.get(candidate["artifactUrl"]).status_code == 200
+    with store.session() as session:
+        persisted_job = session.get(Job, job["id"])
+        assert (
+            persisted_job.options["regionStyles"][region_id]["verticalQuoteLayout"]
+            == "compact-corner-quotes-v1"
+        )
+        row = session.get(PageTypesetCandidate, candidate["candidateId"])
+        assert (
+            typeset_service._retry_region_styles(row)[region_id]["verticalQuoteLayout"]
+            == "compact-corner-quotes-v1"
+        )
+        for key in ("bodyStrokeWidth", "quoteScaleX", "quoteScaleY"):
+            if key in override:
+                assert persisted_job.options["regionStyles"][region_id][key] == override[key]
+                assert candidate["styleManifest"][0]["style"][key] == override[key]
+                assert candidate["layoutManifest"][0][key] == override[key]
+                assert typeset_service._retry_region_styles(row)[region_id][key] == override[key]
+    assert client.get(f"/api/images/{image['id']}/page-gates/typeset").status_code == 200
+    changed = json.loads(json.dumps(candidate["styleManifest"]))
+    if tamper == "remove":
+        changed[0]["style"].pop(field)
+    else:
+        changed[0]["style"][field] = "future-v2" if field == "verticalQuoteLayout" else 2
+    with sqlite3.connect(store.database_path) as db:
+        db.execute("DROP TRIGGER page_typeset_candidates_no_update")
+        db.execute(
+            "UPDATE page_typeset_candidates SET style_manifest=? WHERE id=?",
+            (json.dumps(changed), candidate["candidateId"]),
+        )
+    response = client.get(f"/api/images/{image['id']}/page-gates/typeset")
+    assert response.status_code == 409
+    assert response.json()["detail"]["reason"] == "g10-replay-invalid"
+
+
+def test_compact_corner_quotes_invalid_binding_is_rejected_before_enqueue(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g8_accepted_page(
+        client, app, tmp_path, disposition="redraw-art", region_type="title"
+    )
+    prepared = _complete_g9_terminal(client, prepared, translation_text="『缩地")
+    image, project, store = prepared["targetImage"], prepared["targetProject"], prepared["store"]
+    generation_id = str(prepared["generationId"])
+    context = client.get(f"/api/images/{image['id']}/page-gates/typeset").json()
+    region_id = context["routeManifest"][0]["regionId"]
+
+    def counts():
+        with store.session() as session:
+            return [
+                session.scalar(select(func.count()).select_from(model))
+                for model in (Job, JobItem, Revision, PageLineageEvent, PageTypesetCandidate)
+            ]
+
+    before = counts()
+    result = client.post(
+        f"/api/projects/{project['id']}/typeset",
+        json={
+            "imageIds": [image["id"]],
+            "options": {
+                "regionStyles": {
+                    region_id: {
+                        "fontToken": _compact_display_font()["token"],
+                        "verticalQuoteLayout": "compact-corner-quotes-v1",
+                    }
+                }
+            },
+            "lineage": _current_lineage_context(client, str(image["id"]), generation_id),
+        },
+    )
+    assert result.status_code == 409
+    assert result.json()["detail"]["reason"] == "g10-style-invalid"
+    assert counts() == before
+
+
+def test_compact_modifier_overrides_are_validated_before_any_enqueue_mutation(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g8_accepted_page(
+        client, app, tmp_path, disposition="redraw-art", region_type="title"
+    )
+    prepared = _complete_g9_terminal(client, prepared, translation_text="『缩地』")
+    image, project, store = prepared["targetImage"], prepared["targetProject"], prepared["store"]
+    generation_id = str(prepared["generationId"])
+    context = client.get(f"/api/images/{image['id']}/page-gates/typeset").json()
+    region_id = context["routeManifest"][0]["regionId"]
+
+    def snapshot():
+        with store.session() as session:
+            return [
+                session.scalar(select(func.count()).select_from(model))
+                for model in (Job, JobItem, Revision, PageLineageEvent, PageTypesetCandidate)
+            ] + [
+                session.get(ImageAsset, image["id"]).revision,
+                session.get(PageGeneration, generation_id).next_sequence,
+            ]
+
+    before = snapshot()
+    for field in ("bodyStrokeWidth", "quoteScaleX", "quoteScaleY"):
+        bad_overrides = [{field: 1}] + [
+            {"verticalQuoteLayout": "compact-corner-quotes-v1", field: value}
+            for value in (None, True, "1", -1, 33)
+        ]
+        for override in bad_overrides:
+            result = client.post(
+                f"/api/projects/{project['id']}/typeset",
+                json={
+                    "imageIds": [image["id"]],
+                    "options": {"regionStyles": {region_id: override}},
+                    "lineage": _current_lineage_context(client, str(image["id"]), generation_id),
+                },
+            )
+            assert result.status_code == 409, result.text
+            assert result.json()["detail"]["reason"] == "g10-style-invalid"
+            assert snapshot() == before
+
+
 def test_art_renderer_combines_base_rotation_and_style_fields_deterministically() -> None:
     display = typeset_service._display_fonts()[0]
     style = typeset_service._base_style("art-lettering") | {
@@ -696,8 +1341,9 @@ def test_g10_art_autofit_is_bounded_and_selects_largest_fitting_size(
     assert next_size[0] > 400 or next_size[1] > 400
 
 
+@pytest.mark.parametrize("compact", [False, True])
 def test_g10_art_pixel_work_budget_is_shared_across_the_whole_page(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, compact: bool
 ) -> None:
     clean_path = tmp_path / "clean.png"
     Image.new("RGBA", (300, 160), "white").save(clean_path)
@@ -709,9 +1355,28 @@ def test_g10_art_pixel_work_budget_is_shared_across_the_whole_page(
         "minFontSize": 64,
         "autoFit": False,
     }
+    extra_draw = {}
+    text = "中字"
+    if compact:
+        display = _compact_display_font()
+        style.update(
+            fontToken=display["token"],
+            fontChecksum=display["fontChecksum"],
+            verticalQuoteLayout="compact-corner-quotes-v1",
+            bodyStrokeWidth=2,
+            quoteScaleX=0.65,
+            quoteScaleY=0.45,
+        )
+        extra_draw = {
+            "vertical_quote_layout": "compact-corner-quotes-v1",
+            "body_stroke_width": 2,
+            "quote_scale_x": 0.65,
+            "quote_scale_y": 0.45,
+        }
+        text = "『缩地』"
     font_path = typeset_service._font_path(style, route="art-lettering")
     measurement = typeset_service._measure_art_text(
-        "中字",
+        text,
         font_path=font_path,
         font_size=64,
         direction="vertical",
@@ -721,6 +1386,7 @@ def test_g10_art_pixel_work_budget_is_shared_across_the_whole_page(
         letter_spacing=float(style["letterSpacing"]),
         line_spacing=float(style["lineSpacing"]),
         align=str(style["align"]),
+        **extra_draw,
     )
     plan = typeset_service._art_transform_plan(
         int(measurement["width"]),
@@ -729,6 +1395,7 @@ def test_g10_art_pixel_work_budget_is_shared_across_the_whole_page(
         rotation=0,
     )
     one_region_work = int(measurement["width"]) * int(measurement["height"])
+    one_region_work += measurement.get("extraPixelWork", 0)
     one_region_work += sum(
         dimensions[0] * dimensions[1] for dimensions in plan if dimensions is not None
     )
@@ -765,7 +1432,7 @@ def test_g10_art_pixel_work_budget_is_shared_across_the_whole_page(
                 for region in regions
             ],
             accepted_by_region={
-                region["regionId"]: SimpleNamespace(translation_text="中字") for region in regions
+                region["regionId"]: SimpleNamespace(translation_text=text) for region in regions
             },
             scale=1,
         )
@@ -1958,3 +2625,35 @@ def test_g10_translate_sound_effect_tamper_never_routes_to_ordinary(
             )
         assert captured.value.reason == "g10-unknown-translate-type"
         session.rollback()
+
+
+def test_art_lettering_vertical_measures_map_horizontal_dashes() -> None:
+    font = imaging_typesetting.default_cjk_font()
+    if font is None:
+        pytest.skip("No usable system CJK font")
+    options = {
+        "font_path": font,
+        "font_size": 40,
+        "direction": "vertical",
+        "fill": "#000000",
+        "stroke_color": "#ffffff",
+        "stroke_width": 0,
+        "letter_spacing": 0,
+        "line_spacing": 0.15,
+        "align": "center",
+    }
+    em_dash = typeset_service._measure_art_text(
+        "\u7684\u4e00\u51fb\u2014\u2014\uff01\uff01", **options
+    )
+    assert "\u2014" not in em_dash["rendered"]
+    assert "\ufe31" in em_dash["rendered"]
+    horizontal_bar = typeset_service._measure_art_text(
+        "\u8cab\u304f\u4e00\u6483\u2015\u2015!!", **options
+    )
+    assert "\u2015" not in horizontal_bar["rendered"]
+    assert "\ufe31" in horizontal_bar["rendered"]
+    horizontal = typeset_service._measure_art_text(
+        "\u7684\u4e00\u51fb\u2014\u2014\uff01\uff01", **{**options, "direction": "horizontal"}
+    )
+    assert "\u2014" in horizontal["rendered"]
+    assert "\ufe31" not in horizontal["rendered"]

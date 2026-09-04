@@ -65,6 +65,7 @@ from manga_localizer.schemas import (
     ProjectPatch,
     ReadingOrderRequest,
     ReconstructionGateRequest,
+    ReconstructionReviewRequest,
     RegionCreate,
     RegionDeleteRequest,
     RegionOut,
@@ -86,6 +87,7 @@ from manga_localizer.security import (
     resolve_write_target,
     safe_relative_path,
 )
+from manga_localizer.services import reconstructions
 from manga_localizer.services.clean_plates import (
     clean_plate_artifact_path,
     clean_plate_gate_context,
@@ -1293,6 +1295,79 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             "event": public_page_lineage_event(event),
         }
 
+    @router.get("/images/{image_id}/page-gates/reconstruction")
+    async def reconstruction_context(image_id: str) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        return reconstructions.context(store, image.id)
+
+    @router.get("/images/{image_id}/page-gates/reconstruction/inputs/{role}")
+    async def reconstruction_input(image_id: str, role: str) -> FileResponse:
+        store, image = registry.find_image(image_id)
+        return FileResponse(
+            reconstructions.input_path(store, image.id, role),
+            headers={"Cache-Control": "private, no-store"},
+        )
+
+    @router.post("/images/{image_id}/page-gates/reconstruction/candidates")
+    async def reconstruction_import(image_id: str, request: Request) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        form = await request.form()
+        parts = list(form.multi_items())
+        names = [name for name, _ in parts]
+        name_set = set(names)
+        if name_set == {"raw", "metadata"}:
+            if len(parts) != 2:
+                raise HTTPException(status_code=422, detail="Expected exactly raw and metadata")
+            lettering_mask = None
+        elif name_set == {"raw", "metadata", "letteringMask"}:
+            if len(parts) != 3 or names.count("letteringMask") != 1:
+                raise HTTPException(
+                    status_code=422, detail="Expected raw, metadata, and one letteringMask"
+                )
+            mask_upload = form.get("letteringMask")
+            if not isinstance(mask_upload, StarletteUploadFile):
+                raise HTTPException(status_code=422, detail="Expected a lettering mask raster")
+            lettering_mask = await _read_upload_with_limit(
+                mask_upload, reconstructions.MAX_RAW_BYTES
+            )
+        else:
+            raise HTTPException(status_code=422, detail="Expected exactly raw and metadata")
+        raw, metadata = form.get("raw"), form.get("metadata")
+        if not isinstance(raw, StarletteUploadFile) or not isinstance(metadata, str):
+            raise HTTPException(status_code=422, detail="Expected raw raster and JSON metadata")
+        if len(metadata) > reconstructions.MAX_METADATA_CHARS:
+            raise HTTPException(status_code=413, detail="Reconstruction metadata exceeds limit")
+        try:
+            metadata = json.loads(metadata)
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail="Invalid reconstruction JSON") from error
+        return reconstructions.ingest(
+            store,
+            image.id,
+            raw=await _read_upload_with_limit(raw, reconstructions.MAX_RAW_BYTES),
+            metadata=metadata,
+            lettering_mask=lettering_mask,
+        )
+
+    @router.patch("/images/{image_id}/page-gates/reconstruction/candidates")
+    async def reconstruction_review(
+        image_id: str, body: ReconstructionReviewRequest
+    ) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        values = body.model_dump(mode="json")
+        values["lineage"] = body.lineage.model_dump(mode="json", by_alias=True)
+        return reconstructions.review(store, image.id, **values)
+
+    @router.get("/images/{image_id}/page-gates/reconstruction/candidates/{candidate_id}/{variant}")
+    async def reconstruction_artifact(
+        image_id: str, candidate_id: str, variant: str
+    ) -> FileResponse:
+        store, image = registry.find_image(image_id)
+        return FileResponse(
+            reconstructions.artifact_path(store, image.id, candidate_id, variant),
+            headers={"Cache-Control": "private, no-store"},
+        )
+
     @router.get("/images/{image_id}/page-gates/clean-plate/candidates/{candidate_id}")
     async def page_clean_plate_candidate(image_id: str, candidate_id: str) -> FileResponse:
         store, image = registry.find_image(image_id)
@@ -1657,6 +1732,14 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
     @router.get("/images/{image_id}/generated/{stage}")
     async def image_generated(image_id: str, stage: str) -> FileResponse:
+        if stage == "quality":
+            store, image = registry.find_image(image_id)
+            with store.session() as session:
+                generation = reconstructions._active(session, image)
+                quality = reconstructions.lineage_service.require_current_quality_plate(
+                    store, session, image, generation
+                )
+            return _generated_image_response(quality["path"])
         stage_directory = {
             "preprocessed": "preprocessed",
             "inpainted": "inpainted",

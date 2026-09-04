@@ -41,6 +41,9 @@ from manga_localizer.services.projects import (
 )
 
 CLOUD_FULL_PAGE_PROFILE = "cloud-full-page-repair-v1"
+STRICT_COMPOSITE_PROFILE = "strict-g8-mask-composite-v1"
+NORMALIZATION_PROFILE = "canonical-whole-frame-normalization-v1"
+REGISTRATION_PROFILE = "canonical-whole-frame-registration-v1"
 CLOUD_FULL_PAGE_CHECKS = (
     "full-page-fidelity",
     "no-new-text",
@@ -58,6 +61,9 @@ MAX_RAW_BYTES = 32 * 1024 * 1024
 MAX_NORMALIZED_BYTES = 48 * 1024 * 1024
 MAX_METADATA_CHARS = 256 * 1024
 MAX_RASTER_PIXELS = 32_000_000
+ASPECT_LIMIT = 0.01
+FIT_REJECT = "reject"
+FIT_COVER_CROP = "cover-crop"
 CLAIM_STATUS = "operator-attested-client-supplied-unverified"
 _CLAIM_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ +()-]*$")
 _INVOCATION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
@@ -67,6 +73,8 @@ _METADATA_KEYS = {
     "provider",
     "tool",
     "modelVersion",
+    "quotaClass",
+    "providerParameters",
     "claimStatus",
     "promptSha256",
     "rawSha256",
@@ -101,12 +109,31 @@ _ACTOR_KEYS = {
     "sessionId",
     "operationSource",
 }
-_ANCESTRY = {
+_PROVIDER_PARAMETER_KEYS = {
+    "apiProfile",
+    "responseMimeType",
+    "inputRoles",
+    "outputCount",
+}
+_LEGACY_ANCESTRY = {
     "originKind": "direct-ai",
     "providerClaimStatus": CLAIM_STATUS,
     "operatorAttestation": {
         "attested": True,
         "scope": "provider-tool-model-claim",
+    },
+}
+_ANCESTRY = {
+    "originKind": "deterministic-mask-composite",
+    "providerRawOriginKind": "direct-ai",
+    "providerClaimStatus": CLAIM_STATUS,
+    "operatorAttestation": {
+        "attested": True,
+        "scope": "provider-tool-model-claim",
+    },
+    "derivation": {
+        "profile": STRICT_COMPOSITE_PROFILE,
+        "inputs": ["quality-plate", "provider-normalized", "accepted-g7-mask"],
     },
 }
 
@@ -142,6 +169,8 @@ def _png_bytes(image: Image.Image) -> bytes:
 def _validate_metadata_contract(metadata: dict[str, Any]) -> None:
     if set(metadata) != _METADATA_KEYS:
         raise ProjectError("Cloud ingest metadata must match the exact allowlisted contract")
+    if not isinstance(metadata.get("normalizationManifest"), dict):
+        raise ProjectError("Cloud normalization manifest must be an object")
     lineage = metadata.get("lineage")
     if not isinstance(lineage, dict) or set(lineage) != _LINEAGE_KEYS:
         raise ProjectError("Cloud ingest lineage metadata is invalid")
@@ -162,6 +191,11 @@ def _validate_metadata_contract(metadata: dict[str, Any]) -> None:
         raise ProjectError("Cloud ancestry and provider attestation are invalid")
     if metadata.get("claimStatus") != CLAIM_STATUS:
         raise ProjectError("Cloud provider claim status is invalid")
+    if metadata.get("quotaClass") not in {"included", "prepaid"}:
+        raise ProjectError("Cloud quota class must be included or prepaid")
+    _validate_normalization_route(
+        metadata["normalizationManifest"].get("profile"), metadata.get("providerParameters")
+    )
     invocation_id = metadata.get("invocationId")
     if not isinstance(invocation_id, str) or _INVOCATION_RE.fullmatch(invocation_id) is None:
         raise ProjectError("Cloud invocation identity is invalid")
@@ -176,6 +210,33 @@ def _validate_metadata_contract(metadata: dict[str, Any]) -> None:
             raise ProjectError(f"{field} cloud claim is invalid")
     if type(metadata.get("expectedRevision")) is not int or metadata["expectedRevision"] < 0:
         raise ProjectError("Cloud expected revision is invalid")
+
+
+def _validate_provider_parameters(value: object) -> None:
+    if not isinstance(value, dict) or set(value) != _PROVIDER_PARAMETER_KEYS:
+        raise ProjectError("Cloud provider parameters must match the exact allowlist")
+    profile = value.get("apiProfile")
+    if (
+        not isinstance(profile, str)
+        or not 1 <= len(profile) <= 80
+        or _CLAIM_RE.fullmatch(profile) is None
+    ):
+        raise ProjectError("Cloud provider API profile is invalid")
+    if value.get("responseMimeType") != "image/png":
+        raise ProjectError("Cloud provider response media type must be image/png")
+    if value.get("inputRoles") != ["quality-plate", "accepted-g7-mask"]:
+        raise ProjectError("Cloud provider input roles are invalid")
+    if value.get("outputCount") != 1:
+        raise ProjectError("Cloud provider output count must be one")
+
+
+def _validate_normalization_route(profile: object, provider_parameters: object) -> None:
+    _validate_provider_parameters(provider_parameters)
+    if profile == REGISTRATION_PROFILE and provider_parameters["apiProfile"] not in {
+        "codex-native-subscription-v1",
+        "cursor-native-subscription-v1",
+    }:
+        raise ProjectError("Cloud registration requires a native subscription route")
 
 
 def _relative(generation_id: str, candidate_id: str, name: str) -> Path:
@@ -440,25 +501,71 @@ def _validate_candidate_evidence(
             reason="g8-cloud-replay-invalid",
         )
     raw = _read_verified(raw_path, row.raw_checksum, message="Cloud raw artifact is unavailable")
-    canonical, normalization, raw_grid, raw_media_type = _normalize(
-        raw, (row.normalized_width, row.normalized_height)
-    )
+    try:
+        if not isinstance(row.normalization_manifest, dict):
+            raise ProjectError("Cloud normalization manifest must be an object")
+        profile = row.normalization_manifest.get("profile")
+        if row.route_manifest.get("maskComposite") is not True and profile != NORMALIZATION_PROFILE:
+            raise ProjectError("Legacy cloud evidence cannot use registration")
+        if profile == REGISTRATION_PROFILE:
+            _validate_normalization_route(profile, row.route_manifest.get("providerParameters"))
+        provider_normalized, normalization, raw_grid, raw_media_type = _normalize_for_profile(
+            raw,
+            (row.normalized_width, row.normalized_height),
+            quality=quality_bytes,
+            mask=mask_bytes,
+            profile=profile,
+        )
+    except ProjectError as error:
+        raise PageLineageConflict(
+            "Cloud normalization does not replay",
+            resource=f"cloud-candidate:{row.id}",
+            reason="g8-cloud-replay-invalid",
+        ) from error
     normalized = _read_verified(
         _target(store, Path(row.normalized_relative_path)),
         row.normalized_checksum,
         message="Cloud normalized artifact is unavailable",
     )
-    delta = _delta_manifest(quality_bytes, normalized, mask_bytes)
-    route = {
-        "profile": CLOUD_FULL_PAGE_PROFILE,
-        "wholeFrame": True,
-        "outsideMaskChangesAllowed": True,
-        "normalizationDigest": _digest(normalization),
-        "deltaDigest": _digest(delta),
-        "orderedInputDigest": _digest(ordered_inputs),
-    }
+    if row.route_manifest.get("maskComposite") is True:
+        canonical, composite = _strict_mask_composite(
+            quality_bytes, provider_normalized, mask_bytes
+        )
+        delta = _delta_manifest(quality_bytes, canonical, mask_bytes)
+        quota_class = row.route_manifest.get("quotaClass")
+        provider_parameters = row.route_manifest.get("providerParameters")
+        try:
+            _validate_provider_parameters(provider_parameters)
+        except ProjectError as error:
+            raise PageLineageConflict(
+                "Cloud provider parameters do not replay",
+                resource=f"cloud-candidate:{row.id}",
+                reason="g8-cloud-replay-invalid",
+            ) from error
+        route = _strict_route_manifest(
+            normalization,
+            composite,
+            delta,
+            ordered_inputs,
+            quota_class=quota_class,
+            provider_parameters=provider_parameters,
+        )
+        ancestry = _ANCESTRY
+        strict_outside = delta["outsideMaskChangedPixelCount"] == 0 and quota_class in {
+            "included",
+            "prepaid",
+        }
+    else:
+        # Preserve replay for immutable v1 rows created before the strict G8
+        # composite contract. New ingest never accepts this legacy route.
+        canonical = provider_normalized
+        delta = _delta_manifest(quality_bytes, canonical, mask_bytes)
+        route = _legacy_route_manifest(normalization, delta, ordered_inputs)
+        ancestry = _LEGACY_ANCESTRY
+        strict_outside = True
     if (
         canonical != normalized
+        or not strict_outside
         or row.raw_media_type != raw_media_type
         or (row.raw_width, row.raw_height) != raw_grid
         or row.ordered_input_manifest != ordered_inputs
@@ -469,6 +576,7 @@ def _validate_candidate_evidence(
         or row.delta_digest != _digest(delta)
         or row.route_manifest != route
         or row.route_checksum != _digest(route)
+        or row.ancestry != ancestry
     ):
         raise PageLineageConflict(
             "Cloud candidate evidence does not reproduce",
@@ -515,12 +623,17 @@ def cloud_full_page_replay(
             resource=f"page-generation:{generation.id}",
             reason="g8-cloud-replay-invalid",
         )
-    expected_operations = [
-        "cloud-full-page-job-enqueued",
-        "cloud-full-page-candidate-produced",
-        "cloud-full-page-job-completed",
-        *(["cloud-full-page-stage-review"] if reviews else []),
-    ]
+    expected_operations: list[str] = []
+    for index in range(len(candidates)):
+        expected_operations.extend(
+            (
+                "cloud-full-page-job-enqueued",
+                "cloud-full-page-candidate-produced",
+                "cloud-full-page-job-completed",
+            )
+        )
+        if index < len(reviews):
+            expected_operations.append("cloud-full-page-stage-review")
     if [event.operation for event in events] != expected_operations:
         raise PageLineageConflict(
             "Cloud full-page lineage event sequence is invalid",
@@ -569,10 +682,12 @@ def cloud_full_page_replay(
         },
     ]
     for row in candidates:
+        expected_ancestry = (
+            _ANCESTRY if row.route_manifest.get("maskComposite") is True else _LEGACY_ANCESTRY
+        )
         if (
             row.generation_id != generation.id
             or row.image_id != image.id
-            or row.sequence != 1
             or row.route_profile != CLOUD_FULL_PAGE_PROFILE
             or row.legacy_state_checksum != legacy["stateChecksum"]
             or row.parent_checksum != legacy["g7Checksum"]
@@ -587,7 +702,7 @@ def cloud_full_page_replay(
             or _CLAIM_RE.fullmatch(row.provider) is None
             or _CLAIM_RE.fullmatch(row.tool) is None
             or _CLAIM_RE.fullmatch(row.model_version) is None
-            or row.ancestry != _ANCESTRY
+            or row.ancestry != expected_ancestry
             or not _is_sha256(row.prompt_sha256)
             or row.normalized_media_type != "image/png"
         ):
@@ -604,288 +719,322 @@ def cloud_full_page_replay(
             mask_bytes=mask_bytes,
             ordered_inputs=ordered_inputs,
         )
-    if len(candidates) != 1 or len(reviews) > 1:
+    if (
+        len(reviews) not in {len(candidates), len(candidates) - 1}
+        or any(review.candidate_id != candidates[index].id for index, review in enumerate(reviews))
+        or any(review.state == "accepted" for review in reviews[:-1])
+        or (reviews and reviews[-1].state == "accepted" and len(reviews) != len(candidates))
+        or (
+            len(reviews) == len(candidates) - 1
+            and any(review.state != "rejected" for review in reviews)
+        )
+    ):
         raise PageLineageConflict(
             "Cloud full-page row cardinality is invalid",
             resource=f"page-generation:{generation.id}",
             reason="g8-cloud-replay-invalid",
         )
-    candidate = candidates[0]
-    job = session.get(Job, candidate.job_id)
-    item = session.get(JobItem, candidate.job_item_id)
-    revision = session.get(Revision, candidate.revision_id)
-    actor = (
-        job.lineage_context.get("actor") if job and isinstance(job.lineage_context, dict) else None
-    )
-    expected_job_context = {
-        "generationId": generation.id,
-        "sourceChecksum": image.checksum,
-        "expectedSequence": events[0].sequence,
-        "actor": actor,
-    }
-    replay_metadata = {
-        "routeProfile": candidate.route_profile,
-        "invocationId": candidate.invocation_id,
-        "provider": candidate.provider,
-        "tool": candidate.tool,
-        "modelVersion": candidate.model_version,
-        "claimStatus": candidate.ancestry.get("providerClaimStatus"),
-        "promptSha256": candidate.prompt_sha256,
-        "rawSha256": candidate.raw_checksum,
-        "rawMediaType": candidate.raw_media_type,
-        "normalizedSha256": candidate.normalized_checksum,
-        "normalizationManifest": candidate.normalization_manifest,
-        "normalizationDigest": candidate.normalization_digest,
-        "deltaManifest": candidate.delta_manifest,
-        "deltaDigest": candidate.delta_digest,
-        "routeManifest": candidate.route_manifest,
-        "routeChecksum": candidate.route_checksum,
-        "ancestry": candidate.ancestry,
-        "expectedRevision": revision.after.get("requestRevision") if revision else None,
-        "lineage": {
-            "runId": generation.run_id,
-            "pageGenerationId": generation.id,
-            "expectedSequence": events[0].sequence,
+    event_cursor = 0
+    for index, candidate in enumerate(candidates):
+        publication = events[event_cursor : event_cursor + 3]
+        event_cursor += 3
+        review = reviews[index] if index < len(reviews) else None
+        review_event = None
+        if review is not None:
+            review_event = events[event_cursor]
+            event_cursor += 1
+        job = session.get(Job, candidate.job_id)
+        item = session.get(JobItem, candidate.job_item_id)
+        revision = session.get(Revision, candidate.revision_id)
+        actor = (
+            job.lineage_context.get("actor")
+            if job and isinstance(job.lineage_context, dict)
+            else None
+        )
+        enqueue_sequence = publication[0].sequence if publication else None
+        expected_job_context = {
+            "generationId": generation.id,
+            "sourceChecksum": image.checksum,
+            "expectedSequence": enqueue_sequence,
             "actor": actor,
-        },
-        "projectChecksum": candidate.project_checksum,
-        "sourceChecksum": candidate.source_checksum,
-        "g7Checksum": candidate.parent_checksum,
-        "legacyStateChecksum": candidate.legacy_state_checksum,
-        "qualityChecksum": candidate.quality_checksum,
-        "backgroundChecksum": candidate.background_checksum,
-        "maskArtifactId": candidate.mask_artifact_id,
-        "maskChecksum": candidate.mask_checksum,
-        "orderedInputs": candidate.ordered_input_manifest,
-        "orderedInputDigest": candidate.ordered_input_digest,
-    }
-    if (
-        job is None
-        or item is None
-        or revision is None
-        or not isinstance(actor, dict)
-        or job.project_id != generation.project_id
-        or job.kind != "cloud-full-page-repair"
-        or job.status != "completed"
-        or job.progress != 1.0
-        or job.total != 1
-        or job.completed != 1
-        or job.options != {"routeProfile": CLOUD_FULL_PAGE_PROFILE}
-        or job.lineage_context != expected_job_context
-        or item.job_id != job.id
-        or item.image_id != image.id
-        or item.region_id is not None
-        or item.position != 0
-        or item.status != "completed"
-        or item.progress != 1.0
-        or item.output
-        != {
+        }
+        prior_state = legacy["stateChecksum"] if index == 0 else reviews[index - 1].state_checksum
+        candidate_state = _cloud_state(legacy["stateChecksum"], candidates[: index + 1], [])
+        replay_metadata = {
+            "routeProfile": candidate.route_profile,
+            "invocationId": candidate.invocation_id,
+            "provider": candidate.provider,
+            "tool": candidate.tool,
+            "modelVersion": candidate.model_version,
+            "claimStatus": candidate.ancestry.get("providerClaimStatus"),
+            "promptSha256": candidate.prompt_sha256,
+            "rawSha256": candidate.raw_checksum,
+            "rawMediaType": candidate.raw_media_type,
+            "normalizedSha256": candidate.normalized_checksum,
+            "normalizationManifest": candidate.normalization_manifest,
+            "normalizationDigest": candidate.normalization_digest,
+            "deltaManifest": candidate.delta_manifest,
+            "deltaDigest": candidate.delta_digest,
+            "routeManifest": candidate.route_manifest,
+            "routeChecksum": candidate.route_checksum,
+            "ancestry": candidate.ancestry,
+            "expectedRevision": revision.after.get("requestRevision") if revision else None,
+            "lineage": {
+                "runId": generation.run_id,
+                "pageGenerationId": generation.id,
+                "expectedSequence": enqueue_sequence,
+                "actor": actor,
+            },
+            "projectChecksum": candidate.project_checksum,
+            "sourceChecksum": candidate.source_checksum,
+            "g7Checksum": candidate.parent_checksum,
+            "legacyStateChecksum": candidate.legacy_state_checksum,
+            "qualityChecksum": candidate.quality_checksum,
+            "backgroundChecksum": candidate.background_checksum,
+            "maskArtifactId": candidate.mask_artifact_id,
+            "maskChecksum": candidate.mask_checksum,
+            "orderedInputs": candidate.ordered_input_manifest,
+            "orderedInputDigest": candidate.ordered_input_digest,
+        }
+        if candidate.route_manifest.get("maskComposite") is True:
+            replay_metadata["quotaClass"] = candidate.route_manifest.get("quotaClass")
+            replay_metadata["providerParameters"] = candidate.route_manifest.get(
+                "providerParameters"
+            )
+        if (
+            job is None
+            or item is None
+            or revision is None
+            or not isinstance(actor, dict)
+            or len(publication) != 3
+            or candidate.state_checksum != candidate_state
+            or job.project_id != generation.project_id
+            or job.kind != "cloud-full-page-repair"
+            or job.status != "completed"
+            or job.progress != 1.0
+            or job.total != 1
+            or job.completed != 1
+            or job.options != {"routeProfile": CLOUD_FULL_PAGE_PROFILE}
+            or job.lineage_context != expected_job_context
+            or item.job_id != job.id
+            or item.image_id != image.id
+            or item.region_id is not None
+            or item.position != 0
+            or item.status != "completed"
+            or item.progress != 1.0
+            or item.output
+            != {
+                "candidateId": candidate.id,
+                "rawChecksum": candidate.raw_checksum,
+                "normalizedChecksum": candidate.normalized_checksum,
+                "routeChecksum": candidate.route_checksum,
+            }
+            or item.started_at != candidate.created_at
+            or item.finished_at != candidate.created_at
+            or job.created_at != candidate.created_at
+            or job.updated_at != candidate.created_at
+            or revision.project_id != generation.project_id
+            or revision.entity_type != "page-cloud-full-page-candidate"
+            or revision.entity_id != candidate.id
+            or revision.operation != "create"
+            or type(revision.after.get("requestRevision")) is not int
+            or revision.before != {}
+            or revision.after
+            != _candidate_revision_after(
+                candidate_id=candidate.id,
+                generation_id=generation.id,
+                image_id=image.id,
+                job_id=job.id,
+                job_item_id=item.id,
+                raw_checksum=candidate.raw_checksum,
+                normalized_checksum=candidate.normalized_checksum,
+                request_revision=revision.after.get("requestRevision"),
+            )
+            or candidate.project_checksum
+            != _digest(
+                {
+                    "projectId": generation.project_id,
+                    "projectRevision": revision.project_revision - 1,
+                }
+            )
+            or candidate.parameter_hash
+            != _digest(
+                {
+                    "metadata": replay_metadata,
+                    "raw": candidate.raw_checksum,
+                    "normalized": candidate.normalized_checksum,
+                }
+            )
+        ):
+            raise PageLineageConflict(
+                "Cloud candidate job, item, or revision evidence is invalid",
+                resource=f"cloud-candidate:{candidate.id}",
+                reason="g8-cloud-replay-invalid",
+            )
+        base_event_evidence = {
+            "routeProfile": CLOUD_FULL_PAGE_PROFILE,
+            "claimStatus": CLAIM_STATUS,
             "candidateId": candidate.id,
             "rawChecksum": candidate.raw_checksum,
             "normalizedChecksum": candidate.normalized_checksum,
             "routeChecksum": candidate.route_checksum,
+            "stateChecksum": candidate_state,
         }
-        or item.started_at != candidate.created_at
-        or item.finished_at != candidate.created_at
-        or job.created_at != candidate.created_at
-        or job.updated_at != candidate.created_at
-        or revision.project_id != generation.project_id
-        or revision.entity_type != "page-cloud-full-page-candidate"
-        or revision.entity_id != candidate.id
-        or revision.operation != "create"
-        or type(revision.after.get("requestRevision")) is not int
-        or revision.before != {}
-        or revision.after
-        != _candidate_revision_after(
-            candidate_id=candidate.id,
-            generation_id=generation.id,
-            image_id=image.id,
-            job_id=job.id,
-            job_item_id=item.id,
-            raw_checksum=candidate.raw_checksum,
-            normalized_checksum=candidate.normalized_checksum,
-            request_revision=revision.after.get("requestRevision"),
+        event_matrix = (
+            (
+                "cloud-full-page-job-enqueued",
+                prior_state,
+                prior_state,
+                None,
+                "job-enqueued",
+            ),
+            (
+                "cloud-full-page-candidate-produced",
+                prior_state,
+                candidate_state,
+                revision.id,
+                "candidate-produced",
+            ),
+            (
+                "cloud-full-page-job-completed",
+                candidate_state,
+                candidate_state,
+                None,
+                "review-required",
+            ),
         )
-        or candidate.project_checksum
-        != _digest(
-            {"projectId": generation.project_id, "projectRevision": revision.project_revision - 1}
-        )
-        or candidate.parameter_hash
-        != _digest(
-            {
-                "metadata": replay_metadata,
-                "raw": candidate.raw_checksum,
-                "normalized": candidate.normalized_checksum,
-            }
-        )
-    ):
+        for event, (operation, input_checksum, output_checksum, revision_id, reason) in zip(
+            publication, event_matrix, strict=True
+        ):
+            if (
+                event.operation != operation
+                or event.gate != "G8_cloudFullPage"
+                or event.state != "pending"
+                or _event_actor(event) != actor
+                or event.input_checksum != input_checksum
+                or event.output_checksum != output_checksum
+                or event.parent_checksum != legacy["g7Checksum"]
+                or event.stage != "inpaint"
+                or event.provider != candidate.provider
+                or event.model_version != candidate.model_version
+                or event.parameter_hash != candidate.parameter_hash
+                or event.job_id != job.id
+                or event.job_item_id != item.id
+                or event.revision_id != revision_id
+                or event.decision is not None
+                or event.reason != reason
+                or event.git_commit is not None
+                or event.evidence != {"eventType": operation, **base_event_evidence}
+                or event.started_at != candidate.created_at
+                or event.finished_at != candidate.created_at
+            ):
+                raise PageLineageConflict(
+                    "Cloud publication event does not match exact candidate evidence",
+                    resource=f"event:{event.id}",
+                    reason="g8-cloud-replay-invalid",
+                )
+        if review is not None:
+            review_revision = session.get(Revision, review.revision_id)
+            expected_checks = [
+                {"check": check, "passed": review.state == "accepted"}
+                for check in CLOUD_FULL_PAGE_CHECKS
+            ]
+            if review.state == "rejected":
+                expected_checks = review.checks
+            failed_checks = [
+                entry["check"] for entry in review.checks if entry.get("passed") is False
+            ]
+            expected_reason = (
+                "cloud-full-page-repair-complete"
+                if review.state == "accepted"
+                else "multiple-visual-failures"
+                if len(failed_checks) > 1
+                else failed_checks[0]
+                if failed_checks
+                else None
+            )
+            if (
+                review_event is None
+                or review.generation_id != generation.id
+                or review.image_id != image.id
+                or review.candidate_id != candidate.id
+                or review.parent_checksum != candidate_state
+                or review.candidate_checksum != candidate.normalized_checksum
+                or review.reviewer != _event_actor(review_event)
+                or review.checks != expected_checks
+                or [entry.get("check") for entry in review.checks] != list(CLOUD_FULL_PAGE_CHECKS)
+                or any(set(entry) != {"check", "passed"} for entry in review.checks)
+                or any(type(entry.get("passed")) is not bool for entry in review.checks)
+                or review.reason != expected_reason
+                or review_revision is None
+                or review_revision.project_id != generation.project_id
+                or review_revision.entity_type != "page-cloud-full-page-review"
+                or review_revision.entity_id != review.id
+                or review_revision.operation != review.state
+                or review_revision.before != {}
+                or review_revision.after
+                != _review_revision_after(
+                    review_id=review.id,
+                    candidate=candidate,
+                    state=review.state,
+                    reason=review.reason,
+                    checks=review.checks,
+                )
+                or review_event.operation != "cloud-full-page-stage-review"
+                or review_event.gate != "G8_cloudFullPage"
+                or review_event.state != review.state
+                or review_event.input_checksum != candidate_state
+                or review_event.output_checksum != review.state_checksum
+                or review_event.parent_checksum != legacy["g7Checksum"]
+                or review_event.stage != "inpaint"
+                or review_event.provider != candidate.provider
+                or review_event.model_version != candidate.model_version
+                or review_event.parameter_hash != candidate.parameter_hash
+                or review_event.job_id is not None
+                or review_event.job_item_id is not None
+                or review_event.revision_id != review_revision.id
+                or review_event.decision != f"cloud-full-page-{review.state}"
+                or review_event.reason != review.reason
+                or review_event.git_commit is not None
+                or review_event.evidence
+                != {
+                    "eventType": "cloud-full-page-stage-review",
+                    "routeProfile": CLOUD_FULL_PAGE_PROFILE,
+                    "claimStatus": CLAIM_STATUS,
+                    "candidateId": candidate.id,
+                    "candidateChecksum": candidate.normalized_checksum,
+                    "g7Checksum": legacy["g7Checksum"],
+                    "checks": review.checks,
+                    "reviewId": review.id,
+                    "stateChecksum": review.state_checksum,
+                }
+                or review_event.started_at != review.created_at
+                or review_event.finished_at != review.created_at
+            ):
+                raise PageLineageConflict(
+                    "Cloud review event or revision does not match exact review evidence",
+                    resource=f"cloud-review:{review.id}",
+                    reason="g8-cloud-replay-invalid",
+                )
+    if event_cursor != len(events):
         raise PageLineageConflict(
-            "Cloud candidate job, item, or revision evidence is invalid",
-            resource=f"cloud-candidate:{candidate.id}",
-            reason="g8-cloud-replay-invalid",
-        )
-    if any(review.candidate_id not in {row.id for row in candidates} for review in reviews):
-        raise PageLineageConflict(
-            "Cloud review candidate identity is invalid",
+            "Cloud full-page lineage event sequence is invalid",
             resource=f"page-generation:{generation.id}",
             reason="g8-cloud-replay-invalid",
         )
-    candidate_state = _cloud_state(legacy["stateChecksum"], candidates, [])
-    base_event_evidence = {
-        "routeProfile": CLOUD_FULL_PAGE_PROFILE,
-        "claimStatus": CLAIM_STATUS,
-        "candidateId": candidate.id,
-        "rawChecksum": candidate.raw_checksum,
-        "normalizedChecksum": candidate.normalized_checksum,
-        "routeChecksum": candidate.route_checksum,
-        "stateChecksum": candidate_state,
-    }
-    event_matrix = (
-        (
-            "cloud-full-page-job-enqueued",
-            legacy["stateChecksum"],
-            legacy["stateChecksum"],
-            None,
-            "job-enqueued",
-        ),
-        (
-            "cloud-full-page-candidate-produced",
-            legacy["stateChecksum"],
-            candidate_state,
-            revision.id,
-            "candidate-produced",
-        ),
-        (
-            "cloud-full-page-job-completed",
-            candidate_state,
-            candidate_state,
-            None,
-            "review-required",
-        ),
-    )
-    for event, (operation, input_checksum, output_checksum, revision_id, reason) in zip(
-        events[:3], event_matrix, strict=True
-    ):
-        if (
-            event.operation != operation
-            or event.gate != "G8_cloudFullPage"
-            or event.state != "pending"
-            or _event_actor(event) != actor
-            or event.input_checksum != input_checksum
-            or event.output_checksum != output_checksum
-            or event.parent_checksum != legacy["g7Checksum"]
-            or event.stage != "inpaint"
-            or event.provider != candidate.provider
-            or event.model_version != candidate.model_version
-            or event.parameter_hash != candidate.parameter_hash
-            or event.job_id != job.id
-            or event.job_item_id != item.id
-            or event.revision_id != revision_id
-            or event.decision is not None
-            or event.reason != reason
-            or event.git_commit is not None
-            or event.evidence != {"eventType": operation, **base_event_evidence}
-            or event.started_at != candidate.created_at
-            or event.finished_at != candidate.created_at
-        ):
-            raise PageLineageConflict(
-                "Cloud publication event does not match exact candidate evidence",
-                resource=f"event:{event.id}",
-                reason="g8-cloud-replay-invalid",
-            )
-    if reviews:
-        review = reviews[0]
-        review_revision = session.get(Revision, review.revision_id)
-        expected_checks = [
-            {"check": check, "passed": review.state == "accepted"}
-            for check in CLOUD_FULL_PAGE_CHECKS
-        ]
-        if review.state == "rejected":
-            expected_checks = review.checks
-        failed_checks = [entry["check"] for entry in review.checks if entry.get("passed") is False]
-        expected_reason = (
-            "cloud-full-page-repair-complete"
-            if review.state == "accepted"
-            else "multiple-visual-failures"
-            if len(failed_checks) > 1
-            else failed_checks[0]
-            if failed_checks
-            else None
-        )
-        review_event = events[3]
-        if (
-            review.generation_id != generation.id
-            or review.image_id != image.id
-            or review.candidate_id != candidate.id
-            or review.sequence != 1
-            or review.parent_checksum != candidate_state
-            or review.candidate_checksum != candidate.normalized_checksum
-            or review.reviewer != _event_actor(review_event)
-            or review.checks != expected_checks
-            or [entry.get("check") for entry in review.checks] != list(CLOUD_FULL_PAGE_CHECKS)
-            or any(set(entry) != {"check", "passed"} for entry in review.checks)
-            or any(type(entry.get("passed")) is not bool for entry in review.checks)
-            or review.reason != expected_reason
-            or review_revision is None
-            or review_revision.project_id != generation.project_id
-            or review_revision.entity_type != "page-cloud-full-page-review"
-            or review_revision.entity_id != review.id
-            or review_revision.operation != review.state
-            or review_revision.before != {}
-            or review_revision.after
-            != _review_revision_after(
-                review_id=review.id,
-                candidate=candidate,
-                state=review.state,
-                reason=review.reason,
-                checks=review.checks,
-            )
-            or review_event.operation != "cloud-full-page-stage-review"
-            or review_event.gate != "G8_cloudFullPage"
-            or review_event.state != review.state
-            or review_event.input_checksum != candidate_state
-            or review_event.output_checksum != review.state_checksum
-            or review_event.parent_checksum != legacy["g7Checksum"]
-            or review_event.stage != "inpaint"
-            or review_event.provider != candidate.provider
-            or review_event.model_version != candidate.model_version
-            or review_event.parameter_hash != candidate.parameter_hash
-            or review_event.job_id is not None
-            or review_event.job_item_id is not None
-            or review_event.revision_id != review_revision.id
-            or review_event.decision != f"cloud-full-page-{review.state}"
-            or review_event.reason != review.reason
-            or review_event.git_commit is not None
-            or review_event.evidence
-            != {
-                "eventType": "cloud-full-page-stage-review",
-                "routeProfile": CLOUD_FULL_PAGE_PROFILE,
-                "claimStatus": CLAIM_STATUS,
-                "candidateId": candidate.id,
-                "candidateChecksum": candidate.normalized_checksum,
-                "g7Checksum": legacy["g7Checksum"],
-                "checks": review.checks,
-                "reviewId": review.id,
-                "stateChecksum": review.state_checksum,
-            }
-            or review_event.started_at != review.created_at
-            or review_event.finished_at != review.created_at
-        ):
-            raise PageLineageConflict(
-                "Cloud review event or revision does not match exact review evidence",
-                resource=f"cloud-review:{review.id}",
-                reason="g8-cloud-replay-invalid",
-            )
     expected_state = _cloud_state(legacy["stateChecksum"], candidates, reviews)
-    if (
-        candidates
-        and candidates[-1].state_checksum != _cloud_state(legacy["stateChecksum"], candidates, [])
-    ) or (reviews and reviews[-1].state_checksum != expected_state):
-        raise PageLineageConflict(
-            "Cloud full-page state checksum is invalid",
-            resource=f"page-generation:{generation.id}",
-            reason="g8-cloud-replay-invalid",
+    if reviews:
+        reviewed_state = (
+            expected_state
+            if len(reviews) == len(candidates)
+            else _cloud_state(legacy["stateChecksum"], candidates[: len(reviews)], reviews)
         )
+        if reviews[-1].state_checksum != reviewed_state:
+            raise PageLineageConflict(
+                "Cloud full-page state checksum is invalid",
+                resource=f"page-generation:{generation.id}",
+                reason="g8-cloud-replay-invalid",
+            )
     accepted = [review for review in reviews if review.state == "accepted"]
     return {
         "legacy": legacy,
@@ -1001,6 +1150,9 @@ def public_cloud_candidate(
         "provider": row.provider,
         "tool": row.tool,
         "modelVersion": row.model_version,
+        "quotaClass": row.route_manifest.get("quotaClass"),
+        "providerParameters": row.route_manifest.get("providerParameters"),
+        "parameterHash": row.parameter_hash,
         "promptSha256": row.prompt_sha256,
         "rawChecksum": row.raw_checksum,
         "normalizedChecksum": row.normalized_checksum,
@@ -1022,9 +1174,49 @@ def public_cloud_candidate(
     }
 
 
+def _aspect_error(width: int, height: int, target_grid: tuple[int, int]) -> float:
+    target_ratio = target_grid[0] / target_grid[1]
+    return abs((width / height) - target_ratio) / target_ratio
+
+
+def _cover_crop_box(
+    raw_size: tuple[int, int], target_grid: tuple[int, int]
+) -> tuple[int, int, int, int] | None:
+    raw_width, raw_height = raw_size
+    target_ratio = target_grid[0] / target_grid[1]
+    best: tuple[float, int, tuple[int, int, int, int]] | None = None
+    if raw_width / raw_height >= target_ratio:
+        base = round(raw_height * target_ratio)
+        for crop_width in range(max(1, base - 3), min(raw_width, base + 3) + 1):
+            error = _aspect_error(crop_width, raw_height, target_grid)
+            if error > ASPECT_LIMIT:
+                continue
+            left = (raw_width - crop_width) // 2
+            candidate = (error, crop_width, (left, 0, crop_width, raw_height))
+            if best is None or candidate < best:
+                best = candidate
+    else:
+        base = round(raw_width / target_ratio)
+        for crop_height in range(max(1, base - 3), min(raw_height, base + 3) + 1):
+            error = _aspect_error(raw_width, crop_height, target_grid)
+            if error > ASPECT_LIMIT:
+                continue
+            top = (raw_height - crop_height) // 2
+            candidate = (error, crop_height, (0, top, raw_width, crop_height))
+            if best is None or candidate < best:
+                best = candidate
+    return None if best is None else best[2]
+
+
 def _normalize(
-    raw: bytes, target_grid: tuple[int, int]
+    raw: bytes,
+    target_grid: tuple[int, int],
+    *,
+    fit: str = FIT_REJECT,
 ) -> tuple[bytes, dict[str, Any], tuple[int, int], str]:
+    if fit not in {FIT_REJECT, FIT_COVER_CROP}:
+        raise ProjectError("Unknown cloud normalization fit")
+    crop_box: tuple[int, int, int, int] | None = None
     try:
         with Image.open(io.BytesIO(raw)) as opened:
             if opened.width * opened.height > MAX_RASTER_PIXELS:
@@ -1040,14 +1232,28 @@ def _normalize(
             if orientation != 1:
                 raise ProjectError("Raw cloud image must already be upright")
             raw_size = opened.size
-            if raw_size[1] <= raw_size[0]:
-                raise ProjectError("Raw cloud image must be portrait")
-            target_ratio = target_grid[0] / target_grid[1]
-            raw_ratio = raw_size[0] / raw_size[1]
-            if abs(raw_ratio - target_ratio) / target_ratio > 0.01:
-                raise ProjectError("Raw cloud image aspect differs from the target by more than 1%")
+            if _aspect_error(*raw_size, target_grid) > ASPECT_LIMIT:
+                if fit != FIT_COVER_CROP:
+                    raise ProjectError(
+                        "Raw cloud image aspect differs from the target by more than 1%"
+                    )
+                crop_box = _cover_crop_box(raw_size, target_grid)
+                if crop_box is None:
+                    raise ProjectError(
+                        "Raw cloud image aspect differs from the target by more than 1%"
+                    )
+                fitted = (crop_box[2], crop_box[3])
+                if _aspect_error(*fitted, target_grid) > ASPECT_LIMIT:
+                    raise ProjectError(
+                        "Raw cloud image aspect differs from the target by more than 1%"
+                    )
             opened.load()
             image = ImageOps.exif_transpose(opened).convert("RGB")
+            working_size = raw_size
+            if crop_box is not None:
+                left, top, crop_width, crop_height = crop_box
+                image = image.crop((left, top, left + crop_width, top + crop_height))
+                working_size = image.size
             if image.size != target_grid:
                 image = image.resize(target_grid, Image.Resampling.LANCZOS)
             normalized = _png_bytes(image)
@@ -1061,15 +1267,128 @@ def _normalize(
         "targetGrid": {"width": target_grid[0], "height": target_grid[1]},
         "orientation": "upright",
         "colorMode": "RGB",
-        "resize": "lanczos-whole-frame" if raw_size != target_grid else "none",
-        "crop": False,
+        "resize": "lanczos-whole-frame" if working_size != target_grid else "none",
+        "crop": crop_box is not None,
         "padding": False,
         "maskComposite": False,
         "localPatch": False,
         "contentAwareTransform": False,
         "output": "canonical-png-v1",
     }
+    if crop_box is not None:
+        left, top, crop_width, crop_height = crop_box
+        manifest["fittedGrid"] = {"width": crop_width, "height": crop_height}
+        manifest["cropBox"] = {
+            "x": left,
+            "y": top,
+            "width": crop_width,
+            "height": crop_height,
+        }
     return normalized, manifest, raw_size, raw_media_type
+
+
+def _strict_mask_composite(
+    quality: bytes, provider_normalized: bytes, mask: bytes
+) -> tuple[bytes, dict[str, Any]]:
+    try:
+        with (
+            Image.open(io.BytesIO(quality)) as source_image,
+            Image.open(io.BytesIO(provider_normalized)) as provider_image,
+            Image.open(io.BytesIO(mask)) as mask_image,
+        ):
+            source = np.asarray(source_image.convert("RGB"), dtype=np.uint8)
+            provider = np.asarray(provider_image.convert("RGB"), dtype=np.uint8)
+            binary_mask = np.asarray(mask_image.convert("L"), dtype=np.uint8) > 0
+    except OSError as error:
+        raise ProjectError("Cloud composite inputs could not be decoded") from error
+    if source.shape != provider.shape or binary_mask.shape != source.shape[:2]:
+        raise ProjectError("Cloud composite inputs do not share the canonical target grid")
+    composite = source.copy()
+    composite[binary_mask] = provider[binary_mask]
+    payload = _png_bytes(Image.fromarray(composite, mode="RGB"))
+    manifest = {
+        "profile": STRICT_COMPOSITE_PROFILE,
+        "targetGrid": {"width": int(source.shape[1]), "height": int(source.shape[0])},
+        "qualitySha256": _sha256(quality),
+        "providerNormalizedSha256": _sha256(provider_normalized),
+        "maskSha256": _sha256(mask),
+        "maskRule": "nonzero-inside-provider-zero-outside-quality",
+        "outsideMaskSource": "quality-plate",
+        "output": "canonical-png-v1",
+    }
+    return payload, manifest
+
+
+def _normalize_for_profile(
+    raw: bytes,
+    target_grid: tuple[int, int],
+    *,
+    quality: bytes,
+    mask: bytes,
+    profile: object = NORMALIZATION_PROFILE,
+) -> tuple[bytes, dict[str, Any], tuple[int, int], str]:
+    if profile not in (NORMALIZATION_PROFILE, REGISTRATION_PROFILE):
+        raise ProjectError("Unknown cloud normalization profile")
+    if profile == NORMALIZATION_PROFILE:
+        return _normalize(raw, target_grid, fit=FIT_COVER_CROP)
+    if min(target_grid) <= 0 or target_grid[0] * target_grid[1] > MAX_RASTER_PIXELS:
+        raise ProjectError("Cloud target exceeds the raster pixel limit")
+    normalized, manifest, raw_grid, media_type = _normalize(raw, target_grid, fit=FIT_COVER_CROP)
+    from manga_localizer.services.cloud_registration import register_whole_frame
+
+    registered, registration = register_whole_frame(quality, normalized, mask)
+    return (
+        registered,
+        {
+            **manifest,
+            "profile": REGISTRATION_PROFILE,
+            "contentAwareTransform": True,
+            "registration": registration,
+        },
+        raw_grid,
+        media_type,
+    )
+
+
+def _legacy_route_manifest(
+    normalization: dict[str, Any],
+    delta: dict[str, Any],
+    ordered_inputs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "profile": CLOUD_FULL_PAGE_PROFILE,
+        "wholeFrame": True,
+        "outsideMaskChangesAllowed": True,
+        "normalizationDigest": _digest(normalization),
+        "deltaDigest": _digest(delta),
+        "orderedInputDigest": _digest(ordered_inputs),
+    }
+
+
+def _strict_route_manifest(
+    normalization: dict[str, Any],
+    composite: dict[str, Any],
+    delta: dict[str, Any],
+    ordered_inputs: list[dict[str, Any]],
+    *,
+    quota_class: object,
+    provider_parameters: object,
+) -> dict[str, Any]:
+    return {
+        "profile": CLOUD_FULL_PAGE_PROFILE,
+        "providerOutputWholeFrame": True,
+        "acceptedCandidate": STRICT_COMPOSITE_PROFILE,
+        "outsideMaskChangesAllowed": False,
+        "maskComposite": True,
+        "quotaClass": quota_class,
+        "providerParameters": provider_parameters,
+        "providerParameterDigest": _digest(provider_parameters),
+        "normalizationDigest": _digest(normalization),
+        "compositeManifest": composite,
+        "compositeDigest": _digest(composite),
+        "deltaDigest": _digest(delta),
+        "orderedInputDigest": _digest(ordered_inputs),
+    }
 
 
 def _delta_manifest(quality: bytes, normalized: bytes, mask: bytes) -> dict[str, Any]:
@@ -1136,20 +1455,26 @@ def ingest_cloud_full_page_candidate(
                 )
             )
             if existing is not None:
-                if existing.parameter_hash != request_digest:
+                if (
+                    existing.raw_checksum != _sha256(raw_bytes)
+                    or existing.normalized_checksum != _sha256(normalized_bytes)
+                    or (
+                        existing.normalization_manifest != metadata.get("normalizationManifest")
+                        or existing.normalization_digest != metadata.get("normalizationDigest")
+                        or existing.normalization_digest
+                        != _digest(metadata.get("normalizationManifest"))
+                    )
+                ):
                     raise PageLineageConflict(
-                        "Cloud invocation was already used with different content",
+                        "Cloud invocation retry bytes or normalization changed",
                         resource=f"cloud-invocation:{invocation_id}",
                         reason="g8-cloud-invocation-conflict",
                     )
-                if existing.raw_checksum != _sha256(
-                    raw_bytes
-                ) or existing.normalized_checksum != _sha256(normalized_bytes):
-                    raise PageLineageConflict(
-                        "Cloud invocation retry bytes changed",
-                        resource=f"cloud-invocation:{invocation_id}",
-                        reason="g8-cloud-invocation-conflict",
-                    )
+                # A successful first ingest necessarily advances the image revision and
+                # lineage sequence.  A process-level retry therefore carries a refreshed
+                # CAS context even though the invocation and immutable image bytes are
+                # identical.  Reuse the stored, replay-validated candidate; never rewrite
+                # its original metadata or relax byte identity.
                 _publish_once(_target(store, Path(existing.raw_relative_path)), raw_bytes)
                 _publish_once(
                     _target(store, Path(existing.normalized_relative_path)),
@@ -1180,9 +1505,12 @@ def ingest_cloud_full_page_candidate(
                     resource=f"image:{image.id}",
                     reason="g8-cloud-accepted",
                 )
-            if cloud_candidates:
+            if cloud_candidates and (
+                len(cloud_reviews) != len(cloud_candidates)
+                or any(row.state != "rejected" for row in cloud_reviews)
+            ):
                 raise PageLineageConflict(
-                    "The fixed cloud profile permits one candidate per generation",
+                    "A pending or unreviewed cloud candidate already exists",
                     resource=f"image:{image.id}",
                     reason="g8-cloud-candidate-exists",
                 )
@@ -1233,13 +1561,20 @@ def ingest_cloud_full_page_candidate(
                 "normalizedSha256"
             ] != _sha256(normalized_bytes):
                 raise ProjectError("Uploaded cloud artifact checksum does not match metadata")
-            canonical, normalization_manifest, raw_grid, raw_media_type = _normalize(
-                raw_bytes, target_grid
+            provider_normalized, normalization_manifest, raw_grid, raw_media_type = (
+                _normalize_for_profile(
+                    raw_bytes,
+                    target_grid,
+                    quality=quality_bytes,
+                    mask=mask_bytes,
+                    profile=metadata["normalizationManifest"].get("profile"),
+                )
+            )
+            canonical, composite_manifest = _strict_mask_composite(
+                quality_bytes, provider_normalized, mask_bytes
             )
             if canonical != normalized_bytes:
-                raise ProjectError(
-                    "Uploaded normalized image is not the canonical whole-frame normalization"
-                )
+                raise ProjectError("Uploaded normalized image is not the strict G8 mask composite")
             if metadata.get("rawMediaType") != raw_media_type:
                 raise ProjectError("Raw cloud image media type does not match metadata")
             if metadata.get("normalizationManifest") != normalization_manifest or metadata.get(
@@ -1247,25 +1582,33 @@ def ingest_cloud_full_page_candidate(
             ) != _digest(normalization_manifest):
                 raise ProjectError("Cloud normalization manifest is invalid")
             delta = _delta_manifest(quality_bytes, normalized_bytes, mask_bytes)
+            if delta["outsideMaskChangedPixelCount"] != 0:
+                raise ProjectError("Cloud candidate changed pixels outside the accepted G7 mask")
             if metadata.get("deltaManifest") != delta or metadata.get("deltaDigest") != _digest(
                 delta
             ):
                 raise ProjectError("Cloud full-page delta manifest is invalid")
-            route_manifest = {
-                "profile": CLOUD_FULL_PAGE_PROFILE,
-                "wholeFrame": True,
-                "outsideMaskChangesAllowed": True,
-                "normalizationDigest": _digest(normalization_manifest),
-                "deltaDigest": _digest(delta),
-                "orderedInputDigest": _digest(ordered),
-            }
+            route_manifest = _strict_route_manifest(
+                normalization_manifest,
+                composite_manifest,
+                delta,
+                ordered,
+                quota_class=metadata["quotaClass"],
+                provider_parameters=metadata["providerParameters"],
+            )
             if metadata.get("routeManifest") != route_manifest or metadata.get(
                 "routeChecksum"
             ) != _digest(route_manifest):
                 raise ProjectError("Cloud route manifest is invalid")
             ancestry = metadata.get("ancestry")
-            if not isinstance(ancestry, dict) or ancestry.get("originKind") != "direct-ai":
-                raise ProjectError("Cloud ancestry must truthfully identify direct AI generation")
+            if ancestry != _ANCESTRY:
+                raise ProjectError(
+                    "Cloud ancestry must identify the raw AI output and strict composite"
+                )
+            prior_state = (
+                cloud_reviews[-1].state_checksum if cloud_reviews else legacy["stateChecksum"]
+            )
+            candidate_sequence = len(cloud_candidates) + 1
             candidate_id = str(uuid.uuid5(_NAMESPACE, f"{generation.id}:{invocation_id}"))
             job_id = str(uuid.uuid5(_NAMESPACE, f"job:{generation.id}:{invocation_id}"))
             item_id = str(uuid.uuid5(_NAMESPACE, f"item:{generation.id}:{invocation_id}"))
@@ -1333,7 +1676,7 @@ def ingest_cloud_full_page_candidate(
                 job_id=job_id,
                 job_item_id=item_id,
                 revision_id=revision.id,
-                sequence=1,
+                sequence=candidate_sequence,
                 route_profile=CLOUD_FULL_PAGE_PROFILE,
                 invocation_id=invocation_id,
                 parent_checksum=g7,
@@ -1373,7 +1716,9 @@ def ingest_cloud_full_page_candidate(
                 ancestry=ancestry,
                 created_at=now,
             )
-            candidate.state_checksum = _cloud_state(legacy["stateChecksum"], [candidate], [])
+            candidate.state_checksum = _cloud_state(
+                legacy["stateChecksum"], [*cloud_candidates, candidate], []
+            )
             session.add(candidate)
             session.flush()
             raw_path = _target(store, _relative(generation.id, candidate_id, "raw.bin"))
@@ -1396,12 +1741,8 @@ def ingest_cloud_full_page_candidate(
                     gate="G8_cloudFullPage",
                     state=state,
                     actor=actor,
-                    input_checksum=(
-                        legacy["stateChecksum"] if offset < 2 else candidate.state_checksum
-                    ),
-                    output_checksum=(
-                        legacy["stateChecksum"] if offset == 0 else candidate.state_checksum
-                    ),
+                    input_checksum=(prior_state if offset < 2 else candidate.state_checksum),
+                    output_checksum=(prior_state if offset == 0 else candidate.state_checksum),
                     parent_checksum=g7,
                     stage="inpaint",
                     provider=candidate.provider,
@@ -1541,10 +1882,10 @@ def record_cloud_full_page_review(
                 image_id=image.id,
                 candidate_id=candidate.id,
                 revision_id=revision.id,
-                sequence=1,
+                sequence=len(replay["reviews"]) + 1,
                 state=state,
                 reason=reason,
-                parent_checksum=replay["stateChecksum"],
+                parent_checksum=candidate.state_checksum,
                 candidate_checksum=candidate.normalized_checksum,
                 checks=checks,
                 reviewer=actor,
@@ -1565,7 +1906,7 @@ def record_cloud_full_page_review(
                 gate="G8_cloudFullPage",
                 state=state,
                 actor=actor,
-                input_checksum=replay["stateChecksum"],
+                input_checksum=candidate.state_checksum,
                 output_checksum=review.state_checksum,
                 parent_checksum=replay["legacy"]["g7Checksum"],
                 stage="inpaint",

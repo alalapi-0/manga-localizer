@@ -1683,32 +1683,240 @@ def create_project_engine(database_path: Path) -> Engine:
                    OR NEW.parameter_hash GLOB '*[^0-9a-f]*'
                    OR length(NEW.state_checksum) <> 64
                    OR NEW.state_checksum GLOB '*[^0-9a-f]*'
-                   OR NEW.sequence <> 1
+                   OR NEW.sequence < 1
+                   OR NEW.sequence IS NOT (
+                       SELECT COALESCE(MAX(sequence), 0) + 1
+                       FROM page_cloud_full_page_candidates
+                       WHERE generation_id = NEW.generation_id
+                   )
                    OR NEW.provider IS NULL OR length(NEW.provider) NOT BETWEEN 1 AND 80
                    OR NEW.tool IS NULL OR length(NEW.tool) NOT BETWEEN 1 AND 80
                    OR NEW.model_version IS NULL OR length(NEW.model_version) NOT BETWEEN 1 AND 128;
                 SELECT RAISE(ABORT, 'invalid cloud full-page candidate manifests')
                 WHERE NOT json_valid(NEW.ordered_input_manifest)
-                   OR json_type(NEW.ordered_input_manifest) <> 'array'
+                   OR json_type(NEW.ordered_input_manifest) IS NOT 'array'
                    OR json_array_length(NEW.ordered_input_manifest) < 2
                    OR NOT json_valid(NEW.normalization_manifest)
-                   OR json_type(NEW.normalization_manifest) <> 'object'
+                   OR json_type(NEW.normalization_manifest) IS NOT 'object'
                    OR NOT json_valid(NEW.delta_manifest)
-                   OR json_type(NEW.delta_manifest) <> 'object'
+                   OR json_type(NEW.delta_manifest) IS NOT 'object'
                    OR NOT json_valid(NEW.route_manifest)
-                   OR json_type(NEW.route_manifest) <> 'object'
+                   OR json_type(NEW.route_manifest) IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(NEW.route_manifest)) <> 13
+                   OR EXISTS (
+                       SELECT 1 FROM json_each(NEW.route_manifest)
+                       WHERE key NOT IN (
+                           'profile',
+                           'providerOutputWholeFrame',
+                           'acceptedCandidate',
+                           'outsideMaskChangesAllowed',
+                           'maskComposite',
+                           'quotaClass',
+                           'providerParameters',
+                           'providerParameterDigest',
+                           'normalizationDigest',
+                           'compositeManifest',
+                           'compositeDigest',
+                           'deltaDigest',
+                           'orderedInputDigest'
+                       )
+                   )
+                   OR json_extract(NEW.route_manifest, '$.profile')
+                      IS NOT 'cloud-full-page-repair-v1'
+                   OR json_type(NEW.route_manifest, '$.providerOutputWholeFrame') IS NOT 'true'
+                   OR json_extract(NEW.route_manifest, '$.acceptedCandidate')
+                      IS NOT 'strict-g8-mask-composite-v1'
+                   OR json_type(NEW.route_manifest, '$.outsideMaskChangesAllowed') IS NOT 'false'
+                   OR json_type(NEW.route_manifest, '$.maskComposite') IS NOT 'true'
+                   OR json_extract(NEW.route_manifest, '$.quotaClass') IS NULL
+                   OR json_extract(NEW.route_manifest, '$.quotaClass')
+                      NOT IN ('included', 'prepaid')
+                   OR json_type(NEW.route_manifest, '$.providerParameters') IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(
+                       json_extract(NEW.route_manifest, '$.providerParameters'))) <> 4
+                   OR EXISTS (
+                       SELECT 1 FROM json_each(
+                           NEW.route_manifest, '$.providerParameters'
+                       )
+                       WHERE key NOT IN (
+                           'apiProfile', 'responseMimeType', 'inputRoles', 'outputCount'
+                       )
+                   )
+                   OR json_type(
+                       NEW.route_manifest, '$.providerParameters.apiProfile'
+                   ) IS NOT 'text'
+                   OR COALESCE(length(json_extract(
+                       NEW.route_manifest, '$.providerParameters.apiProfile')), 0)
+                      NOT BETWEEN 1 AND 80
+                   OR substr(json_extract(
+                       NEW.route_manifest, '$.providerParameters.apiProfile'), 1, 1)
+                      NOT GLOB '[A-Za-z0-9]'
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameters.apiProfile'
+                   ) GLOB '*[^A-Za-z0-9._ +()-]*'
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameters.responseMimeType'
+                   ) IS NOT 'image/png'
+                   OR json_type(
+                       NEW.route_manifest, '$.providerParameters.inputRoles') IS NOT 'array'
+                   OR json_array_length(json_extract(
+                       NEW.route_manifest, '$.providerParameters.inputRoles')) <> 2
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameters.inputRoles[0]')
+                      IS NOT 'quality-plate'
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameters.inputRoles[1]')
+                      IS NOT 'accepted-g7-mask'
+                   OR json_type(
+                       NEW.route_manifest, '$.providerParameters.outputCount'
+                   ) IS NOT 'integer'
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameters.outputCount') IS NOT 1
+                   OR json_type(
+                       NEW.route_manifest, '$.providerParameterDigest'
+                   ) IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest, '$.providerParameterDigest')) <> 64
+                   OR json_extract(
+                       NEW.route_manifest, '$.providerParameterDigest') GLOB '*[^0-9a-f]*'
+                   OR json_type(
+                       NEW.route_manifest, '$.normalizationDigest'
+                   ) IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest, '$.normalizationDigest')) <> 64
+                   OR json_extract(
+                       NEW.route_manifest, '$.normalizationDigest') GLOB '*[^0-9a-f]*'
+                   OR json_extract(
+                       NEW.route_manifest, '$.normalizationDigest') IS NOT NEW.normalization_digest
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest'
+                   ) IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(
+                       NEW.route_manifest, '$.compositeManifest')) <> 8
+                   OR EXISTS (
+                       SELECT 1 FROM json_each(
+                           NEW.route_manifest, '$.compositeManifest'
+                       )
+                       WHERE key NOT IN (
+                           'profile',
+                           'targetGrid',
+                           'qualitySha256',
+                           'providerNormalizedSha256',
+                           'maskSha256',
+                           'maskRule',
+                           'outsideMaskSource',
+                           'output'
+                       )
+                   )
+                   OR json_extract(NEW.route_manifest, '$.compositeManifest.profile')
+                      IS NOT 'strict-g8-mask-composite-v1'
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid'
+                   ) IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid')) <> 2
+                   OR EXISTS (
+                       SELECT 1 FROM json_each(
+                           NEW.route_manifest, '$.compositeManifest.targetGrid'
+                       )
+                       WHERE key NOT IN ('width', 'height')
+                   )
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid.width'
+                   ) IS NOT 'integer'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid.width'
+                   ) IS NOT NEW.normalized_width
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid.height'
+                   ) IS NOT 'integer'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.targetGrid.height'
+                   ) IS NOT NEW.normalized_height
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.qualitySha256'
+                   ) IS NOT 'text'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.qualitySha256'
+                   ) IS NOT NEW.quality_checksum
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.providerNormalizedSha256'
+                   ) IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest,
+                       '$.compositeManifest.providerNormalizedSha256'
+                   )) <> 64
+                   OR json_extract(
+                       NEW.route_manifest,
+                       '$.compositeManifest.providerNormalizedSha256'
+                   ) GLOB '*[^0-9a-f]*'
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeManifest.maskSha256'
+                   ) IS NOT 'text'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.maskSha256'
+                   ) IS NOT NEW.mask_checksum
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.maskRule'
+                   ) IS NOT 'nonzero-inside-provider-zero-outside-quality'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.outsideMaskSource'
+                   ) IS NOT 'quality-plate'
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeManifest.output'
+                   ) IS NOT 'canonical-png-v1'
+                   OR json_type(
+                       NEW.route_manifest, '$.compositeDigest'
+                   ) IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest, '$.compositeDigest')) <> 64
+                   OR json_extract(
+                       NEW.route_manifest, '$.compositeDigest') GLOB '*[^0-9a-f]*'
+                   OR json_type(NEW.route_manifest, '$.deltaDigest') IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest, '$.deltaDigest')) <> 64
+                   OR json_extract(
+                       NEW.route_manifest, '$.deltaDigest') GLOB '*[^0-9a-f]*'
+                   OR json_extract(
+                       NEW.route_manifest, '$.deltaDigest') IS NOT NEW.delta_digest
+                   OR json_type(
+                       NEW.route_manifest, '$.orderedInputDigest'
+                   ) IS NOT 'text'
+                   OR length(json_extract(
+                       NEW.route_manifest, '$.orderedInputDigest')) <> 64
+                   OR json_extract(
+                       NEW.route_manifest, '$.orderedInputDigest') GLOB '*[^0-9a-f]*'
+                   OR json_extract(
+                       NEW.route_manifest, '$.orderedInputDigest'
+                   ) IS NOT NEW.ordered_input_digest
+                   OR json_extract(NEW.delta_manifest, '$.outsideMaskChangedPixelCount') IS NOT 0
                    OR NOT json_valid(NEW.ancestry)
-                   OR json_type(NEW.ancestry) <> 'object'
-                   OR (SELECT COUNT(*) FROM json_each(NEW.ancestry)) <> 3
-                   OR json_extract(NEW.ancestry, '$.originKind') <> 'direct-ai'
+                   OR json_type(NEW.ancestry) IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(NEW.ancestry)) <> 5
+                   OR json_extract(NEW.ancestry, '$.originKind')
+                      IS NOT 'deterministic-mask-composite'
+                   OR json_extract(NEW.ancestry, '$.providerRawOriginKind') IS NOT 'direct-ai'
                    OR json_extract(NEW.ancestry, '$.providerClaimStatus')
-                      <> 'operator-attested-client-supplied-unverified'
-                   OR json_type(NEW.ancestry, '$.operatorAttestation') <> 'object'
+                      IS NOT 'operator-attested-client-supplied-unverified'
+                   OR json_type(NEW.ancestry, '$.operatorAttestation') IS NOT 'object'
                    OR (SELECT COUNT(*) FROM json_each(
                        json_extract(NEW.ancestry, '$.operatorAttestation'))) <> 2
-                   OR json_type(NEW.ancestry, '$.operatorAttestation.attested') <> 'true'
+                   OR json_type(NEW.ancestry, '$.operatorAttestation.attested') IS NOT 'true'
                    OR json_extract(NEW.ancestry, '$.operatorAttestation.scope')
-                      <> 'provider-tool-model-claim';
+                      IS NOT 'provider-tool-model-claim'
+                   OR json_type(NEW.ancestry, '$.derivation') IS NOT 'object'
+                   OR (SELECT COUNT(*) FROM json_each(
+                       json_extract(NEW.ancestry, '$.derivation'))) <> 2
+                   OR json_extract(NEW.ancestry, '$.derivation.profile')
+                      IS NOT 'strict-g8-mask-composite-v1'
+                   OR json_type(NEW.ancestry, '$.derivation.inputs') IS NOT 'array'
+                   OR json_array_length(
+                       json_extract(NEW.ancestry, '$.derivation.inputs')) <> 3
+                   OR json_extract(NEW.ancestry, '$.derivation.inputs[0]') IS NOT 'quality-plate'
+                   OR json_extract(NEW.ancestry, '$.derivation.inputs[1]')
+                      IS NOT 'provider-normalized'
+                   OR json_extract(NEW.ancestry, '$.derivation.inputs[2]')
+                      IS NOT 'accepted-g7-mask';
                 SELECT RAISE(ABORT, 'invalid cloud full-page candidate paths')
                 WHERE NEW.raw_relative_path <> 'generated/lineage-cloud-full-pages/'
                       || NEW.generation_id || '/' || NEW.id || '/raw.bin'
@@ -1716,13 +1924,52 @@ def create_project_engine(database_path: Path) -> Engine:
                       || NEW.generation_id || '/' || NEW.id || '/normalized.png'
                    OR NEW.raw_media_type NOT IN ('image/png', 'image/jpeg', 'image/webp')
                    OR NEW.normalized_media_type <> 'image/png'
-                   OR NEW.raw_height <= NEW.raw_width
+                   OR NEW.raw_width <= 0
+                   OR NEW.raw_height <= 0
                    OR NEW.normalized_width <= 0
-                   OR NEW.normalized_height <= NEW.normalized_width
-                   OR abs(
-                       CAST(NEW.raw_width AS REAL) / NEW.raw_height
-                       - CAST(NEW.normalized_width AS REAL) / NEW.normalized_height
-                   ) / (CAST(NEW.normalized_width AS REAL) / NEW.normalized_height) > 0.01;
+                   OR NEW.normalized_height <= 0
+                   OR (
+                        json_extract(NEW.normalization_manifest, '$.crop') IS NOT 1
+                        AND abs(
+                            CAST(NEW.raw_width AS REAL) / NEW.raw_height
+                            - CAST(NEW.normalized_width AS REAL) / NEW.normalized_height
+                        ) / (CAST(NEW.normalized_width AS REAL) / NEW.normalized_height) > 0.01
+                   )
+                   OR (
+                        json_extract(NEW.normalization_manifest, '$.crop') IS 1
+                        AND (
+                            json_type(NEW.normalization_manifest, '$.fittedGrid') IS NOT 'object'
+                            OR json_type(NEW.normalization_manifest, '$.cropBox') IS NOT 'object'
+                            OR json_extract(NEW.normalization_manifest, '$.sourceGrid.width')
+                               IS NOT NEW.raw_width
+                            OR json_extract(NEW.normalization_manifest, '$.sourceGrid.height')
+                               IS NOT NEW.raw_height
+                            OR json_extract(NEW.normalization_manifest, '$.fittedGrid.width')
+                               IS NOT json_extract(NEW.normalization_manifest, '$.cropBox.width')
+                            OR json_extract(NEW.normalization_manifest, '$.fittedGrid.height')
+                               IS NOT json_extract(NEW.normalization_manifest, '$.cropBox.height')
+                            OR json_extract(NEW.normalization_manifest, '$.cropBox.x') < 0
+                            OR json_extract(NEW.normalization_manifest, '$.cropBox.y') < 0
+                            OR json_extract(NEW.normalization_manifest, '$.cropBox.x')
+                               + json_extract(NEW.normalization_manifest, '$.cropBox.width')
+                               > NEW.raw_width
+                            OR json_extract(NEW.normalization_manifest, '$.cropBox.y')
+                               + json_extract(NEW.normalization_manifest, '$.cropBox.height')
+                               > NEW.raw_height
+                            OR json_extract(NEW.normalization_manifest, '$.fittedGrid.width') < 1
+                            OR json_extract(NEW.normalization_manifest, '$.fittedGrid.height') < 1
+                            OR abs(
+                                CAST(json_extract(
+                                    NEW.normalization_manifest, '$.fittedGrid.width'
+                                ) AS REAL)
+                                / json_extract(
+                                    NEW.normalization_manifest, '$.fittedGrid.height'
+                                )
+                                - CAST(NEW.normalized_width AS REAL) / NEW.normalized_height
+                            ) / (CAST(NEW.normalized_width AS REAL) / NEW.normalized_height)
+                               > 0.01
+                        )
+                   );
                 SELECT RAISE(ABORT, 'invalid cloud full-page candidate ownership')
                 WHERE NOT EXISTS (
                     SELECT 1 FROM page_generations AS generation
@@ -1788,7 +2035,12 @@ def create_project_engine(database_path: Path) -> Engine:
                    OR NEW.candidate_checksum GLOB '*[^0-9a-f]*'
                    OR length(NEW.state_checksum) <> 64
                    OR NEW.state_checksum GLOB '*[^0-9a-f]*'
-                   OR NEW.sequence <> 1
+                   OR NEW.sequence < 1
+                   OR NEW.sequence IS NOT (
+                       SELECT COALESCE(MAX(sequence), 0) + 1
+                       FROM page_cloud_full_page_reviews
+                       WHERE generation_id = NEW.generation_id
+                   )
                    OR NOT json_valid(NEW.checks)
                    OR json_type(NEW.checks) <> 'array'
                    OR json_array_length(NEW.checks) <> 10

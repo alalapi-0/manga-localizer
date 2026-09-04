@@ -701,6 +701,60 @@ class ReconstructionGateRequest(APIModel):
         return self
 
 
+class ReconstructionImportRequest(APIModel):
+    profile: Literal["native-reconstruction-v1"]
+    runtime: Literal["codex", "cursor"]
+    tool: Literal["image_gen", "GenerateImage"]
+    provider: Literal["unreported"]
+    model_version: Literal["native-image-model-unreported", "auto-native-image-model-unreported"]
+    claim_status: Literal["operator-attested-client-supplied-unverified"]
+    invocation_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+    prompt_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    source_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    baseline_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    baseline_event_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    decision_event_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    expected_revision: int = Field(ge=0, strict=True)
+    lineage: MutationLineageContext
+    lettering_lock: Literal[True] | None = None
+    lettering_mask_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def native_identity(self) -> ReconstructionImportRequest:
+        expected = {
+            "codex": ("image_gen", "native-image-model-unreported"),
+            "cursor": ("GenerateImage", "auto-native-image-model-unreported"),
+        }[self.runtime]
+        if (self.tool, self.model_version) != expected:
+            raise ValueError("Native reconstruction identity is inconsistent")
+        if (self.lettering_lock is True) != (self.lettering_mask_sha256 is not None):
+            raise ValueError("Lettering lock requires a mask digest")
+        return self
+
+
+class ReconstructionCheckResult(APIModel):
+    check: Literal[
+        "clarity-improved",
+        "identity-preserved",
+        "expression-preserved",
+        "composition-preserved",
+        "text-and-sfx-preserved",
+        "objects-preserved",
+        "no-invented-detail",
+        "no-artifacts",
+    ]
+    passed: bool = Field(strict=True)
+
+
+class ReconstructionReviewRequest(APIModel):
+    candidate_id: str = Field(pattern=r"^[0-9a-f-]{36}$")
+    observed_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decision: Literal["accept", "reject"]
+    checks: list[ReconstructionCheckResult] = Field(min_length=8, max_length=8)
+    expected_revision: int = Field(ge=0, strict=True)
+    lineage: MutationLineageContext
+
+
 class TextPresenceGateRequest(APIModel):
     decision: Literal["yes", "no", "uncertain"]
     reason: Literal[

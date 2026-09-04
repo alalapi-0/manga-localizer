@@ -174,6 +174,7 @@ def ruby_mapping(session, image_id: str, rows: list[TextRegion]) -> dict[str, li
                 select(TextRegion).where(
                     TextRegion.image_id == image_id,
                     TextRegion.region_type == "ruby",
+                    TextRegion.content_disposition == "ignore",
                     TextRegion.ruby_parent_id.in_(primary_ids),
                 )
             ).all()

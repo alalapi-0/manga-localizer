@@ -80,6 +80,26 @@ def resources_root() -> Path:
     return here
 
 
+def application_data_dir(env: dict[str, str]) -> Path:
+    configured = env.get("MANGA_LOCALIZER_DATA_DIR", "").strip()
+    if not configured:
+        raise SystemExit(
+            "MANGA_LOCALIZER_DATA_DIR must be injected by the guarded application wrapper"
+        )
+    candidate = Path(configured)
+    if not candidate.is_absolute():
+        raise SystemExit("MANGA_LOCALIZER_DATA_DIR must be an absolute path")
+    if candidate.is_symlink() or not candidate.is_dir():
+        raise SystemExit("MANGA_LOCALIZER_DATA_DIR must be a real directory")
+    try:
+        resolved = candidate.resolve(strict=True)
+    except OSError as error:
+        raise SystemExit("MANGA_LOCALIZER_DATA_DIR cannot be canonicalized") from error
+    if resolved != candidate:
+        raise SystemExit("MANGA_LOCALIZER_DATA_DIR must be canonical")
+    return candidate
+
+
 def window_launch(
     url: str,
     *,
@@ -141,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     env["MANGA_LOCALIZER_LAN_ACCESS"] = "1" if lan_access else "0"
     env.setdefault("MANGA_LOCALIZER_FRONTEND_DIST", str(resources / "frontend"))
     env.setdefault("MANGA_LOCALIZER_MODEL_BUNDLE", str(resources / "models"))
-    env.setdefault("MANGA_LOCALIZER_DATA_DIR", str(Path.home() / ".manga-localizer"))
+    env["MANGA_LOCALIZER_DATA_DIR"] = str(application_data_dir(env))
     app_url = f"http://{host}:{port}"
     api = subprocess.Popen(
         [

@@ -1006,6 +1006,7 @@ def test_vertical_typesetting_uses_vertical_punctuation_forms() -> None:
     assert verticalize_punctuation("\u300c你好\u300d\u2014\u2014啊\u2026") == (
         "\ufe41你好\ufe42\ufe31\ufe31啊\ufe19"
     )
+    assert verticalize_punctuation("\u2015\u2015\uff0d") == "\ufe31\ufe31\ufe31"
     assert verticalize_punctuation("横向\u300c引号\u300d") == "横向\ufe41引号\ufe42"
     assert verticalize_punctuation("你好\u3002") == "你好\u3002"
 

@@ -1,0 +1,53 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "A",
+  "status": "main_verified",
+  "semantic_sha256": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+  "candidate_commit": "f97852faed4cfc61cc0dca0227f0d961aa60d9e1",
+  "acceptance_metadata_commit": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+  "history_checkpoint": "c130b50f1584c1ecd78d9bad9a49cc9daf103937",
+  "repository": "https://github.com/alalapi-0/manga-localizer",
+  "branch": "main",
+  "observed_remote_sha": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+  "candidate_and_checkpoint_ancestry_verified": true,
+  "ci": {
+    "run_id": 34221937366,
+    "url": "https://github.com/alalapi-0/manga-localizer/actions/runs/34221937366",
+    "head_sha": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": {
+      "frontend": "success",
+      "backend": "success",
+      "e2e": "success"
+    },
+    "backend_tests": "1012 passed,1 warning,1053.35s",
+    "frontend_tests": 461,
+    "e2e_tests": 6,
+    "log_sha256": "98ab6fc971b7bbe79e75f4b0d679041df12fab511ca9dd47187dcb99bdca579a"
+  },
+  "final_local_audit": {
+    "exit": 0,
+    "base": "0e2a03b27e15661b18d25c96d236577751b3391c",
+    "head": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+    "candidate": 232,
+    "index_blobs": 232,
+    "historical_blob_paths": 1596,
+    "live_reads": 229,
+    "inert_cursor_objects": 2,
+    "cursor_live_reads": 0,
+    "log_sha256": "341548b8c52f97f0991c4f39cc6d4c046d1e7b732be5333c17426f78da5267ca"
+  },
+  "original_pending_dispositions": {
+    "total": 60,
+    "exact_or_base_preserved": 41,
+    "registered_forward_repairs_or_routes": 17,
+    "state_preserved_in_git_then_retired": 1,
+    "protected_unread_cursor": 1
+  },
+  "pending": [
+    "Stage B original installation acceptance/receipt main CI",
+    "Real Hub routing and refresh",
+    "Actual image redo and corpus acceptance"
+  ]
+}

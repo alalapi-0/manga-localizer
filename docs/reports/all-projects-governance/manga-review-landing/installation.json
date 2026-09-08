@@ -1,0 +1,1891 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "B",
+  "phase": "verified_awaiting_fresh_installation_review",
+  "source_delivery_commit": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+  "source_stage_a_semantic": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+  "original_head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+  "original_branch": "main",
+  "original_index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
+  "original_pending_path_count": 60,
+  "original_native_owner_check": {
+    "thread": "01a06efa-fb31-75d3-8a7f-3659f3dda1ba",
+    "latest_turn": "01a06f44-3cfa-7e81-9308-feae34976911",
+    "status": "failed",
+    "completedAt": 1788573141,
+    "resumed": false
+  },
+  "precheck": "original npm run storage:check PASS; original59 readable preimages and8 additional paths exact; Cursor path unread",
+  "baseline_files": [
+    {
+      "path": ".agent/PAGE_PROBLEM_REPORT.md",
+      "sha256": "29466fa4334261dbb688e707a940a493e85214ce9bc13254526cadd89278d2b7",
+      "mode": 420
+    },
+    {
+      "path": ".env.example",
+      "sha256": "c8942245967a52d2bda8bc8174f23b940ca8e996876e2ded0071676071ec2edb",
+      "mode": 420
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug_report.yml",
+      "sha256": "d9aa8f9d83c8e0e4d5485f22aefb7bb21a0c42a430d680b471060f1dfbd65ef8",
+      "mode": 420
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "sha256": "2cf3336bd045b94b18fb4bb02345224c4c2bfb53e32abbee896e9964fddfd86b",
+      "mode": 420
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/feature_request.yml",
+      "sha256": "68844968483a0758a2e6eb957d006fff4c3b05ad88419d7b44e6759def12c13d",
+      "mode": 420
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "sha256": "5871849c3fb0c413a30ff56773eb79228a477ad3e0129f6c4c936f66629c3b0a",
+      "mode": 420
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "sha256": "5a2ffc3d980012464d6149c085b90e710ead7d53a51f3bb60e25959bf1986f2c",
+      "mode": 420
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "4795fde30e5849d98b29f8ce846152fd98ac0735e1cca22fb22b6ee0ac828b6e",
+      "mode": 420
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "8ae217c3bc702a9304ee0b49e2fe9cd92c0a4e4d63f86b6198ec88c4838dd11b",
+      "mode": 420
+    },
+    {
+      "path": "CODE_OF_CONDUCT.md",
+      "sha256": "591acfe8d0161b0a2f0aec0662f068da3274a10e29c7167f566a0f2d21b2c681",
+      "mode": 420
+    },
+    {
+      "path": "CONTRIBUTING.md",
+      "sha256": "986351a8608ae9abf06d1306415eba327fb3355369e2b4703a63fb48864108f0",
+      "mode": 420
+    },
+    {
+      "path": "LICENSE",
+      "sha256": "a184ac7ce31ee73976886947455bfc75d6c688319771028b5d66568f0560b2cc",
+      "mode": 420
+    },
+    {
+      "path": "README.md",
+      "sha256": "d5044319154b3fafa44bba024aca595ac87f1649a0a167c3a71ccbfc510a2b3a",
+      "mode": 420
+    },
+    {
+      "path": "ROADMAP.md",
+      "sha256": "e67c0b309812a441bc6db1b998a9e4a8958b71928e65c2ac0a3811b93d81b2b9",
+      "mode": 420
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "6087adf58b1265ec3ad2f875919a470a13a643d07fac6822f37dc758653c335c",
+      "mode": 420
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "b9d248ff67b7978e259d4f698dde0b17d56e5bc759bd0f11f22168636b853711",
+      "mode": 420
+    },
+    {
+      "path": "backend/.venv",
+      "sha256": "83ab438df2a8bc8797dad9561b883bf8531bc44e8609e35003cdd8d09f796dba",
+      "mode": 420
+    },
+    {
+      "path": "backend/pyproject.toml",
+      "sha256": "556fd3783cea4e108f92624d41090464b7e701341757dd734e3c883542ee024c",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/__init__.py",
+      "sha256": "6c6ec210c64f80a01736f131646009de5c461aa1819f3d4536d1770379e5b099",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/config.py",
+      "sha256": "f3518911969eb0e1d771adc8b1352c1ba1284b42481c822d0299dfe54731a5c7",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/evaluation/__init__.py",
+      "sha256": "bce9f59f34ce5953b51c1c6357b6e86deb5ccf86951e9defca1e74021794b7d0",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/evaluation/detection_ocr.py",
+      "sha256": "8f762a8fd89efbf63fb55c28d944e024fac63301bcc2988282f8f23d582c2024",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/evaluation/synthetic.py",
+      "sha256": "80262788ca23a5cb13fcbd1cdca31c5533a0e71590f0228fccbdbfd87abe93f2",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/__init__.py",
+      "sha256": "e2e85323c68ac66003ca1efc7e5a0d65bfb648a88e66d2e79ff8d3b45d9ee4ac",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/boundary_inpaint.py",
+      "sha256": "5e7834f722eeb9db8b4c1f67096221689550fbe13b1ee116c2e6941393feabf6",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/inpainting.py",
+      "sha256": "3d519164aa6acf9aff66685962d6f47fcc2d63ca1b24ac7b85ff7525ec35a698",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/layered_structure.py",
+      "sha256": "015a3e73a0f6ed4c70832f8a5904f47e9040ae0b06789d80fd820d3431157e01",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/lineart_inpaint.py",
+      "sha256": "c86b647ff15919627a46d8ae3c7c0bbcaefb37aadd5cac8be50f403e059dc9cd",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/manga_ai_postprocess.py",
+      "sha256": "d8c5fcdbcea2cd498540dbf9c0c86e6b4cc429578087ed5f868757054878c9f0",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/preprocessing.py",
+      "sha256": "dc888bb3b764d7df00dc80ef05de58df3c3fd67a1172afebb4420b56c1d0b362",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/realesrgan_onnx.py",
+      "sha256": "a7f518795568cf6cafd8e7b6f7585df90f6242c7872ffcdd0a429c9c791bc4d9",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/screentone_inpaint.py",
+      "sha256": "8bd290f0c610223b265c9c59ce3e891187b00adafb4ba597e7807f9c2eda0c30",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/imaging/typesetting.py",
+      "sha256": "2b233f3569a4bdd68442aabdb9bd7ba459a867616d2740679e73d028b8a0f694",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/logging_utils.py",
+      "sha256": "25e60635f1049a6a2645efacb5c77e3b9a3c0924f86fd916e5c4a863a15455c7",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/model_bundle.py",
+      "sha256": "172cf151d0dd7c13952c2466db603afbbd418db47182df3e4c682dcdbf55dfac",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/__init__.py",
+      "sha256": "24cb9a3ad0caa432c843f12cfb8a76dffd80b828de2e5865a55cee03b83ece13",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/detection.py",
+      "sha256": "5426045cc7c5734eea1edb481f3935338d9c8a74893426f858d75b8f4cfeea4f",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/inpainting.py",
+      "sha256": "21d5fad9d2aa01d871817f388f50d51e8d662ee17610e9001eb2c683c00d5a40",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/inpainting_lama.py",
+      "sha256": "8ffa6eddaac4d457b8e42df85f344b4a67c0295cc7c6f515d114f2a50af9674e",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/ocr.py",
+      "sha256": "e77026139a1df23bea9a16f963e39f00ae598f90b658c443708a338b6e497e75",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/registry.py",
+      "sha256": "34f639f16f156a9bf371919490434909fcb88fa1bf4caf45cab28cdbf9bf9e09",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/translation.py",
+      "sha256": "88f49c97e41d0f62091710252364e292b19e7322cdfe975ba662837b372428d9",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/providers/translation_argos.py",
+      "sha256": "5c89d820bde1a62fad356b0c66a3cc19a9ccdabc290ea499226fc9020660dd86",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/queue.py",
+      "sha256": "ac83b4e15007c6d580261dd3b969fdf488ae191ce365de51de4cc9305ce54743",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/reconstruction_cli.py",
+      "sha256": "aeb7c3da956c04e745ebaa9098a20e05f91d1f8eb523d62a3ff1119db90c9396",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/security.py",
+      "sha256": "a261947727e65f3836e90754ca5feed98a5322205b6ab7c83fd4a342a1aa30c3",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/cloud_registration.py",
+      "sha256": "f0561abcbaba2429db280d4c9bb89eb6f2023cb87029d1920231d09aa092c471",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/exporting.py",
+      "sha256": "4bc0701ea58f82dbffb074fbb13156d92ec986f6bdb14f06a06a0a41e9bd012a",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/images.py",
+      "sha256": "6e487c95a37b1f91b682a30235fbf1e114611307239e9d5ef0d526b3fd7bbc29",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/inpaint_candidates.py",
+      "sha256": "0623c1ae5c385be44bcf0af771bb3542e96a8808b6a2ba8955529dc3e23bb432",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/reconstructions.py",
+      "sha256": "c816a599d18b15223e8a5895de17585c10ece6f7ca84cff9b03cbbcf15710656",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/regions.py",
+      "sha256": "8d1a0e061da7c3305159130dab430a55a99a480b646fd844845bbaf78a14428d",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/trust.py",
+      "sha256": "af2630349bf5609b749ae0a4dcbef8ce57704f39ca111983b2f7043efe4815e2",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/workbench_static.py",
+      "sha256": "8d4a1263af055bc68aea5912618adff3934e64aa318a1a0c7e9f2cab34fadd9a",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/__init__.py",
+      "sha256": "f2169d740d4c35441844473d700ef64f601cec52672b170eddaf2ff68e4c70e3",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "sha256": "d9a60bcf0925c1dd7fd9dd9f5dd0e8a74c068fdb0d19558fc4c86b989e2097b1",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/legacy_g8_fixture.py",
+      "sha256": "61961d8899fe91a1c4d39d2ae43e00fe103cb6ccb459981c67724d9c191b47ee",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_api_regions.py",
+      "sha256": "bbf418c53f9920a854843458e82d30b049d75209c8a8d6a6c6f32ac60df24661",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_audit_final_review_corpus.py",
+      "sha256": "979a7b77644e328c428f0f6492a1bb659cbd4498b87694ac6b68bb9e97043da6",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_audit_release.py",
+      "sha256": "b069a081cb4e6ca8ac3f654ed0abc4971447d76f1b7dc49c95388d691e349f3d",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_clean_plate_scripts.py",
+      "sha256": "56ea6a40da4167974d4b9bd6d982fb13ffc1b5ccc12102a9fc147874ccc0d5db",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_cloud_registration.py",
+      "sha256": "12c4f346d51e17fb76a6921fdc9d18b7787e799198fe92184d57c19a6392aca6",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_cloud_registration_api.py",
+      "sha256": "de9c17857f7ce7b549f3cd6408dda0301c2218249ac0d40c8d547883f4265e02",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_detection_letterbox.py",
+      "sha256": "40882404b28cea9718c30af02f6eb301eefb1d4a9404200f926cc17935dd9529",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_detection_ocr_eval.py",
+      "sha256": "15396d3c74cb86c7b778f47eb57ad4d3581374ddc24f23627dc8d5e43a3de878",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_evaluate_real_data.py",
+      "sha256": "ba1fc5afb35cc827c1e114c865936211f3f2bd1bbd81602aac9d15d101b3dd1f",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_g8_cloud_only.py",
+      "sha256": "ec08681dcaece6b73b79bb48187a02717d5ebd5f216175bbc113d68c9cfc74f8",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_imaging.py",
+      "sha256": "81903fc3469d242b44c9514bae00fb2831c6b90f9579943da9118ebe27026246",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_inpainting_lama.py",
+      "sha256": "9d0b96bfda6210325fbe123c94276ce1516c6f11d221fe6ccb9f52ca9162c067",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_jobs.py",
+      "sha256": "102564af42c007485facccd92b81fa5b924b7bfa6f18ae16b03f3dbea075aad6",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_layered_structure.py",
+      "sha256": "79f5c1059eb2dad22feb160ec460581459144b377bc4dcb9600d4f24d248d517",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_lineart_inpaint.py",
+      "sha256": "d4c63778fda388c1683991fd52610c2d7cd9104bb61e317632d5c20db96ee9ed",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_model_bundle.py",
+      "sha256": "4c198b4185d5c93c288eefc5818b73777be41de06598f42785491b65a908548d",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_pipeline_enhancements.py",
+      "sha256": "890f04a3c0760b75b33cf80b29024f16c2abd01a0be016845993cf2119644143",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_preprocessing.py",
+      "sha256": "7119c61960f900f37c1e09e6af094d8e6d3e2664e57109266e0ece5158aa5f96",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_providers.py",
+      "sha256": "8216dd8c0c36c401d06625a804584ce4650177efd5fd330b4b8939a99feb756d",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_realesrgan_onnx.py",
+      "sha256": "6484f221452d4bd99a0bb1f3d6cbcd1a759b9c5d5ff241784714c132a292ffac",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_reconstruction_cli.py",
+      "sha256": "5cfa1d57545370f72b43071e11a24f7bdbbf82914149e822522d31e41f4f4260",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_reconstructions.py",
+      "sha256": "fed421cd4b3c2975b3324238c2f178579697a17294d8c673242ad673936c1eff",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_review_detection_annotations.py",
+      "sha256": "4baab740d2ef1c4652a8f7bd8f9832dfd0ccf6a46cebb481f6d86864dcf9e4a5",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_translation_argos.py",
+      "sha256": "ae0ce700b0461fd368117e6533d0fd62fb72a54ce701a92de78fca9a9679e50d",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_typesets.py",
+      "sha256": "75469f4fd261bbcd4e7895c62d127dd3451860efa431337c4fadb69cd2eefa1b",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_workbench_static.py",
+      "sha256": "4f629c716cc6c6ed17a514c08f1dc26ec872cb8b954387b5664aba8c2a4032b8",
+      "mode": 420
+    },
+    {
+      "path": "backend/uv.lock",
+      "sha256": "44f7ca3047270591a8084158a24c0072edb61488228e1e3bd925bdcadb81ea38",
+      "mode": 420
+    },
+    {
+      "path": "docs/adr/0001-local-first-modular-workbench.md",
+      "sha256": "54f543afa0027d09fb90cee64e37b4a83483ee81afd1dca14054b9209790eacc",
+      "mode": 420
+    },
+    {
+      "path": "docs/architecture.md",
+      "sha256": "ef50ee530825e2b0a58dca101c335c9b314bab061ad7a8503efb53fa46839ef7",
+      "mode": 420
+    },
+    {
+      "path": "docs/assets/workbench.jpg",
+      "sha256": "8e7c839df07430145d5100d80e60f9d28a60137aadc14caed7c8f980090d124d",
+      "mode": 420
+    },
+    {
+      "path": "docs/data-model.md",
+      "sha256": "f31db62ecf37b1f437fde98fa8e48fd8e80367730abe09efade4cf9b720ba41c",
+      "mode": 420
+    },
+    {
+      "path": "docs/development.md",
+      "sha256": "f6e0f207f9a120c6116c02fe9d77a31d54000719b72ac0ea72645722f14f9373",
+      "mode": 420
+    },
+    {
+      "path": "docs/mvp-task-list.md",
+      "sha256": "67a0d5c4d7fdb2605b401e28ae4a2e7f2ec35e1a9f19ff136803f285c6743a0b",
+      "mode": 420
+    },
+    {
+      "path": "docs/privacy.md",
+      "sha256": "f1da3b258d3c02a37fb54bc875d14453b39b3cb892ab97df04055b70f69b9ebf",
+      "mode": 420
+    },
+    {
+      "path": "docs/provider-system.md",
+      "sha256": "963d51166a421428ab9a65a5d887b1d3a07dddd36ac658e19a5a927d0d340b3f",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/README.md",
+      "sha256": "f9f64ff1c99a8e9f83402f501ee519fab8b3c0f91fa40c255436ded1058b10e7",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/baseline.json",
+      "sha256": "f5f5bf046b4b2d4a24851456802bd68f1a4dabc94ead7f5a3093e6284f71351f",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/candidate.json",
+      "sha256": "f7b870b159dccc12353a7ee4b2072f07d30d7c4404d0eb5e83dd4936fc24c334",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/contract.md",
+      "sha256": "2c5a5a4f1ed579c8879bad972fbb7bffa8efc7d31507acc87bead5ca955720ca",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/delivery.json",
+      "sha256": "97be05d067f62e42d2125066e64c9cca9abbe860794aad30d1dea0b3088c530e",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/governor.json",
+      "sha256": "084187fdc6061556996fac57789c33d176650d70bbec1094bf029150722bdada",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/judge.json",
+      "sha256": "a99f8ee6e6b1d0c13011e671c73f4814d4aa88215477412d6033f9a075999c14",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/validation.json",
+      "sha256": "8cc3fa86d57fe544b5cc6696b2cac039010c1cc3fdbf8e7401bd5085f74ad82a",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/README.md",
+      "sha256": "cc640fc8ef743731f7bfd5d2bb84f9aff34f0919e353819de03aa5a8b5cc33f2",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/baseline.json",
+      "sha256": "9c0f97b9398fd03e035f2c53db889c566b2782d418547c6d19e064c011a8deef",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/candidate.json",
+      "sha256": "573fe86d2c01900cff927571a4852b154a745b5d3b9f293459e8e71811a0b317",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/delivery.json",
+      "sha256": "fe6bcc89cbd6e9de9b933979271dc0fe65e198d97ffb9abdc1ec65e7136a781c",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/judge.json",
+      "sha256": "9e6197d11696b9f09e8921a180679d5c2b920cb9d5af4b04a1dfcf95ce132550",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/live-recovery.json",
+      "sha256": "c86299fa1eab2406664e731ec6f51cab91c15eae5fb97831ee5360b081027965",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/validation.json",
+      "sha256": "f05b760c0a77c1a98ab38b002d4e822e5f2b9c890729cc501240f1ee962751f5",
+      "mode": 420
+    },
+    {
+      "path": "docs/troubleshooting.md",
+      "sha256": "478d2b8f12a9e8ec2a2041492283ad2faaae47dfe856db6874352a0b4ae19891",
+      "mode": 420
+    },
+    {
+      "path": "frontend/.env.example",
+      "sha256": "e3db30915bc511842546017af828bcf1f8e9ee54aa3e4655e50df3012e3e90a9",
+      "mode": 420
+    },
+    {
+      "path": "frontend/eslint.config.js",
+      "sha256": "625da57f82db83d85814d6d05bf9e14dce662ca8c10b38a5466cd42122c5e8a7",
+      "mode": 420
+    },
+    {
+      "path": "frontend/index.html",
+      "sha256": "b32d9cf69109ab7235b13eedcff181e06672643c77621f10ee1ec5a7da0714b0",
+      "mode": 420
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "31c2a94218040029607881ee6e5262e50c1c233c400391533a6e77d6f580329d",
+      "mode": 420
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "bb66916c016c128422fd1822373802abf4cbcff11b0c50f9db0ba7d41414d79d",
+      "mode": 420
+    },
+    {
+      "path": "frontend/public/apple-touch-icon.png",
+      "sha256": "3aebec4d7e82690a7a6bba5355314a96055639d70a0ca64d9813b1345d5d244b",
+      "mode": 420
+    },
+    {
+      "path": "frontend/public/favicon.svg",
+      "sha256": "95e83aec019253d34bc0e175ad96328c4134b7be1b815d30fbf05b29791ea10b",
+      "mode": 420
+    },
+    {
+      "path": "frontend/public/manifest.webmanifest",
+      "sha256": "cfca9a0f45e460d950e0e8fbbf6964980f583f07d1876dc1c42d90cf7f2aff4b",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/api/client.test.ts",
+      "sha256": "2f9d2dd1d71435433be705fe28141c8770b1eb1005a71c85f22617c964e94701",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/BatchDrawer.tsx",
+      "sha256": "0903f8c00df1fb1eefc28b4cdb34690c23e7020986ef819d393cb637d525e8e3",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/CanvasWorkspace.test.tsx",
+      "sha256": "6465ed0f5837cb296b76744cdd9d58ca12867ccbf76fb874c172b9a38ac142f9",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/CanvasWorkspace.tsx",
+      "sha256": "9d072ec60756395f896a9c57a11ce3b0d5b3f830e33e174de4e29c28ce4fbc50",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/Inspector.test.tsx",
+      "sha256": "283b3e6cdd555282e762da7c3bb75628b307227f5ace7ebb909f4e00e8082d11",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/Inspector.tsx",
+      "sha256": "9c2891747a3c91125320dd909db07dd6085c968524bb71e01e3a2139389d8555",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/Primitives.tsx",
+      "sha256": "13ee4fc12baecf647bcf9aca98f1ccb5e5e00577231e4666a433fdcad45b23ed",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/ProjectDialog.tsx",
+      "sha256": "ddfd2e85d531e47c6954b0c72a6e28e8a03d226142c6280b625a4faf788b252a",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/ShortcutsDialog.tsx",
+      "sha256": "ac7b6f10a850b1f108749b92b80bc204671f6d9acf12d5a13dc294bb82a87737",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/TopBar.tsx",
+      "sha256": "b39ad08a9f7b5dcdd2f8e01b88d8e2f4081a2e47f9aab58c3d9f3736df5b21b0",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/canvasGeometry.ts",
+      "sha256": "7b89ff0624810167bac883b61b8997d7218c62f0891901491d0db9ed23002215",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/canvasImage.ts",
+      "sha256": "4de0ad32418ac9dc09c2726a9af6b4f4bea38ba83b9ef09f64a789c54992427b",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/testFixtures.ts",
+      "sha256": "e4b7d404b508f36f0a51408d19489739c485cfbf4757c430f794cabff233a911",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/types.ts",
+      "sha256": "3e1599cc366ae7f789171fb5c6f2aad22f5772b39a5299f5f0f23782b12f686a",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/main.tsx",
+      "sha256": "b0a99c8792cb8ac1b6554e1eebb7183b3604094629cf6d83b173e750cec0040b",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/styles.css",
+      "sha256": "09d7fe0e202f0646e6e32df9dcffd11e8cb8b7a6e5dea34e5d680a64b188499f",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/test/fixtures.ts",
+      "sha256": "8c73c71753b0238cc1baea2c1856074a95661d7177c1c15afcef77398e33f9a6",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/test/setup.tsx",
+      "sha256": "b7f8019befc0b6a6719212852940b9b900894fcf7efa4add87d6093009c922de",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/types.ts",
+      "sha256": "48fddb7a6121e0fd12d42d1c6da7c98eb436aae060d983a679bfd7a5acb8771d",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/vite-env.d.ts",
+      "sha256": "65996936fbb042915f7b74a200fcdde7e410f32a669b1ab9597cfaa4b0faddb5",
+      "mode": 420
+    },
+    {
+      "path": "frontend/tsconfig.app.json",
+      "sha256": "b8e4af682c22cdff28066826f2785574e26f9893849426207403887cc3b79eb8",
+      "mode": 420
+    },
+    {
+      "path": "frontend/tsconfig.json",
+      "sha256": "770b4140bbb581e2dfd9ea9946ffc9c75a1d86ba7d2db5f77c83e37cbdf9d808",
+      "mode": 420
+    },
+    {
+      "path": "frontend/tsconfig.node.json",
+      "sha256": "b2da0b26acff699fe586bf16a8755b8908269bcfd32a3143ffb7cb0a790d2311",
+      "mode": 420
+    },
+    {
+      "path": "frontend/vite.config.ts",
+      "sha256": "76fea3481e005c1a4ed4bf298e46c8bc5def2d23ef4123b61d5fd9fdcbf8a883",
+      "mode": 420
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "a296b881aba5506069b50dc8f49d8125076c67c7ad25bbd5f531bf424e6f87d4",
+      "mode": 420
+    },
+    {
+      "path": "playwright.config.ts",
+      "sha256": "2f4a7314890d6413b450f331c61b1778f3fa2ee851aa24bfc81a0dd5b3d82ef7",
+      "mode": 420
+    },
+    {
+      "path": "scripts/app-platform.mjs",
+      "sha256": "7e0f20a9839aa10233c42e8d1e7546e98bd00bd59e5d8fc5643973008d274cb4",
+      "mode": 420
+    },
+    {
+      "path": "scripts/app-platform.test.mjs",
+      "sha256": "3ce904ff8252a249e3ece43d2152c10b481d33c8fb0812550778959ab6bd43ea",
+      "mode": 420
+    },
+    {
+      "path": "scripts/app.mjs",
+      "sha256": "3626fce4715ca86d640205da2d98c0cb676068669ba4c6f7353fc583244b4b85",
+      "mode": 420
+    },
+    {
+      "path": "scripts/audit_final_review_corpus.py",
+      "sha256": "ae2946281efd1cb29ce70eae9034bba4a98c7e9e71dc7ac3d032552a1e77a896",
+      "mode": 420
+    },
+    {
+      "path": "scripts/audit_release.py",
+      "sha256": "6954a06982f584e145ce8a35472b38748d3eea55bc59417d2c0376a59da4ea6e",
+      "mode": 420
+    },
+    {
+      "path": "scripts/bootstrap_clean_plate_run.py",
+      "sha256": "9ebbac306ff704ec8bffad140d2c7b2f2b3855c45bdb461a5a58f891e7790933",
+      "mode": 420
+    },
+    {
+      "path": "scripts/bootstrap_detection_annotations.py",
+      "sha256": "7a6c1bc155638a8af964fcdbc7b8343cf72d6fcae6045da73c5b6ff0c4ff025c",
+      "mode": 420
+    },
+    {
+      "path": "scripts/compare_inpaint.py",
+      "sha256": "d9df3c750605d99740b8bff23b14ec5b1cd3a71b1ba937ff268ffdd2e3cfadf6",
+      "mode": 420
+    },
+    {
+      "path": "scripts/compare_translate.py",
+      "sha256": "b6eadcde18350e1d2ff808d9938188e7460112e6c356d04d7de4d9ade9ede079",
+      "mode": 420
+    },
+    {
+      "path": "scripts/compare_upscale.py",
+      "sha256": "b92813c0a0e62ec8337ffec0e16c7c067b82c76186c5a38395c8da5bb4881d34",
+      "mode": 420
+    },
+    {
+      "path": "scripts/dev-platform.mjs",
+      "sha256": "11cff29c7ef9d970213a94ef5fbf9b89bd2ea71509ab4da68662cc87660aecd4",
+      "mode": 420
+    },
+    {
+      "path": "scripts/dev-platform.test.mjs",
+      "sha256": "dae20a5e5d5c293f8d451ab0218d6a9b85767b9b17373c5177e4f891c31203ec",
+      "mode": 420
+    },
+    {
+      "path": "scripts/dev.mjs",
+      "sha256": "c5843e0d9da9e4ab742c27f83f503df6eb9c63131aaa191dc1e2a349ebefbf86",
+      "mode": 420
+    },
+    {
+      "path": "scripts/evaluate_detection_ocr.py",
+      "sha256": "449fcb29714b0d7f8c625e1f61681f388f1b5f84a36923cbe9b38d6aea4f2c65",
+      "mode": 420
+    },
+    {
+      "path": "scripts/evaluate_real_data.py",
+      "sha256": "d2d4534ab9618e2b30440c794597b57b426324ef9bde1909d35d34080804b431",
+      "mode": 420
+    },
+    {
+      "path": "scripts/external-data.mjs",
+      "sha256": "49f930e650946f17edcfe50d32d00dcc46f0bc836b46033c005a6b11b563a56b",
+      "mode": 420
+    },
+    {
+      "path": "scripts/external-frontend.mjs",
+      "sha256": "edb41f2fdabdfdac0781178636d6e3f73cf9d088766ea55dd5573affb626f030",
+      "mode": 420
+    },
+    {
+      "path": "scripts/generate_test_image.py",
+      "sha256": "3479fd7064bca94f190a8069d969def3e99508668a95e9402836f6ddd4854c2c",
+      "mode": 420
+    },
+    {
+      "path": "scripts/macos_app_launcher.py",
+      "sha256": "04c392031ed9cc93a6eecac3d57c2450dc25243707e3fe51f2ebac67f4860f49",
+      "mode": 493
+    },
+    {
+      "path": "scripts/macos_webview.swift",
+      "sha256": "dedc7a882f5f660bda3fc03efdbaaccf2af1c47131dff2dd8f39ca999fcce534",
+      "mode": 420
+    },
+    {
+      "path": "scripts/package-app.mjs",
+      "sha256": "bda8f3d46e46e6a60fe73674846927d8d1aadbeacee61938510430933a72f0c6",
+      "mode": 420
+    },
+    {
+      "path": "scripts/package-app.test.mjs",
+      "sha256": "0e67c56c5f9973165ff6c31800307f52feeb4c0babcbed06d4a3fd2a2813c6c3",
+      "mode": 420
+    },
+    {
+      "path": "scripts/prepare_clean_plate_review.py",
+      "sha256": "94188ed1551559ec2f82081cbd7413db31e9f92c18c9a6ffc286bcd4c8278a59",
+      "mode": 420
+    },
+    {
+      "path": "scripts/review_detection_annotations.py",
+      "sha256": "01cfe900877bc8e0609a1759053d62d3ff2be0f7924b52a27dbe1e951daf2fc2",
+      "mode": 420
+    },
+    {
+      "path": "scripts/setup-models.mjs",
+      "sha256": "3015de09978a775e4801c113866e8d637d4d5a2a353fabcd20a62be66114bdc3",
+      "mode": 420
+    },
+    {
+      "path": "scripts/setup_optional_models.py",
+      "sha256": "af0b46d0aa8c64a6102fd07b70f4e6b11fbb7e37ad3efa84324566f4dc5323b9",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-data-route.mjs",
+      "sha256": "e8c03b170668073b930fb431a9195a1c706d7b3d16e8e1d7d5d3dac24e2d63aa",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-data-route.test.mjs",
+      "sha256": "39c770ca7b72c55676e1de21ac361898a7f8ebff880346d14a72b62c81d2a7ce",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-frontend-route.mjs",
+      "sha256": "55d01bffb22bab43b31732bd71fd95ee1220b9c2226fb6e3df70c08106d1213f",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-frontend-route.test.mjs",
+      "sha256": "c6a82a8c8d2ea45fcc2b4e5d4314effdfd84a5fc9ca136155b5c169d021ad53c",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-model-route.mjs",
+      "sha256": "0368543c29c9e483164fbcc9fc604c6e0df8fa259f21dfa59ac66ddfd95aad37",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-model-route.test.mjs",
+      "sha256": "81b63fb4420e6c2f6bc6abadfdb125cee9c73666eecf77ef95582fccf0c74158",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-runtime-route.mjs",
+      "sha256": "d594a6b66111c30305251992236e6ba36d189ef27e9f7aaf4f5ea206ff0c3f6f",
+      "mode": 420
+    },
+    {
+      "path": "scripts/verify_final_review_retry_data.py",
+      "sha256": "e06dbfc7572795281842b223a178f903912fe2edde2d3807eb85218f03c94232",
+      "mode": 420
+    }
+  ],
+  "install_files": [
+    {
+      "path": ".agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md",
+      "action": "replace",
+      "before_sha256": "0c5b136d48b11669b0b9f6f5eeca59ce96d3a2b1737610ba8f7449c3fd6a9f74",
+      "after_sha256": "2230a16c8c07001f91a3f6642c8a7f10d4c2a80f64c7c406fcae22c0beaad9a1",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": ".agent/FINAL_CORPUS_REBUILD_REFERENCE.md",
+      "action": "replace",
+      "before_sha256": "b2d52e42e61b7aabe6e0d5956cb9aed5c5b237697813823c582aeac2c3df9d7f",
+      "after_sha256": "1b0896c69a77db57292a44eeb7a87201d9415483a4a4a9e30c11b6526cced388",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": ".agent/STATE.md",
+      "action": "retire",
+      "before_sha256": "d7c5bfe73e1da0607af966932e1ad9189bd3d4854663e51b682d8b499049127c",
+      "after_sha256": null,
+      "before_mode": 420,
+      "after_mode": null,
+      "inverse": "restore exact checkpoint c130b50f1584c1ecd78d9bad9a49cc9daf103937:.agent/STATE.md only while target absent"
+    },
+    {
+      "path": ".agent/STATE.yaml",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": ".agents/skills/manga-final-review-loop/SKILL.md",
+      "action": "replace",
+      "before_sha256": "b3507c2b734ea52f04c7d9914dd6a22dbe4b67f6ca857cd8f445040640c4581b",
+      "after_sha256": "5e69e5d1312dc2b122ba5ed7f14587973c515301c226614119d003987a985a5f",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "action": "replace",
+      "before_sha256": "0add8b875793bad5affd748c12756391ff3a03a60d9df2d982b03d22b8dff48c",
+      "after_sha256": "4822d7e083155567191406825364d65356944ecab1fad5d92053b6cd195d78b5",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "AGENTS.md",
+      "action": "replace",
+      "before_sha256": "e053500b0217cac97d373e0257f9e758c054aaa57c430dd187cf3d5e622bbb8e",
+      "after_sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/src/manga_localizer/cloud_image_cli.py",
+      "action": "unchanged",
+      "before_sha256": "2543e63828ceeef7bade154283e894a9dd0e16ebf0f95cea50af163ccd2c8f99",
+      "after_sha256": "2543e63828ceeef7bade154283e894a9dd0e16ebf0f95cea50af163ccd2c8f99",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/database.py",
+      "action": "replace",
+      "before_sha256": "05eca6ac2c671ecebf67486cc23a472caa5446441cddbc80a51fe1cc5af3e6c9",
+      "after_sha256": "7138a981cdff74c948ab2eeb309b7f387aa06c6874b6f431ffa2a2b70717f6a0",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/src/manga_localizer/main.py",
+      "action": "unchanged",
+      "before_sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+      "after_sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/schemas.py",
+      "action": "unchanged",
+      "before_sha256": "ca59ebe254d4903f52ff45d842317966fc100fe8b6905ca33d7296445e98551a",
+      "after_sha256": "ca59ebe254d4903f52ff45d842317966fc100fe8b6905ca33d7296445e98551a",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/clean_plates.py",
+      "action": "unchanged",
+      "before_sha256": "89bd72a6096d858bb0070e5cc9a79eab7942eba29f81fa6575adc775f00883ff",
+      "after_sha256": "89bd72a6096d858bb0070e5cc9a79eab7942eba29f81fa6575adc775f00883ff",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
+      "action": "unchanged",
+      "before_sha256": "75f71ca2b1a616e9ac395bded663fbaba4151d88466932796248dc8d1798d6e8",
+      "after_sha256": "75f71ca2b1a616e9ac395bded663fbaba4151d88466932796248dc8d1798d6e8",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/final_reviews.py",
+      "action": "unchanged",
+      "before_sha256": "2ebfe40e68729b8a489718e1a5a35f85a68e942a99d5120068ba9dd2f8e92d26",
+      "after_sha256": "2ebfe40e68729b8a489718e1a5a35f85a68e942a99d5120068ba9dd2f8e92d26",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/masks.py",
+      "action": "replace",
+      "before_sha256": "289934ce30068dc7f45bd04ff14b7741fe6aea4e73a4631344192459ffde36a5",
+      "after_sha256": "47a2c6cda7bb0613d847daed4de49c7ea97edc26bbfd672a6b258ebe41d5025a",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/page_lineage.py",
+      "action": "replace",
+      "before_sha256": "61fbc2b1d4cc916948e1a966245e016f9329e44f68934a68b0100d58c6e659fe",
+      "after_sha256": "10ba6002908f2cb27a96dfd19c75e10e6b3f929fb1289afbd9b6eb174357bc9b",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/projects.py",
+      "action": "unchanged",
+      "before_sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+      "after_sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/translations.py",
+      "action": "unchanged",
+      "before_sha256": "24cbbd16a8ee992b1feaf4d90f06108a30d7b9dc364d16709d9252b3e2f95750",
+      "after_sha256": "24cbbd16a8ee992b1feaf4d90f06108a30d7b9dc364d16709d9252b3e2f95750",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/typesets.py",
+      "action": "unchanged",
+      "before_sha256": "39b98876e24b9c7789a7b8ba2b3565729d0418346b1958ec8bb30587dd5a182c",
+      "after_sha256": "39b98876e24b9c7789a7b8ba2b3565729d0418346b1958ec8bb30587dd5a182c",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/tests/test_api_projects.py",
+      "action": "unchanged",
+      "before_sha256": "143d663f20fc70127e6a7e0dca16111e45ae7fe59793c4bc81e1c9b747b2dbc7",
+      "after_sha256": "143d663f20fc70127e6a7e0dca16111e45ae7fe59793c4bc81e1c9b747b2dbc7",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/tests/test_cloud_full_page_clean_plates.py",
+      "action": "replace",
+      "before_sha256": "66bb0cfbe085057a261341fc9b77f02b2f9513eabb2326e93dc258eae6c92faf",
+      "after_sha256": "43f92a49f82a25838781c971529a9b826efde986bfa1b9ecee0e5ab07fd6b2c7",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/tests/test_cloud_image_cli.py",
+      "action": "unchanged",
+      "before_sha256": "0906be055a89f51e4b024e60622cd88cfa558f1d4c978dfc9aac9afec47a7ed9",
+      "after_sha256": "0906be055a89f51e4b024e60622cd88cfa558f1d4c978dfc9aac9afec47a7ed9",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/tests/test_database_review_epochs.py",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "91b3bf8e3104a5ffc7df18128523458490e553387533d1906897588f65ba9cef",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "backend/tests/test_final_review_responsiveness.py",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "8d38a772efec38ec185e8f19fefff0c6f87612ab6435bba0b3c964fe02929705",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "backend/tests/test_final_reviews.py",
+      "action": "replace",
+      "before_sha256": "bd7a3c39624969c84a9d34d908251ce9099db3d28eedc2422d7a238dee1190d0",
+      "after_sha256": "1cc8f8ffe6c39e8c6ef4004d76fec25ee5254514f2e7e83406296443be939d88",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "backend/tests/test_mask_recovery_edges.py",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "757af6a9c3306ec73086b2e69d0808e283ec889078ade3510d35a2df17202a1e",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "backend/tests/test_page_lineage.py",
+      "action": "unchanged",
+      "before_sha256": "a67a1f315920887104605af8a64ecd5a4c3cba7f7919f34ccaf1a1f22ccff13b",
+      "after_sha256": "a67a1f315920887104605af8a64ecd5a4c3cba7f7919f34ccaf1a1f22ccff13b",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "backend/tests/test_state_contract.py",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/real-data-iteration-status.md",
+      "action": "replace",
+      "before_sha256": "2ee4d7c175fe00ee795c3ae325856dd008463ea63cea547e5fe4df5c27e34e79",
+      "after_sha256": "27c8e64b8efc76256b975537b8c98a98f0a5506b9e8e16019dc170222c67d8d3",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/baseline.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "bcab5bffec2f723497b148e1d648f3b884b96efe0d081eed42f8401e9abf9072",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/candidate.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "1a8ced5ac201710a9ec986ee4d81c0df4fe48b02f1c5cd1d7cae60cdb3b8175e",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/contract.md",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "c769abe23e31fe8e38e36d6b56088a0f554d663c9e0014c6c170d054323deb0c",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/contract_decision.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "f47a9a20043f8b97d990bbc51d417f2e5729cc66e4ee76c0fda34fe45d041a1d",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/delivery.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "3578d8f12f2349491ccea739de3fee23f5a1643be1a05a1c75720cbd608a9b07",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/governor.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "4e1f8ec980aeda7c8298af0e9ad4470d27ad802bce5149cb50847489fe0ecd7c",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/judge.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "449dc4b78065518c65c5c34d8603c118b7efdee39c22369c66a6a484bcc25518",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "69a0455b2765ca571e4046e7da00bf2ab933865a70f6d80860239ff3fd4dc242",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/state_validation.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "f2ba5be5ad0172d9fdb3fbf7c62e108cca6eb68decadc80222541d4e67447a07",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/validation.json",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "ee7cfb38650e2ee114c59e0c4b529762ab2afe3d210d7e43aa835f2e2982f6bf",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "action": "replace",
+      "before_sha256": "46928a75d8fedd612692123b3440d302624875703d580158a24eab317c2d2dcc",
+      "after_sha256": "74eea180f14fd4ce366c8b87d916c0cb81cbf194625fa42b6a6b558276dffe9a",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "action": "unchanged",
+      "before_sha256": "86ef63711e080e3b46b9b731bb12f3c5ff471cdf403b3d29eea5937bb0f217aa",
+      "after_sha256": "86ef63711e080e3b46b9b731bb12f3c5ff471cdf403b3d29eea5937bb0f217aa",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx",
+      "action": "unchanged",
+      "before_sha256": "330658edcd5580d0d7de9c38c7c13070eb8a534188c4314b45ef7b2ac79f4afd",
+      "after_sha256": "330658edcd5580d0d7de9c38c7c13070eb8a534188c4314b45ef7b2ac79f4afd",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "frontend/src/components/Workbench.test.tsx",
+      "action": "unchanged",
+      "before_sha256": "1c360018b2d332d11f7c3142370ebc09f248ec5a4729abc0b7b5103c8243c673",
+      "after_sha256": "1c360018b2d332d11f7c3142370ebc09f248ec5a4729abc0b7b5103c8243c673",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.test.tsx",
+      "action": "replace",
+      "before_sha256": "c0e5be684f2c8c23ad16192de99bbc7a90bdbe35de530ef0fb7b950088076a1e",
+      "after_sha256": "5936c154ac2cd827a4983b437f0a373e6fa8ea8c9a8dec9c826a67e70e42bfeb",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.tsx",
+      "action": "replace",
+      "before_sha256": "a226aed9b11714742578aeb446817c33f54f659e17c943087d0c9e84b58fb83f",
+      "after_sha256": "b202f9ae6bd4b8d6e02b6b6553f15cff92b3d0b63e7e6e9163c76853d6f2a148",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/finalReview/store.test.ts",
+      "action": "replace",
+      "before_sha256": "e993f735d44d31718d2906c439d8ab25c3ba31ab9885d1d2eaeae067e02983cc",
+      "after_sha256": "a0f779530753cee04b0fe3d18216d11d17733532ebd9ed21758356a4db011cd5",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/finalReview/store.ts",
+      "action": "replace",
+      "before_sha256": "a654a6f18523ddb03d9906a273cfd489293e123ada4dcb2d5d4aa9c79552c217",
+      "after_sha256": "03f14a78e6d4bce6f10cb61a7118fbe3b45c0548a67526de6c548f3d55f68fc8",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/store/workbench.test.ts",
+      "action": "replace",
+      "before_sha256": "058a46f80802200a6eb51680e49a37889217e6027df4c54819f0c8b9fa1294df",
+      "after_sha256": "21e7c11af14c551ca2aca6e87009f6fec64ade20d92eb3fcbb63121fbe4f274a",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "frontend/src/store/workbench.ts",
+      "action": "unchanged",
+      "before_sha256": "3aff7ad98b2e2b814d2ad63707cd30092279e03e1975b1e657b92d243d2a6986",
+      "after_sha256": "3aff7ad98b2e2b814d2ad63707cd30092279e03e1975b1e657b92d243d2a6986",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "no effect"
+    },
+    {
+      "path": "hub.connection.yaml",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "a6f6baea6521056ef1b2fc52b9731f68a9a646de395fb5573f6a5743b5ba3f69",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "package.json",
+      "action": "replace",
+      "before_sha256": "aeec7bc10f4bf84c6a0612ae661a3b83667362e2d037a7a154bc304b9ff299df",
+      "after_sha256": "de7909e548da7225785a5e1309e243ff0114f116d45335018b84f0f44c37d1ab",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "scripts/check_state.py",
+      "action": "add",
+      "before_sha256": null,
+      "after_sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
+      "before_mode": null,
+      "after_mode": 420,
+      "inverse": "unlink only after exact postimage SHA/mode CAS"
+    },
+    {
+      "path": "scripts/external-uv.mjs",
+      "action": "replace",
+      "before_sha256": "f8ef6a06b91b3e808dcd84b4ab4f1bdfe7588d94e0e4787909b08e1c32fcc10a",
+      "after_sha256": "34da44e2f71269b8de91dfffb49a8981e2df739253feb5fffc186975cde0856c",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "scripts/storage-runtime-route.test.mjs",
+      "action": "replace",
+      "before_sha256": "ddee257333fbc7cf92a4425f427b944e5be955fa9c8a39b49b8fee4faab59f9d",
+      "after_sha256": "8c4dfc083bc1de0065e31f90c37b85e38a37570ef1952cca8114d4928c0289cd",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "scripts/verify-final-review-retry-ui.mjs",
+      "action": "replace",
+      "before_sha256": "04677c043c305572aed3fa068bae1c711d93ea5e21d13dc19951e1ff6e7c66cd",
+      "after_sha256": "9281f05fdeafc573baec7cb1dc708896c1f4e896479450842379ffe751a2e1e8",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    },
+    {
+      "path": "tests/e2e/manga-localizer.spec.ts",
+      "action": "replace",
+      "before_sha256": "f507184e8512b1c3025d0481fe5dfb574a2589b97ae30686eb1a8c3ff3d5e4ee",
+      "after_sha256": "cd098b3446c3a46ad2e79151ee972aeb413b7162b1b7332e685203e786771113",
+      "before_mode": 420,
+      "after_mode": 420,
+      "inverse": "apply registered reverse patch only after postimage CAS"
+    }
+  ],
+  "inverse_patch_utf8": "--- a/.agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md\n+++ b/.agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md\n@@ -1 +1 @@\n-/goal 在当前 Manga Localizer Git 根恢复并完成 199 页真实图片终审与语料重建。先读 `AGENTS.md` 和 `.agent/STATE.yaml`，按其路由使用 `$manga-final-review-loop`，从唯一 checkpoint 跨轮推进；每轮持久化证据、blocker 和唯一 next action，不重复加载或复述完整协议。持续完成所有可执行工作，直到 `199 approved` 且重建、导出、校验全部通过；仅在需要用户判定或真实外部条件时，保存精确停点后等待。\n+/goal 在当前 Manga Localizer Git 根恢复并完成 199 页真实图片终审与语料重建。先读 `AGENTS.md` 和 `.agent/STATE.md`，按其路由使用 `$manga-final-review-loop`，从唯一 checkpoint 跨轮推进；每轮持久化证据、blocker 和唯一 next action，不重复加载或复述完整协议。持续完成所有可执行工作，直到 `199 approved` 且重建、导出、校验全部通过；仅在需要用户判定或真实外部条件时，保存精确停点后等待。\n--- a/.agent/FINAL_CORPUS_REBUILD_REFERENCE.md\n+++ b/.agent/FINAL_CORPUS_REBUILD_REFERENCE.md\n@@ -1,16 +1,16 @@\n # 199 张真实数据终审、溯源与重做参考规范\n \n - **Reader：**已由用户当前消息显式激活 Manga Localizer 项目 Goal 的 Root 与审查者。\n-- **Update trigger：**领域门禁、受治理存储路由、验收标准或按需读取协议发生持久变化。当前计数、checkpoint、blocker 和 next action 只更新 `.agent/STATE.yaml`。\n+- **Update trigger：**领域门禁、受治理存储路由、验收标准或按需读取协议发生持久变化。当前计数、checkpoint、blocker 和 next action 只更新 `.agent/STATE.md`。\n - **Purpose：**保存稳定领域规范与事实底稿，由 repo skill 按当前 checkpoint 渐进式读取，不作为第二套当前状态。\n - **Protocol revision：**`final-corpus-rebuild/2026-09-04.2`\n \n-本文档、repo skill、静态 Prompt、历史记录或文件存在本身都不授权启动服务、导出图片、改写审核结果或重做页面。只有用户在当前消息中显式激活配套 Goal 后，才按 `.agent/STATE.yaml` 进入执行。\n+本文档、repo skill、静态 Prompt、历史记录或文件存在本身都不授权启动服务、导出图片、改写审核结果或重做页面。只有用户在当前消息中显式激活配套 Goal 后，才按 `.agent/STATE.md` 进入执行。\n \n ## 0. 渐进式读取路由\n \n - 首次激活、protocol revision 变化或上下文压缩丢失必要协议时，先读章节标题，再只读当前 checkpoint 需要的章节。\n-- 普通续轮只重读 `AGENTS.md`、`.agent/STATE.yaml` 和 next action 的直接证据；不整份重读本文档，不把它复制进 Prompt、STATE 或进度消息。\n+- 普通续轮只重读 `AGENTS.md`、`.agent/STATE.md` 和 next action 的直接证据；不整份重读本文档，不把它复制进 Prompt、STATE 或进度消息。\n - 启动、权限、事实优先级与存储前置：第 1–3 节。\n - 历史归因或具体问题族：第 4–5 节及 `.agent/PAGE_PROBLEM_REPORT.md`。\n - 单页重做门禁：第 6 节；产品能力核验：第 7 节；多轮 checkpoint：第 8 节。\n@@ -31,7 +31,7 @@\n - 不允许 Codex、Cursor、后台批处理器或其他会话同时写同一个源项目、审核库或导出目录。开始写入前必须确认唯一写入者。\n - 用户发出暂停、停止或取消时，立即停止新任务派发，保存当前页面和审计 ledger，停止服务，并保持 Goal 未完成状态供以后恢复。\n \n-控制 authority 与产品事实分开：`.agent/STATE.yaml` 是唯一当前控制权威，决定 activation、authority、automation 状态和 next action；其中的产品计数只是需由现场数据库覆盖的快照，不能代替数据证据。\n+控制 authority 与产品事实分开：`.agent/STATE.md` 是唯一当前控制权威，决定 activation、authority、automation 状态和 next action；其中的产品计数只是需由现场数据库覆盖的快照，不能代替数据证据。\n \n 产品事实优先级如下：\n \n@@ -41,7 +41,7 @@\n 4. 当前代码、测试和文档描述的行为。\n 5. Git、Codex/Cursor 任务记录和历史日志。\n \n-执行时必须重新查询审核库；不得用 `STATE.yaml` 的快照、Git/Codex/Cursor 历史或旧日志覆盖当前数据库与用户 verdict。\n+执行时必须重新查询审核库；不得用 `STATE.md` 的快照、Git/Codex/Cursor 历史或旧日志覆盖当前数据库与用户 verdict。\n \n ## 2. 数据路径和固定输出约定\n \n@@ -128,7 +128,7 @@\n \n ## 3. 2026-08-25 历史审核基线\n \n-本节只是历史 cohort 与根因比较证据，不是当前 checkpoint。当前计数只由 `.agent/STATE.yaml` 保存为待现场数据库覆盖的快照。当时的只读检查点：\n+本节只是历史 cohort 与根因比较证据，不是当前 checkpoint。当前计数只由 `.agent/STATE.md` 保存为待现场数据库覆盖的快照。当时的只读检查点：\n \n - 199 items。\n - 41 `approved`（20.6%）。\n@@ -464,22 +464,22 @@\n \n 实现时优先使用现有数据模型和 UI 交互，不建立与项目工具竞争的第二套审核系统。\n \n-## 8. `STATE.yaml` 驱动的多轮迭代协议\n-\n-本 Goal 不维护一套与 `STATE.yaml` 并行的固定 Round 0–6，也不在每轮重放启动流程。历史轮次只是证据；当前 `checkpoint` 和 `next action` 只存于 `.agent/STATE.yaml`。\n+## 8. `STATE.md` 驱动的多轮迭代协议\n+\n+本 Goal 不维护一套与 `STATE.md` 并行的固定 Round 0–6，也不在每轮重放启动流程。历史轮次只是证据；当前 `checkpoint` 和 `next action` 只存于 `.agent/STATE.md`。\n \n ### 首次激活或协议变化\n \n - 确认用户当前消息已显式激活 Goal；未激活时保持 waiting，不产生执行效果。\n - 只读核对唯一 writer、live process/agent、句柄、Git operation、dirty worktree、受治理存储健康、三个 SQLite、manifest/checksum、revision/counts、source mapping 和用户最新 verdict。\n-- 将现场事实、已加载 protocol revision、当前 checkpoint、证据位置和精确 next action 写入 `STATE.yaml`。不把本文档、完整历史或大段日志复制进 STATE。\n+- 将现场事实、已加载 protocol revision、当前 checkpoint、证据位置和精确 next action 写入 `STATE.md`。不把本文档、完整历史或大段日志复制进 STATE。\n \n ### 普通续轮\n \n-1. 只读 `AGENTS.md`、`STATE.yaml` 和 next action 的直接证据。只有 loaded revision 不匹配或必要协议已丢失时，才按第 0 节重新选读。\n+1. 只读 `AGENTS.md`、`STATE.md` 和 next action 的直接证据。只有 loaded revision 不匹配或必要协议已丢失时，才按第 0 节重新选读。\n 2. 选择一个能产生可验证证据的最小闭环。在该 checkpoint 内连续处理所有可安全推进的独立页或 cohort，不默认每页等一次用户 verdict。\n 3. 单页遇到可复现 blocker 时，登记证据、假设与恢复条件，然后继续其他独立工作。连续两次同质无进展后禁止原样重试，必须先诊断并改变方法。\n-4. 只在 material change 时更新 `STATE.yaml`：保留当前计数、checkpoint、blocker/证据、loaded revision 和精确 next action。计划、首个失败、单页完成或进度汇报不是停止条件；仍有可安全推进的独立工作就继续。\n+4. 只在 material change 时更新 `STATE.md`：保留当前计数、checkpoint、blocker/证据、loaded revision 和精确 next action。计划、首个失败、单页完成或进度汇报不是停止条件；仍有可安全推进的独立工作就继续。\n \n ### 统一人工终审 checkpoint\n \n@@ -598,7 +598,7 @@\n \n ## 12. 相关仓库文档和代码入口\n \n-项目 Goal 显式激活后，始终只读 `AGENTS.md` 与 `.agent/STATE.yaml`；其余入口只在当前 checkpoint 直接需要时选读：\n+项目 Goal 显式激活后，始终只读 `AGENTS.md` 与 `.agent/STATE.md`；其余入口只在当前 checkpoint 直接需要时选读：\n \n - 具体问题族或恢复证据：`.agent/PAGE_PROBLEM_REPORT.md`。\n - 历史 pipeline 证据：`docs/real-data-iteration-status.md` 和必要的 Git 历史。已删除的旧入口只作证据，不产生 authority。\n@@ -607,4 +607,4 @@\n - 后端阶段、最终审核或页面修复：`backend/src/manga_localizer/queue.py`、`backend/src/manga_localizer/services/final_reviews.py` 以及当前动作直接调用的 service/provider。\n - 前端批处理或人工终审：`frontend/src/store/workbench.ts` 或 `frontend/src/finalReview/` 中当前动作直接涉及的文件。\n \n-本文档中的 2026-08-25 数字只是历史基线。执行 Agent 启动或恢复时必须以现场数据库覆盖当前快照；只把新快照写入 `STATE.yaml` 或 Git-ignored 项目进度证据，不悄改历史 cohort。\n+本文档中的 2026-08-25 数字只是历史基线。执行 Agent 启动或恢复时必须以现场数据库覆盖当前快照；只把新快照写入 `STATE.md` 或 Git-ignored 项目进度证据，不悄改历史 cohort。\n--- a/.agents/skills/manga-final-review-loop/SKILL.md\n+++ b/.agents/skills/manga-final-review-loop/SKILL.md\n@@ -9,28 +9,28 @@\n \n ## Maintenance and standing write permission\n \n-A request to inspect or update this skill or Agent permissions is maintenance only, not a request to run or resume the Goal. For maintenance, do not enter the workflow below, discover storage, start services, change `STATE.yaml`, or process pages; preserve the existing Goal checkpoint.\n+A request to inspect or update this skill or Agent permissions is maintenance only, not a request to run or resume the Goal. For maintenance, do not enter the workflow below, discover storage, start services, change `STATE.md`, or process pages; preserve the existing Goal checkpoint.\n \n The owner's standing global filesystem-write grant covers Codex and Cursor primary agents and subagents across all projects. Within an authorized task's owned scope, do not ask again for ordinary local writes merely because the project changed or images, OCR, databases, review outputs, or other personal data are real, Git-ignored, or outside the repository. Task scope, assigned writer/reviewer roles, data-integrity constraints, guarded storage routing, and actual runtime restrictions still apply. Filesystem permission does not itself authorize uploads or other external effects; reuse an explicit external-effect grant within its authorized scope without asking for the same permission again.\n \n ## Enter or resume\n \n-1. Read the repository `AGENTS.md` and [current state](../../../.agent/STATE.yaml). Treat `STATE.yaml` as the sole authority and next-action source.\n+1. Read the repository `AGENTS.md` and [current state](../../../.agent/STATE.md). Treat `STATE.md` as the sole authority and next-action source.\n 2. Enter execution only when the current request explicitly activates or continues this Goal. Otherwise do not run its workflow or change its recorded state. When execution is authorized, resume from the current checkpoint.\n-3. On first activation, a protocol-revision mismatch, or context compaction that lost needed protocol, read the headings in the [reference](../../../.agent/FINAL_CORPUS_REBUILD_REFERENCE.md), then only the sections required by the current checkpoint. Record the loaded protocol revision in `STATE.yaml` after authority and live facts are verified.\n-4. On an ordinary continuation, do not reload the reference, history, or problem report. Read the compact strict-YAML `STATE.yaml` execution_control/current_work and the exact historical checkpoint referenced for the active page; load reference sections again only under the conditions in step 3. Do not ingest the whole state file.\n+3. On first activation, a protocol-revision mismatch, or context compaction that lost needed protocol, read the headings in the [reference](../../../.agent/FINAL_CORPUS_REBUILD_REFERENCE.md), then only the sections required by the current checkpoint. Record the loaded protocol revision in `STATE.md` after authority and live facts are verified.\n+4. On an ordinary continuation, do not reload the reference, history, or problem report. Read only the `STATE.md` Execution control header (about the first 25 lines) plus the one checkpoint named by Unique next action; load reference sections again only under the conditions in step 3. Do not ingest the whole state file.\n \n ## Advance one bounded turn\n \n - Before any write, prove there is one control-plane writer (Root) and at most one page writer per image/generation, no conflicting process/handle/Git operation, and an exact effect set. Preserve unrelated dirty-worktree changes. Unique writer is per page, not one writer for the whole database.\n-- In the same tick, Root orchestrates and dispatches up to `pageSlots` page workers in parallel. Each worker writes exactly one assigned page. Root writes `STATE.yaml` and control-plane only. Pending owner-review pages do not occupy slots. If every remaining issue page is skip-listed or blocked, stop at the batched human-review checkpoint; do not hunt the C cluster. `pageSlots` may cover remask/G4 only. G8 `--execute` is hard-serialized to **1**; never stack a second ingest or a prepare-dir against a live execute. Do not relaunch leftover `sample`/profiler attaches on uvicorn.\n+- In the same tick, Root orchestrates and dispatches up to `pageSlots` page workers in parallel. Each worker writes exactly one assigned page. Root writes `STATE.md` and control-plane only. Pending owner-review pages do not occupy slots. If every remaining issue page is skip-listed or blocked, stop at the batched human-review checkpoint; do not hunt the C cluster. `pageSlots` may cover remask/G4 only. G8 `--execute` is hard-serialized to **1**; never stack a second ingest or a prepare-dir against a live execute. Do not relaunch leftover `sample`/profiler attaches on uvicorn.\n - On first activation, a protocol revision change, or a new process after context loss, run `npm run storage:check` and resolve the data root once with `npm run -s storage:data -- --print-real-data`. Use that guarded route and the repository wrappers; never fall back to repo-local project data or a hard-coded volume path. Ordinary continuations do not repeat this discovery while the same verified route remains loaded.\n - Advance one evidence-bearing checkpoint. Continue independent safe work after a single-page failure; after two equivalent no-progress attempts, record evidence and change the approach.\n - Owner bounce and visual reject are gate-local. Reuse accepted G0–G(n-1) checksums, regions, mask, and clean plate. Do not `restartFromSource` unless the feedback names source/preprocess identity or the accepted quality/mask is actually unusable. A G8 fail keeps G0–G7; a G10 fail keeps accepted G8; a missed box returns to G4/G7 only.\n - Do not copy quality/mask/raw into `.agent/audits/` except the checksum-bound `cloud:image --prepare-dir` tree. That tree stays gitignored. Do not write `.py` there.\n - Never overwrite immutable originals, user verdicts, history, or valid lineage. A repaired item returns to `pending`; only the user can mark it `approved`. Keep project data on the guarded local storage route and out of Git; external upload still requires explicit authority.\n-- Update `STATE.yaml` only for a material change, keeping current counts, checkpoint, blocker/evidence, loaded protocol revision, and exact next action concise.\n+- Update `STATE.md` only for a material change, keeping current counts, checkpoint, blocker/evidence, loaded protocol revision, and exact next action concise.\n - When all currently actionable issue pages are `pending` or reproducibly blocked, stop at one batched human-review checkpoint. Keep the Goal active and do not poll or run in the background.\n - On `pause`, `stop`, or `cancel`, stop new dispatch and effects immediately, persist the safe current checkpoint, and respond.\n \n-Complete only after live evidence proves `199 approved / 0 issues / 0 pending`, full database/identity/lineage/checksum consistency, and a verified new-directory final export under the storage-governance route. Otherwise resume from `STATE.yaml` or report the precise owner decision that is required.\n+Complete only after live evidence proves `199 approved / 0 issues / 0 pending`, full database/identity/lineage/checksum consistency, and a verified new-directory final export under the storage-governance route. Otherwise resume from `STATE.md` or report the precise owner decision that is required.\n--- a/.github/workflows/ci.yml\n+++ b/.github/workflows/ci.yml\n@@ -30,11 +30,9 @@\n           sudo apt-get update\n           sudo apt-get install -y fonts-noto-cjk tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert\n       - run: uv sync --project backend --group dev --locked\n-      - run: uv run --project backend ruff check backend scripts/audit_release.py scripts/check_state.py\n-      - run: uv run --project backend ruff format --check backend scripts/audit_release.py scripts/check_state.py\n+      - run: uv run --project backend ruff check backend scripts/audit_release.py\n+      - run: uv run --project backend ruff format --check backend scripts/audit_release.py\n       - run: uv run --project backend pytest backend/tests\n-      - name: Validate sole project state\n-        run: uv run --project backend python -B scripts/check_state.py\n       - name: Audit normal Git delivery\n         env:\n           AUDIT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}\n--- a/AGENTS.md\n+++ b/AGENTS.md\n@@ -1,21 +1,30 @@\n # Manga Localizer 路由\n \n-Reader：项目 Root、按需执行者、审查者与 Hub。更新条件：权威、状态格式、激活或验证入口改变。用途：用最小上下文识别当前事实与执行边界。\n+- **Reader：**进入本仓库的 Root、Explorer、Judge 或显式激活项目 Goal 的执行者。\n+- **Update trigger：**唯一当前状态、激活方式、保护边界或文档路由发生持久变化。\n+- **Purpose：**用最小上下文进入唯一当前状态，防止历史 Prompt、休眠会话和旧循环自动恢复。\n \n-默认只读本文件及 `.agent/STATE.yaml`。后者是唯一当前状态，格式为严格 YAML；旧 Markdown 状态已迁入 Git 历史；禁止重复键、alias/anchor。读取 `execution_control`、`current_work`、`blockers` 与本任务 `all_projects_governance`；不要默认载入历史。\n+## 权威与默认加载\n \n-原项目状态为 `OWNER_R2_REVIEW / owner-r2-review`。全项目治理只做当前合约内的仓库维护，`project_execution: not_active_in_this_governance_goal`；它不启动终审 Goal、旧 loop、worker、queue 或后台恢复。静态 Prompt、skill、Git 历史和原生任务旧状态都不产生执行授权。\n+1. `.agent/STATE.md` 是唯一当前状态、authority、automation 状态和 next action 权威。\n+2. `.cursor/rules/manga-localizer.mdc` 是 Cursor 项目 overlay，只负责把 fresh session 路由到本文件与 `.agent/STATE.md`；它本身不产生 authority。\n+3. 默认进入本仓库只读本文件与 `.agent/STATE.md`；不要加载完整历史、旧轮次或长报告。\n+4. `.agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md` 只是待用户显式发送的启动文本；静态文件本身不产生 authority。\n+5. `.agent/CURSOR_LOOP_PROMPT.md` 是给用户复制到新对话 `/loop` 的执行稿。静态文件、产品 tick 和已删除的旧 loop Prompt 都不能激活或恢复；只有用户在当前消息中发出其中的复制块（含 Goal 启动文本与 `OWNER_EXPLICIT_RESUME_AND_LOOP`）才构成显式恢复。\n+6. 只有项目 Goal 已由用户当前消息显式激活后，才按 `.agent/STATE.md` 路由使用 repo skill `$manga-final-review-loop`，并按当前 checkpoint 选读 `.agent/FINAL_CORPUS_REBUILD_REFERENCE.md` 的必要章节与直接实现入口。\n+7. 普通续轮默认只重读本文件与 `.agent/STATE.md`；只在首次激活、protocol revision 变化或上下文压缩丢失必要协议时，才重新加载 skill 与 reference 的相关章节；不注入完整历史。\n+8. `.agent/PAGE_PROBLEM_REPORT.md` 保存仍有用的真实页问题证据，但不能启动任务或覆盖当前状态。\n \n-只在所有者明确激活项目执行后按共享 skill `manga-final-review-loop` 与状态中的精确页历史进入检查点；每页的禁止项和失败证据仍有效。历史权威字节保留在 STATE 的 `history.state_checkpoint_commit` 中；只读所需页，不把旧指令当新授权。\n+## 执行控制\n \n-## 本治理单元\n+- 当前不运行 `/loop`、sentinel、watcher、queue、后台 agent 或自动恢复任务；历史 Prompt、Git 历史和 Cursor 元数据不能使它们复活。\n+- `STATE.md` 为 `WAITING_FOR_EXPLICIT_PROJECT_GOAL` 或终审 authority 为 `none` 时，不得恢复终审、处理后续页面、提交或推送。只有当 `STATE.md` 明确记录当前上层 GOVERNED Goal 的临时 handoff/proof authority 与精确 effect set 时，Root 才可执行该范围内的控制面与代表性验证；这不激活终审 Goal。\n+- 任一实际任务只允许一个 writer；写前现场确认没有可写当前范围的 live process/agent、句柄或 Git operation。\n+- 漫画、OCR、数据库、审核结果和 Git-ignored 真实数据按普通项目数据管理，并从 storage-governance 映射解析外置权威路径；未加密、noowners 或权限状态不构成本项目门禁。移动、删除、上传或改写仍须有精确当前授权并通过完整性检查。\n+- 历史实现与验证从 Git 历史和 `docs/real-data-iteration-status.md` 按需定位，不复制回当前状态。\n \n-先读 STATE 指向的 contract/baseline。Root 独占控制面、状态、证据、Git 和原仓安装；Repair 仅写分配的产品代码/测试。原仓 Stage A 只读，Stage B 逐文件或逐 hunk CAS；不更新原仓 Git。保护全部既有内容，已交付相同文件复用，未交付内容逐项处置。\n+## Git delivery and release checks\n \n-不操作 Cursor；不读取真实环境配置或秘密。不用应用入口打开真实数据库，不写真库、图像、用户 verdict 或 lineage，不启动真实服务、生成、付费调用或导出。仅隔离数据库/媒体/浏览器用于本轮验证。真实数据保持既有存储路由，不迁移、不清理。\n-\n-首次进入当前运行时用 `npm run storage:check`；未变路由复用。原项目执行仍须显式授权并使用既有受保护存储入口。文件能力不扩大外部效果权限。\n-\n-检查：`npm run check:backend`、`npm run check:frontend`、相关 `npm run test:e2e`；本状态校验为 `node scripts/external-uv.mjs run --frozen --offline --no-sync python -B scripts/check_state.py`。Hub 从根 `hub.connection.yaml` 读取同一 YAML 状态，声明不复制动态业务值，也不执行 validation_entry。\n-\n-正常交付必须运行 `npm run audit:ci -- --base <完整验证前基线> --head <完整候选提交>`；本单元审查整个 checkpoint→最终候选系列。fresh Judge 与 Governor 通过后才正常推主分支并验证远端和 CI。禁止强推、绕过保护或重写历史。`audit:release` 另管产品发布，普通 CI 不解除历史发布阻塞。\n+- Normal authorized Git delivery requires `npm run audit:ci -- --base <full-base-sha> --head <full-head-sha>` and the relevant application checks. Use the exact verified pre-change base; do not reset it to hide a failed candidate.\n+- Product release additionally requires `npm run audit:release` (also the default audit mode). CI acceptance does not clear historical personal paths or grant release authority. Secret/artifact checks cover candidate, index and reachable history in both modes.\n+- The all-projects governance task has owner-authorized scoped main delivery; this does not resume the paused image workflow or grant other tasks that authority.\n--- a/backend/src/manga_localizer/database.py\n+++ b/backend/src/manga_localizer/database.py\n@@ -1,6 +1,5 @@\n from __future__ import annotations\n \n-import re\n import uuid\n from datetime import UTC, datetime\n from enum import StrEnum\n@@ -1023,258 +1022,33 @@\n     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)\n \n \n-def _quote_sqlite_identifier(value: str) -> str:\n-    return f'\"{value.replace(chr(34), chr(34) * 2)}\"'\n-\n-\n-def _split_sqlite_table_items(create_sql: str) -> tuple[str, list[str], str]:\n-    start = create_sql.find(\"(\")\n-    if start < 0:\n-        raise RuntimeError(\"SQLite table definition has no column list\")\n-    depth = 0\n-    quote: str | None = None\n-    item_start = start + 1\n-    items: list[str] = []\n-    end = -1\n-    index = start\n-    while index < len(create_sql):\n-        character = create_sql[index]\n-        if quote:\n-            if character == quote:\n-                if index + 1 < len(create_sql) and create_sql[index + 1] == quote:\n-                    index += 1\n-                else:\n-                    quote = None\n-        elif character in ('\"', \"'\", \"`\"):\n-            quote = character\n-        elif character == \"[\":\n-            quote = \"]\"\n-        elif character == \"(\":\n-            depth += 1\n-        elif character == \")\":\n-            depth -= 1\n-            if depth == 0:\n-                items.append(create_sql[item_start:index])\n-                end = index\n-                break\n-        elif character == \",\" and depth == 1:\n-            items.append(create_sql[item_start:index])\n-            item_start = index + 1\n-        index += 1\n-    if end < 0 or quote:\n-        raise RuntimeError(\"SQLite table definition has an unterminated column list\")\n-    return create_sql[: start + 1], items, create_sql[end:]\n-\n-\n-def _sqlite_identifier(value: str) -> str:\n-    value = value.strip()\n-    if len(value) >= 2 and (\n-        (value[0] == value[-1] and value[0] in ('\"', \"'\", \"`\"))\n-        or (value[0] == \"[\" and value[-1] == \"]\")\n-    ):\n-        value = value[1:-1]\n-    return value.replace('\"\"', '\"').replace(\"''\", \"'\").replace(\"``\", \"`\").lower()\n-\n-\n-def _sqlite_unique_item_columns(item: str) -> tuple[str, ...] | None:\n-    match = re.match(\n-        r\"^\\s*(?:CONSTRAINT\\s+(?:\\\"(?:\\\"\\\"|[^\\\"])+\\\"|`(?:``|[^`])+`|\\[[^]]+\\]|\\S+)\\s+)?\"\n-        r\"UNIQUE\\s*\\((.*)\\)\\s*(?:ON\\s+CONFLICT\\s+\\w+)?\\s*$\",\n-        item,\n-        flags=re.IGNORECASE | re.DOTALL,\n-    )\n-    if not match:\n-        return None\n-    return tuple(_sqlite_identifier(part) for part in match.group(1).split(\",\"))\n-\n-\n-def _sqlite_index_rows(cursor, table: str) -> list[dict[str, Any]]:\n-    rows: list[dict[str, Any]] = []\n-    index_rows = cursor.execute(f\"PRAGMA index_list({_quote_sqlite_identifier(table)})\").fetchall()\n-    for _, name, unique, origin, partial in index_rows:\n-        if not unique:\n-            continue\n-        columns = tuple(\n-            str(row[2]).lower()\n-            for row in cursor.execute(f\"PRAGMA index_info({_quote_sqlite_identifier(str(name))})\")\n-            if row[2] is not None\n-        )\n-        sql_row = cursor.execute(\n-            \"SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?\", (name,)\n-        ).fetchone()\n-        rows.append(\n-            {\n-                \"name\": str(name),\n-                \"columns\": columns,\n-                \"origin\": str(origin),\n-                \"partial\": bool(partial),\n-                \"sql\": str(sql_row[0]) if sql_row and sql_row[0] else \"\",\n-            }\n-        )\n-    return rows\n-\n-\n-def _sqlite_accepted_partial(index: dict[str, Any]) -> bool:\n-    normalized = re.sub(r'[\\s\"`\\[\\]()]', \"\", str(index[\"sql\"])).lower()\n-    return bool(index[\"partial\"] and normalized.endswith(\"wherestate='accepted'\"))\n-\n-\n-def _rebuild_sqlite_table_without_unique(cursor, table: str, old_columns: tuple[str, ...]) -> None:\n-    table_sql_row = cursor.execute(\n-        \"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?\", (table,)\n-    ).fetchone()\n-    if not table_sql_row or not table_sql_row[0]:\n-        raise RuntimeError(f\"missing SQLite definition for {table}\")\n-    _, items, suffix = _split_sqlite_table_items(str(table_sql_row[0]))\n-    retained_items = [item for item in items if _sqlite_unique_item_columns(item) != old_columns]\n-    if len(retained_items) == len(items):\n-        raise RuntimeError(f\"could not locate inline legacy uniqueness on {table}\")\n-\n-    temporary = f\"{table}__epoch_migration\"\n-    if cursor.execute(\n-        \"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?\", (temporary,)\n-    ).fetchone():\n-        raise RuntimeError(f\"refusing to overwrite residual table {temporary}\")\n-    schema_objects = cursor.execute(\n-        \"\"\"\n-        SELECT type, name, sql\n-        FROM sqlite_master\n-        WHERE sql IS NOT NULL\n-          AND (\n-              (tbl_name = ? AND type IN ('index', 'trigger'))\n-              OR (type = 'trigger' AND sql LIKE ?)\n-          )\n-        ORDER BY type, name\n-        \"\"\",\n-        (table, f\"%{table}%\"),\n-    ).fetchall()\n-    columns = [\n-        str(row[1])\n-        for row in cursor.execute(f\"PRAGMA table_xinfo({_quote_sqlite_identifier(table)})\")\n-        if int(row[6]) == 0\n-    ]\n-    quoted_columns = \", \".join(_quote_sqlite_identifier(column) for column in columns)\n-    cursor.execute(\n-        f\"CREATE TABLE {_quote_sqlite_identifier(temporary)} (\" + \",\".join(retained_items) + suffix\n-    )\n-    cursor.execute(\n-        f\"INSERT INTO {_quote_sqlite_identifier(temporary)} ({quoted_columns}) \"\n-        f\"SELECT {quoted_columns} FROM {_quote_sqlite_identifier(table)}\"\n-    )\n-    for object_type, object_name, _ in schema_objects:\n-        if object_type == \"trigger\":\n-            cursor.execute(f\"DROP TRIGGER {_quote_sqlite_identifier(str(object_name))}\")\n-    cursor.execute(f\"DROP TABLE {_quote_sqlite_identifier(table)}\")\n-    cursor.execute(\n-        f\"ALTER TABLE {_quote_sqlite_identifier(temporary)} \"\n-        f\"RENAME TO {_quote_sqlite_identifier(table)}\"\n-    )\n-    for _, _, object_sql in schema_objects:\n-        cursor.execute(str(object_sql))\n-\n-\n-def _migrate_review_epoch_constraints(engine: Engine) -> None:\n-    migrations = (\n-        (\"page_cloud_full_page_reviews\", (\"generation_id\",), None, True),\n-        (\n-            \"region_translation_candidates\",\n-            (\"generation_id\", \"region_id\", \"revision_number\"),\n-            (\"generation_id\", \"region_id\", \"g8_checksum\", \"revision_number\"),\n-            False,\n-        ),\n-        (\n-            \"page_translation_reviews\",\n-            (\"generation_id\",),\n-            (\"generation_id\", \"g8_checksum\"),\n-            False,\n-        ),\n-        (\n-            \"page_typeset_reviews\",\n-            (\"generation_id\",),\n-            (\"generation_id\", \"g9_terminal_checksum\"),\n-            True,\n-        ),\n-    )\n-    raw_connection = engine.raw_connection()\n-    cursor = raw_connection.cursor()\n-    try:\n-        cursor.execute(\"PRAGMA foreign_keys=OFF\")\n-        if cursor.execute(\"PRAGMA foreign_keys\").fetchone()[0] != 0:\n-            raise RuntimeError(\"could not disable SQLite foreign keys before migration\")\n-        cursor.execute(\"BEGIN IMMEDIATE\")\n-        changed = False\n-        for table, old_columns, new_columns, accepted_partial in migrations:\n-            if not cursor.execute(\n-                \"SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?\", (table,)\n-            ).fetchone():\n-                continue\n-            indexes = _sqlite_index_rows(cursor, table)\n-            legacy = [\n-                index\n-                for index in indexes\n-                if index[\"columns\"] == old_columns\n-                and (_sqlite_accepted_partial(index) if accepted_partial else not index[\"partial\"])\n-            ]\n-            inline_legacy = [index for index in legacy if index[\"origin\"] == \"u\"]\n-            if inline_legacy:\n-                _rebuild_sqlite_table_without_unique(cursor, table, old_columns)\n-                changed = True\n-                indexes = _sqlite_index_rows(cursor, table)\n-                legacy = [\n-                    index\n-                    for index in indexes\n-                    if index[\"columns\"] == old_columns\n-                    and (\n-                        _sqlite_accepted_partial(index)\n-                        if accepted_partial\n-                        else not index[\"partial\"]\n-                    )\n-                ]\n-            for index in legacy:\n-                if index[\"origin\"] != \"c\":\n-                    raise RuntimeError(f\"unsupported legacy uniqueness on {table}\")\n-                cursor.execute(f\"DROP INDEX {_quote_sqlite_identifier(str(index['name']))}\")\n-                changed = True\n-            if new_columns is None:\n-                continue\n-            indexes = _sqlite_index_rows(cursor, table)\n-            current = any(\n-                index[\"columns\"] == new_columns\n-                and (_sqlite_accepted_partial(index) if accepted_partial else not index[\"partial\"])\n-                for index in indexes\n-            )\n-            if not current:\n-                index_name = {\n-                    \"region_translation_candidates\": \"uq_translation_candidate_revision_g8\",\n-                    \"page_translation_reviews\": \"uq_translation_terminal_generation_g8\",\n-                    \"page_typeset_reviews\": \"uq_typeset_terminal_g9\",\n-                }[table]\n-                predicate = \" WHERE state = 'accepted'\" if accepted_partial else \"\"\n-                cursor.execute(\n-                    f\"CREATE UNIQUE INDEX {_quote_sqlite_identifier(index_name)} \"\n-                    f\"ON {_quote_sqlite_identifier(table)} \"\n-                    f\"({', '.join(_quote_sqlite_identifier(column) for column in new_columns)})\"\n-                    f\"{predicate}\"\n-                )\n-                changed = True\n-        if changed:\n-            integrity = cursor.execute(\"PRAGMA integrity_check\").fetchall()\n-            if integrity != [(\"ok\",)]:\n-                raise RuntimeError(f\"SQLite integrity check failed: {integrity!r}\")\n-            foreign_key_failures = cursor.execute(\"PRAGMA foreign_key_check\").fetchall()\n-            if foreign_key_failures:\n-                raise RuntimeError(f\"SQLite foreign key check failed: {foreign_key_failures!r}\")\n-        raw_connection.commit()\n-    except BaseException:\n-        raw_connection.rollback()\n-        raise\n-    finally:\n-        cursor.execute(\"PRAGMA foreign_keys=ON\")\n-        foreign_keys_enabled = cursor.execute(\"PRAGMA foreign_keys\").fetchone()[0]\n-        cursor.close()\n-        raw_connection.close()\n-        if foreign_keys_enabled != 1:\n-            raise RuntimeError(\"could not restore SQLite foreign keys after migration\")\n+def _sqlite_table_sql(connection, table: str) -> str:\n+    row = connection.exec_driver_sql(\n+        \"SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?\",\n+        (table,),\n+    ).first()\n+    return str(row[0]) if row and row[0] else \"\"\n+\n+\n+def _drop_triggers_referencing(connection, table: str) -> None:\n+    rows = connection.exec_driver_sql(\n+        \"SELECT name FROM sqlite_master WHERE type = 'trigger' AND sql LIKE ?\",\n+        (f\"%{table}%\",),\n+    ).all()\n+    for (name,) in rows:\n+        connection.exec_driver_sql(f'DROP TRIGGER IF EXISTS \"{name}\"')\n+\n+\n+def _rebuild_sqlite_table(connection, table: str, create_sql: str) -> None:\n+    rebuild = f\"{table}__rebuild\"\n+    connection.exec_driver_sql(\"PRAGMA foreign_keys=OFF\")\n+    _drop_triggers_referencing(connection, table)\n+    connection.exec_driver_sql(f\"DROP TABLE IF EXISTS {rebuild}\")\n+    connection.exec_driver_sql(create_sql)\n+    connection.exec_driver_sql(f\"INSERT INTO {rebuild} SELECT * FROM {table}\")\n+    connection.exec_driver_sql(f\"DROP TABLE {table}\")\n+    connection.exec_driver_sql(f\"ALTER TABLE {rebuild} RENAME TO {table}\")\n+    connection.exec_driver_sql(\"PRAGMA foreign_keys=ON\")\n \n \n def create_project_engine(database_path: Path) -> Engine:\n@@ -1294,11 +1068,104 @@\n     with engine.connect() as connection:\n         connection.exec_driver_sql(\"PRAGMA journal_mode=WAL\")\n     Base.metadata.create_all(engine)\n-    # Old G8/G9/G10 uniqueness blocked same-generation replacements. SQLite\n-    # represents table-inline UNIQUE constraints as undroppable autoindexes, so\n-    # migrate by semantic column identity and preserve every unrelated schema\n-    # object in one rollback-safe transaction.\n-    _migrate_review_epoch_constraints(engine)\n+    # Accepted G8 is unique per G7 parent in application code. The old\n+    # generation-wide unique blocked a replacement plate after G4/G7 amendment.\n+    review_index_names = {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"page_cloud_full_page_reviews\")\n+    }\n+    if \"uq_cloud_full_page_accepted_generation\" in review_index_names:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\n+                \"DROP INDEX IF EXISTS uq_cloud_full_page_accepted_generation\"\n+            )\n+    translation_candidate_indexes = {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"region_translation_candidates\")\n+    }\n+    if \"uq_translation_candidate_revision\" in translation_candidate_indexes:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\"DROP INDEX IF EXISTS uq_translation_candidate_revision\")\n+    if \"uq_translation_candidate_revision_g8\" not in {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"region_translation_candidates\")\n+    }:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\n+                \"CREATE UNIQUE INDEX IF NOT EXISTS uq_translation_candidate_revision_g8 \"\n+                \"ON region_translation_candidates \"\n+                \"(generation_id, region_id, g8_checksum, revision_number)\"\n+            )\n+    translation_terminal_indexes = {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"page_translation_reviews\")\n+    }\n+    if \"uq_translation_terminal_generation\" in translation_terminal_indexes:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\"DROP INDEX IF EXISTS uq_translation_terminal_generation\")\n+    if \"uq_translation_terminal_generation_g8\" not in {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"page_translation_reviews\")\n+    }:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\n+                \"CREATE UNIQUE INDEX IF NOT EXISTS uq_translation_terminal_generation_g8 \"\n+                \"ON page_translation_reviews (generation_id, g8_checksum)\"\n+            )\n+    typeset_review_indexes = {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"page_typeset_reviews\")\n+    }\n+    if \"uq_typeset_terminal_generation\" in typeset_review_indexes:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\"DROP INDEX IF EXISTS uq_typeset_terminal_generation\")\n+    if \"uq_typeset_terminal_g9\" not in {\n+        index[\"name\"] for index in inspect(engine).get_indexes(\"page_typeset_reviews\")\n+    }:\n+        with engine.begin() as connection:\n+            connection.exec_driver_sql(\n+                \"CREATE UNIQUE INDEX IF NOT EXISTS uq_typeset_terminal_g9 \"\n+                \"ON page_typeset_reviews (generation_id, g9_terminal_checksum) \"\n+                \"WHERE state = 'accepted'\"\n+            )\n+    # Table-inline UNIQUE(generation_id) survives DROP INDEX. Rebuild only the\n+    # G9 terminal table so a replacement G8 can accept a new page review.\n+    with engine.begin() as connection:\n+        terminal_sql = \" \".join(_sqlite_table_sql(connection, \"page_translation_reviews\").split())\n+        if \"CONSTRAINT uq_translation_terminal_generation UNIQUE (generation_id)\" in terminal_sql:\n+            _rebuild_sqlite_table(\n+                connection,\n+                \"page_translation_reviews\",\n+                \"\"\"\n+                CREATE TABLE page_translation_reviews__rebuild (\n+                    id VARCHAR(36) NOT NULL,\n+                    generation_id VARCHAR(36) NOT NULL,\n+                    image_id VARCHAR(36) NOT NULL,\n+                    sequence INTEGER NOT NULL,\n+                    state VARCHAR(20) NOT NULL,\n+                    reason VARCHAR(80) NOT NULL,\n+                    g8_checksum VARCHAR(64) NOT NULL,\n+                    translation_state_checksum VARCHAR(64) NOT NULL,\n+                    terminal_checksum VARCHAR(64) NOT NULL,\n+                    accepted_candidate_ids JSON NOT NULL,\n+                    reviewer JSON NOT NULL,\n+                    revision_id VARCHAR(36) NOT NULL,\n+                    created_at DATETIME NOT NULL,\n+                    PRIMARY KEY (id),\n+                    CONSTRAINT uq_translation_terminal_generation_g8\n+                        UNIQUE (generation_id, g8_checksum),\n+                    CONSTRAINT ck_translation_terminal_state\n+                        CHECK (state IN ('accepted', 'not-applicable')),\n+                    UNIQUE (terminal_checksum),\n+                    FOREIGN KEY(generation_id) REFERENCES page_generations (id) ON DELETE RESTRICT,\n+                    FOREIGN KEY(image_id) REFERENCES images (id) ON DELETE RESTRICT,\n+                    FOREIGN KEY(revision_id) REFERENCES revisions (id) ON DELETE RESTRICT\n+                )\n+                \"\"\",\n+            )\n+            for index_sql in (\n+                \"CREATE INDEX IF NOT EXISTS ix_page_translation_reviews_generation_id \"\n+                \"ON page_translation_reviews (generation_id)\",\n+                \"CREATE INDEX IF NOT EXISTS ix_page_translation_reviews_image_id \"\n+                \"ON page_translation_reviews (image_id)\",\n+                \"CREATE INDEX IF NOT EXISTS ix_page_translation_reviews_revision_id \"\n+                \"ON page_translation_reviews (revision_id)\",\n+            ):\n+                connection.exec_driver_sql(index_sql)\n     # ``create_all`` intentionally does not alter an existing portable SQLite\n     # project. Keep the migration small and idempotent so old projects reopen\n     # without requiring a separate migration tool or destructive rebuild.\n--- a/backend/src/manga_localizer/services/masks.py\n+++ b/backend/src/manga_localizer/services/masks.py\n@@ -12,7 +12,7 @@\n \n import numpy as np\n from PIL import Image\n-from sqlalchemy import func, select\n+from sqlalchemy import select\n \n from manga_localizer.database import (\n     ImageAsset,\n@@ -253,19 +253,6 @@\n     g6_terminal = _current_g6_terminal_event(session, generation)\n     if g6_terminal is None:\n         return [], []\n-    current_review_count = (\n-        session.scalar(\n-            select(func.count())\n-            .select_from(PageLineageEvent)\n-            .where(\n-                PageLineageEvent.generation_id == generation.id,\n-                PageLineageEvent.gate == \"G7_mask\",\n-                PageLineageEvent.operation == \"mask-stage-review\",\n-                PageLineageEvent.sequence > g6_terminal.sequence,\n-            )\n-        )\n-        or 0\n-    )\n     current_item_ids = {\n         item_id\n         for item_id in session.scalars(\n@@ -280,13 +267,7 @@\n     }\n     artifacts = [row for row in artifacts if row.job_item_id in current_item_ids]\n     artifact_ids = {row.id for row in artifacts}\n-    current_reviews = reviews[-current_review_count:] if current_review_count else []\n-    return artifacts, [\n-        row\n-        for row in current_reviews\n-        if row.artifact_id in artifact_ids\n-        or (row.state == \"not-applicable\" and row.artifact_id is None)\n-    ]\n+    return artifacts, [row for row in reviews if row.artifact_id in artifact_ids]\n \n \n def g7_amendment_open(session, generation: PageGeneration) -> bool:\n@@ -801,20 +782,14 @@\n         if row.job_item_id in current_item_ids\n     ]\n     artifact_ids = {row.id for row in artifacts}\n-    all_reviews = list(\n-        session.scalars(\n+    reviews = [\n+        review\n+        for review in session.scalars(\n             select(PageMaskReview)\n             .where(PageMaskReview.generation_id == generation.id)\n             .order_by(PageMaskReview.sequence)\n         ).all()\n-    )\n-    current_review_count = sum(event.operation == \"mask-stage-review\" for event in events)\n-    current_reviews = all_reviews[-current_review_count:] if current_review_count else []\n-    reviews = [\n-        review\n-        for review in current_reviews\n         if review.artifact_id in artifact_ids\n-        or (review.state == \"not-applicable\" and review.artifact_id is None)\n     ]\n     matched_items = [\n         (item, job)\n--- a/backend/src/manga_localizer/services/page_lineage.py\n+++ b/backend/src/manga_localizer/services/page_lineage.py\n@@ -4333,15 +4333,15 @@\n             quality, g3_event = require_current_text_present_quality_plate(\n                 store, session, image, generation\n             )\n+            g4_checksum, g4_accepted = _require_current_g4_acceptance(\n+                store, session, image=image, generation=generation\n+            )\n             if g4_amendment_open(session, generation):\n                 raise PageLineageConflict(\n                     \"G4 missed-box amendment is already open\",\n                     resource=f\"image:{image.id}\",\n                     reason=\"g4-regions-amendment-open\",\n                 )\n-            g4_checksum, g4_accepted = _require_current_g4_acceptance(\n-                store, session, image=image, generation=generation\n-            )\n             detect_started = session.scalar(\n                 select(PageLineageEvent.id)\n                 .where(\n--- a/backend/tests/test_cloud_full_page_clean_plates.py\n+++ b/backend/tests/test_cloud_full_page_clean_plates.py\n@@ -83,28 +83,6 @@\n         cloud_service._detect_raw_media_type(gif)\n     with pytest.raises(ProjectError, match=\"media type\"):\n         cloud_service._normalize(gif, (4, 6))\n-\n-\n-@pytest.mark.parametrize(\n-    \"raw_format,media_type\", [(\"PNG\", \"image/png\"), (\"JPEG\", \"image/jpeg\"), (\"WEBP\", \"image/webp\")]\n-)\n-def test_cloud_raster_formats_preserve_grid_and_reject_implicit_exif_rotation(\n-    raw_format, media_type\n-):\n-    image = Image.new(\"RGB\", (8, 12), \"white\")\n-    raw = _encode_raw(image, raw_format)\n-    normalized, manifest, source_grid, detected = cloud_service._normalize(raw, (16, 24))\n-    assert detected == cloud_service._detect_raw_media_type(raw) == media_type\n-    assert source_grid == (8, 12)\n-    assert manifest[\"sourceGrid\"] == {\"width\": 8, \"height\": 12}\n-    with Image.open(io.BytesIO(normalized)) as opened:\n-        assert (opened.format, opened.mode, opened.size) == (\"PNG\", \"RGB\", (16, 24))\n-    exif = Image.Exif()\n-    exif[274] = 6\n-    rotated = io.BytesIO()\n-    image.save(rotated, format=raw_format, exif=exif)\n-    with pytest.raises(ProjectError, match=\"already be upright\"):\n-        cloud_service._normalize(rotated.getvalue(), (16, 24))\n \n \n @pytest.mark.parametrize(\"size\", [(4, 6), (6, 4), (4, 4)])\n@@ -314,32 +292,28 @@\n     return response, metadata, raw, normalized\n \n \n-@pytest.mark.parametrize(\n-    \"raw_format,media_type,signature\",\n-    [(\"JPEG\", \"image/jpeg\", b\"\\xff\\xd8\\xff\"), (\"WEBP\", \"image/webp\", b\"RIFF\")],\n-)\n-def test_cloud_ingest_preserves_encoded_raw_bytes_and_detected_media_type(\n-    tmp_path, client: TestClient, app, raw_format, media_type, signature\n+def test_cloud_ingest_preserves_jpeg_raw_bytes_and_detected_media_type(\n+    tmp_path, client: TestClient, app\n ):\n     prepared = _prepare_g7_accepted_page(client, app, tmp_path)\n     response, metadata, raw, _normalized = _candidate_upload(\n         client,\n         prepared,\n-        raw_format=raw_format,\n-        invocation_id=\"synthetic-cloud-encoded-raw-1\",\n+        raw_format=\"JPEG\",\n+        invocation_id=\"synthetic-cloud-jpeg-raw-1\",\n     )\n     assert response.status_code == 200, response.text\n-    assert raw.startswith(signature)\n-    assert metadata[\"rawMediaType\"] == media_type\n+    assert raw.startswith(b\"\\xff\\xd8\\xff\")\n+    assert metadata[\"rawMediaType\"] == \"image/jpeg\"\n     assert metadata[\"rawSha256\"] == _sha(raw)\n     assert metadata[\"deltaManifest\"][\"outsideMaskChangedPixelCount\"] == 0\n     with prepared[\"store\"].session() as session:\n         candidate = session.get(PageCloudFullPageCandidate, response.json()[\"candidateId\"])\n         assert candidate is not None\n-        assert candidate.raw_media_type == media_type\n+        assert candidate.raw_media_type == \"image/jpeg\"\n         stored = (prepared[\"store\"].root / candidate.raw_relative_path).read_bytes()\n         assert stored == raw\n-        assert stored.startswith(signature)\n+        assert stored.startswith(b\"\\xff\\xd8\\xff\")\n         assert candidate.normalized_media_type == \"image/png\"\n \n \n@@ -1991,18 +1965,12 @@\n         )\n         is False\n     )\n-    assert (\n-        cloud_service.g8_replace_accepted_for_linked_item(\n-            store, None, item_verdict_lookup=lambda _item: \"issues\"\n-        )\n-        is False\n-    )\n-    assert (\n-        cloud_service.g8_replace_accepted_for_linked_item(\n-            store, \"not-a-lineage\", item_verdict_lookup=lambda _item: \"issues\"\n-        )\n-        is False\n-    )\n+    assert cloud_service.g8_replace_accepted_for_linked_item(\n+        store, None, item_verdict_lookup=lambda _item: \"issues\"\n+    ) is False\n+    assert cloud_service.g8_replace_accepted_for_linked_item(\n+        store, \"not-a-lineage\", item_verdict_lookup=lambda _item: \"issues\"\n+    ) is False\n \n \n def test_owner_issues_bounce_can_replace_accepted_g8_on_same_g7(\n--- a/backend/tests/test_final_reviews.py\n+++ b/backend/tests/test_final_reviews.py\n@@ -990,7 +990,7 @@\n         find_final_review_repair_generation_for_item,\n     )\n \n-    _batch, item, request, handoff = _create_issue_repair(\n+    batch, item, request, handoff = _create_issue_repair(\n         app, client, tmp_path / \"owner-bounce-refresh\"\n     )\n     _complete_repair_g10(app, client, tmp_path / \"owner-bounce-g10\", handoff)\n--- a/docs/real-data-iteration-status.md\n+++ b/docs/real-data-iteration-status.md\n@@ -1,6 +1,6 @@\n # Real-data iteration status\n \n-This is the sanitized public real-data summary and round log routed from `.agent/STATE.yaml`, the compact\n+This is the sanitized public real-data summary and round log routed from `.agent/STATE.md`, the compact\n current-state authority. It is updated after each completed round. Private images, OCR text,\n machine-specific paths, model weights, and generated artwork are deliberately excluded.\n \n--- a/frontend/src/App.tsx\n+++ b/frontend/src/App.tsx\n@@ -313,23 +313,11 @@\n \n   useEffect(() => {\n     function onHashChange() {\n-      const next = viewFromLocation();\n-      if (next === activeView) return;\n-      if (activeView === 'final-review') {\n-        const finalState = useFinalReviewStore.getState();\n-        const blocked = finalState.operation || finalState.conflict\n-          || (finalReviewDraftDirty(finalState)\n-            && !window.confirm('当前终审标注尚未保存，确定离开终审页面吗？'));\n-        if (blocked) {\n-          persistView(activeView);\n-          return;\n-        }\n-      }\n-      setActiveView(next);\n+      setActiveView(viewFromLocation());\n     }\n     window.addEventListener('hashchange', onHashChange);\n     return () => window.removeEventListener('hashchange', onHashChange);\n-  }, [activeView]);\n+  }, []);\n \n   useEffect(() => {\n     document.documentElement.dataset.theme = theme;\n--- a/frontend/src/finalReview/FinalReviewPage.test.tsx\n+++ b/frontend/src/finalReview/FinalReviewPage.test.tsx\n@@ -84,13 +84,10 @@\n \n   it('applies review shortcuts outside fields and ignores them inside feedback', () => {\n     renderPage();\n-    const save = vi.spyOn(api, 'updateFinalReviewItem');\n     fireEvent.keyDown(window, { key: '2' });\n     expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');\n     fireEvent.keyDown(screen.getByLabelText('具体反馈'), { key: '3' });\n     expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');\n-    fireEvent.keyDown(screen.getByRole('button', { name: '保存并下一张' }), { key: 'Enter' });\n-    expect(save).not.toHaveBeenCalled();\n     fireEvent.keyDown(window, { key: '3' });\n     expect(useFinalReviewStore.getState().draft?.verdict).toBe('issues');\n   });\n@@ -578,35 +575,6 @@\n     expect(screen.getByRole('main')).toHaveClass('final-review');\n   });\n \n-  it('guards browser hash navigation when the final-review draft is dirty', async () => {\n-    const user = userEvent.setup();\n-    seedWorkbench();\n-    const item = finalReviewItemFixture();\n-    const batch = finalReviewBatchFixture([item]);\n-    useFinalReviewStore.setState({\n-      batches: [batch], batch, items: [item], activeItemId: item.id,\n-      draft: { verdict: 'pending', issueCodes: [], feedback: '' },\n-    });\n-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);\n-    render(<App />);\n-    await user.click(screen.getByRole('button', { name: '最终验收' }));\n-    await user.click(screen.getByRole('radio', { name: '完全没问题' }));\n-\n-    window.history.replaceState(null, '', window.location.pathname);\n-    fireEvent(window, new HashChangeEvent('hashchange'));\n-\n-    expect(confirm).toHaveBeenCalledWith('当前终审标注尚未保存，确定离开终审页面吗？');\n-    expect(screen.getByRole('main')).toHaveClass('final-review');\n-    expect(window.location.hash).toBe('#final-review');\n-    expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');\n-\n-    confirm.mockReturnValue(true);\n-    window.history.replaceState(null, '', window.location.pathname);\n-    fireEvent(window, new HashChangeEvent('hashchange'));\n-    expect(document.querySelector('.workbench-grid')).toBeInTheDocument();\n-    expect(window.location.hash).toBe('');\n-  });\n-\n   it('releases the repair lock only after navigation and then switches App to the workbench', async () => {\n     const user = userEvent.setup();\n     seedWorkbench();\n@@ -702,7 +670,7 @@\n     const onOpenWorkbench = vi.fn();\n     render(<FinalReviewPage onOpenWorkbench={onOpenWorkbench} />);\n \n-    expect(screen.getByText(/你可以重新审核并保存这个旧版问题项/)).toBeInTheDocument();\n+    expect(screen.getByText(/旧版问题项可由业主改判定并保存/)).toBeInTheDocument();\n     expect(screen.getAllByRole('radio').every((control) => control.hasAttribute('disabled'))).toBe(false);\n     expect(screen.getByLabelText('具体反馈')).not.toBeDisabled();\n     const button = screen.getByRole('button', { name: '进入修复工作台' });\n--- a/frontend/src/finalReview/FinalReviewPage.tsx\n+++ b/frontend/src/finalReview/FinalReviewPage.tsx\n@@ -73,11 +73,7 @@\n     function keydown(event: KeyboardEvent) {\n       const target = event.target;\n       if (target instanceof HTMLElement\n-        && target.closest([\n-          'button', 'a[href]', 'input', 'textarea', 'select', 'summary',\n-          '[contenteditable=\"true\"]', '[role=\"button\"]', '[role=\"link\"]',\n-          '[role=\"menuitem\"]', '[role=\"option\"]', '[role=\"tab\"]', '[role=\"textbox\"]',\n-        ].join(', '))) return;\n+        && target.closest('input, textarea, select, [contenteditable=\"true\"], [role=\"textbox\"]')) return;\n       if (event.metaKey || event.ctrlKey || event.altKey) return;\n       const store = useFinalReviewStore.getState();\n       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {\n@@ -362,7 +358,7 @@\n                 value={state.draft.feedback}\n               />\n               {validation ? <p className=\"final-review__validation\">{validation}</p> : null}\n-              {legacyReviewed ? <div className=\"final-review__legacy-lock\" role=\"status\">{legacyApproved ? '此旧版已通过项保持只读。缺失的阶段证据会如实显示为“不可用”，不能同步或更改审核结论。' : '你可以重新审核并保存这个旧版问题项。历史反馈会保留；进入修复工作台后也不会自动开始处理。'}</div> : null}\n+              {legacyReviewed ? <div className=\"final-review__legacy-lock\" role=\"status\">{legacyApproved ? '旧版已通过项保持只读；缺失阶段证据如实标记为 unavailable，不允许 refresh 或改写 verdict。' : '旧版问题项可由业主改判定并保存；历史反馈留在 revision 里。新 G0 仍可用，但本 Goal 不自动开。'}</div> : null}\n               {state.error ? <div className={`final-review__error ${state.conflict ? 'is-conflict' : ''}`} role=\"alert\"><strong>{state.conflict ? '终审状态需要重新载入确认' : '操作失败'}</strong><span>{state.error}</span>{state.conflict ? <button className=\"text-button\" disabled={locked} onClick={() => void state.reloadConflict()} type=\"button\">载入最新版本并保留草稿</button> : null}</div> : null}\n               {repairError ? <div className=\"final-review__error\" role=\"alert\"><strong>无法进入工作台修复</strong><span>{repairError}</span></div> : null}\n               <div className=\"final-review__save-status\" aria-live=\"polite\">\n--- a/frontend/src/finalReview/store.test.ts\n+++ b/frontend/src/finalReview/store.test.ts\n@@ -281,23 +281,6 @@\n       activeItemId: items[0]?.id,\n       items,\n     });\n-  });\n-\n-  it('retries a torn compact batch metadata and item snapshot', async () => {\n-    const items = [finalReviewItemFixture()];\n-    const first = { ...finalReviewBatchFixture(items), revision: 1, items: [] };\n-    const second = { ...first, revision: 2 };\n-    vi.spyOn(api, 'getFinalReviewBatch')\n-      .mockResolvedValueOnce(first)\n-      .mockResolvedValueOnce(second)\n-      .mockResolvedValueOnce(second)\n-      .mockResolvedValueOnce(second);\n-    const listItems = vi.spyOn(api, 'listFinalReviewItems').mockResolvedValue(items);\n-\n-    await expect(useFinalReviewStore.getState().loadBatch(first.id)).resolves.toBe(true);\n-    expect(listItems).toHaveBeenCalledTimes(2);\n-    expect(useFinalReviewStore.getState().batch?.revision).toBe(2);\n-    expect(useFinalReviewStore.getState().items).toEqual(items);\n   });\n \n   it('selects the first pending item when loading a mixed compact batch', async () => {\n--- a/frontend/src/finalReview/store.ts\n+++ b/frontend/src/finalReview/store.ts\n@@ -555,39 +555,6 @@\n     evidence: current.evidence,\n     contentUrl: current.contentUrl,\n     thumbnailUrl: current.thumbnailUrl,\n-  });\n-}\n-\n-function batchMetadataSignature(batch: FinalReviewBatch): string {\n-  return stableSerialize({\n-    id: batch.id,\n-    name: batch.name,\n-    itemCount: batch.itemCount,\n-    counts: batch.counts,\n-    rootPath: batch.rootPath,\n-    manifestPath: batch.manifestPath,\n-    revision: batch.revision,\n-    formatVersion: batch.formatVersion,\n-    createdAt: batch.createdAt,\n-    updatedAt: batch.updatedAt,\n-  });\n-}\n-\n-async function loadBatchSnapshot(batchId: string): Promise<FinalReviewBatch> {\n-  for (let attempt = 0; attempt < 2; attempt += 1) {\n-    const before = await api.getFinalReviewBatch(batchId);\n-    if (Array.isArray(before.items) && before.items.length > 0) return before;\n-    const items = await api.listFinalReviewItems(batchId);\n-    const after = await api.getFinalReviewBatch(batchId);\n-    if (batchMetadataSignature(before) === batchMetadataSignature(after)) {\n-      return {\n-        ...after,\n-        items: Array.isArray(after.items) && after.items.length > 0 ? after.items : items,\n-      };\n-    }\n-  }\n-  throw new ApiError('终审批次在加载期间持续变化；请重新载入后再继续。', 409, {\n-    code: 'FINAL_REVIEW_BATCH_SNAPSHOT_DRIFT',\n   });\n }\n \n@@ -929,8 +896,10 @@\n     if (finalReviewDraftDirty(get()) && !window.confirm('当前终审标注尚未保存，确定放弃并切换批次吗？')) return false;\n     set({ loading: true, operation: 'load', error: '', conflict: false, conflictDraft: null });\n     try {\n-      const loaded = await loadBatchSnapshot(batchId);\n-      const items = loaded.items;\n+      const loaded = await api.getFinalReviewBatch(batchId);\n+      const items = Array.isArray(loaded.items) && loaded.items.length\n+        ? loaded.items\n+        : await api.listFinalReviewItems(batchId);\n       const batch = { ...loaded, items, counts: loaded.counts ?? statsFor(items) };\n       const active = items.find((item) => item.id === preferredItemId)\n         ?? items.find((item) => item.verdict === 'pending')\n@@ -1327,7 +1296,11 @@\n     const activeItemId = state.activeItemId;\n     set({ operation: 'load', loading: true, error: '' });\n     try {\n-      const loaded = await loadBatchSnapshot(state.batch.id);\n+      const loadedMeta = await api.getFinalReviewBatch(state.batch.id);\n+      const listed = Array.isArray(loadedMeta.items) && loadedMeta.items.length\n+        ? loadedMeta.items\n+        : await api.listFinalReviewItems(state.batch.id);\n+      const loaded = { ...loadedMeta, items: listed };\n       const items = assertAuthoritativeReloadBatch(loaded, state.batch, state.items, activeItemId);\n       const current = get();\n       if (current.operation !== 'load' || !current.conflict\n--- a/frontend/src/store/workbench.test.ts\n+++ b/frontend/src/store/workbench.test.ts\n@@ -442,9 +442,9 @@\n   });\n \n   afterEach(() => {\n-    vi.restoreAllMocks();\n     resetWorkbenchStore();\n     vi.useRealTimers();\n+    vi.restoreAllMocks();\n   });\n \n   it('lists catalog projects without auto-opening the first one', async () => {\n@@ -469,9 +469,10 @@\n     ]);\n     vi.spyOn(api, 'listJobs').mockResolvedValue([]);\n     vi.spyOn(api, 'listRegions').mockResolvedValue([]);\n+    const loadG4 = vi.spyOn(useWorkbenchStore.getState(), 'loadG4Context').mockResolvedValue(true);\n     await expect(useWorkbenchStore.getState().selectProject('project-1')).resolves.toBe(true);\n-    expect(api.listPageGenerations).toHaveBeenCalledWith('image-1');\n-    expect(vi.mocked(api.listPageGenerations).mock.calls.some((call) => call[0] === 'image-2')).toBe(false);\n+    expect(loadG4).toHaveBeenCalledWith('image-1', false);\n+    expect(loadG4.mock.calls.some((call) => call[0] === 'image-2')).toBe(false);\n   });\n \n   it('creates a region in canonical image pixels and autosaves it after the debounce', async () => {\n--- a/package.json\n+++ b/package.json\n@@ -13,9 +13,9 @@\n     \"app\": \"node scripts/app.mjs\",\n     \"app:lan\": \"node scripts/app.mjs --lan\",\n     \"package:app\": \"node scripts/package-app.mjs\",\n-    \"check\": \"npm run check:launcher && npm run check:backend && npm run check:frontend && npm run check:state\",\n+    \"check\": \"npm run check:launcher && npm run check:backend && npm run check:frontend\",\n     \"check:launcher\": \"node --test scripts/dev-platform.test.mjs scripts/app-platform.test.mjs scripts/package-app.test.mjs scripts/storage-data-route.test.mjs scripts/storage-frontend-route.test.mjs scripts/storage-model-route.test.mjs scripts/storage-runtime-route.test.mjs\",\n-    \"check:backend\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff check backend scripts/audit_release.py scripts/check_state.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff format --check backend scripts/audit_release.py scripts/check_state.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m pytest backend/tests\",\n+    \"check:backend\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff format --check backend scripts/audit_release.py scripts/bootstrap_clean_plate_run.py scripts/bootstrap_detection_annotations.py scripts/compare_inpaint.py scripts/compare_translate.py scripts/compare_upscale.py scripts/evaluate_detection_ocr.py scripts/evaluate_real_data.py scripts/macos_app_launcher.py scripts/prepare_clean_plate_review.py scripts/review_detection_annotations.py scripts/setup_optional_models.py && node scripts/external-uv.mjs run --frozen --offline --no-sync python -m pytest backend/tests\",\n     \"check:frontend\": \"npm --prefix frontend run lint && npm --prefix frontend run typecheck && npm --prefix frontend run test -- --run && npm --prefix frontend run build\",\n     \"test:e2e\": \"playwright test\",\n     \"audit:ci\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python scripts/audit_release.py --mode normal-ci\",\n@@ -23,8 +23,7 @@\n     \"cloud:image\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python -m manga_localizer.cloud_image_cli\",\n     \"g2:image\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python -m manga_localizer.reconstruction_cli\",\n     \"storage:data\": \"node scripts/external-data.mjs\",\n-    \"storage:check\": \"node scripts/external-uv.mjs --check && node scripts/external-frontend.mjs --check && node scripts/external-data.mjs --check\",\n-    \"check:state\": \"node scripts/external-uv.mjs run --frozen --offline --no-sync python -B scripts/check_state.py\"\n+    \"storage:check\": \"node scripts/external-uv.mjs --check && node scripts/external-frontend.mjs --check && node scripts/external-data.mjs --check\"\n   },\n   \"devDependencies\": {\n     \"@playwright/test\": \"^1.55.0\"\n--- a/scripts/external-uv.mjs\n+++ b/scripts/external-uv.mjs\n@@ -104,15 +104,6 @@\n   };\n }\n \n-export function projectSourceEnvironment(env) {\n-  // The guarded venv can be shared by checkouts and retain another checkout's\n-  // editable install. Commands must import the source selected by this wrapper.\n-  return {\n-    ...env,\n-    PYTHONPATH: [path.join(backendRoot, 'src'), env.PYTHONPATH].filter(Boolean).join(path.delimiter),\n-  };\n-}\n-\n export function runExternalUv(argv, {\n   env = process.env,\n   runUv = spawnSync,\n@@ -138,7 +129,7 @@\n   });\n   const result = runUv(canonicalUv, parsed.uvArgs, {\n     cwd: projectRoot,\n-    env: parsed.action === 'run' ? projectSourceEnvironment(route.environment) : route.environment,\n+    env: route.environment,\n     stdio: 'inherit',\n   });\n   if (result.error) throw result.error;\n--- a/scripts/storage-runtime-route.test.mjs\n+++ b/scripts/storage-runtime-route.test.mjs\n@@ -1,5 +1,4 @@\n import assert from 'node:assert/strict';\n-import { execFileSync } from 'node:child_process';\n import {\n   chmodSync,\n   mkdirSync,\n@@ -17,7 +16,6 @@\n import {\n   modelRoutedEnvironment,\n   normalizeUvArguments,\n-  projectSourceEnvironment,\n   resolveCanonicalUv,\n } from './external-uv.mjs';\n import {\n@@ -166,22 +164,6 @@\n   );\n });\n \n-test('selected checkout source wins over an inherited stale Python package', (t) => {\n-  const data = fixture(t);\n-  const stale = path.join(data.root, 'stale-checkout');\n-  mkdirSync(path.join(stale, 'manga_localizer'), { recursive: true });\n-  writeFileSync(path.join(stale, 'manga_localizer', '__init__.py'), 'raise RuntimeError(\"wrong checkout\")\\n');\n-  const originalEnvironment = { ...process.env, PYTHONPATH: stale, PRESERVED_FIXTURE_SETTING: 'kept' };\n-  const environment = projectSourceEnvironment(originalEnvironment);\n-  assert.equal(originalEnvironment.PYTHONPATH, stale);\n-  assert.equal(environment.PRESERVED_FIXTURE_SETTING, 'kept');\n-  const imported = execFileSync('python3', ['-c', 'import manga_localizer; print(manga_localizer.__file__)'], {\n-    env: environment,\n-    encoding: 'utf8',\n-  }).trim();\n-  assert.equal(realpathSync(imported), realpathSync(path.join(import.meta.dirname, '..', 'backend', 'src', 'manga_localizer', '__init__.py')));\n-});\n-\n test('external uv binary is derived from a canonical HOME without a username literal', (t) => {\n   const data = fixture(t);\n   const uv = path.join(data.home, '.local', 'bin', 'uv');\n--- a/scripts/verify-final-review-retry-ui.mjs\n+++ b/scripts/verify-final-review-retry-ui.mjs\n@@ -15,46 +15,37 @@\n const html = `<!doctype html><html lang=\"zh-CN\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>Isolated retry UI proof</title><div id=\"root\"></div><script type=\"module\">\n import React from 'react';\n import { createRoot } from 'react-dom/client';\n-import App from '/src/App.tsx';\n import { FinalReviewPage, RepairContextBanner } from '/src/finalReview/FinalReviewPage.tsx';\n import { useFinalReviewStore } from '/src/finalReview/store.ts';\n import { finalReviewItemFixture, finalReviewBatchFixture } from '/src/finalReview/testFixtures.ts';\n import { useWorkbenchStore } from '/src/store/workbench.ts';\n-import { seedWorkbench } from '/src/test/fixtures.ts';\n-import { ApiError, api } from '/src/api/client.ts';\n+import { api } from '/src/api/client.ts';\n import '/src/styles.css';\n const cases = ${JSON.stringify(receipt.cases)};\n const selected = cases[Number(new URL(location.href).searchParams.get('case') || 0)];\n-const scenario = new URL(location.href).searchParams.get('scenario') || 'retry';\n const handoff = selected.handoff;\n const item = finalReviewItemFixture(handoff.itemId, { position: 1, batchId: 'isolated-retry-proof', sourceProjectId: handoff.sourceProjectId, sourceImageId: handoff.sourceImageId, sourceRelativePath: '隔离回归.png', revision: handoff.finalReviewItemRevision, artifactRevision: handoff.artifactRevision, verdict: 'issues', issueCodes: ['mask'], feedback: '隔离界面回归，未生成或审核真实图片', strictEvidence: selected.strict_evidence, formatVersion: selected.strict_evidence ? 2 : 1 });\n const batch = {...finalReviewBatchFixture([item]), id: item.batchId, revision: handoff.batchRevision, name: '隔离回归样例'};\n useFinalReviewStore.setState({ batches: [batch], batch, items: [item], activeItemId: item.id, draft: { verdict: 'issues', issueCodes: ['mask'], feedback: item.feedback } });\n-window.proof = { calls: [], expected: handoff, context: () => useFinalReviewStore.getState().repairContext, state: () => useFinalReviewStore.getState(), verdict: () => useFinalReviewStore.getState().items[0].verdict };\n+window.proof = { calls: [], expected: handoff, context: () => useFinalReviewStore.getState().repairContext, verdict: () => useFinalReviewStore.getState().items[0].verdict };\n api.beginFinalReviewRepair = async (id, body) => { if (id !== item.id || body.expectedRevision !== item.revision || body.expectedBatchRevision !== batch.revision || body.retryFromGenerationId) throw new Error('Unexpected mutation'); window.proof.calls.push(['repair', id]); return structuredClone(handoff); };\n-let saveAttempts = 0;\n-api.updateFinalReviewItem = async (id, body) => { window.proof.calls.push(['save', id, structuredClone(body)]); saveAttempts += 1; if (saveAttempts === 1) throw new ApiError('隔离保存失败，请重试', 422); return { item: {...item, verdict: body.verdict, issueCodes: body.issueCodes, feedback: body.feedback, revision: item.revision + 1, reviewedAt: '2026-09-08T12:00:00Z'}, batchRevision: batch.revision + 1, historyCreated: true }; };\n useWorkbenchStore.setState({ selectProject: async (id, reload) => { window.proof.calls.push(['project', id, reload]); return id === handoff.repairProjectId && reload; }, selectImage: async (id) => { window.proof.calls.push(['image', id]); return id === handoff.repairImageId; } });\n function Proof() { const [opened, setOpened] = React.useState(Boolean(useFinalReviewStore.getState().repairContext)); return opened ? React.createElement('main', {style:{padding:'16px'}}, React.createElement('p', null, '隔离回归：修复上下文已恢复'), React.createElement(RepairContextBanner, {onReturn: () => setOpened(false)})) : React.createElement(FinalReviewPage, {onOpenWorkbench: () => setOpened(true)}); }\n-if (scenario === 'hash') seedWorkbench({images: [], regions: []});\n-createRoot(document.getElementById('root')).render(React.createElement(scenario === 'hash' ? App : Proof));\n+createRoot(document.getElementById('root')).render(React.createElement(Proof));\n </script></html>`;\n-const server = await createServer({ root: path.join(root, 'frontend'), server: {host:'127.0.0.1', port:0, strictPort:false}, plugins:[{name:'isolated-retry-proof', configureServer(s) { s.middlewares.use(async (req,res,next) => {if (!req.url?.startsWith('/__retry-proof.html') || req.url.includes('html-proxy')) return next(); try {res.setHeader('Content-Type','text/html');res.end(await s.transformIndexHtml(req.url,html));} catch(e) {next(e);} });}}] });\n+const server = await createServer({ root: path.join(root, 'frontend'), server: {host:'127.0.0.1', port:15174, strictPort:true}, plugins:[{name:'isolated-retry-proof', configureServer(s) { s.middlewares.use(async (req,res,next) => {if (!req.url?.startsWith('/__retry-proof.html') || req.url.includes('html-proxy')) return next(); try {res.setHeader('Content-Type','text/html');res.end(await s.transformIndexHtml(req.url,html));} catch(e) {next(e);} });}}] });\n let browser;\n const results = [];\n try {\n  await server.listen();\n- const address = server.httpServer?.address();\n- if (!address || typeof address === 'string') throw new Error('Unable to resolve isolated Vite port');\n- const baseUrl = `http://127.0.0.1:${address.port}/__retry-proof.html`;\n  browser = await chromium.launch({headless:true, executablePath:process.env.MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE || undefined});\n  for (const viewport of [{width:1440,height:900},{width:390,height:844}]) {\n   for (let index=0;index<receipt.cases.length;index++) {\n-   const context = await browser.newContext({viewport,locale:'zh-CN',reducedMotion:'reduce'});\n-   const page = await context.newPage(); const errors=[];const unexpected=[];const requests=[];\n+   const context = await browser.newContext({viewport,locale:'zh-CN'});\n+   const page = await context.newPage(); const errors=[];const unexpected=[];\n    page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});\n-   await page.route('**/api/**',async route=>{const u=new URL(route.request().url()); if (!u.pathname.startsWith('/api/')) return route.continue(); requests.push({method:route.request().method(),path:u.pathname}); if (/\\/(artifacts\\/final|thumbnail)$/.test(u.pathname)) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1800\"><rect width=\"1200\" height=\"1800\" fill=\"#ece7df\"/><text x=\"100\" y=\"200\" font-size=\"72\">Isolated fixture</text></svg>'});unexpected.push(u.pathname);await route.abort();});\n-   await page.goto(`${baseUrl}?case=${index}`);\n+   await page.route('**/api/**',async route=>{const u=new URL(route.request().url()); if (!u.pathname.startsWith('/api/')) return route.continue(); if (/\\/(artifacts\\/final|thumbnail)$/.test(u.pathname)) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1800\"><rect width=\"1200\" height=\"1800\" fill=\"#ece7df\"/><text x=\"100\" y=\"200\" font-size=\"72\">Isolated fixture</text></svg>'});unexpected.push(u.pathname);await route.abort();});\n+   await page.goto(`http://127.0.0.1:15174/__retry-proof.html?case=${index}`);\n    if(viewport.width<600)await page.getByRole('button',{name:'审核与导出',exact:true}).click();\n    const button=page.getByRole('button',{name:'进入修复工作台',exact:true});try {await expect(button).toBeEnabled();} catch(error) {writeFileSync(path.join(output,'failure.json'),JSON.stringify({errors,unexpected,body:await page.locator('body').innerText()},null,2));await page.screenshot({path:path.join(output,'failure.png')});throw error;}\n    expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);\n@@ -66,58 +57,7 @@\n    expect(await page.evaluate(()=>window.proof.context().runId)).toBe(receipt.cases[index].handoff.runId);\n    await page.screenshot({path:path.join(output,`${viewport.width}-${index}-resumed.png`),fullPage:true});\n    expect(errors).toEqual([]);expect(unexpected).toEqual([]);\n-   results.push({scenario:'retry-handoff',viewport,index,item_id:receipt.cases[index].item_id,keyboard_native_button:true,session_reload:true,verdict_unchanged:true,reduced_motion:true,console_errors:errors,observed_network:requests,unexpected_network:unexpected});\n-   await context.close();\n-  }\n-\n-  {\n-   const context = await browser.newContext({viewport,locale:'zh-CN',reducedMotion:'reduce'});\n-   const page = await context.newPage(); const errors=[];const unexpected=[];const requests=[];\n-   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});\n-   await page.route('**/api/**',async route=>{const u=new URL(route.request().url());if (!u.pathname.startsWith('/api/')) return route.continue();requests.push({method:route.request().method(),path:u.pathname});if (/\\/(artifacts\\/final|thumbnail)$/.test(u.pathname)) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1800\"><rect width=\"1200\" height=\"1800\" fill=\"#ece7df\"/><text x=\"100\" y=\"200\" font-size=\"72\">Isolated fixture</text></svg>'});unexpected.push(u.pathname);await route.abort();});\n-   await page.goto(`${baseUrl}?case=0&scenario=save`);\n-   if(viewport.width<600)await page.getByRole('button',{name:'审核与导出',exact:true}).click();\n-   const approved=page.getByRole('radio',{name:'完全没问题',exact:true});\n-   try {await expect(approved).toBeVisible({timeout:5000});} catch(error) {writeFileSync(path.join(output,'failure-save.json'),JSON.stringify({url:page.url(),errors,unexpected,body:await page.locator('body').innerText()},null,2));await page.screenshot({path:path.join(output,'failure-save.png'),fullPage:true});throw error;}\n-   await approved.click();\n-   const saveNext=page.getByRole('button',{name:'保存并下一张',exact:true});\n-   await expect(saveNext).toBeEnabled();\n-   await saveNext.click();\n-   await expect(page.getByText('隔离保存失败，请重试',{exact:true})).toBeVisible();\n-   const failed=await page.evaluate(()=>({draft:window.proof.state().draft,conflict:window.proof.state().conflict,active:window.proof.state().activeItemId,calls:window.proof.calls}));\n-   expect(failed.draft.verdict).toBe('approved');expect(failed.conflict).toBe(false);expect(failed.active).toBe(receipt.cases[0].handoff.itemId);expect(failed.calls.filter(c=>c[0]==='save')).toHaveLength(1);\n-   await page.screenshot({path:path.join(output,`${viewport.width}-save-error.png`),fullPage:true});\n-   await saveNext.click();\n-   await expect(page.getByText(/已保存/)).toBeVisible();\n-   const saved=await page.evaluate(()=>({draft:window.proof.state().draft,active:window.proof.state().activeItemId,verdict:window.proof.verdict(),calls:window.proof.calls}));\n-   expect(saved.draft.verdict).toBe('approved');expect(saved.active).toBe(receipt.cases[0].handoff.itemId);expect(saved.verdict).toBe('approved');expect(saved.calls.filter(c=>c[0]==='save')).toHaveLength(2);\n-   await page.screenshot({path:path.join(output,`${viewport.width}-save-success.png`),fullPage:true});\n-   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);expect(errors).toEqual([]);expect(unexpected).toEqual([]);\n-   results.push({scenario:'last-item-save-retry',viewport,error_preserved_draft:true,retry_saved_without_navigation:true,reduced_motion:true,console_errors:errors,observed_network:requests,unexpected_network:unexpected});\n-   await context.close();\n-  }\n-\n-  {\n-   const context = await browser.newContext({viewport,locale:'zh-CN',reducedMotion:'reduce'});\n-   const page = await context.newPage(); const errors=[];const unexpected=[];const requests=[];\n-   page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(m.type()==='error')errors.push(m.text());});\n-   await page.route('**/api/**',async route=>{const u=new URL(route.request().url());if (!u.pathname.startsWith('/api/')) return route.continue();requests.push({method:route.request().method(),path:u.pathname});if (/\\/(artifacts\\/final|thumbnail)$/.test(u.pathname)) return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1200\" height=\"1800\"><rect width=\"1200\" height=\"1800\" fill=\"#ece7df\"/><text x=\"100\" y=\"200\" font-size=\"72\">Isolated fixture</text></svg>'});unexpected.push(u.pathname);await route.abort();});\n-   await page.goto(`${baseUrl}?case=0&scenario=hash#final-review`);\n-   if(viewport.width<600)await page.getByRole('button',{name:'审核与导出',exact:true}).click();\n-   await page.getByRole('radio',{name:'完全没问题',exact:true}).click();\n-   page.once('dialog',dialog=>dialog.dismiss());\n-   await page.evaluate(()=>{location.hash='';});\n-   await expect(page.locator('main.final-review')).toBeVisible();\n-   await expect.poll(()=>page.evaluate(()=>location.hash)).toBe('#final-review');\n-   expect(await page.evaluate(()=>window.proof.state().draft.verdict)).toBe('approved');\n-   await page.screenshot({path:path.join(output,`${viewport.width}-hash-denied.png`),fullPage:true});\n-   page.once('dialog',dialog=>dialog.accept());\n-   await page.evaluate(()=>{location.hash='';});\n-   await expect(page.locator('.workbench-grid')).toBeVisible();\n-   expect(await page.evaluate(()=>location.hash)).toBe('');\n-   expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);\n-   expect(errors).toEqual([]);expect(unexpected).toEqual([]);\n-   results.push({scenario:'hash-dirty-guard',viewport,decline_preserved_draft_and_url:true,accept_navigated:true,reduced_motion:true,console_errors:errors,observed_network:requests,unexpected_network:unexpected});\n+   results.push({viewport,index,item_id:receipt.cases[index].item_id,keyboard_handoff:true,session_reload:true,verdict_unchanged:true,console_errors:errors,unexpected_network:unexpected});\n    await context.close();\n   }\n  }\n--- a/tests/e2e/manga-localizer.spec.ts\n+++ b/tests/e2e/manga-localizer.spec.ts\n@@ -231,8 +231,6 @@\n   await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();\n   await reviewVisualStage(page, '成品', 'typeset', '接受', '已接受');\n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   await page.getByRole('button', { name: '擦除', exact: true }).click();\n   await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');\n@@ -259,8 +257,6 @@\n   await expect(page.getByRole('application', { name: '成品画布' })).toBeVisible();\n \n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   await expect(page.locator('.image-row__name')).toHaveText('001.png');\n   await page.locator('.region-index button').first().click();\n@@ -373,8 +369,6 @@\n   expect(JSON.stringify(detected)).not.toContain('\"regionId\"');\n \n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   await page.getByRole('button', { name: '批处理与导出' }).click();\n   const trustDialog = page.getByRole('dialog', { name: '批处理与导出' });\n@@ -422,8 +416,6 @@\n   }\n \n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   await page.getByRole('button', { name: '批处理与导出' }).click();\n   const translatedDialog = page.getByRole('dialog', { name: '批处理与导出' });\n@@ -465,8 +457,6 @@\n     expect(response.ok()).toBe(true);\n   }\n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   await inspector.getByRole('tab', { name: '文本' }).click();\n   await inspector\n@@ -542,8 +532,6 @@\n \n   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();\n   await page.reload();\n-  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');\n-  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);\n   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);\n   for (const mode of ['增强', '擦除', '成品'] as const) {\n     await page.getByRole('button', { name: mode, exact: true }).click();\n",
+  "inverse_patch_sha256": "bbba0abbfad103f2c22496b63647068b427fb372dc078a474c96d6f4a9760832",
+  "inverse_proof": "All replace operations reconstruct exact original bytes in a disposable fixture; retired state reconstructs from checkpoint; new paths inverse is postimage-CAS unlink. No real rollback performed.",
+  "checks": [
+    {
+      "command": "Original npm run storage:check",
+      "exit": 0,
+      "result": "guarded runtime/model/frontend/project-data routes PASS; no real app startup"
+    },
+    {
+      "command": "Original npm run check:state, including final-state recheck",
+      "exit": 0,
+      "result": "sole YAML/history and21field contract PASS"
+    },
+    {
+      "command": "Original npm run check:launcher",
+      "exit": 0,
+      "result": "40passed"
+    },
+    {
+      "command": "Original external-uv python import manga_localizer.database.__file__",
+      "exit": 0,
+      "result": {
+        "module_relative_path": "backend/src/manga_localizer/database.py",
+        "resolved_beneath": "original_root_ref",
+        "module_sha256": "7138a981cdff74c948ab2eeb309b7f387aa06c6874b6f431ffa2a2b70717f6a0"
+      }
+    },
+    {
+      "command": "Original external-uv python -m pytest: database_review_epochs,mask_recovery_edges,final_review_responsiveness,state_contract plus4 original G7N/A regressions",
+      "exit": 0,
+      "result": "21passed,1 upstream warning; all synthetic",
+      "log_sha256": "60d48496ccea2bd4e9d32bad3dcfefd6ddcddb1d9d670b075aa4e8c4ad6b01e3"
+    },
+    {
+      "command": "Original npm run check:frontend",
+      "exit": 0,
+      "result": "lint/typecheck461tests/buildPASS; existing Vite chunk warning",
+      "log_sha256": "2e681d00316f73e598496dba647baf8a51eb4d125995b4c0a7b55a1881f2161d"
+    },
+    {
+      "command": "Original isolated verify-final-review-retry-ui.mjs",
+      "exit": 0,
+      "result": "10desktop/mobile real-component scenarios PASS with explicit API/navigation substitutes; Root viewed mobile save-error and desktop hash-denial PNGs; no real image-generation claim",
+      "log_sha256": "ea2e155c3517343dd98be1a20d936e0160ec294704e69c25663cf6c2aa83defd"
+    },
+    {
+      "command": "Original npm run test:e2e with explicit /tmp/manga-install-e2e roots",
+      "exit": 0,
+      "result": "6passed54.8seconds; all owned browsers/services closed",
+      "log_sha256": "048d8a73d3fffbd8721b172b14ce4216215ade00391342fb06f2785d80253417"
+    },
+    {
+      "command": "Unchanged Hub SourceResolver with disposable per-ID registry and actual installed Manga state",
+      "exit": 0,
+      "result": "resolved,20known1unknown,repeatrefreshsamebusiness/updatekey; realHubregistry unchanged"
+    }
+  ],
+  "pending": [
+    "fresh installation Judge/Governor",
+    "receipt main and CI",
+    "real Hub route/refresh",
+    "actual image redo"
+  ],
+  "installed_path_count": 40,
+  "original_head_index_preserved": true,
+  "metadata_distribution": {
+    "path": "docs/reports/all-projects-governance/manga-review-landing/installation.json",
+    "original_preimage": null,
+    "self_identity_excluded": true,
+    "purpose": "The installation registration itself is copied as Root evidence; it is never included in its own hash."
+  },
+  "semantic_files": [
+    {
+      "scope": "original",
+      "path": ".agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md",
+      "sha256": "2230a16c8c07001f91a3f6642c8a7f10d4c2a80f64c7c406fcae22c0beaad9a1",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": ".agent/FINAL_CORPUS_REBUILD_REFERENCE.md",
+      "sha256": "1b0896c69a77db57292a44eeb7a87201d9415483a4a4a9e30c11b6526cced388",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": ".agent/STATE.md",
+      "sha256": null,
+      "mode": null
+    },
+    {
+      "scope": "original",
+      "path": ".agent/STATE.yaml",
+      "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": ".agents/skills/manga-final-review-loop/SKILL.md",
+      "sha256": "5e69e5d1312dc2b122ba5ed7f14587973c515301c226614119d003987a985a5f",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": ".github/workflows/ci.yml",
+      "sha256": "4822d7e083155567191406825364d65356944ecab1fad5d92053b6cd195d78b5",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "AGENTS.md",
+      "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/cloud_image_cli.py",
+      "sha256": "2543e63828ceeef7bade154283e894a9dd0e16ebf0f95cea50af163ccd2c8f99",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/database.py",
+      "sha256": "7138a981cdff74c948ab2eeb309b7f387aa06c6874b6f431ffa2a2b70717f6a0",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/main.py",
+      "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/schemas.py",
+      "sha256": "ca59ebe254d4903f52ff45d842317966fc100fe8b6905ca33d7296445e98551a",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/clean_plates.py",
+      "sha256": "89bd72a6096d858bb0070e5cc9a79eab7942eba29f81fa6575adc775f00883ff",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
+      "sha256": "75f71ca2b1a616e9ac395bded663fbaba4151d88466932796248dc8d1798d6e8",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/final_reviews.py",
+      "sha256": "2ebfe40e68729b8a489718e1a5a35f85a68e942a99d5120068ba9dd2f8e92d26",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/masks.py",
+      "sha256": "47a2c6cda7bb0613d847daed4de49c7ea97edc26bbfd672a6b258ebe41d5025a",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/page_lineage.py",
+      "sha256": "10ba6002908f2cb27a96dfd19c75e10e6b3f929fb1289afbd9b6eb174357bc9b",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/projects.py",
+      "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/translations.py",
+      "sha256": "24cbbd16a8ee992b1feaf4d90f06108a30d7b9dc364d16709d9252b3e2f95750",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/src/manga_localizer/services/typesets.py",
+      "sha256": "39b98876e24b9c7789a7b8ba2b3565729d0418346b1958ec8bb30587dd5a182c",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_api_projects.py",
+      "sha256": "143d663f20fc70127e6a7e0dca16111e45ae7fe59793c4bc81e1c9b747b2dbc7",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_cloud_full_page_clean_plates.py",
+      "sha256": "43f92a49f82a25838781c971529a9b826efde986bfa1b9ecee0e5ab07fd6b2c7",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_cloud_image_cli.py",
+      "sha256": "0906be055a89f51e4b024e60622cd88cfa558f1d4c978dfc9aac9afec47a7ed9",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_database_review_epochs.py",
+      "sha256": "91b3bf8e3104a5ffc7df18128523458490e553387533d1906897588f65ba9cef",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_final_review_responsiveness.py",
+      "sha256": "8d38a772efec38ec185e8f19fefff0c6f87612ab6435bba0b3c964fe02929705",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_final_reviews.py",
+      "sha256": "1cc8f8ffe6c39e8c6ef4004d76fec25ee5254514f2e7e83406296443be939d88",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_mask_recovery_edges.py",
+      "sha256": "757af6a9c3306ec73086b2e69d0808e283ec889078ade3510d35a2df17202a1e",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_page_lineage.py",
+      "sha256": "a67a1f315920887104605af8a64ecd5a4c3cba7f7919f34ccaf1a1f22ccff13b",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "backend/tests/test_state_contract.py",
+      "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/real-data-iteration-status.md",
+      "sha256": "27c8e64b8efc76256b975537b8c98a98f0a5506b9e8e16019dc170222c67d8d3",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/baseline.json",
+      "sha256": "bcab5bffec2f723497b148e1d648f3b884b96efe0d081eed42f8401e9abf9072",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/candidate.json",
+      "sha256": "1a8ced5ac201710a9ec986ee4d81c0df4fe48b02f1c5cd1d7cae60cdb3b8175e",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/contract.md",
+      "sha256": "c769abe23e31fe8e38e36d6b56088a0f554d663c9e0014c6c170d054323deb0c",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/contract_decision.json",
+      "sha256": "f47a9a20043f8b97d990bbc51d417f2e5729cc66e4ee76c0fda34fe45d041a1d",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/delivery.json",
+      "sha256": "3578d8f12f2349491ccea739de3fee23f5a1643be1a05a1c75720cbd608a9b07",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/governor.json",
+      "sha256": "4e1f8ec980aeda7c8298af0e9ad4470d27ad802bce5149cb50847489fe0ecd7c",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/judge.json",
+      "sha256": "449dc4b78065518c65c5c34d8603c118b7efdee39c22369c66a6a484bcc25518",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json",
+      "sha256": "69a0455b2765ca571e4046e7da00bf2ab933865a70f6d80860239ff3fd4dc242",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/state_validation.json",
+      "sha256": "f2ba5be5ad0172d9fdb3fbf7c62e108cca6eb68decadc80222541d4e67447a07",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/validation.json",
+      "sha256": "ee7cfb38650e2ee114c59e0c4b529762ab2afe3d210d7e43aa835f2e2982f6bf",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/App.tsx",
+      "sha256": "74eea180f14fd4ce366c8b87d916c0cb81cbf194625fa42b6a6b558276dffe9a",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/api/client.ts",
+      "sha256": "86ef63711e080e3b46b9b731bb12f3c5ff471cdf403b3d29eea5937bb0f217aa",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/components/Sidebar.tsx",
+      "sha256": "330658edcd5580d0d7de9c38c7c13070eb8a534188c4314b45ef7b2ac79f4afd",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/components/Workbench.test.tsx",
+      "sha256": "1c360018b2d332d11f7c3142370ebc09f248ec5a4729abc0b7b5103c8243c673",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/finalReview/FinalReviewPage.test.tsx",
+      "sha256": "5936c154ac2cd827a4983b437f0a373e6fa8ea8c9a8dec9c826a67e70e42bfeb",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/finalReview/FinalReviewPage.tsx",
+      "sha256": "b202f9ae6bd4b8d6e02b6b6553f15cff92b3d0b63e7e6e9163c76853d6f2a148",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/finalReview/store.test.ts",
+      "sha256": "a0f779530753cee04b0fe3d18216d11d17733532ebd9ed21758356a4db011cd5",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/finalReview/store.ts",
+      "sha256": "03f14a78e6d4bce6f10cb61a7118fbe3b45c0548a67526de6c548f3d55f68fc8",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/store/workbench.test.ts",
+      "sha256": "21e7c11af14c551ca2aca6e87009f6fec64ade20d92eb3fcbb63121fbe4f274a",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "frontend/src/store/workbench.ts",
+      "sha256": "3aff7ad98b2e2b814d2ad63707cd30092279e03e1975b1e657b92d243d2a6986",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "hub.connection.yaml",
+      "sha256": "a6f6baea6521056ef1b2fc52b9731f68a9a646de395fb5573f6a5743b5ba3f69",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "package.json",
+      "sha256": "de7909e548da7225785a5e1309e243ff0114f116d45335018b84f0f44c37d1ab",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "scripts/check_state.py",
+      "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "scripts/external-uv.mjs",
+      "sha256": "34da44e2f71269b8de91dfffb49a8981e2df739253feb5fffc186975cde0856c",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "scripts/storage-runtime-route.test.mjs",
+      "sha256": "8c4dfc083bc1de0065e31f90c37b85e38a37570ef1952cca8114d4928c0289cd",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "scripts/verify-final-review-retry-ui.mjs",
+      "sha256": "9281f05fdeafc573baec7cb1dc708896c1f4e896479450842379ffe751a2e1e8",
+      "mode": 420
+    },
+    {
+      "scope": "original",
+      "path": "tests/e2e/manga-localizer.spec.ts",
+      "sha256": "cd098b3446c3a46ad2e79151ee972aeb413b7162b1b7332e685203e786771113",
+      "mode": 420
+    },
+    {
+      "scope": "source",
+      "path": ".agent/STATE.yaml",
+      "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+      "mode": 420
+    }
+  ],
+  "semantic_sha256": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+  "semantic_hash_recipe": "SHA256 of compact sorted-key JSON semantic_files sorted by scope/path; installation record and later review/delivery metadata excluded to avoid self-reference.",
+  "source_state_preimage_commit": "57fe2ef5fe8570ba18affa8d394781acd796f433",
+  "source_state_preimage_sha256": "b5f2931f1d6f055ec3fed8aa4e6d87a8c82abe219eee4c2a6140cb5b0d166e07",
+  "hub_source_validation": {
+    "scope": "Unchanged Hub SourceResolver reads actual installed Manga declaration/state through a disposable per-ID registry only; no real Hub ledger refresh or validation_entry execution.",
+    "success": true,
+    "disposition": "resolved",
+    "source_hashes": {
+      ".agent/STATE.yaml": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+      "hub.connection.yaml": "a6f6baea6521056ef1b2fc52b9731f68a9a646de395fb5573f6a5743b5ba3f69"
+    },
+    "shared_code": {
+      "src/hub/connection_records.py": "24ed402167f7811dd4cb12ebb3e08237a57f32e0a1aedc6d5e0bd2966d80e733",
+      "src/hub/connection_sources.py": "0648baa808ac566ff8c1e1a6f1e6c5a6b826b230787e32665424060776014435",
+      "src/hub/connections.py": "b9fa95e08272b8747dc0326ac149ba6c384993a9e1bc131125929ec617619033"
+    },
+    "registry_unchanged_sha256": "5b0922259f22a15a232697fc12dcc28077dac88d033d03214b0657db35c69851",
+    "known_fields": 20,
+    "unknown_fields": {
+      "progress.milestones": "No canonical business milestone list is maintained; the source publishes owner-approved page counts instead."
+    },
+    "business_assertions": {
+      "status": "blocked",
+      "completed": false,
+      "accepted": false,
+      "progress_completed": 140,
+      "progress_total": 199,
+      "blocker_count": 3,
+      "delivery_status": "delivered",
+      "delivery_commit": "57fe2ef5fe8570ba18affa8d394781acd796f433"
+    },
+    "repeat_refresh_same_business_and_update_key": true
+  },
+  "full_backend_reuse": "Full1012 source backend and remote CI passed. All installed product code and176unchanged baseline paths match that accepted source exactly; original runtime routing and21focused regressions reproduced. No redundant full backend rerun.",
+  "failure_conclusions": [
+    {
+      "target": "Root original focused pytest invocation",
+      "failure": "Direct pytest console script hit the guarded Python shell-wrapper shebang nesting issue before collecting tests; one G10selector was also discovered in test_typesets.py, not test_page_lineage.py.",
+      "resolution": "Used existing project python -m pytest entry and exact rg-discovered selector;21passed. No runtime or test weakening."
+    }
+  ],
+  "original_pending_path_count_after_install": 83,
+  "browser_artifacts": {
+    "result_sha256": "677a6187b03ab764407c79f8b03a205f5f47239858139ec7f58eec52c26c19f2",
+    "screenshots": {
+      "390-save-error.png": "fd4ca9e9822960b1c21c177b452fa59198b7c62d1f102111be1ea17a702203d7",
+      "1440-hash-denied.png": "c979b292f335b7c264d3db65f3d0a50d68204c5cb8b5f5c99489da7a9a2d7eb2"
+    }
+  },
+  "original_root_ref": {
+    "project_id": "manga-localizer",
+    "authority": "Personal Control Hub registry, data/registry/external_projects.yaml",
+    "canonical_path_sha256": "433c7f080321ccc58482406ad0abbc0b10f40c90a3fb655bf536355b40a19183"
+  },
+  "delivery_repair": {
+    "failed_candidate_commit": "b23a40f836eaf0539a78a47b30b7d58da5a4aa94",
+    "failed_local_branch_preserved": "codex/manga-review-retry-governance",
+    "audit_base": "0e2a03b27e15661b18d25c96d236577751b3391c",
+    "failure_class": "New personal absolute paths in two receipt fields; no product defect or secret finding",
+    "failed_audit_exit": 1,
+    "failed_audit_log_sha256": "e48b9ad4eed098f893281b7d0fc1dee4834df99c027d76a9e303d2095dd89f00",
+    "prior_reviewed_record_sha256": "ad88007c14901adbf99693ddf27225713b34ccb27cb0a939a3970f55d12e11d2",
+    "correction": "Portable project identity plus canonical-path SHA and relative module path; same original root and exact verification evidence. No audit change or allowlist.",
+    "git_method": "New ordinary branch from verified main57fe2ef; retain failed unpublished branch/commit. No reset, amend, rebase or history rewrite; failed commit will not be pushed.",
+    "semantic_unchanged": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+    "pending": "Fresh read-only evidence-delta check, Governor confirmation, corrected full audit and main CI"
+  }
+}

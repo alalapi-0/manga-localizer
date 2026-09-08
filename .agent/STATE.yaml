@@ -95,40 +95,44 @@ blockers:
   retry_entry: Owner final-review screen; no automatic retry or regeneration.
   waiting_for_user: true
 verification:
-  status: maintenance_checks_verified_actual_redo_incomplete
+  status: maintenance_source_delivered_original_checks_verified
   evidence_refs:
   - docs/reports/all-projects-governance/manga-retry/live-recovery.json
   - docs/reports/all-projects-governance/manga-ci-audit/delivery.json
   - docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json
   - docs/reports/all-projects-governance/manga-review-landing/validation.json
-  accepted_basis: Prior handoff code passed review and main CI. Current maintenance checks pass; its independent
-    review/delivery and actual image/corpus acceptance remain pending.
+  - docs/reports/all-projects-governance/manga-review-landing/delivery.json
+  accepted_basis: Stage A passed fresh Judge/Governor and remote main CI34221937366 (1012 backend,461
+    frontend,6 E2E). Original installation now passes state/launcher,21 targeted backend,461 frontend,10
+    isolated browser and6 E2E checks; independent installation acceptance/receipt and actual image/corpus
+    acceptance remain pending.
 delivery:
-  status: prior_code_main_verified_new_unit_in_progress
+  status: main_verified
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: 0e2a03b27e15661b18d25c96d236577751b3391c
-  receipt_ref: docs/reports/all-projects-governance/manga-ci-audit/delivery.json
+  commit: 57fe2ef5fe8570ba18affa8d394781acd796f433
+  receipt_ref: docs/reports/all-projects-governance/manga-review-landing/delivery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
   path: .agent/STATE.md
   sha256: d7c5bfe73e1da0607af966932e1ad9189bd3d4854663e51b682d8b499049127c
-  meaning: Exact original current-state bytes retained in this local reviewed-series checkpoint, not yet
-    remote delivery. Historical text cannot activate execution.
+  meaning: Exact original current-state bytes preserved in the checkpoint, verified as an ancestor of
+    remote main57fe2ef. Historical text cannot activate execution.
 all_projects_governance:
   task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
   unit: manga_review_replacement_landing
   lane: GOVERNED
   status: ACTIVE
-  stage: A
+  stage: B
   contract: docs/reports/all-projects-governance/manga-review-landing/contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/baseline.json
-  candidate_status: checks_passed_awaiting_independent_review
-  next_action: Fresh Judge and Governor review of the full Stage A series, then normal main push and CI
-    verification. Original installation, Hub routing and actual image redo remain pending.
+  candidate_status: installation_checks_passed_awaiting_independent_review
+  next_action: Fresh Judge/Governor review of the exact original installation and source state, then normal
+    main receipt delivery and CI. Later Hub routing/refresh and actual image redo remain pending.
   budget:
-    native_tokens: 8599386
-    native_seconds: 30035
+    native_tokens: 9115516
+    native_seconds: 32282
     coverage: cumulative native Goal snapshot; no explicit cap/cost telemetry; no reset
   failure_fingerprint: 'Resolved G7N/A readback regression: final full isolated backend1012passed; no
     failed quality standard waived.'
+  candidate_manifest: docs/reports/all-projects-governance/manga-review-landing/installation.json

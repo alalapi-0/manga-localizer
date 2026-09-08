@@ -15,9 +15,9 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    env:
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/manga-localizer-backend-venv
     steps:
+      - name: Configure external Python environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/manga-localizer-backend-venv" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -60,8 +60,9 @@ jobs:
     env:
       CI: "true"
       MANGA_LOCALIZER_CI_LOCAL_RUNTIME: "1"
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/manga-localizer-backend-venv
     steps:
+      - name: Configure external Python environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/manga-localizer-backend-venv" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
         with:

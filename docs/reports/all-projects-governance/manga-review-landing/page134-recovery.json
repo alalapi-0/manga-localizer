@@ -3,7 +3,7 @@
   "contract": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
   "lane": "GOVERNED",
   "stage": "A",
-  "status": "source semantic candidate frozen; fresh independent acceptance pending",
+  "status": "Stage A source accepted; main delivery and CI pending; Stage B/C/D not accepted",
   "baseline_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
   "governor_origin": "/root/hub_connection_governor native contract decision before mutation",
   "original": {
@@ -327,6 +327,36 @@
       "protected": false,
       "effective_branch_rules": [],
       "fetch_exit": 0
+    },
+    "audit_ci": {
+      "command": "npm run audit:ci -- --base 1aa3fb8a80241bf7a533b13eeb08771a428f4839 --head 1c163511b4825e359e55d5d49f0a432bb69b8aaa",
+      "exit": 0,
+      "candidate_files": 241,
+      "index_blobs": 241,
+      "historical_blob_paths": 1614,
+      "live_content_reads": 238,
+      "inert_cursor_objects": 2,
+      "cursor_live_content_reads": 0,
+      "log_sha256": "4eaa42f4de06c19b0dda99d8d95ff0a2aa553a386a86eb6a1f7ea5c71b6dab4b",
+      "meaning": "Normal CI audit only; no release acceptance"
+    },
+    "original_preservation_after_source_checks": {
+      "exit": 0,
+      "protected_paths": 236,
+      "protected_tree_sha256": "ed0f340f42643f15f759cb81919d246e8e025bcc77ad8c69c9693af89f43af09",
+      "head_unchanged": true,
+      "index_unchanged": true,
+      "owned7_preimages_unchanged": true,
+      "cursor_read": false,
+      "method": "Same sorted compact path/hash/mode recipe as registration; exact baseline matched"
+    },
+    "e2e_teardown": {
+      "ports": [
+        18100,
+        15173
+      ],
+      "listeners_remaining": false,
+      "method": "Root loopback socket probes after completed E2E process"
     }
   },
   "preserved_limits": {
@@ -343,10 +373,40 @@
       192
     ]
   },
-  "reviews": {},
+  "reviews": {
+    "stage_a_judge": {
+      "agent": "/root/manga_page134_stage_a_judge_v1",
+      "role": "fresh read-only Judge",
+      "verdict": "PASS",
+      "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
+      "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
+      "evidence_origin": "Native collaboration final response; Root transcript registration, not writer self-assessment",
+      "checks": {
+        "semantic_files": 10,
+        "preimages_match": true,
+        "controlled_tests": 9,
+        "state_tests": 26,
+        "root_log_hashes_match": true,
+        "diff_check": 0
+      },
+      "scope": "Stage A source prerequisites only; no install, clone, actual recovery, owner approval or remote acceptance"
+    },
+    "stage_a_governor": {
+      "agent": "/root/hub_connection_governor",
+      "role": "read-only Governor",
+      "decision": "APPROVE",
+      "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
+      "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
+      "evidence_origin": "Native collaboration final decision after fresh Judge PASS",
+      "scope": "Normal source-main candidate+metadata delivery, then remote ancestry and CI verification. Stage B requires those prerequisites and a separate clone/install acceptance; no live effects accepted."
+    }
+  },
   "delivery": {
-    "status": "pending",
-    "previous_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839"
+    "status": "accepted_source_pending_main_and_ci",
+    "previous_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
+    "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
+    "target_repository": "alalapi-0/manga-localizer",
+    "target_branch": "main"
   },
   "budget": {
     "native_tokens": 10920063,
@@ -443,5 +503,6 @@
   ],
   "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
   "semantic_hash_recipe": "SHA256 of UTF-8 compact sorted-key JSON semantic_files list, ordered by path. Exact whole source/state/contract bytes; registration/check/review/delivery metadata excluded. No product/state/control semantic edits after freeze without new exact candidate acceptance.",
-  "metadata_boundary": "This page134-recovery.json record is evidence registration and review/delivery metadata, excluded to avoid self-hashing; contract is included in semantic_files. Source preimages and original preservation facts remain review inputs."
+  "metadata_boundary": "This page134-recovery.json record is evidence registration and review/delivery metadata, excluded to avoid self-hashing; contract is included in semantic_files. Source preimages and original preservation facts remain review inputs.",
+  "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa"
 }

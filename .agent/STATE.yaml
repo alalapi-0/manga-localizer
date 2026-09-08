@@ -38,21 +38,21 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Deliver accepted v2 Stage A source and receipt to Manga main, verify remote ancestry and
-    complete CI, then prepare Stage B CAS installation and isolated post-v1 clone under the effective
-    contract. Actual page134 remains inactive at image73/next92; generation/ingest prior1/1, no v2 effects.
+  next_action: Freeze the actual v2 G8-rejected receipt for fresh Judge/Governor and normal main/CI delivery.
+    Preserve image79/next102, project9273, item2/batch485, queues0 and series2/2 spent; no further native
+    generation or downstream effects.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
   total: 199
   counting_basis: Owner-approved final-review items in batch a734c596-faae-4875-ae61-f694a3c26d4a revision485:140
-    approved,56 issues,3 pending. Actual Stage C stopped after G8 rejection; all199 review rows unchanged
-    and no synthetic progress counted.
+    approved,56 issues,3 pending. Actual v2 stopped after formal G8 rejection; all199 review rows unchanged.
+    No clone/synthetic progress counted.
   milestones: null
 catalog_observation:
   batch_id: a734c596-faae-4875-ae61-f694a3c26d4a
   revision: 485
-  observed_at: '2026-09-08T15:59:07.151082+00:00'
+  observed_at: '2026-09-08T18:13:07.474515+00:00'
   approved: 140
   issues: 56
   pending: 3
@@ -62,23 +62,24 @@ catalog_observation:
   - 173
 blockers:
 - code: STRICT_G8_COMPOSITE_VISUAL_FAILURE
-  reason: Page134 actual new G8 0a0ef31a was rejected after G4/G7 long-vowel coverage repair. Strict composite
-    has left-side white cutouts, fragmented background and damaged structure. Outside-mask changed0; this
-    is not visual acceptance.
+  reason: Page134 actual v2 G8 eeca6620 rejected after precise left glyph/internal-hole G7 remask. Strict
+    composite still has white cutouts in left black limb, fragmented ground and broken sleeve/clothing
+    contours. Outside-mask changed0 and strict recomposition mismatch0 are preservation checks, not visual
+    acceptance.
   affected_items:
   - 7975117b-c953-4ac4-847e-5249d9521a2c
-  - candidate:0a0ef31a-5690-5ee5-bc00-13a90d149404
-  recovery_condition: Diagnose retained quality/mask/new raw/strict composite and register a materially
-    new method before further generation. Existing one-generation plan is spent; no unchanged retry, raw
-    reuse, source restart or automatic approval.
-  retry_entry: Current G4-G7 accepted; G8 rejected. Image73/next92, project9267, item2/batch485, queues0.
-    Existing gated G7 coverage/owner-issues reopen and native G8 routes require their real preconditions
-    and separately accepted next plan.
+  - candidate:eeca6620-1655-5dfc-89f6-34aacc8b802d
+  recovery_condition: Preserve both v1/v2 failed raw/mask/normalized/reviews. Accepted controlled-recovery
+    series is spent at2 generation/2 ingest; further image effects require a materially different evidenced
+    method and separately accepted exact plan. No unchanged retry, failed raw reuse, source restart or
+    automatic approval.
+  retry_entry: Current G7 accepted; new G8 rejected. Project9273/image79/next102, item2/batch485, queues0.
+    Existing gated owner-issues G7/native G8 routes retain actual preconditions; no active execution declaration.
   waiting_for_user: false
 - code: G8_VISUAL_FAILURES
-  reason: 56 actual final-review issues remain. Page134 produced a new actual G8 and was rejected; pages167/192
-    and remaining affected-set closure are unresolved. Process re-entry is proven, whole-page visual completion
-    is not.
+  reason: 56 actual final-review issues remain. Page134 v1 and v2 each produced one actual new G8 and
+    formal rejection; pages167/192 and remaining affected-set closure remain unresolved. Actual re-entry/failure
+    handling is proven; image quality/corpus completion is not.
   affected_items:
   - batch:a734c596-faae-4875-ae61-f694a3c26d4a/verdict:issues
   - page134
@@ -100,7 +101,7 @@ blockers:
   retry_entry: Owner final-review screen; no automatic retry or regeneration.
   waiting_for_user: true
 verification:
-  status: actual_reentry_verified_g8_visual_failed
+  status: actual_v2_reentry_verified_g8_visual_failed
   evidence_refs:
   - docs/reports/all-projects-governance/manga-retry/live-recovery.json
   - docs/reports/all-projects-governance/manga-ci-audit/delivery.json
@@ -108,14 +109,15 @@ verification:
   - docs/reports/all-projects-governance/manga-review-landing/validation.json
   - docs/reports/all-projects-governance/manga-review-landing/delivery.json
   - docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  accepted_basis: Source main bf5c713/CI34239969045 and Stage B independently accepted. Actual G4-G7/local
-    OCR/new mask, one native generation and one ingest verified; G8 formally rejected. No G9/G10/refresh.
-    Whole-table and2624 old-media preservation PASS; this does not accept image quality.
+  accepted_basis: Source v2 main20f14f7/CI34254929980 and exact Stage B independently accepted. Actual
+    G7 owner-issues re-entry, deterministic remask, one new native generation/ingest and formal five-of-ten-check
+    G8 rejection verified. No G0-G6/OCR/G9/G10/refresh; all199 review rows and2627 old media preserved.
+    Actual Stage D independent review pending; no image-quality acceptance.
 delivery:
-  status: prior_code_main_verified_new_unit_in_progress
+  status: stage_a_source_main_verified_actual_receipt_pending_delivery
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: 747acc57ecc3309e1b47309300c9d1840422ba51
+  commit: 20f14f73446a44aa4462735ef77ee094b5c0f45c
   receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
@@ -128,19 +130,19 @@ all_projects_governance:
   unit: manga_page134_controlled_recovery_v2
   lane: GOVERNED
   status: ACTIVE
-  stage: A
+  stage: D
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: stage_a_source_accepted_pending_main_verification
-  next_action: Deliver accepted v2 Stage A source and receipt to Manga main, verify remote ancestry and
-    complete CI, then prepare Stage B CAS installation and isolated post-v1 clone under the effective
-    contract. Actual page134 remains inactive at image73/next92; generation/ingest prior1/1, no v2 effects.
+  candidate_status: Actual bounded failure verified; independent receipt review pending
+  next_action: Freeze the actual v2 G8-rejected receipt for fresh Judge/Governor and normal main/CI delivery.
+    Preserve image79/next102, project9273, item2/batch485, queues0 and series2/2 spent; no further native
+    generation or downstream effects.
   budget:
-    native_tokens: 12790605
-    native_seconds: 49570
-    coverage: Cumulative native Goal snapshot at v2 Stage A verification; no explicit cap/cost; completed
-      first250k and last health REPLAN3903214 preserved, no reset
-  failure_fingerprint: 'Page134 G8 strict composite b53d87d: white cutouts/fragmented background/structure
-    despite outside0; native raw6278a800, corrected maskf06ff69. One actual generation/ingest spent; retained
-    image73/next92, no downstream effects.'
+    native_tokens: 13830802
+    native_seconds: 54282
+    coverage: Cumulative native Goal at actual verification; cost/cap unavailable; first250k completed
+      and last health REPLAN3903214 preserved without reset
+  failure_fingerprint: Page134 v2 G8 de268616/actualrawfd0dc152/newmask6717e86a:5of10 visual checks failed
+    (whiteholes/brokenjoins/structure). Strictoutside0/recomposition0; formalreject. Actualimage79/next102/project9273/item2/batch485,queues0.
+    Seriesgeneration2/ingest2 spent; no G9/G10/refresh.
   candidate_manifest: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json

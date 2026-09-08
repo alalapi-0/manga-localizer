@@ -1,6 +1,6 @@
 {
   "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2",
-  "status": "pending_delivery",
+  "status": "delivered",
   "semantic_sha256": "92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f",
   "original_integration": {
     "registered_preimages_matched": 17,
@@ -52,6 +52,39 @@
     "state_preimage": "21d513c0c30f0e027417cf977894c1126b01a9cbe29ceedbd77b3a888aed9369",
     "state_postimage": "f6023cf63706330f0d398bc19f6956380bfa21a47986318c98cb3ad56346151d"
   },
-  "remote_ci": "pending",
-  "main_ancestry": "pending"
+  "remote_ci": {
+    "run_id": 34190703515,
+    "url": "https://github.com/alalapi-0/manga-localizer/actions/runs/34190703515",
+    "head_sha": "35665cd1052d7ac707cc39a9a933922c9778896f",
+    "status": "completed",
+    "conclusion": "success",
+    "jobs": {
+      "frontend": "success",
+      "backend": "success",
+      "e2e": "success"
+    },
+    "backend": "963 passed, 1 existing warning in 983.95s",
+    "e2e": "6 passed (1.3m); two real CI fixture application flows and four environment cases",
+    "audit": {
+      "status": "passed",
+      "candidate": 217,
+      "index_blobs": 217,
+      "historical_blob_paths": 1479,
+      "live_content_reads": 214,
+      "inert_cursor_objects": 2,
+      "cursor_live_content_reads": 0
+    }
+  },
+  "main_ancestry": "verified: git fetch, merge-base --is-ancestor, ls-remote",
+  "repository": "alalapi-0/manga-localizer",
+  "default_branch": "main",
+  "accepted_commit": "35665cd1052d7ac707cc39a9a933922c9778896f",
+  "observed_remote_main": "35665cd1052d7ac707cc39a9a933922c9778896f",
+  "original_integration_validation": "targeted art-lettering capability/no-enqueue test: 1 passed in 4.87s; original HEAD and index preserved",
+  "metadata_update": "Only allowed STATE decision lines, candidate status and this delivery receipt changed after acceptance; accepted semantic identity is unchanged. Receipt follow-up commit is verified outside its own content.",
+  "limits": [
+    "No real image generated or approved; 56 quality issues and 3 pending owner reviews remain",
+    "The actual re-open probe preserves three current attempt-2 heads; browser proof is an isolated real component, not a live full-workbench session",
+    "Strict release audit remains release_not_ready on protected historical personal paths"
+  ]
 }

@@ -14,8 +14,8 @@
 - Result: exact attempt-2 issue heads at positions 134, 167, 192 reopen idempotently; repeated opens preserve the same generation. Selected review, image revision, generation and event-count fingerprints remain unchanged. No new image was generated or approved.
 - Unresolved: the 56 quality issues and 3 pending owner reviews remain; whole-project state-template onboarding and other governance checks are later units. Loopback API8000 was not listening at this observation; bounded service verification did not restart it. Browser proof uses the real review component with isolated API/navigation substitutes, not a live full-workbench session.
 - Unit review: initial handoff Judge PASS; CI repair fresh Judge /root/manga_ci_audit_judge PASS and Governor /root/startup_governor APPROVE, semantic candidate 92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f.
-- Unit delivery: repair commits 9320e60 and b408098 observed on remote main; accepted CI repair pending_delivery until full remote CI and ancestry verification.
-- Unit next action: normally push the accepted CI repair to main, verify backend/frontend/audit/E2E and accepted ancestry, then continue unified onboarding; preserve all image quality blockers.
+- Unit delivery: delivered: accepted code commit 35665cd1052d7ac707cc39a9a933922c9778896f is on remote main; GitHub CI 34190703515 passed backend 963, frontend checks and E2E 6. Receipt: docs/reports/all-projects-governance/manga-ci-audit/delivery.json.
+- Unit next action: continue the Hub unified-source template unit and later project onboarding; retain all 56 quality issues, 3 pending reviews, and the unresolved real image-redo limitations.
 - Delivery repair: GOVERNED `ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2`; contract and baseline under `docs/reports/all-projects-governance/manga-ci-audit/`. Default release audit remains strict and `release_not_ready` due protected historical personal paths. No image workflow is resumed.
 
 ## Execution control

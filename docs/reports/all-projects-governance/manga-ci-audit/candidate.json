@@ -33,7 +33,7 @@
     "docs/reports/all-projects-governance/manga-ci-audit/governor.json",
     "docs/reports/all-projects-governance/manga-ci-audit/judge.json"
   ],
-  "status": "fresh Judge PASS; Governor APPROVE; pending_delivery",
+  "status": "fresh Judge PASS; Governor APPROVE; accepted code delivered to main with full remote CI success",
   "state_raw_sha256_at_registration": "f4279c02e5c0a5929fc554b09ce56b40e1b2ef07472906e211802de11a3fd055",
   "final_normal_ci_audit": {
     "exit": 0,

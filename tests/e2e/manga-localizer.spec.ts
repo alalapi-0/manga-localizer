@@ -231,6 +231,8 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await reviewVisualStage(page, '成品', 'typeset', '接受', '已接受');
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '擦除', exact: true }).click();
   await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');
@@ -257,6 +259,8 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   await expect(page.getByRole('application', { name: '成品画布' })).toBeVisible();
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await expect(page.locator('.image-row__name')).toHaveText('001.png');
   await page.locator('.region-index button').first().click();
@@ -369,6 +373,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   expect(JSON.stringify(detected)).not.toContain('"regionId"');
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const trustDialog = page.getByRole('dialog', { name: '批处理与导出' });
@@ -416,6 +422,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   }
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const translatedDialog = page.getByRole('dialog', { name: '批处理与导出' });
@@ -457,6 +465,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
     expect(response.ok()).toBe(true);
   }
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await inspector.getByRole('tab', { name: '文本' }).click();
   await inspector
@@ -532,6 +542,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
 
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   for (const mode of ['增强', '擦除', '成品'] as const) {
     await page.getByRole('button', { name: mode, exact: true }).click();

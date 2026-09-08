@@ -283,6 +283,66 @@ describe('final review store', () => {
     });
   });
 
+  it('retries a torn compact batch metadata and item snapshot', async () => {
+    const items = [finalReviewItemFixture()];
+    const first = { ...finalReviewBatchFixture(items), revision: 1, items: [] };
+    const second = { ...first, revision: 2 };
+    vi.spyOn(api, 'getFinalReviewBatch')
+      .mockResolvedValueOnce(first)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(second)
+      .mockResolvedValueOnce(second);
+    const listItems = vi.spyOn(api, 'listFinalReviewItems').mockResolvedValue(items);
+
+    await expect(useFinalReviewStore.getState().loadBatch(first.id)).resolves.toBe(true);
+    expect(listItems).toHaveBeenCalledTimes(2);
+    expect(useFinalReviewStore.getState().batch?.revision).toBe(2);
+    expect(useFinalReviewStore.getState().items).toEqual(items);
+  });
+
+  it('selects the first pending item when loading a mixed compact batch', async () => {
+    const items = [
+      finalReviewItemFixture('approved-item', { verdict: 'approved', reviewedAt: '2026-08-25T01:00:00Z' }),
+      finalReviewItemFixture('pending-item', { verdict: 'pending' }),
+      finalReviewItemFixture('issue-item', { verdict: 'issues', issueCodes: ['mask'], feedback: '残字' }),
+    ];
+    const batch = finalReviewBatchFixture([]);
+    vi.spyOn(api, 'getFinalReviewBatch').mockResolvedValue(batch);
+    vi.spyOn(api, 'listFinalReviewItems').mockResolvedValue(items);
+
+    await expect(useFinalReviewStore.getState().loadBatch(batch.id)).resolves.toBe(true);
+    expect(useFinalReviewStore.getState().activeItemId).toBe('pending-item');
+  });
+
+  it('reloads a compact conflict batch from the items list', async () => {
+    const { items } = seedFinalReview();
+    useFinalReviewStore.setState({
+      conflict: true,
+      conflictDraft: { verdict: 'approved', issueCodes: [], feedback: '我的未保存判断' },
+      draft: { verdict: 'approved', issueCodes: [], feedback: '我的未保存判断' },
+      error: '操作结果未知',
+    });
+    const newest = finalReviewItemFixture('final-item-1', {
+      revision: 7, verdict: 'issues', issueCodes: ['mask'],
+      reviewedAt: '2026-08-25T03:00:00Z',
+    });
+    const loadedItems = [newest, items[1]!, items[2]!];
+    vi.spyOn(api, 'getFinalReviewBatch').mockResolvedValue({
+      ...finalReviewBatchFixture(loadedItems), revision: 7, items: [],
+    });
+    vi.spyOn(api, 'listFinalReviewItems').mockResolvedValue(loadedItems);
+
+    await expect(useFinalReviewStore.getState().reloadConflict()).resolves.toBe(true);
+    expect(useFinalReviewStore.getState()).toMatchObject({
+      conflict: false,
+      activeItemId: items[0]?.id,
+    });
+    expect(useFinalReviewStore.getState().items[0]).toMatchObject({ revision: 7, verdict: 'issues' });
+    expect(useFinalReviewStore.getState().draft).toEqual({
+      verdict: 'approved', issueCodes: [], feedback: '我的未保存判断',
+    });
+  });
+
   it('filters independently by verdict, issue and search', () => {
     seedFinalReview();
     useFinalReviewStore.setState({ statusFilter: 'issues', issueFilter: 'translation', search: '真实项目' });
@@ -380,7 +440,7 @@ describe('final review store', () => {
     expect(useFinalReviewStore.getState().error).toContain('没有下一张');
   });
 
-  it('blocks save-and-next on the final visible item but still allows explicit save', async () => {
+  it('saves the final visible dirty item without requiring a next page', async () => {
     const { items } = seedFinalReview();
     useFinalReviewStore.setState({
       activeItemId: items[2]!.id,
@@ -390,13 +450,10 @@ describe('final review store', () => {
       ...items[2]!, verdict: 'approved', issueCodes: [], feedback: '修订后通过', revision: 2,
     }));
 
-    await expect(useFinalReviewStore.getState().save(true)).resolves.toBe(false);
-    expect(update).not.toHaveBeenCalled();
-    expect(useFinalReviewStore.getState().error).toContain('没有下一张');
-
-    await expect(useFinalReviewStore.getState().save()).resolves.toBe(true);
+    await expect(useFinalReviewStore.getState().save(true)).resolves.toBe(true);
     expect(update).toHaveBeenCalledOnce();
     expect(useFinalReviewStore.getState().activeItemId).toBe('final-item-3');
+    expect(useFinalReviewStore.getState().items[2]?.verdict).toBe('approved');
   });
 
   it.each([
@@ -1810,7 +1867,7 @@ describe('final review store', () => {
     expect(useFinalReviewStore.getState().batch?.revision).toBe(485);
   });
 
-  it('keeps legacy reviewed verdicts read-only while allowing a v1 issues item to start repair', async () => {
+  it('keeps legacy approved verdicts read-only but lets a human rejudge v1 issues', async () => {
     const legacy = finalReviewItemFixture('legacy-approved', { formatVersion: 1, strictEvidence: false, verdict: 'approved' });
     const batch = finalReviewBatchFixture([legacy]);
     useFinalReviewStore.setState({
@@ -1822,14 +1879,35 @@ describe('final review store', () => {
     await expect(useFinalReviewStore.getState().save()).resolves.toBe(false);
     await expect(useFinalReviewStore.getState().refreshActive()).resolves.toBe(false);
 
-    const issue = finalReviewItemFixture('legacy-issue', { formatVersion: 1, strictEvidence: false, verdict: 'issues', issueCodes: ['mask'] });
+    const issue = legacyPublicItem('legacy-issue', {
+      verdict: 'issues', issueCodes: ['mask'], feedback: '', reviewedAt: '2026-08-25T01:30:00Z',
+    });
     const issueBatch = finalReviewBatchFixture([issue]);
     useFinalReviewStore.setState({
       batch: issueBatch, items: [issue], activeItemId: issue.id,
       draft: { verdict: 'issues', issueCodes: ['mask'], feedback: '' },
     });
-    useFinalReviewStore.getState().updateDraft({ verdict: 'approved', feedback: 'forbidden edit' });
-    expect(useFinalReviewStore.getState().draft).toEqual({ verdict: 'issues', issueCodes: ['mask'], feedback: '' });
+    useFinalReviewStore.getState().updateDraft({ verdict: 'approved', feedback: '' });
+    expect(useFinalReviewStore.getState().draft).toEqual({
+      verdict: 'approved', issueCodes: ['mask'], feedback: '',
+    });
+    const update = vi.spyOn(api, 'updateFinalReviewItem').mockResolvedValue(saveResult({
+      ...issue,
+      verdict: 'approved',
+      issueCodes: [],
+      feedback: '',
+      revision: issue.revision + 1,
+      reviewedAt: '2026-09-07T02:00:00Z',
+    }));
+    await expect(useFinalReviewStore.getState().save()).resolves.toBe(true);
+    expect(update).toHaveBeenCalledOnce();
+    expect(useFinalReviewStore.getState().items[0]?.verdict).toBe('approved');
+
+    useFinalReviewStore.setState({
+      batch: issueBatch, items: [issue], activeItemId: issue.id,
+      draft: { verdict: 'issues', issueCodes: ['mask'], feedback: '' },
+      saving: false, operation: null,
+    });
     vi.spyOn(api, 'beginFinalReviewRepair').mockResolvedValue(repairResult(issue, {
       pageGenerationId: 'generation-v2',
     }));

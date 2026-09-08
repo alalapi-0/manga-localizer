@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import {
   chmodSync,
   mkdirSync,
@@ -16,6 +17,7 @@ import test from 'node:test';
 import {
   modelRoutedEnvironment,
   normalizeUvArguments,
+  projectSourceEnvironment,
   resolveCanonicalUv,
 } from './external-uv.mjs';
 import {
@@ -162,6 +164,22 @@ test('external uv parser pins the backend and rejects routing overrides', () => 
     () => normalizeUvArguments(['sync', '--with-guarded-models']),
     /available only for run/,
   );
+});
+
+test('selected checkout source wins over an inherited stale Python package', (t) => {
+  const data = fixture(t);
+  const stale = path.join(data.root, 'stale-checkout');
+  mkdirSync(path.join(stale, 'manga_localizer'), { recursive: true });
+  writeFileSync(path.join(stale, 'manga_localizer', '__init__.py'), 'raise RuntimeError("wrong checkout")\n');
+  const originalEnvironment = { ...process.env, PYTHONPATH: stale, PRESERVED_FIXTURE_SETTING: 'kept' };
+  const environment = projectSourceEnvironment(originalEnvironment);
+  assert.equal(originalEnvironment.PYTHONPATH, stale);
+  assert.equal(environment.PRESERVED_FIXTURE_SETTING, 'kept');
+  const imported = execFileSync('python3', ['-c', 'import manga_localizer; print(manga_localizer.__file__)'], {
+    env: environment,
+    encoding: 'utf8',
+  }).trim();
+  assert.equal(realpathSync(imported), realpathSync(path.join(import.meta.dirname, '..', 'backend', 'src', 'manga_localizer', '__init__.py')));
 });
 
 test('external uv binary is derived from a canonical HOME without a username literal', (t) => {

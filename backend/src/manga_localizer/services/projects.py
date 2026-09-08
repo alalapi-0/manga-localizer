@@ -626,39 +626,89 @@ class ProjectRegistry:
                         {"translation", "inpaint", "typeset", "export"},
                     )
                     image.revision += 1
-            current.settings = settings_with_defaults(
-                None,
-                base=current.settings,
-                drop_invalid_remote_endpoints=True,
+            mutated = bool(stale_trust_image_ids or migrate_trust_schema)
+            mutated = (
+                _assign_if_changed(
+                    current,
+                    "settings",
+                    settings_with_defaults(
+                        None,
+                        base=current.settings,
+                        drop_invalid_remote_endpoints=True,
+                    ),
+                )
+                or mutated
             )
             for revision in session.scalars(select(Revision)).all():
-                revision.before = redact(
-                    normalize_remote_endpoints(without_secrets(revision.before), drop_invalid=True)
+                mutated = (
+                    _assign_if_changed(
+                        revision,
+                        "before",
+                        redact(
+                            normalize_remote_endpoints(
+                                without_secrets(revision.before),
+                                drop_invalid=True,
+                            )
+                        ),
+                    )
+                    or mutated
                 )
-                revision.after = redact(
-                    normalize_remote_endpoints(without_secrets(revision.after), drop_invalid=True)
+                mutated = (
+                    _assign_if_changed(
+                        revision,
+                        "after",
+                        redact(
+                            normalize_remote_endpoints(
+                                without_secrets(revision.after),
+                                drop_invalid=True,
+                            )
+                        ),
+                    )
+                    or mutated
                 )
             for image in session.scalars(select(ImageAsset)).all():
-                image.processing_errors = redact(image.processing_errors)
+                mutated = (
+                    _assign_if_changed(
+                        image,
+                        "processing_errors",
+                        redact(image.processing_errors),
+                    )
+                    or mutated
+                )
             for job in session.scalars(select(Job).options(selectinload(Job.items))).all():
                 if job.kind == "typeset" and isinstance(job.lineage_context, dict):
                     from manga_localizer.services.typesets import (
                         sanitized_typeset_job_options,
                     )
 
-                    job.options = sanitized_typeset_job_options(dict(job.options))
+                    next_options = sanitized_typeset_job_options(dict(job.options))
                 else:
-                    job.options = normalize_remote_endpoints(
+                    next_options = normalize_remote_endpoints(
                         without_secrets(job.options),
                         drop_invalid=True,
                     )
+                mutated = _assign_if_changed(job, "options", next_options) or mutated
                 lineage_context = redact(without_secrets(job.lineage_context))
-                job.lineage_context = lineage_context if isinstance(lineage_context, dict) else None
-                job.error = redact(job.error) if job.error else None
+                next_lineage = lineage_context if isinstance(lineage_context, dict) else None
+                mutated = _assign_if_changed(job, "lineage_context", next_lineage) or mutated
+                mutated = (
+                    _assign_if_changed(job, "error", redact(job.error) if job.error else None)
+                    or mutated
+                )
                 for item in job.items:
-                    item.output = without_secrets(item.output)
-                    item.error = redact(item.error) if item.error else None
-        store.write_snapshot()
+                    mutated = (
+                        _assign_if_changed(item, "output", without_secrets(item.output)) or mutated
+                    )
+                    mutated = (
+                        _assign_if_changed(
+                            item,
+                            "error",
+                            redact(item.error) if item.error else None,
+                        )
+                        or mutated
+                    )
+        if mutated:
+            store.write_snapshot()
         project = store.project()
         with self._lock:
             self._stores[project.id] = store
@@ -711,6 +761,14 @@ class ProjectRegistry:
                 if job is not None:
                     return store, job
         raise ProjectNotFound(f"Job {job_id} was not found in an open project")
+
+
+def _assign_if_changed(entity: object, field: str, value: Any) -> bool:
+    current = getattr(entity, field)
+    if current == value:
+        return False
+    setattr(entity, field, value)
+    return True
 
 
 def public_root(root: Path) -> str:

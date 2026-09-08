@@ -1,0 +1,83 @@
+{
+  "kind": "read_only_real_failure_diagnosis",
+  "project_id": "manga-localizer",
+  "page": 134,
+  "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+  "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
+  "repair_image_id": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+  "input_quality": {
+    "relative_path": "generated/preprocessed/final-review-repairs/7975117b-c953-4ac4-847e-5249d9521a2c/r000002/a000002/IMG_3898.png",
+    "sha256": "52db694e0516c2371086988a1176f1ecf59b541bdc819170290b4163a9015726",
+    "grid": [
+      2142,
+      1140
+    ]
+  },
+  "accepted_mask": {
+    "id": "17d30eeb-403c-55ac-bf1c-c7f7d4146db6",
+    "sha256": "5a5950976c5c385f11e10991bcb826b1d68ead3b81b3a8e64c08810872a42b46",
+    "support_pixels": 347364
+  },
+  "candidate": {
+    "id": "7741ed24-e9d2-5dc5-b18e-85f8d5f1ad7e",
+    "raw_sha256": "87f1b497d6b637707d0a5ac11568d9b7f4b2f5d156d7b0884e6f7edc75ac1c67",
+    "normalized_sha256": "954237941822215bcba946231a2cf950bfd95a80a25a6d313d66612499d9eb99",
+    "hashes_match_database": true,
+    "review_id": "479d2981-d55e-41e9-af58-342200a5139e",
+    "state": "rejected",
+    "failed_checks": [
+      "no-white-or-gray-hole",
+      "background-continuous"
+    ],
+    "raw_visually_inspected": true,
+    "quality_mask_composite_visually_inspected": true
+  },
+  "measurements": {
+    "quality_composite_outside_mask_changed_pixels": 0,
+    "roi": {
+      "name": "right_long_vowel_mark",
+      "quality_xyxy": [
+        2015,
+        480,
+        2065,
+        795
+      ],
+      "dark_threshold": "all RGB channels <64",
+      "source_dark_pixels": 3339,
+      "dark_outside_mask": 3339,
+      "dark_outside_mask_unchanged": 3339,
+      "dark_below_accepted_g4_bottom": 2474
+    },
+    "g4_region": {
+      "id": "4f47ead4-54ed-430a-a037-981215c73004",
+      "source_xywh": [
+        960,
+        25,
+        100,
+        250
+      ],
+      "source_grid": [
+        1071,
+        570
+      ],
+      "quality_xyxy": [
+        1920,
+        50,
+        2120,
+        550
+      ],
+      "background_category": "illustration/character"
+    }
+  },
+  "finding": "The raw is text-free in this region, but accepted G4 clips the long-vowel tail and accepted G7 omits all3339 measured dark stroke pixels. Strict composite correctly preserves mask-outside source pixels. G4 boundary correction plus G7 coverage repair is needed; another raw or registration cannot change those protected pixels. White-halo coverage also requires explicit visual verification, not a claimed numeric guarantee.",
+  "reproduction": "Read the exact checksum-bound quality/mask/composite rasters with Pillow, convert RGB/L, mask support>0. Count all-RGB<64 in stated ROI, then mask==0 and exact quality==composite. Count the ROI subset y>=550. Coordinates are manually identified from the viewed long-vowel mark; this is not OCR classification or full-page quality acceptance.",
+  "effects": {
+    "database": "sqlite mode=ro and PRAGMA query_only=ON for selected metadata; no application startup",
+    "media": "read only; no generated/rewritten/copied images",
+    "provider_calls": 0,
+    "business_mutations": 0,
+    "new_candidate_ingestion": false,
+    "real_repair_complete": false
+  },
+  "remaining": "Product regression and legal G4/G7 recovery path, then separately reviewed real correction/import; pages167/192 and full affected-set closure remain unresolved."
+}

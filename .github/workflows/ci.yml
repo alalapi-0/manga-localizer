@@ -30,9 +30,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fonts-noto-cjk tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert
       - run: uv sync --project backend --group dev --locked
-      - run: uv run --project backend ruff check backend scripts/audit_release.py
-      - run: uv run --project backend ruff format --check backend scripts/audit_release.py
+      - run: uv run --project backend ruff check backend scripts/audit_release.py scripts/check_state.py
+      - run: uv run --project backend ruff format --check backend scripts/audit_release.py scripts/check_state.py
       - run: uv run --project backend pytest backend/tests
+      - name: Validate sole project state
+        run: uv run --project backend python -B scripts/check_state.py
       - name: Audit normal Git delivery
         env:
           AUDIT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}

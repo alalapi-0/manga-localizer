@@ -3332,7 +3332,7 @@ async function synchronizeImages(projectId: string): Promise<void> {
 async function loadProjectG4Contexts(imageIds: string[], force = false): Promise<boolean> {
   const uniqueImageIds = [...new Set(imageIds)];
   let loaded = true;
-  const concurrency = 8;
+  const concurrency = 2;
   for (let offset = 0; offset < uniqueImageIds.length; offset += concurrency) {
     const batch = uniqueImageIds.slice(offset, offset + concurrency);
     const results = await Promise.all(batch.map((imageId) =>
@@ -3850,7 +3850,8 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         projects,
         loadState: 'ready',
       });
-      if (projects[0]) await get().selectProject(projects[0].id);
+      // Do not auto-open the last catalog project. Final-review can run without
+      // loading every page-generation/event; opening A/B workbench is explicit.
     } catch (error) {
       set({
         loadState: 'error',
@@ -3960,7 +3961,7 @@ export const useWorkbenchStore = create<WorkbenchState>((set, get) => ({
         past: [],
         future: [],
       });
-      const lineageLoad = loadProjectG4Contexts(images.map((image) => image.id));
+      const lineageLoad = loadProjectG4Contexts(firstImageId ? [firstImageId] : []);
       if (firstImageId) await Promise.all([get().loadRegions(firstImageId), lineageLoad]);
       else await lineageLoad;
       return true;

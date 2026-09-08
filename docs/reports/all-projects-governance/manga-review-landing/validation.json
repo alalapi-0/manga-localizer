@@ -1,0 +1,167 @@
+{
+  "contract_version": "v3",
+  "stage": "A",
+  "original_preservation": {
+    "checked_original_paths": 59,
+    "changed_paths": [],
+    "head_unchanged": true,
+    "index_unchanged": true,
+    "cursor_content_read": false,
+    "additional_install_preimages": {
+      ".agent/FINAL_CORPUS_REBUILD_REFERENCE.md": {
+        "sha256": "b2d52e42e61b7aabe6e0d5956cb9aed5c5b237697813823c582aeac2c3df9d7f",
+        "mode": 420
+      },
+      ".agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md": {
+        "sha256": "0c5b136d48b11669b0b9f6f5eeca59ce96d3a2b1737610ba8f7449c3fd6a9f74",
+        "mode": 420
+      },
+      "docs/real-data-iteration-status.md": {
+        "sha256": "2ee4d7c175fe00ee795c3ae325856dd008463ea63cea547e5fe4df5c27e34e79",
+        "mode": 420
+      },
+      "package.json": {
+        "sha256": "aeec7bc10f4bf84c6a0612ae661a3b83667362e2d037a7a154bc304b9ff299df",
+        "mode": 420
+      },
+      "tests/e2e/manga-localizer.spec.ts": {
+        "sha256": "f507184e8512b1c3025d0481fe5dfb574a2589b97ae30686eb1a8c3ff3d5e4ee",
+        "mode": 420
+      },
+      "scripts/external-uv.mjs": {
+        "sha256": "f8ef6a06b91b3e808dcd84b4ab4f1bdfe7588d94e0e4787909b08e1c32fcc10a",
+        "mode": 420
+      },
+      "scripts/storage-runtime-route.test.mjs": {
+        "sha256": "ddee257333fbc7cf92a4425f427b944e5be955fa9c8a39b49b8fee4faab59f9d",
+        "mode": 420
+      },
+      "scripts/verify-final-review-retry-ui.mjs": {
+        "sha256": "04677c043c305572aed3fa068bae1c711d93ea5e21d13dc19951e1ff6e7c66cd",
+        "mode": 420
+      }
+    },
+    "new_current_state_absent_in_original": true
+  },
+  "checks": [
+    {
+      "command": "npm run check:state",
+      "exit": 0,
+      "result": "Strict sole YAML, history checksum, 21 fields,20 mapped1 unknown21 fallback reasons."
+    },
+    {
+      "command": "Unchanged Hub SourceResolver using exact-byte disposable project/registry fixture",
+      "exit": 0,
+      "evidence": "state_validation.json"
+    },
+    {
+      "command": "npm run check:launcher",
+      "exit": 0,
+      "result": "39 tests passed"
+    },
+    {
+      "command": "PYTHONPATH=<isolated backend/src> external-uv pytest test_database_review_epochs.py test_mask_recovery_edges.py -q",
+      "exit": 0,
+      "result": "7 passed; actual module path verified"
+    },
+    {
+      "command": "npm --prefix frontend run test -- --run src/finalReview/FinalReviewPage.test.tsx src/finalReview/store.test.ts src/store/workbench.test.ts",
+      "exit": 0,
+      "result": "Root reproduced318 tests passed"
+    },
+    {
+      "command": "npm run check:frontend",
+      "exit": 0,
+      "result": "Repair reports lint/typecheck461 tests/build pass; Root nearby318 reproduced; browser pending",
+      "evidence_owner": "/root/manga_frontend_pending_repair"
+    },
+    {
+      "command": "npm run check:launcher after selected-source runtime repair",
+      "exit": 0,
+      "result": "40 tests, including actual Python import precedence against an inherited wrong checkout."
+    },
+    {
+      "command": "external-uv python -c import manga_localizer.database; print(__file__) without PYTHONPATH override",
+      "exit": 0,
+      "result": "Resolved current isolated source backend/src, not original editable install."
+    },
+    {
+      "command": "Full check:backend initial complete run",
+      "exit": 1,
+      "result": "Lint and format pass;1004passed4failed. All4failures concern G7not-applicable terminal readback. No quality waiver; forward repair in progress."
+    },
+    {
+      "command": "Corrected full npm run test:e2e",
+      "exit": 0,
+      "result": "6passed,57.6seconds, real isolated backend/frontend against temporary synthetic data; repeated after wrapper source-routing change pending."
+    },
+    {
+      "command": "MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE=<supported installed browser> node scripts/verify-final-review-retry-ui.mjs",
+      "exit": 0,
+      "result": "Root reproduced10desktop/mobile paths; simulated API/navigation explicitly isolated; no actual image-generation claim."
+    },
+    {
+      "command": "Media format regressions through automatic selected-source wrapper",
+      "exit": 0,
+      "result": "5passed:PNG/JPEG/WebP grid and uprightEXIF contract; JPEG/WebP immutable raw persistence."
+    },
+    {
+      "command": "Full E2E through automatic selected-source wrapper, no caller PYTHONPATH",
+      "exit": 0,
+      "result": "6passed57.2seconds; explicit open+preserved restart/storage/OCRevidence."
+    },
+    {
+      "command": "npm run check:backend through automatic selected-source wrapper",
+      "exit": 0,
+      "result": "Ruff lint/format99files and1012tests passed in436.19seconds. One upstream Starlette/httpx deprecation warning, no skips or waived failures."
+    },
+    {
+      "command": "git diff --check and node --check external-uv.mjs/verify-final-review-retry-ui.mjs",
+      "exit": 0
+    }
+  ],
+  "pending": [
+    "whole-series final audit",
+    "fresh exact Judge/Governor",
+    "main delivery and CI",
+    "original Stage B",
+    "later Hub registry integration",
+    "actual image redo"
+  ],
+  "failure_conclusions": [
+    {
+      "target": "frontend workbench test isolation",
+      "fingerprint": "23 failures from Zustand action spy surviving store reset",
+      "repair": "Remove action spy and restore mocks before reset; preserve all assertions;461pass"
+    },
+    {
+      "target": "backend prechecks",
+      "fingerprint": "Unused batch binding and2 unformatted copied/new testfiles",
+      "repair": "Explicit unused binding and repository Ruff formatting; finalfullrunpending"
+    },
+    {
+      "target": "E2E reload semantics",
+      "fingerprint": "Tests assumed autoopen after reload while deliberate lazy startup leaves unopened",
+      "repair": "All6 exact reload paths now assert unopened then explicitlyselectsameproject; persistenceassertionsretained. One extra stale-suite invocation started before successful patch; does notcountasvalidation."
+    },
+    {
+      "target": "G7 not-applicable terminal reads",
+      "fingerprint": "final_reviews exactterminal, G8zeroeligible, G7latelegacyresidual, G10keep/ignore/ruby: successful G7NA PATCH followed by409readback",
+      "repair": "Current G6 epoch review-event suffix retains exact artifact-free N/A reviews; all replay/checksum/residual checks retained. Original4failures and final1012tests pass."
+    }
+  ],
+  "browser": {
+    "scope": "isolated real-component browser proof; API and navigation substitutes; no actual workbench or image generation claim",
+    "passed_scenarios": 10,
+    "results_sha256": "677a6187b03ab764407c79f8b03a205f5f47239858139ec7f58eec52c26c19f2",
+    "console_errors": 0,
+    "unexpected_network": 0,
+    "visual_inspection": "Root viewed desktop retry, mobile retry/save-error and actual App hash-denial. Content/controls visible without horizontal overflow. Synthetic fixtures only.",
+    "screenshots": {
+      "1440-0-before.png": "45134d3e127320d3f433b645901b648cac2b9c20ee37f062d9f70c0e3a39bb11",
+      "390-0-before.png": "13418c501018332df9b3d862b05db9a72ff681edc1fc2312f9702af02924f320",
+      "390-save-error.png": "fd4ca9e9822960b1c21c177b452fa59198b7c62d1f102111be1ea17a702203d7",
+      "1440-hash-denied.png": "9ef08b6f5becc49ef43ccd24ff9396128d9ce61ba889673a265e76fc84d6ec6b"
+    }
+  }
+}

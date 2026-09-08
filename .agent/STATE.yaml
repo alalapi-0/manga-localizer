@@ -1,0 +1,134 @@
+# Manga Localizer — sole current state (YAML)
+schema_version: '1.0'
+metadata:
+  role: canonical_current_state
+  format: yaml
+  sole_source: .agent/STATE.yaml
+  reader: Project Agents and Hub2; strict YAML current authority. Historical checkpoints are read from
+    Git only when needed.
+  update_triggers:
+  - owner_decision
+  - verified_checkpoint
+  - blocker_change
+  - accepted_delivery
+project:
+  id: manga-localizer
+  name: Manga Localizer
+execution_control:
+  state: OWNER_R2_REVIEW
+  authority: owner-r2-review
+  project_execution: not_active_in_this_governance_goal
+  checkpoint: BATCHED_HUMAN_REVIEW
+  protocol_revision: final-corpus-rebuild/2026-09-04.2
+  activation: Only a new explicit project execution request activates page work; static documents and
+    this maintenance Goal do not.
+  owner_constraints:
+  - Only the owner may mark final-review items approved.
+  - Do not process the 3 pending pages112/24/173 or reopen approved pages.
+  - Do not create G0 or restart from source to evade downstream failures.
+  - 'Page52: no G2 redo; Page190: NO_A2; Page91 r4-r11: no unchanged remask/generation retries.'
+  - Preserve every remaining page-specific prohibition/checkpoint in the exact historical state; consult
+    its matching page before any future authorized page effect.
+  - No Cursor operations, paid provider, real-database migration, queue or image effects in this maintenance
+    unit.
+current_work:
+  objective: Complete owner-reviewed localization of all199 pages, then rebuild/export and validate the
+    corpus.
+  phase: owner_final_review
+  round: owner-r2-review
+  status: OWNER_R2_REVIEW
+  completed: false
+  accepted: false
+  next_action: 'BATCHED_HUMAN_REVIEW: retain all unresolved pages and obtain owner decisions on the3 pending
+    pages; this maintenance unit does not execute page work.'
+  owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
+progress:
+  completed: 140
+  total: 199
+  counting_basis: Owner-approved final-review items in batch a734c596-faae-4875-ae61-f694a3c26d4a revision485:140
+    approved,56 issues,3 pending; observed2026-09-08T03:54:29.659797+00:00. Counts are not current fresh
+    DB reads, repaired-image count or export acceptance.
+  milestones: null
+catalog_observation:
+  batch_id: a734c596-faae-4875-ae61-f694a3c26d4a
+  revision: 485
+  observed_at: '2026-09-08T03:54:29.659797+00:00'
+  approved: 140
+  issues: 56
+  pending: 3
+  pending_pages:
+  - 112
+  - 24
+  - 173
+blockers:
+- code: G4_G7_ACCEPTED_COVERAGE_INCOMPLETE
+  reason: Page134 accepted G7 excludes3339 measured long-vowel dark pixels;2474 also lie below its accepted
+    G4 box. Strict composite preserves them; the existing raw is text-free.
+  affected_items:
+  - 7975117b-c953-4ac4-847e-5249d9521a2c
+  recovery_condition: Validate exact G4 boundary correction then G7 coverage reopen, retaining upstream
+    identities/history. Real correction requires a separately reviewed effect.
+  retry_entry: POST /api/images/{image_id}/page-gates/regions/reopen, then gated G4/G7 validation with
+    current revision/lineage; candidate recovery is under test.
+  waiting_for_user: false
+- code: G8_VISUAL_FAILURES
+  reason: 56 issues remain in the observed catalog; pages134/167/192 have rejected G8 candidates. Process
+    handoff is fixed, actual generation/review chain remains incomplete.
+  affected_items:
+  - batch:a734c596-faae-4875-ae61-f694a3c26d4a/verdict:issues
+  - page134
+  - page167
+  - page192
+  recovery_condition: Resolve each exact blocker with a materially new authorized method; retain immutable
+    raw/mask/reviews and all10 visual checks. No unchanged retries or automatic approval.
+  retry_entry: Existing final-review repair handoff and gated G4/G7/cloud:image workflow; no automatic
+    execution from Hub.
+  waiting_for_user: false
+- code: OWNER_REVIEW_PENDING
+  reason: 3 pending items require owner verdicts; they cannot be regenerated or approved by this maintenance
+    Goal.
+  affected_items:
+  - page112
+  - page24
+  - page173
+  recovery_condition: Owner reviews the exact current artifacts.
+  retry_entry: Owner final-review screen; no automatic retry or regeneration.
+  waiting_for_user: true
+verification:
+  status: maintenance_checks_verified_actual_redo_incomplete
+  evidence_refs:
+  - docs/reports/all-projects-governance/manga-retry/live-recovery.json
+  - docs/reports/all-projects-governance/manga-ci-audit/delivery.json
+  - docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json
+  - docs/reports/all-projects-governance/manga-review-landing/validation.json
+  accepted_basis: Prior handoff code passed review and main CI. Current maintenance checks pass; its independent
+    review/delivery and actual image/corpus acceptance remain pending.
+delivery:
+  status: prior_code_main_verified_new_unit_in_progress
+  remote: https://github.com/alalapi-0/manga-localizer
+  branch: main
+  commit: 0e2a03b27e15661b18d25c96d236577751b3391c
+  receipt_ref: docs/reports/all-projects-governance/manga-ci-audit/delivery.json
+history:
+  state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
+  path: .agent/STATE.md
+  sha256: d7c5bfe73e1da0607af966932e1ad9189bd3d4854663e51b682d8b499049127c
+  meaning: Exact original current-state bytes retained in this local reviewed-series checkpoint, not yet
+    remote delivery. Historical text cannot activate execution.
+all_projects_governance:
+  task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
+  unit: manga_review_replacement_landing
+  lane: GOVERNED
+  status: ACTIVE
+  stage: A
+  contract: docs/reports/all-projects-governance/manga-review-landing/contract.md
+  baseline: docs/reports/all-projects-governance/manga-review-landing/baseline.json
+  candidate_status: checks_passed_awaiting_independent_review
+  next_action: Fresh Judge and Governor review of the full Stage A series, then normal main push and CI
+    verification. Original installation, Hub routing and actual image redo remain pending.
+  budget:
+    native_tokens: 8599386
+    native_seconds: 30035
+    coverage: cumulative native Goal snapshot; no explicit cap/cost telemetry; no reset
+  failure_fingerprint: 'Resolved G7N/A readback regression: final full isolated backend1012passed; no
+    failed quality standard waived.'

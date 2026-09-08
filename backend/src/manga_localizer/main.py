@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -51,6 +52,7 @@ from manga_localizer.schemas import (
     MaskDraftRequest,
     MaskGateContextOut,
     MaskGateRequest,
+    MaskReopenRequest,
     OCRGateContextOut,
     OCRGateRequest,
     OCRSourceReviewRequest,
@@ -71,6 +73,8 @@ from manga_localizer.schemas import (
     RegionOut,
     RegionPatch,
     RegionsGateRequest,
+    RegionsReopenOut,
+    RegionsReopenRequest,
     SelectInpaintCandidateRequest,
     StageReviewRequest,
     TextPresenceGateRequest,
@@ -101,6 +105,7 @@ from manga_localizer.services.cloud_full_page_clean_plates import (
     cloud_full_page_artifact_path,
     cloud_full_page_context,
     cloud_full_page_raw_artifact_path,
+    g8_replace_accepted_for_linked_item,
     ingest_cloud_full_page_candidate,
     record_cloud_full_page_review,
 )
@@ -108,6 +113,7 @@ from manga_localizer.services.final_reviews import (
     FINAL_REVIEW_NO_STORE_HEADERS,
     FinalReviewBatchConflict,
     FinalReviewConflict,
+    FinalReviewNotFound,
     FinalReviewRegistry,
 )
 from manga_localizer.services.images import (
@@ -138,6 +144,7 @@ from manga_localizer.services.masks import (
     mask_artifact_path,
     mask_gate_context,
     record_mask_review,
+    reopen_mask_for_coverage_hole,
     update_mask_draft,
 )
 from manga_localizer.services.page_lineage import (
@@ -155,6 +162,7 @@ from manga_localizer.services.page_lineage import (
     record_reconstruction_decision,
     record_regions_gate_acceptance,
     record_text_presence_decision,
+    reopen_regions_for_missed_box,
     require_no_active_generations_for_project_settings,
     require_no_page_generations_for_project_ingest,
 )
@@ -768,18 +776,27 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         return final_reviews.open(body.manifest_path)
 
     @router.get("/final-review-batches/{batch_id}")
-    async def final_review_batch_get(batch_id: str) -> dict[str, Any]:
-        return final_reviews.get(batch_id).batch(include_items=True)
+    async def final_review_batch_get(
+        batch_id: str,
+        include_items: Annotated[bool, Query(alias="includeItems")] = True,
+    ) -> dict[str, Any]:
+        store = final_reviews.get(batch_id)
+        return await asyncio.to_thread(store.batch, include_items=include_items)
 
     @router.get("/final-review-batches/{batch_id}/items")
-    async def final_review_batch_items(batch_id: str) -> list[dict[str, Any]]:
-        return final_reviews.get(batch_id).items()
+    async def final_review_batch_items(
+        batch_id: str,
+        compute_stale: Annotated[bool, Query(alias="computeStale")] = False,
+    ) -> list[dict[str, Any]]:
+        store = final_reviews.get(batch_id)
+        return await asyncio.to_thread(store.items, compute_stale=compute_stale)
 
     @router.post("/final-review-batches/{batch_id}/export")
     async def final_review_batch_export(
         batch_id: str, body: FinalReviewBatchExport
     ) -> dict[str, Any]:
-        return final_reviews.export(
+        return await asyncio.to_thread(
+            final_reviews.export,
             batch_id,
             body.output_path,
             conflict=body.conflict,
@@ -791,7 +808,8 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     @router.patch("/final-review-items/{item_id}")
     async def final_review_item_patch(item_id: str, body: FinalReviewItemPatch) -> dict[str, Any]:
         store = final_reviews.find_item(item_id)
-        return store.update_item(
+        return await asyncio.to_thread(
+            store.update_item,
             item_id,
             verdict=body.verdict,
             issue_codes=body.issue_codes,
@@ -805,7 +823,9 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     async def final_review_item_refresh(
         item_id: str, body: FinalReviewItemRefresh
     ) -> dict[str, Any]:
-        return final_reviews.find_item(item_id).refresh(
+        store = final_reviews.find_item(item_id)
+        return await asyncio.to_thread(
+            store.refresh,
             item_id,
             expected_revision=body.expected_revision,
             expected_batch_revision=body.expected_batch_revision,
@@ -814,7 +834,9 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
 
     @router.post("/final-review-items/{item_id}/repair", status_code=201)
     async def final_review_item_repair(item_id: str, body: FinalReviewItemRepair) -> dict[str, Any]:
-        return final_reviews.find_item(item_id).repair(
+        store = final_reviews.find_item(item_id)
+        return await asyncio.to_thread(
+            store.repair,
             item_id,
             expected_revision=body.expected_revision,
             expected_batch_revision=body.expected_batch_revision,
@@ -1095,6 +1117,19 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             "event": public_page_lineage_event(event),
         }
 
+    @router.post(
+        "/images/{image_id}/page-gates/regions/reopen",
+        response_model=RegionsReopenOut,
+    )
+    async def page_regions_reopen(image_id: str, body: RegionsReopenRequest) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        return reopen_regions_for_missed_box(
+            store,
+            image.id,
+            expected_revision=body.expected_revision,
+            lineage=body.lineage.model_dump(mode="json", by_alias=True),
+        )
+
     @router.patch(
         "/images/{image_id}/page-gates/regions",
         response_model=PageGateResultOut,
@@ -1193,6 +1228,32 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     async def page_mask_gate_context(image_id: str) -> dict[str, Any]:
         store, image = registry.find_image(image_id)
         return mask_gate_context(store, image.id)
+
+    @router.post(
+        "/images/{image_id}/page-gates/mask/reopen",
+        response_model=MaskGateContextOut,
+    )
+    async def page_mask_reopen(image_id: str, body: MaskReopenRequest) -> dict[str, Any]:
+        store, image = registry.find_image(image_id)
+        lineage = body.lineage.model_dump(mode="json", by_alias=True)
+
+        def item_verdict_lookup(item_id: str) -> str | None:
+            try:
+                return final_reviews.find_item(item_id).item(item_id).get("verdict")
+            except FinalReviewNotFound:
+                return None
+
+        return reopen_mask_for_coverage_hole(
+            store,
+            image.id,
+            expected_revision=body.expected_revision,
+            lineage=lineage,
+            owner_issues_remask=g8_replace_accepted_for_linked_item(
+                store,
+                lineage,
+                item_verdict_lookup=item_verdict_lookup,
+            ),
+        )
 
     @router.patch(
         "/images/{image_id}/page-gates/mask/draft",
@@ -1412,12 +1473,28 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             raise HTTPException(status_code=422, detail="metadata must be valid JSON") from error
         if not isinstance(metadata, dict):
             raise HTTPException(status_code=422, detail="metadata must be a JSON object")
-        return ingest_cloud_full_page_candidate(
+
+        def item_verdict_lookup(item_id: str) -> str | None:
+            try:
+                return final_reviews.find_item(item_id).item(item_id).get("verdict")
+            except FinalReviewNotFound:
+                return None
+
+        raw_bytes = await _read_upload_with_limit(raw, MAX_RAW_BYTES)
+        normalized_bytes = await _read_upload_with_limit(normalized, MAX_NORMALIZED_BYTES)
+        replace_accepted = g8_replace_accepted_for_linked_item(
+            store,
+            metadata.get("lineage"),
+            item_verdict_lookup=item_verdict_lookup,
+        )
+        return await asyncio.to_thread(
+            ingest_cloud_full_page_candidate,
             store,
             image.id,
-            raw_bytes=await _read_upload_with_limit(raw, MAX_RAW_BYTES),
-            normalized_bytes=await _read_upload_with_limit(normalized, MAX_NORMALIZED_BYTES),
+            raw_bytes=raw_bytes,
+            normalized_bytes=normalized_bytes,
             metadata=metadata,
+            replace_accepted=replace_accepted,
         )
 
     @router.patch("/images/{image_id}/page-gates/cloud-full-page")
@@ -1425,6 +1502,14 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         image_id: str, body: CloudFullPageReviewRequest
     ) -> dict[str, Any]:
         store, image = registry.find_image(image_id)
+        lineage = body.lineage.model_dump(mode="json", by_alias=True)
+
+        def item_verdict_lookup(item_id: str) -> str | None:
+            try:
+                return final_reviews.find_item(item_id).item(item_id).get("verdict")
+            except FinalReviewNotFound:
+                return None
+
         return record_cloud_full_page_review(
             store,
             image.id,
@@ -1434,7 +1519,12 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             decision=body.decision,
             reason=body.reason,
             expected_revision=body.expected_revision,
-            lineage=body.lineage.model_dump(mode="json", by_alias=True),
+            lineage=lineage,
+            replace_accepted=g8_replace_accepted_for_linked_item(
+                store,
+                lineage,
+                item_verdict_lookup=item_verdict_lookup,
+            ),
         )
 
     @router.get("/images/{image_id}/page-gates/cloud-full-page/candidates/{candidate_id}")

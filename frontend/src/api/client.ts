@@ -389,8 +389,12 @@ export const api = {
     }));
   },
 
-  async getFinalReviewBatch(batchId: string): Promise<FinalReviewBatch> {
-    return unwrap(await request(`/final-review-batches/${encodeURIComponent(batchId)}`));
+  async getFinalReviewBatch(
+    batchId: string,
+    options: { includeItems?: boolean } = {},
+  ): Promise<FinalReviewBatch> {
+    const query = options.includeItems === true ? '' : '?includeItems=false';
+    return unwrap(await request(`/final-review-batches/${encodeURIComponent(batchId)}${query}`));
   },
 
   async listFinalReviewItems(batchId: string): Promise<FinalReviewItem[]> {

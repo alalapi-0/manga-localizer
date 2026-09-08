@@ -1,0 +1,31 @@
+{
+  "scope": "Exact candidate bytes in a disposable ordinary-root project and per-ID registry fixture; unchanged Hub SourceResolver. Real Hub registry/ledger untouched; integration pending.",
+  "source_hashes": {
+    ".agent/STATE.yaml": "b5f2931f1d6f055ec3fed8aa4e6d87a8c82abe219eee4c2a6140cb5b0d166e07",
+    "hub.connection.yaml": "a6f6baea6521056ef1b2fc52b9731f68a9a646de395fb5573f6a5743b5ba3f69"
+  },
+  "shared_code": {
+    "src/hub/connection_records.py": "24ed402167f7811dd4cb12ebb3e08237a57f32e0a1aedc6d5e0bd2966d80e733",
+    "src/hub/connection_sources.py": "0648baa808ac566ff8c1e1a6f1e6c5a6b826b230787e32665424060776014435",
+    "src/hub/connections.py": "b9fa95e08272b8747dc0326ac149ba6c384993a9e1bc131125929ec617619033"
+  },
+  "success": true,
+  "disposition": "resolved",
+  "known_fields": 20,
+  "unknown_fields": {
+    "progress.milestones": "No canonical business milestone list is maintained; the source publishes owner-approved page counts instead."
+  },
+  "business_assertions": {
+    "status": "blocked",
+    "completed": false,
+    "accepted": false,
+    "progress": {
+      "completed": 140,
+      "total": 199,
+      "counting_basis": "Owner-approved final-review items in batch a734c596-faae-4875-ae61-f694a3c26d4a revision485:140 approved,56 issues,3 pending; observed2026-09-08T03:54:29.659797+00:00. Counts are not current fresh DB reads, repaired-image count or export acceptance.",
+      "milestones": null
+    },
+    "blocker_count": 3,
+    "delivery_status": "pending_delivery"
+  }
+}

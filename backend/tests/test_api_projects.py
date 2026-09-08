@@ -1459,6 +1459,46 @@ def test_open_scrubs_legacy_secrets_from_response_history_and_database(tmp_path:
     assert secret not in persisted
 
 
+def test_reopen_skips_rewriting_already_sanitized_history(tmp_path: Path) -> None:
+    from manga_localizer.config import Settings
+
+    root = tmp_path / "clean-reopen"
+    catalog = tmp_path / "catalog"
+    settings = Settings(data_dir=catalog)
+    app = create_app(settings, start_worker=False)
+    with TestClient(app) as client:
+        project = create_project(client, root)
+        upload_image(client, project["id"])
+        project_id = project["id"]
+        before = client.get(f"/api/projects/{project_id}").json()
+        revisions = client.get(f"/api/projects/{project_id}/revisions").json()
+    for store in app.state.registry.stores():
+        store.engine.dispose()
+
+    database = root / "project" / "project.sqlite3"
+    with sqlite3.connect(database) as connection:
+        first_updated = connection.execute("SELECT updated_at FROM projects").fetchone()[0]
+        first_revision_payloads = connection.execute(
+            "SELECT id, before, after FROM revisions ORDER BY id"
+        ).fetchall()
+
+    reopened = create_app(settings, start_worker=False)
+    with TestClient(reopened) as client:
+        listed = client.get("/api/projects").json()
+        assert listed[0]["id"] == project_id
+        assert listed[0]["revision"] == before["revision"]
+        assert client.get(f"/api/projects/{project_id}/revisions").json() == revisions
+    for store in reopened.state.registry.stores():
+        store.engine.dispose()
+
+    with sqlite3.connect(database) as connection:
+        assert connection.execute("SELECT updated_at FROM projects").fetchone()[0] == first_updated
+        assert (
+            connection.execute("SELECT id, before, after FROM revisions ORDER BY id").fetchall()
+            == first_revision_payloads
+        )
+
+
 @pytest.mark.parametrize(
     "unsafe_endpoint",
     (

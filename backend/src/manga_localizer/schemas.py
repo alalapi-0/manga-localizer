@@ -821,6 +821,21 @@ class RegionsGateRequest(APIModel):
     lineage: MutationLineageContext
 
 
+class RegionsReopenRequest(APIModel):
+    expected_revision: int = Field(ge=0)
+    lineage: MutationLineageContext
+
+
+class RegionsReopenOut(APIModel):
+    image_id: str
+    image_revision: int
+    generation_id: str
+    next_sequence: int
+    region_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
+    leftover_region_ids: list[str]
+    state: Literal["pending"]
+
+
 class BackgroundGateRequest(APIModel):
     decision: Literal["accept"]
     reason: Literal["all-eligible-backgrounds-reviewed", "no-eligible-regions"]
@@ -907,6 +922,11 @@ class MaskDraftRequest(APIModel):
 class MaskCheckResult(APIModel):
     check: str = Field(min_length=1, max_length=80)
     passed: bool
+
+
+class MaskReopenRequest(APIModel):
+    expected_revision: int = Field(ge=0)
+    lineage: MutationLineageContext
 
 
 class MaskGateRequest(APIModel):

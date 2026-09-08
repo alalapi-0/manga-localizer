@@ -21,6 +21,7 @@ from manga_localizer.database import (
     PageCloudFullPageReview,
     PageGeneration,
     PageLineageEvent,
+    PageMaskArtifact,
     Revision,
 )
 from manga_localizer.security import atomic_write_bytes, resolve_write_target
@@ -115,6 +116,11 @@ _PROVIDER_PARAMETER_KEYS = {
     "inputRoles",
     "outputCount",
 }
+_RAW_MEDIA_TYPES = {
+    "PNG": "image/png",
+    "JPEG": "image/jpeg",
+    "WEBP": "image/webp",
+}
 _LEGACY_ANCESTRY = {
     "originKind": "direct-ai",
     "providerClaimStatus": CLAIM_STATUS,
@@ -164,6 +170,34 @@ def _png_bytes(image: Image.Image) -> bytes:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG", optimize=False)
     return buffer.getvalue()
+
+
+def _same_rgb_png(left: bytes, right: bytes) -> bool:
+    if left == right:
+        return True
+    try:
+        with Image.open(io.BytesIO(left)) as first, Image.open(io.BytesIO(right)) as second:
+            if first.size != second.size:
+                return False
+            return bool(
+                np.array_equal(
+                    np.asarray(first.convert("RGB"), dtype=np.uint8),
+                    np.asarray(second.convert("RGB"), dtype=np.uint8),
+                )
+            )
+    except (OSError, ValueError):
+        return False
+
+
+def _detect_raw_media_type(raw: bytes) -> str:
+    try:
+        with Image.open(io.BytesIO(raw)) as opened:
+            media_type = _RAW_MEDIA_TYPES.get(opened.format or "")
+    except (OSError, ValueError) as error:
+        raise ProjectError("Raw cloud image is not a supported raster") from error
+    if media_type is None:
+        raise ProjectError("Raw cloud image media type is unsupported")
+    return media_type
 
 
 def _validate_metadata_contract(metadata: dict[str, Any]) -> None:
@@ -430,6 +464,77 @@ def _cloud_rows(session, generation: PageGeneration):
     return candidates, reviews
 
 
+_G8_REBUILD_GATES = {"G4_regions", "G5_background", "G6_ocr", "G7_mask"}
+_G8_DOWNSTREAM_GATES = {"G9_translation", "G10_typeset"}
+
+
+def _cloud_reviews_by_parent(
+    candidates: list[PageCloudFullPageCandidate],
+    reviews: list[PageCloudFullPageReview],
+) -> dict[str, list[tuple[PageCloudFullPageCandidate, PageCloudFullPageReview | None]]]:
+    grouped: dict[str, list[tuple[PageCloudFullPageCandidate, PageCloudFullPageReview | None]]] = {}
+    for index, candidate in enumerate(candidates):
+        review = reviews[index] if index < len(reviews) else None
+        grouped.setdefault(candidate.parent_checksum, []).append((candidate, review))
+    return grouped
+
+
+def _cloud_review_cardinality_invalid(
+    candidates: list[PageCloudFullPageCandidate],
+    reviews: list[PageCloudFullPageReview],
+) -> bool:
+    if len(reviews) not in {len(candidates), len(candidates) - 1}:
+        return True
+    if any(review.candidate_id != candidates[index].id for index, review in enumerate(reviews)):
+        return True
+    for rows in _cloud_reviews_by_parent(candidates, reviews).values():
+        # Unreviewed rows may only be the latest candidate on a parent. Earlier
+        # accepted reviews stay append-only when an owner-issues bounce replaces
+        # the G8 window on the same G7; current_cloud_full_page_acceptance uses
+        # the last accepted review.
+        if any(review is None for _candidate, review in rows[:-1]):
+            return True
+    return False
+
+
+def _is_g7_amendment_block(gap: list[PageLineageEvent]) -> bool:
+    return bool(gap) and (
+        all(event.gate == "G7_mask" for event in gap)
+        and gap[0].operation == "mask-stage-reopened"
+        and gap[-1].operation == "mask-stage-review"
+        and gap[-1].state in {"accepted", "not-applicable"}
+    )
+
+
+def _is_allowed_g8_inter_run_gap(gap: list[PageLineageEvent]) -> bool:
+    if not gap:
+        return False
+    if _is_g7_amendment_block(gap):
+        return True
+    # Owner-issues bounce keeps accepted G0-G7 and only replaces the G8
+    # window. G9/G10 already sit after the previous accepted G8; that
+    # downstream-only gap is legal. A later G4 rebuild or G7 remask
+    # remains legal too.
+    if all(event.gate in _G8_DOWNSTREAM_GATES for event in gap):
+        return True
+    rebuild_start = 0
+    while rebuild_start < len(gap) and gap[rebuild_start].gate in _G8_DOWNSTREAM_GATES:
+        rebuild_start += 1
+    rebuild = gap[rebuild_start:]
+    if not rebuild:
+        return False
+    if _is_g7_amendment_block(rebuild):
+        return True
+    return (
+        rebuild[0].operation == "regions-stage-reopened"
+        and rebuild[0].gate == "G4_regions"
+        and all(event.gate in _G8_REBUILD_GATES for event in rebuild)
+        and rebuild[-1].gate == "G7_mask"
+        and rebuild[-1].operation == "mask-stage-review"
+        and rebuild[-1].state in {"accepted", "not-applicable"}
+    )
+
+
 def _require_closed_rejected_legacy_prefix(legacy: dict[str, Any], generation_id: str) -> None:
     if legacy["terminal"] is not None:
         raise PageLineageConflict(
@@ -564,7 +669,7 @@ def _validate_candidate_evidence(
         ancestry = _LEGACY_ANCESTRY
         strict_outside = True
     if (
-        canonical != normalized
+        not _same_rgb_png(canonical, normalized)
         or not strict_outside
         or row.raw_media_type != raw_media_type
         or (row.raw_width, row.raw_height) != raw_grid
@@ -640,7 +745,6 @@ def cloud_full_page_replay(
             resource=f"page-generation:{generation.id}",
             reason="g8-cloud-replay-invalid",
         )
-    cloud_start = events[0].sequence if events else generation.next_sequence
     all_events = list(
         session.scalars(
             select(PageLineageEvent)
@@ -648,54 +752,48 @@ def cloud_full_page_replay(
             .order_by(PageLineageEvent.sequence)
         ).all()
     )
-    cloud_tail = [event for event in all_events if event.sequence >= cloud_start]
-    downstream_seen = False
-    for event in cloud_tail:
-        if event.gate == "G8_cloudFullPage":
-            if downstream_seen:
+    if events:
+        g8_runs: list[list[PageLineageEvent]] = [[events[0]]]
+        for event in events[1:]:
+            if event.sequence == g8_runs[-1][-1].sequence + 1:
+                g8_runs[-1].append(event)
+            else:
+                g8_runs.append([event])
+        for index in range(len(g8_runs) - 1):
+            previous = g8_runs[index]
+            nxt = g8_runs[index + 1]
+            gap = [
+                event
+                for event in all_events
+                if previous[-1].sequence < event.sequence < nxt[0].sequence
+            ]
+            if not _is_allowed_g8_inter_run_gap(gap):
                 raise PageLineageConflict(
                     "Cloud full-page events are interleaved with downstream evidence",
-                    resource=f"event:{event.id}",
+                    resource=f"event:{nxt[0].id}",
                     reason="g8-cloud-replay-invalid",
                 )
-        else:
-            downstream_seen = True
-    _g7, current_mask, quality, current_background, quality_bytes, mask_bytes = _input_bindings(
-        store, session, image, generation
+    _g7, _current_mask, quality, _current_background, quality_bytes, _current_mask_bytes = (
+        _input_bindings(store, session, image, generation)
     )
-    with Image.open(io.BytesIO(quality_bytes)) as quality_image:
-        width, height = quality_image.size
-    ordered_inputs = [
-        {
-            "position": 1,
-            "role": "quality-plate",
-            "sha256": quality["checksum"],
-            "width": width,
-            "height": height,
-        },
-        {
-            "position": 2,
-            "role": "accepted-g7-mask",
-            "sha256": current_mask.mask_checksum,
-            "width": current_mask.width,
-            "height": current_mask.height,
-        },
-    ]
     for row in candidates:
         expected_ancestry = (
             _ANCESTRY if row.route_manifest.get("maskComposite") is True else _LEGACY_ANCESTRY
+        )
+        bound_mask, mask_bytes, ordered_inputs = _historical_mask_bindings(
+            store, session, row, quality=quality, quality_bytes=quality_bytes
         )
         if (
             row.generation_id != generation.id
             or row.image_id != image.id
             or row.route_profile != CLOUD_FULL_PAGE_PROFILE
-            or row.legacy_state_checksum != legacy["stateChecksum"]
-            or row.parent_checksum != legacy["g7Checksum"]
+            or not _is_sha256(row.legacy_state_checksum)
+            or not _is_sha256(row.parent_checksum)
             or row.source_checksum != image.checksum
             or row.quality_checksum != quality["checksum"]
-            or row.background_checksum != current_background
-            or row.mask_artifact_id != current_mask.id
-            or row.mask_checksum != current_mask.mask_checksum
+            or not _is_sha256(row.background_checksum)
+            or row.mask_artifact_id != bound_mask.id
+            or row.mask_checksum != bound_mask.mask_checksum
             or row.provider is None
             or row.tool is None
             or row.model_version is None
@@ -719,16 +817,7 @@ def cloud_full_page_replay(
             mask_bytes=mask_bytes,
             ordered_inputs=ordered_inputs,
         )
-    if (
-        len(reviews) not in {len(candidates), len(candidates) - 1}
-        or any(review.candidate_id != candidates[index].id for index, review in enumerate(reviews))
-        or any(review.state == "accepted" for review in reviews[:-1])
-        or (reviews and reviews[-1].state == "accepted" and len(reviews) != len(candidates))
-        or (
-            len(reviews) == len(candidates) - 1
-            and any(review.state != "rejected" for review in reviews)
-        )
-    ):
+    if _cloud_review_cardinality_invalid(candidates, reviews):
         raise PageLineageConflict(
             "Cloud full-page row cardinality is invalid",
             resource=f"page-generation:{generation.id}",
@@ -758,8 +847,9 @@ def cloud_full_page_replay(
             "expectedSequence": enqueue_sequence,
             "actor": actor,
         }
-        prior_state = legacy["stateChecksum"] if index == 0 else reviews[index - 1].state_checksum
-        candidate_state = _cloud_state(legacy["stateChecksum"], candidates[: index + 1], [])
+        epoch_root = candidate.legacy_state_checksum
+        prior_state = epoch_root if index == 0 else reviews[index - 1].state_checksum
+        candidate_state = _cloud_state(epoch_root, candidates[: index + 1], [])
         replay_metadata = {
             "routeProfile": candidate.route_profile,
             "invocationId": candidate.invocation_id,
@@ -913,7 +1003,7 @@ def cloud_full_page_replay(
                 or _event_actor(event) != actor
                 or event.input_checksum != input_checksum
                 or event.output_checksum != output_checksum
-                or event.parent_checksum != legacy["g7Checksum"]
+                or event.parent_checksum != candidate.parent_checksum
                 or event.stage != "inpaint"
                 or event.provider != candidate.provider
                 or event.model_version != candidate.model_version
@@ -985,7 +1075,7 @@ def cloud_full_page_replay(
                 or review_event.state != review.state
                 or review_event.input_checksum != candidate_state
                 or review_event.output_checksum != review.state_checksum
-                or review_event.parent_checksum != legacy["g7Checksum"]
+                or review_event.parent_checksum != candidate.parent_checksum
                 or review_event.stage != "inpaint"
                 or review_event.provider != candidate.provider
                 or review_event.model_version != candidate.model_version
@@ -1003,7 +1093,7 @@ def cloud_full_page_replay(
                     "claimStatus": CLAIM_STATUS,
                     "candidateId": candidate.id,
                     "candidateChecksum": candidate.normalized_checksum,
-                    "g7Checksum": legacy["g7Checksum"],
+                    "g7Checksum": candidate.parent_checksum,
                     "checks": review.checks,
                     "reviewId": review.id,
                     "stateChecksum": review.state_checksum,
@@ -1022,12 +1112,17 @@ def cloud_full_page_replay(
             resource=f"page-generation:{generation.id}",
             reason="g8-cloud-replay-invalid",
         )
-    expected_state = _cloud_state(legacy["stateChecksum"], candidates, reviews)
+    state_root = candidates[-1].legacy_state_checksum
+    expected_state = _cloud_state(state_root, candidates, reviews)
     if reviews:
         reviewed_state = (
             expected_state
             if len(reviews) == len(candidates)
-            else _cloud_state(legacy["stateChecksum"], candidates[: len(reviews)], reviews)
+            else _cloud_state(
+                candidates[len(reviews) - 1].legacy_state_checksum,
+                candidates[: len(reviews)],
+                reviews,
+            )
         )
         if reviews[-1].state_checksum != reviewed_state:
             raise PageLineageConflict(
@@ -1043,6 +1138,91 @@ def cloud_full_page_replay(
         "stateChecksum": expected_state,
         "terminal": accepted[-1] if accepted else None,
     }
+
+
+def linked_final_review_item_id(session, generation: PageGeneration) -> str | None:
+    rows = list(
+        session.scalars(
+            select(PageLineageEvent).where(
+                PageLineageEvent.generation_id == generation.id,
+                PageLineageEvent.gate == "G0_identity",
+            )
+        ).all()
+    )
+    if len(rows) != 1 or not isinstance(rows[0].evidence, dict):
+        return None
+    item_id = rows[0].evidence.get("finalReviewItemId")
+    return item_id if isinstance(item_id, str) and item_id else None
+
+
+def g8_replace_accepted_for_linked_item(
+    store: ProjectStore,
+    lineage: object,
+    *,
+    item_verdict_lookup,
+) -> bool:
+    if not isinstance(lineage, dict):
+        return False
+    generation_id = lineage.get("pageGenerationId")
+    if not isinstance(generation_id, str) or not generation_id:
+        return False
+    with store.session() as session:
+        generation = session.get(PageGeneration, generation_id)
+        if generation is None:
+            return False
+        item_id = linked_final_review_item_id(session, generation)
+    if item_id is None:
+        return False
+    verdict = item_verdict_lookup(item_id)
+    return verdict == "issues"
+
+
+def _historical_mask_bindings(
+    store: ProjectStore,
+    session,
+    row: PageCloudFullPageCandidate,
+    *,
+    quality: dict[str, Any],
+    quality_bytes: bytes,
+) -> tuple[PageMaskArtifact, bytes, list[dict[str, Any]]]:
+    artifact = session.get(PageMaskArtifact, row.mask_artifact_id)
+    if (
+        artifact is None
+        or artifact.generation_id != row.generation_id
+        or artifact.image_id != row.image_id
+        or artifact.mask_checksum != row.mask_checksum
+    ):
+        raise PageLineageConflict(
+            "Cloud candidate mask binding does not match a persisted G7 artifact",
+            resource=f"cloud-candidate:{row.id}",
+            reason="g8-cloud-replay-invalid",
+        )
+    mask_path = resolve_write_target(
+        store.root, artifact.relative_path, protected_roots=(store.source_root,)
+    )
+    mask_bytes = _read_verified(mask_path, artifact.mask_checksum, message="Accepted mask changed")
+    with Image.open(io.BytesIO(quality_bytes)) as quality_image:
+        width, height = quality_image.size
+    return (
+        artifact,
+        mask_bytes,
+        [
+            {
+                "position": 1,
+                "role": "quality-plate",
+                "sha256": quality["checksum"],
+                "width": width,
+                "height": height,
+            },
+            {
+                "position": 2,
+                "role": "accepted-g7-mask",
+                "sha256": artifact.mask_checksum,
+                "width": artifact.width,
+                "height": artifact.height,
+            },
+        ],
+    )
 
 
 def _input_bindings(store: ProjectStore, session, image: ImageAsset, generation: PageGeneration):
@@ -1130,9 +1310,8 @@ def cloud_full_page_context(store: ProjectStore, image_id: str) -> dict[str, Any
             "candidates": [
                 public_cloud_candidate(row, replay["reviews"]) for row in replay["candidates"]
             ],
-            "acceptedCandidateId": next(
-                (review.candidate_id for review in replay["reviews"] if review.state == "accepted"),
-                None,
+            "acceptedCandidateId": (
+                None if replay["terminal"] is None else replay["terminal"].candidate_id
             ),
             "fallbackEnabled": replay["legacy"]["fallbackEnabled"],
         }
@@ -1221,11 +1400,7 @@ def _normalize(
         with Image.open(io.BytesIO(raw)) as opened:
             if opened.width * opened.height > MAX_RASTER_PIXELS:
                 raise ProjectError("Raw cloud image exceeds the raster pixel limit")
-            raw_media_type = {
-                "PNG": "image/png",
-                "JPEG": "image/jpeg",
-                "WEBP": "image/webp",
-            }.get(opened.format or "")
+            raw_media_type = _RAW_MEDIA_TYPES.get(opened.format or "")
             if raw_media_type is None:
                 raise ProjectError("Raw cloud image media type is unsupported")
             orientation = int(opened.getexif().get(274, 1))
@@ -1431,6 +1606,7 @@ def ingest_cloud_full_page_candidate(
     raw_bytes: bytes,
     normalized_bytes: bytes,
     metadata: dict[str, Any],
+    replace_accepted: bool = False,
 ) -> dict[str, Any]:
     _validate_metadata_contract(metadata)
     if metadata.get("routeProfile") != CLOUD_FULL_PAGE_PROFILE:
@@ -1499,24 +1675,29 @@ def ingest_cloud_full_page_candidate(
             legacy = _g8_replay(store, session, image, generation)
             _require_closed_rejected_legacy_prefix(legacy, generation.id)
             cloud_candidates, cloud_reviews = _cloud_rows(session, generation)
-            if cloud_reviews and any(row.state == "accepted" for row in cloud_reviews):
+            g7, mask, quality, background, quality_bytes, mask_bytes = _input_bindings(
+                store, session, image, generation
+            )
+            accepted_g7s = {
+                candidate.parent_checksum
+                for candidate in cloud_candidates
+                if any(
+                    row.candidate_id == candidate.id and row.state == "accepted"
+                    for row in cloud_reviews
+                )
+            }
+            if g7 in accepted_g7s and not replace_accepted:
                 raise PageLineageConflict(
                     "Accepted cloud G8 evidence is immutable",
                     resource=f"image:{image.id}",
                     reason="g8-cloud-accepted",
                 )
-            if cloud_candidates and (
-                len(cloud_reviews) != len(cloud_candidates)
-                or any(row.state != "rejected" for row in cloud_reviews)
-            ):
+            if cloud_candidates and len(cloud_reviews) != len(cloud_candidates):
                 raise PageLineageConflict(
                     "A pending or unreviewed cloud candidate already exists",
                     resource=f"image:{image.id}",
                     reason="g8-cloud-candidate-exists",
                 )
-            g7, mask, quality, background, quality_bytes, mask_bytes = _input_bindings(
-                store, session, image, generation
-            )
             with Image.open(io.BytesIO(quality_bytes)) as quality_image:
                 target_grid = quality_image.size
             ordered = [
@@ -1787,6 +1968,7 @@ def record_cloud_full_page_review(
     reason: str,
     expected_revision: int,
     lineage: dict[str, Any],
+    replace_accepted: bool = False,
 ) -> dict[str, Any]:
     by_key = {
         entry.get("check"): entry.get("passed") for entry in checks if isinstance(entry, dict)
@@ -1855,6 +2037,24 @@ def record_cloud_full_page_review(
                     "Cloud candidate already has a review",
                     resource=f"cloud-candidate:{candidate.id}",
                     reason="g8-cloud-candidate-already-reviewed",
+                )
+            accepted_parents = {
+                item.parent_checksum
+                for item in replay["candidates"]
+                if any(
+                    row.candidate_id == item.id and row.state == "accepted"
+                    for row in replay["reviews"]
+                )
+            }
+            if (
+                state == "accepted"
+                and candidate.parent_checksum in accepted_parents
+                and not replace_accepted
+            ):
+                raise PageLineageConflict(
+                    "Accepted cloud G8 evidence is immutable",
+                    resource=f"image:{image.id}",
+                    reason="g8-cloud-accepted",
                 )
             _validate_candidate_file(store, candidate)
             image.revision += 1

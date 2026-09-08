@@ -430,7 +430,7 @@ def _candidate_checksum_payload(
     }
 
 
-def _rows(
+def _all_translation_rows(
     session, generation_id: str
 ) -> tuple[list[RegionTranslationCandidate], list[RegionTranslationReview]]:
     candidates = list(
@@ -448,6 +448,69 @@ def _rows(
         ).all()
     )
     return candidates, reviews
+
+
+def _g8_accept_event(session, generation_id: str, g8_checksum: str) -> PageLineageEvent | None:
+    return next(
+        (
+            event
+            for event in reversed(
+                list(
+                    session.scalars(
+                        select(PageLineageEvent)
+                        .where(PageLineageEvent.generation_id == generation_id)
+                        .order_by(PageLineageEvent.sequence)
+                    ).all()
+                )
+            )
+            if event.output_checksum == g8_checksum
+            and event.state in {"accepted", "not-applicable"}
+            and (
+                (event.gate == "G8_cleanPlate" and event.operation == "clean-plate-stage-review")
+                or (
+                    event.gate == "G8_cloudFullPage"
+                    and event.operation == "cloud-full-page-stage-review"
+                )
+            )
+        ),
+        None,
+    )
+
+
+def _current_g9_rows(
+    session,
+    generation_id: str,
+    g8_checksum: str,
+    *,
+    after_sequence: int | None = None,
+) -> tuple[list[RegionTranslationCandidate], list[RegionTranslationReview]]:
+    if after_sequence is None:
+        parent = _g8_accept_event(session, generation_id, g8_checksum)
+        after_sequence = parent.sequence if parent is not None else 0
+    candidates, reviews = _all_translation_rows(session, generation_id)
+    return (
+        [
+            row
+            for row in candidates
+            if row.g8_checksum == g8_checksum and row.sequence > after_sequence
+        ],
+        [
+            row
+            for row in reviews
+            if row.g8_checksum == g8_checksum and row.sequence > after_sequence
+        ],
+    )
+
+
+def _current_page_translation_review(
+    session, generation_id: str, g8_checksum: str
+) -> PageTranslationReview | None:
+    return session.scalar(
+        select(PageTranslationReview).where(
+            PageTranslationReview.generation_id == generation_id,
+            PageTranslationReview.g8_checksum == g8_checksum,
+        )
+    )
 
 
 def _translation_checksum(
@@ -527,7 +590,10 @@ def translation_state_checksum(session, generation_id: str, g8_checksum: str | N
             resource=f"page-generation:{generation_id}",
             reason="g9-g8-missing",
         )
-    return _translation_checksum(*_rows(session, generation_id), g8_checksum=g8_checksum)
+    return _translation_checksum(
+        *_current_g9_rows(session, generation_id, g8_checksum),
+        g8_checksum=g8_checksum,
+    )
 
 
 def _event_actor(event: PageLineageEvent) -> dict[str, str | None]:
@@ -864,10 +930,14 @@ def validate_translation_replay(
                 invalid("A downstream gate started before terminal G9", f"event:{event.id}")
             downstream_seen = True
 
-    candidates, reviews = _rows(session, generation.id)
-    terminal = session.scalar(
-        select(PageTranslationReview).where(PageTranslationReview.generation_id == generation.id)
+    candidates, reviews = _current_g9_rows(
+        session,
+        generation.id,
+        g8_checksum,
+        after_sequence=g8_terminal.sequence,
     )
+    all_candidates, all_reviews = _all_translation_rows(session, generation.id)
+    terminal = _current_page_translation_review(session, generation.id, g8_checksum)
     candidate_groups: dict[int, list[RegionTranslationCandidate]] = {}
     for row in candidates:
         candidate_groups.setdefault(row.sequence, []).append(row)
@@ -900,6 +970,8 @@ def validate_translation_replay(
             )
             if belongs_to_generation:
                 invalid("G9 job has ambiguous lineage", f"job:{job.id}")
+            continue
+        if expected_sequence <= g8_terminal.sequence:
             continue
         job_items[item.id] = (item, job, expected_sequence)
 
@@ -1190,6 +1262,17 @@ def validate_translation_replay(
                 previous_review is None or previous_review.state != "rejected"
             ):
                 invalid("G9 revision does not follow a rejected candidate", f"event:{event.id}")
+            revision_parent = previous
+            if revision_parent is None:
+                revision_parent = next(
+                    (
+                        candidate
+                        for candidate in reversed(all_candidates)
+                        if candidate.region_id == row.region_id
+                        and candidate.g8_checksum != g8_checksum
+                    ),
+                    None,
+                )
             try:
                 provider, model = _revision_provenance(event_actor, row.origin_kind)
             except PageLineageConflict:
@@ -1212,10 +1295,14 @@ def validate_translation_replay(
                 expected_parameter_hash=parameter_hash,
                 expected_job_id=None,
                 expected_job_item_id=None,
-                expected_revision_number=1 if previous is None else previous.revision_number + 1,
-                expected_parent_id=previous.id if previous else None,
+                expected_revision_number=(
+                    1 if revision_parent is None else revision_parent.revision_number + 1
+                ),
+                expected_parent_id=revision_parent.id if revision_parent else None,
                 expected_flags=flags,
-                expected_before={"supersedesCandidateId": previous.id} if previous else None,
+                expected_before=(
+                    {"supersedesCandidateId": revision_parent.id} if revision_parent else None
+                ),
                 expected_operation="revise",
             )
             if (
@@ -1478,13 +1565,27 @@ def validate_translation_replay(
         if review_prefix or replay_terminal is not None:
             invalid("G9 review began before its job completed", f"job-item:{open_item}")
 
+    historical_accepted: dict[str, RegionTranslationCandidate] = {}
+    historical_reviews = {row.candidate_id: row for row in all_reviews}
+    for row in all_candidates:
+        if row.g8_checksum == g8_checksum:
+            continue
+        review = historical_reviews.get(row.id)
+        if review is not None and review.state == "accepted":
+            historical_accepted[row.region_id] = row
     for region_id, region in eligible_by_id.items():
         latest = latest_by_region.get(region_id)
         if latest is None:
-            if region.translation_text != "" or region.translation_provider is not None:
-                invalid(
-                    "G9 compatibility projection exists without a candidate", f"region:{region_id}"
-                )
+            prior = historical_accepted.get(region_id)
+            if region.translation_text == "" and region.translation_provider is None:
+                continue
+            if (
+                prior is not None
+                and region.translation_text == prior.translation_text
+                and region.translation_provider == prior.provider
+            ):
+                continue
+            invalid("G9 compatibility projection exists without a candidate", f"region:{region_id}")
             continue
         latest_review = reviews_by_candidate.get(latest.id)
         accepted = latest_review is not None and latest_review.state == "accepted"
@@ -1499,9 +1600,16 @@ def validate_translation_replay(
         if not accepted and (
             region.translation_text != "" or region.translation_provider is not None
         ):
-            invalid(
-                "Unaccepted G9 candidate leaked into compatibility fields", f"region:{region_id}"
-            )
+            prior = historical_accepted.get(region_id)
+            if not (
+                prior is not None
+                and region.translation_text == prior.translation_text
+                and region.translation_provider == prior.provider
+            ):
+                invalid(
+                    "Unaccepted G9 candidate leaked into compatibility fields",
+                    f"region:{region_id}",
+                )
 
     if downstream_seen:
         if replay_terminal is None:
@@ -1596,7 +1704,7 @@ def translation_gate_context(store: ProjectStore, image_id: str) -> dict[str, An
         project = store.project(session)
         policy = _bounded_policy(dict(project.settings))
         _require_chinese_target(policy)
-        candidates, reviews = _rows(session, generation.id)
+        candidates, reviews = _current_g9_rows(session, generation.id, g8_checksum)
         reviews_by_candidate = {row.candidate_id: row for row in reviews}
         terminal = replay_terminal
         if (
@@ -1680,14 +1788,7 @@ def prepare_translation_enqueue(
             resource=f"image:{image.id}",
             reason="g9-no-translatable-regions",
         )
-    if (
-        session.scalar(
-            select(PageTranslationReview).where(
-                PageTranslationReview.generation_id == generation.id
-            )
-        )
-        is not None
-    ):
+    if _current_page_translation_review(session, generation.id, g8_checksum) is not None:
         raise PageLineageConflict(
             "Accepted G9 evidence is immutable",
             resource=f"image:{image.id}",
@@ -1714,7 +1815,10 @@ def prepare_translation_enqueue(
     if (
         session.scalar(
             select(RegionTranslationCandidate.id)
-            .where(RegionTranslationCandidate.generation_id == generation.id)
+            .where(
+                RegionTranslationCandidate.generation_id == generation.id,
+                RegionTranslationCandidate.g8_checksum == g8_checksum,
+            )
             .limit(1)
         )
         is not None
@@ -2179,8 +2283,14 @@ def record_translation_revision(
                 resource=f"region:{region.id}",
                 reason="g9-observation-stale",
             )
-        candidates, reviews = _rows(session, generation.id)
+        candidates, reviews = _current_g9_rows(session, generation.id, g8_checksum)
         latest = next((row for row in reversed(candidates) if row.region_id == region.id), None)
+        all_candidates, _all_reviews = _all_translation_rows(session, generation.id)
+        historical_latest = next(
+            (row for row in reversed(all_candidates) if row.region_id == region.id),
+            None,
+        )
+        revision_parent = latest if latest is not None else historical_latest
         reviews_by_id = {row.candidate_id: row for row in reviews}
         if latest is not None:
             review = reviews_by_id.get(latest.id)
@@ -2200,13 +2310,13 @@ def record_translation_revision(
         parameter_hash = _parameter_hash(
             generation, provider=provider, model_version=model, policy=policy
         )
-        revision_number = 1 if latest is None else latest.revision_number + 1
+        revision_number = 1 if revision_parent is None else revision_parent.revision_number + 1
         flags = _computed_flags(region.source_text, translation_text)
         payload = _candidate_checksum_payload(
             generation_id=generation.id,
             region_id=region.id,
             revision_number=revision_number,
-            supersedes_candidate_id=latest.id if latest else None,
+            supersedes_candidate_id=revision_parent.id if revision_parent else None,
             origin_kind=origin_kind,
             g8_checksum=g8_checksum,
             clean_plate_checksum=clean_checksum,
@@ -2229,7 +2339,7 @@ def record_translation_revision(
             entity_type="translation-candidate",
             entity_id=candidate_id,
             operation="revise",
-            before={"supersedesCandidateId": latest.id} if latest else None,
+            before={"supersedesCandidateId": revision_parent.id} if revision_parent else None,
             after={
                 "candidateId": candidate_id,
                 "regionId": region.id,
@@ -2244,7 +2354,7 @@ def record_translation_revision(
             region_id=region.id,
             sequence=generation.next_sequence,
             revision_number=revision_number,
-            supersedes_candidate_id=latest.id if latest else None,
+            supersedes_candidate_id=revision_parent.id if revision_parent else None,
             origin_kind=origin_kind,
             g8_checksum=g8_checksum,
             clean_plate_checksum=clean_checksum,
@@ -2414,7 +2524,7 @@ def record_translation_candidate_review(
                 reason="g9-flags-invalid",
             )
         state = "accepted" if decision == "accept" else "rejected"
-        candidates, _reviews = _rows(session, generation.id)
+        candidates, _reviews = _current_g9_rows(session, generation.id, g8_checksum)
         latest: dict[str, RegionTranslationCandidate] = {}
         for row in candidates:
             latest[row.region_id] = row
@@ -2560,14 +2670,7 @@ def record_translation_gate_review(
             store, session, image, generation
         )
         validate_translation_replay(session, generation, g8_checksum=g8_checksum)
-        if (
-            session.scalar(
-                select(PageTranslationReview).where(
-                    PageTranslationReview.generation_id == generation.id
-                )
-            )
-            is not None
-        ):
+        if _current_page_translation_review(session, generation.id, g8_checksum) is not None:
             raise PageLineageConflict(
                 "G9 terminal review is immutable",
                 resource=f"image:{image.id}",
@@ -2580,8 +2683,10 @@ def record_translation_gate_review(
                 resource=f"image:{image.id}",
                 reason="g9-state-stale",
             )
-        candidates, reviews = _rows(session, generation.id)
+        candidates, reviews = _current_g9_rows(session, generation.id, g8_checksum)
         review_by = {row.candidate_id: row for row in reviews}
+        g8_parent = _g8_accept_event(session, generation.id, g8_checksum)
+        g8_sequence = g8_parent.sequence if g8_parent is not None else 0
         jobs: list[JobItem] = []
         for job_item, job in session.execute(
             select(JobItem, Job)
@@ -2593,8 +2698,10 @@ def record_translation_gate_review(
             )
         ).all():
             try:
-                _job_page_sequence(session, job, generation)
+                job_sequence = _job_page_sequence(session, job, generation)
             except PageLineageConflict:
+                continue
+            if job_sequence <= g8_sequence:
                 continue
             jobs.append(job_item)
         if decision == "not-applicable":

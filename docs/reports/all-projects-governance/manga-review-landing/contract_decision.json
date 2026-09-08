@@ -1,0 +1,16 @@
+{
+  "contract_version": "v3",
+  "status": "active",
+  "reviewed_sha256": "007f4055b84b2ada66ba4621cc8aa3f8b6b30436344dd4632471c7b06090c0b2",
+  "active_sha256": "c769abe23e31fe8e38e36d6b56088a0f554d663c9e0014c6c170d054323deb0c",
+  "metadata_only_change": "Draft/active label only; frozen objective, boundaries and acceptance unchanged.",
+  "judge": {
+    "identity": "/root/manga_state_path_contract_judge_v3",
+    "decision": "REVISION_PASS"
+  },
+  "governor": {
+    "identity": "/root/hub_connection_governor",
+    "decision": "APPROVE"
+  },
+  "scope": "Contract activation only, not product acceptance or delivery authorization beyond the frozen reviewed process."
+}

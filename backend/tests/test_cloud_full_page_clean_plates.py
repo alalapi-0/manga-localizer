@@ -5,6 +5,7 @@ import hashlib
 import io
 import json
 import sqlite3
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -35,16 +36,75 @@ from .legacy_g8_fixture import historical_local_g8
 from .test_page_lineage import (
     _ACTOR,
     _CLEAN_PLATE_CHECKS,
+    _OCR_QC_CHECKS,
+    _accept_current_g7_artifact,
+    _accept_g4_from_latest_mutation,
     _current_lineage_context,
+    _enqueue_g7,
+    _mask_recipe,
     _mutation_lineage,
     _prepare_g3_yes_page,
+    _prepare_g6_accepted_page,
     _prepare_g7_accepted_page,
+    _project_image,
+    _save_g7_default_draft,
+    _StrictLineageOCR,
 )
 from .test_typesets import _complete_g9_terminal, _review_body, _run_typeset
 
 
 def _sha(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
+
+
+def test_same_rgb_png_accepts_equivalent_deflate():
+    image = Image.new("RGB", (12, 8), "red")
+    fast = io.BytesIO()
+    slow = io.BytesIO()
+    image.save(fast, format="PNG", optimize=False, compress_level=1)
+    image.save(slow, format="PNG", optimize=False, compress_level=6)
+    assert fast.getvalue() != slow.getvalue()
+    assert cloud_service._same_rgb_png(fast.getvalue(), slow.getvalue())
+    other = io.BytesIO()
+    Image.new("RGB", (12, 8), "blue").save(other, format="PNG", optimize=False, compress_level=1)
+    assert cloud_service._same_rgb_png(fast.getvalue(), other.getvalue()) is False
+
+
+def test_cloud_normalization_detects_jpeg_and_rejects_gif():
+    jpeg = _encode_raw(Image.new("RGB", (4, 6), "white"), "JPEG")
+    assert jpeg.startswith(b"\xff\xd8\xff")
+    assert cloud_service._detect_raw_media_type(jpeg) == "image/jpeg"
+    normalized, _manifest, raw_grid, media_type = cloud_service._normalize(jpeg, (4, 6))
+    assert media_type == "image/jpeg"
+    assert raw_grid == (4, 6)
+    assert normalized.startswith(b"\x89PNG")
+    gif = _encode_raw(Image.new("RGB", (4, 6), "white"), "GIF")
+    with pytest.raises(ProjectError, match="media type"):
+        cloud_service._detect_raw_media_type(gif)
+    with pytest.raises(ProjectError, match="media type"):
+        cloud_service._normalize(gif, (4, 6))
+
+
+@pytest.mark.parametrize(
+    "raw_format,media_type", [("PNG", "image/png"), ("JPEG", "image/jpeg"), ("WEBP", "image/webp")]
+)
+def test_cloud_raster_formats_preserve_grid_and_reject_implicit_exif_rotation(
+    raw_format, media_type
+):
+    image = Image.new("RGB", (8, 12), "white")
+    raw = _encode_raw(image, raw_format)
+    normalized, manifest, source_grid, detected = cloud_service._normalize(raw, (16, 24))
+    assert detected == cloud_service._detect_raw_media_type(raw) == media_type
+    assert source_grid == (8, 12)
+    assert manifest["sourceGrid"] == {"width": 8, "height": 12}
+    with Image.open(io.BytesIO(normalized)) as opened:
+        assert (opened.format, opened.mode, opened.size) == ("PNG", "RGB", (16, 24))
+    exif = Image.Exif()
+    exif[274] = 6
+    rotated = io.BytesIO()
+    image.save(rotated, format=raw_format, exif=exif)
+    with pytest.raises(ProjectError, match="already be upright"):
+        cloud_service._normalize(rotated.getvalue(), (16, 24))
 
 
 @pytest.mark.parametrize("size", [(4, 6), (6, 4), (4, 4)])
@@ -131,6 +191,14 @@ def _route_snapshot(store, image_id: str, generation_id: str) -> dict[str, int]:
         }
 
 
+def _encode_raw(image: Image.Image, raw_format: str) -> bytes:
+    if raw_format == "PNG":
+        return cloud_service._png_bytes(image)
+    buffer = io.BytesIO()
+    image.save(buffer, format=raw_format)
+    return buffer.getvalue()
+
+
 def _candidate_upload(
     client: TestClient,
     prepared: dict[str, object],
@@ -139,6 +207,7 @@ def _candidate_upload(
     raw_grid: tuple[int, int] | None = None,
     invocation_id: str = "synthetic-cloud-call-1",
     inside_rgb: tuple[int, int, int] = (1, 2, 3),
+    raw_format: str = "PNG",
 ):
     image = prepared["targetImage"]
     assert isinstance(image, dict)
@@ -163,12 +232,12 @@ def _candidate_upload(
     changed.putpixel((int(inside_x), int(inside_y)), inside_rgb)
     changed.putpixel((int(outside_x), int(outside_y)), (4, 5, 6))
     if raw_grid is None:
-        raw = cloud_service._png_bytes(changed)
+        raw = _encode_raw(changed, raw_format)
         provider_normalized, normalization, _, raw_media_type = cloud_service._normalize(
             raw, (width, height)
         )
     else:
-        raw = cloud_service._png_bytes(Image.new("RGB", raw_grid, "white"))
+        raw = _encode_raw(Image.new("RGB", raw_grid, "white"), raw_format)
         provider_normalized, normalization, _, raw_media_type = (
             cloud_service._normalize_for_profile(
                 raw,
@@ -237,12 +306,60 @@ def _candidate_upload(
     response = client.post(
         f"/api/images/{image['id']}/page-gates/cloud-full-page/candidates",
         files={
-            "raw": ("raw.png", raw, "image/png"),
+            "raw": ("raw.bin", raw, raw_media_type),
             "normalized": ("normalized.png", normalized, "image/png"),
             "metadata": (None, json.dumps(metadata), "application/json"),
         },
     )
     return response, metadata, raw, normalized
+
+
+@pytest.mark.parametrize(
+    "raw_format,media_type,signature",
+    [("JPEG", "image/jpeg", b"\xff\xd8\xff"), ("WEBP", "image/webp", b"RIFF")],
+)
+def test_cloud_ingest_preserves_encoded_raw_bytes_and_detected_media_type(
+    tmp_path, client: TestClient, app, raw_format, media_type, signature
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    response, metadata, raw, _normalized = _candidate_upload(
+        client,
+        prepared,
+        raw_format=raw_format,
+        invocation_id="synthetic-cloud-encoded-raw-1",
+    )
+    assert response.status_code == 200, response.text
+    assert raw.startswith(signature)
+    assert metadata["rawMediaType"] == media_type
+    assert metadata["rawSha256"] == _sha(raw)
+    assert metadata["deltaManifest"]["outsideMaskChangedPixelCount"] == 0
+    with prepared["store"].session() as session:
+        candidate = session.get(PageCloudFullPageCandidate, response.json()["candidateId"])
+        assert candidate is not None
+        assert candidate.raw_media_type == media_type
+        stored = (prepared["store"].root / candidate.raw_relative_path).read_bytes()
+        assert stored == raw
+        assert stored.startswith(signature)
+        assert candidate.normalized_media_type == "image/png"
+
+
+def test_cloud_ingest_rejects_jpeg_bytes_claimed_as_png(tmp_path, client: TestClient, app):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+
+    def claim_png(metadata, raw, normalized):
+        metadata["rawMediaType"] = "image/png"
+        return metadata, raw, normalized
+
+    response, _metadata, raw, _normalized = _candidate_upload(
+        client,
+        prepared,
+        mutate=claim_png,
+        raw_format="JPEG",
+        invocation_id="synthetic-cloud-jpeg-claimed-png-1",
+    )
+    assert raw.startswith(b"\xff\xd8\xff")
+    assert response.status_code == 400, response.text
+    assert "media type" in response.text
 
 
 def test_cloud_ingest_accepts_cover_cropped_native_bucket(tmp_path, client: TestClient, app):
@@ -1454,3 +1571,556 @@ def test_cloud_route_accepts_fully_closed_rejected_legacy_prefix(tmp_path, clien
     assert rejected.status_code == 200, rejected.text
     response, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
     assert response.status_code == 200, response.text
+
+
+def test_rejected_cloud_candidate_survives_g7_coverage_hole_reopen(
+    tmp_path, client: TestClient, app
+):
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    hole_id = context["eligibleRegionIds"][0]
+    saved = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [
+                {
+                    "regionId": hole_id,
+                    "maskMode": "manual",
+                    "polygon": None,
+                    "padding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "polarity": "auto",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [
+                            {
+                                "mode": "add",
+                                "radius": 1.0,
+                                "points": [[2.0, 2.0], [3.0, 3.0]],
+                            }
+                        ],
+                    },
+                }
+            ],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    first_mask = _accept_current_g7_artifact(client, prepared)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    cloud = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page").json()
+    checks = [
+        {"check": check, "passed": check != "target-source-text-unreadable"}
+        for check in cloud_service.CLOUD_FULL_PAGE_CHECKS
+    ]
+    rejected = client.patch(
+        f"/api/images/{image['id']}/page-gates/cloud-full-page",
+        json={
+            "candidateId": first.json()["candidateId"],
+            "observedChecksum": first.json()["normalizedChecksum"],
+            "decision": "reject",
+            "reason": "target-source-text-unreadable",
+            "checks": checks,
+            "expectedRevision": cloud["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, cloud["nextSequence"]),
+        },
+    )
+    assert rejected.status_code == 200, rejected.text
+    mask = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": mask["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, mask["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    revised = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [_mask_recipe(hole_id)],
+            "expectedRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    second_job = _enqueue_g7(client, prepared)
+    assert second_job.status_code == 202, second_job.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, second_job.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    second_mask = _accept_current_g7_artifact(client, prepared)
+    assert (
+        second_mask["event"]["evidence"]["artifactId"]
+        != first_mask["event"]["evidence"]["artifactId"]
+    )
+    listed = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["candidates"][0]["review"]["state"] == "rejected"
+    successor, _metadata, _raw, _normalized = _candidate_upload(
+        client,
+        prepared,
+        invocation_id="synthetic-cloud-call-after-g7-reopen",
+        inside_rgb=(9, 8, 7),
+    )
+    assert successor.status_code == 200, successor.text
+    after = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert after.status_code == 200, after.text
+    assert [row["sequence"] for row in after.json()["candidates"]] == [1, 2]
+    assert after.json()["maskArtifactId"] == second_mask["event"]["evidence"]["artifactId"]
+
+
+def _accept_cloud_candidate(
+    client: TestClient, image_id: str, candidate: dict[str, object]
+) -> dict[str, object]:
+    context = client.get(f"/api/images/{image_id}/page-gates/cloud-full-page").json()
+    checks = [{"check": check, "passed": True} for check in cloud_service.CLOUD_FULL_PAGE_CHECKS]
+    accepted = client.patch(
+        f"/api/images/{image_id}/page-gates/cloud-full-page",
+        json={
+            "candidateId": candidate["candidateId"],
+            "observedChecksum": candidate["normalizedChecksum"],
+            "decision": "accept",
+            "reason": "cloud-full-page-repair-complete",
+            "checks": checks,
+            "expectedRevision": context["imageRevision"],
+            "lineage": {
+                "runId": context["runId"],
+                "pageGenerationId": context["generationId"],
+                "expectedSequence": context["nextSequence"],
+                "actor": _ACTOR,
+            },
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()
+
+
+def _rebuild_g5_g7_after_g4(client: TestClient, app, prepared: dict[str, object]) -> None:
+    image = prepared["targetImage"]
+    project = prepared["targetProject"]
+    store = prepared["store"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict) and isinstance(project, dict)
+    regions = client.get(f"/api/images/{image['id']}/regions").json()
+    background = client.get(f"/api/images/{image['id']}/page-gates/background").json()
+    for region in regions:
+        if region.get("contentDisposition") not in {"translate", "redraw-art"}:
+            continue
+        classified = client.patch(
+            f"/api/regions/{region['id']}/background-classification",
+            json={
+                "category": "white-solid",
+                "confidence": 0,
+                "rationaleCodes": ["uniform-near-white"],
+                "expectedRevision": region["revision"],
+                "expectedImageRevision": background["imageRevision"],
+                "lineage": _mutation_lineage(generation_id, background["nextSequence"]),
+            },
+        )
+        assert classified.status_code == 200, classified.text
+        background = client.get(f"/api/images/{image['id']}/page-gates/background").json()
+    accepted_g5 = client.patch(
+        f"/api/images/{image['id']}/page-gates/background",
+        json={
+            "decision": "accept",
+            "reason": "all-eligible-backgrounds-reviewed",
+            "observedBackgroundChecksum": background["backgroundChecksum"],
+            "expectedRevision": background["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, background["nextSequence"]),
+        },
+    )
+    assert accepted_g5.status_code == 200, accepted_g5.text
+    app.state.providers.ocr = _StrictLineageOCR()
+    queued = client.post(
+        f"/api/projects/{project['id']}/ocr",
+        json={
+            "imageIds": [image["id"]],
+            "options": {"provider": "tesseract", "language": "ja"},
+            "lineage": _current_lineage_context(client, image["id"], generation_id),
+        },
+    )
+    assert queued.status_code == 202, queued.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    ocr = client.get(f"/api/images/{image['id']}/page-gates/ocr").json()
+    for region_id in ocr["eligibleRegionIds"]:
+        region = next(
+            row
+            for row in client.get(f"/api/images/{image['id']}/regions").json()
+            if row["id"] == region_id
+        )
+        attempt = [
+            row
+            for row in ocr["attempts"]
+            if row["regionId"] == region_id and row["inputVariant"] == "quality"
+        ][-1]
+        current_image = _project_image(client, project["id"], image["id"])
+        generation = client.get(f"/api/images/{image['id']}/page-generations").json()[0]
+        reviewed = client.patch(
+            f"/api/regions/{region_id}/ocr-source-review",
+            json={
+                "sourceText": attempt["text"],
+                "sourceMode": "quality-attempt",
+                "selectedAttemptId": attempt["id"],
+                "qcChecks": _OCR_QC_CHECKS,
+                "expectedRevision": region["revision"],
+                "expectedImageRevision": current_image["revision"],
+                "lineage": _mutation_lineage(generation_id, generation["nextSequence"]),
+            },
+        )
+        assert reviewed.status_code == 200, reviewed.text
+    ocr = client.get(f"/api/images/{image['id']}/page-gates/ocr").json()
+    current_image = _project_image(client, project["id"], image["id"])
+    generation = client.get(f"/api/images/{image['id']}/page-generations").json()[0]
+    accepted_g6 = client.patch(
+        f"/api/images/{image['id']}/page-gates/ocr",
+        json={
+            "decision": "accept",
+            "reason": "all-translatable-source-text-reviewed",
+            "observedOcrChecksum": ocr["ocrChecksum"],
+            "expectedRevision": current_image["revision"],
+            "lineage": _mutation_lineage(generation_id, generation["nextSequence"]),
+        },
+    )
+    assert accepted_g6.status_code == 200, accepted_g6.text
+    _save_g7_default_draft(client, prepared)
+    queued_mask = _enqueue_g7(client, prepared)
+    assert queued_mask.status_code == 202, queued_mask.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued_mask.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    mask_after = client.get(f"/api/images/{image['id']}/page-gates/mask")
+    assert mask_after.status_code == 200, mask_after.text
+    _accept_current_g7_artifact(client, prepared)
+
+
+def test_g8_gap_allows_g9_g10_then_g7_owner_issues_remask():
+    def event(gate: str, operation: str, state: str = "accepted") -> SimpleNamespace:
+        return SimpleNamespace(gate=gate, operation=operation, state=state)
+
+    remask = [
+        event("G7_mask", "mask-stage-reopened", "pending"),
+        event("G7_mask", "mask-draft-updated", "pending"),
+        event("G7_mask", "mask-stage-review"),
+    ]
+    assert cloud_service._is_allowed_g8_inter_run_gap(remask) is True
+    assert (
+        cloud_service._is_allowed_g8_inter_run_gap(
+            [
+                event("G9_translation", "translation-candidate-revised"),
+                event("G9_translation", "translation-stage-review"),
+                event("G10_typeset", "typeset-job-enqueued", "pending"),
+                event("G10_typeset", "typeset-candidate-reviewed"),
+                *remask,
+            ]
+        )
+        is True
+    )
+
+
+def test_g8_gap_allows_g9_g10_then_g4_rebuild():
+    def event(gate: str, operation: str, state: str = "accepted") -> SimpleNamespace:
+        return SimpleNamespace(gate=gate, operation=operation, state=state)
+
+    gap = [
+        event("G9_translation", "translation-candidate-revised"),
+        event("G9_translation", "translation-stage-review"),
+        event("G10_typeset", "typeset-job-enqueued", "pending"),
+        event("G10_typeset", "typeset-candidate-reviewed", "rejected"),
+        event("G4_regions", "regions-stage-reopened", "pending"),
+        event("G4_regions", "regions-stage-review"),
+        event("G5_background", "background-stage-review"),
+        event("G6_ocr", "ocr-stage-review"),
+        event("G7_mask", "mask-stage-review"),
+    ]
+    assert cloud_service._is_allowed_g8_inter_run_gap(gap) is True
+    assert cloud_service._is_allowed_g8_inter_run_gap(gap[:4]) is True
+    assert cloud_service._is_allowed_g8_inter_run_gap(gap[4:]) is True
+
+
+def test_owner_issues_bounce_can_reopen_g7_after_accepted_g8(
+    tmp_path, client: TestClient, app, monkeypatch
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    _accept_cloud_candidate(client, str(image["id"]), first.json())
+    mask = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: True,
+    )
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": mask["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, mask["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["draft"]["regions"]
+
+
+def test_g4_amendment_can_accept_replacement_g8_after_prior_accept(
+    tmp_path, client: TestClient, app
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    project = prepared["targetProject"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict) and isinstance(project, dict)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    _accept_cloud_candidate(client, str(image["id"]), first.json())
+    mask = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    blocked = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": mask["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, mask["nextSequence"]),
+        },
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["reason"] == "g8-accepted-blocks-g7-reopen"
+    same_parent, _same_metadata, _same_raw, _same_normalized = _candidate_upload(
+        client, prepared, invocation_id="synthetic-cloud-call-same-g7"
+    )
+    assert same_parent.status_code == 409, same_parent.text
+    assert same_parent.json()["detail"]["reason"] == "g8-cloud-accepted"
+    prepared = _complete_g9_terminal(client, prepared)
+    _job, typeset_ctx = _run_typeset(client, app, prepared)
+    first_typeset = typeset_ctx["candidates"][-1]
+    accepted_g10 = client.patch(
+        f"/api/images/{image['id']}/page-gates/typeset/candidates/{first_typeset['candidateId']}",
+        json=_review_body(typeset_ctx, first_typeset, generation_id),
+    )
+    assert accepted_g10.status_code == 200, accepted_g10.text
+    context = client.get(f"/api/images/{image['id']}/page-gates/background").json()
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/regions/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    current = client.get(f"/api/images/{image['id']}/regions").json()[0]
+    expanded = client.patch(
+        f"/api/regions/{current['id']}",
+        json={
+            "x": 20,
+            "y": 20,
+            "width": 80,
+            "height": 60,
+            "expectedRevision": current["revision"],
+            "expectedImageRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert expanded.status_code == 200, expanded.text
+    _accept_g4_from_latest_mutation(
+        client,
+        image_id=str(image["id"]),
+        project_id=str(project["id"]),
+        generation_id=generation_id,
+    )
+    _rebuild_g5_g7_after_g4(client, app, prepared)
+    successor, _metadata, _raw, normalized = _candidate_upload(
+        client,
+        prepared,
+        invocation_id="synthetic-cloud-call-after-g4-amendment",
+        inside_rgb=(9, 8, 7),
+    )
+    assert successor.status_code == 200, successor.text
+    _accept_cloud_candidate(client, str(image["id"]), successor.json())
+    listed = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["acceptedCandidateId"] == successor.json()["candidateId"]
+    assert [row["review"]["state"] for row in listed.json()["candidates"]] == [
+        "accepted",
+        "accepted",
+    ]
+    translation = client.get(f"/api/images/{image['id']}/page-gates/translation")
+    assert translation.status_code == 200, translation.text
+    assert translation.json()["state"] == "pending"
+    assert translation.json()["candidates"] == []
+    assert translation.json()["cleanPlateCandidateId"] == successor.json()["candidateId"]
+    assert translation.json()["cleanPlateChecksum"] == successor.json()["normalizedChecksum"]
+    prepared = _complete_g9_terminal(client, prepared)
+    successor_g9 = client.get(f"/api/images/{image['id']}/page-gates/translation")
+    assert successor_g9.status_code == 200, successor_g9.text
+    assert successor_g9.json()["state"] == "accepted"
+    typeset = client.get(f"/api/images/{image['id']}/page-gates/typeset")
+    assert typeset.status_code == 200, typeset.text
+    assert typeset.json()["state"] == "pending"
+    with prepared["store"].session() as session:
+        current = cloud_service.current_cloud_full_page_acceptance(
+            store=prepared["store"],
+            session=session,
+            image=session.get(ImageAsset, image["id"]),
+            generation=session.get(PageGeneration, generation_id),
+        )
+        assert current is not None
+        assert current[2].id == successor.json()["candidateId"]
+        assert (prepared["store"].root / current[2].normalized_relative_path).read_bytes() == (
+            normalized
+        )
+
+
+def test_g8_replace_accepted_requires_issues_verdict():
+    store = SimpleNamespace()
+    assert (
+        cloud_service.g8_replace_accepted_for_linked_item(
+            store, {"pageGenerationId": ""}, item_verdict_lookup=lambda _item: "issues"
+        )
+        is False
+    )
+    assert (
+        cloud_service.g8_replace_accepted_for_linked_item(
+            store, None, item_verdict_lookup=lambda _item: "issues"
+        )
+        is False
+    )
+    assert (
+        cloud_service.g8_replace_accepted_for_linked_item(
+            store, "not-a-lineage", item_verdict_lookup=lambda _item: "issues"
+        )
+        is False
+    )
+
+
+def test_owner_issues_bounce_can_replace_accepted_g8_on_same_g7(
+    tmp_path, client: TestClient, app, monkeypatch
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    store = prepared["store"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    _accept_cloud_candidate(client, str(image["id"]), first.json())
+    blocked, _blocked_metadata, _blocked_raw, _blocked_normalized = _candidate_upload(
+        client, prepared, invocation_id="synthetic-cloud-call-same-g7-blocked"
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["reason"] == "g8-cloud-accepted"
+
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: True,
+    )
+    successor, _metadata, _raw, normalized = _candidate_upload(
+        client,
+        prepared,
+        invocation_id="synthetic-cloud-call-owner-issues-bounce",
+        inside_rgb=(9, 8, 7),
+    )
+    assert successor.status_code == 200, successor.text
+    _accept_cloud_candidate(client, str(image["id"]), successor.json())
+    listed = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["acceptedCandidateId"] == successor.json()["candidateId"]
+    assert [row["review"]["state"] for row in listed.json()["candidates"]] == [
+        "accepted",
+        "accepted",
+    ]
+    with store.session() as session:
+        current = cloud_service.current_cloud_full_page_acceptance(
+            store=store,
+            session=session,
+            image=session.get(ImageAsset, image["id"]),
+            generation=session.get(PageGeneration, generation_id),
+        )
+        assert current is not None
+        assert current[2].id == successor.json()["candidateId"]
+        assert (store.root / current[2].normalized_relative_path).read_bytes() == normalized
+
+
+def test_owner_issues_bounce_can_accept_replacement_g8_after_g9_g10(
+    tmp_path, client: TestClient, app, monkeypatch
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    store = prepared["store"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    _accept_cloud_candidate(client, str(image["id"]), first.json())
+    prepared = _complete_g9_terminal(client, prepared)
+    _job, typeset_ctx = _run_typeset(client, app, prepared)
+    first_typeset = typeset_ctx["candidates"][-1]
+    accepted_g10 = client.patch(
+        f"/api/images/{image['id']}/page-gates/typeset/candidates/{first_typeset['candidateId']}",
+        json=_review_body(typeset_ctx, first_typeset, generation_id),
+    )
+    assert accepted_g10.status_code == 200, accepted_g10.text
+
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: True,
+    )
+    successor, _metadata, _raw, normalized = _candidate_upload(
+        client,
+        prepared,
+        invocation_id="synthetic-cloud-call-owner-issues-after-g9-g10",
+        inside_rgb=(9, 8, 7),
+    )
+    assert successor.status_code == 200, successor.text
+    listed_pending = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert listed_pending.status_code == 200, listed_pending.text
+    _accept_cloud_candidate(client, str(image["id"]), successor.json())
+    listed = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["acceptedCandidateId"] == successor.json()["candidateId"]
+    assert [row["review"]["state"] for row in listed.json()["candidates"]] == [
+        "accepted",
+        "accepted",
+    ]
+    with store.session() as session:
+        current = cloud_service.current_cloud_full_page_acceptance(
+            store=store,
+            session=session,
+            image=session.get(ImageAsset, image["id"]),
+            generation=session.get(PageGeneration, generation_id),
+        )
+        assert current is not None
+        assert current[2].id == successor.json()["candidateId"]
+        assert (store.root / current[2].normalized_relative_path).read_bytes() == normalized
+
+
+def test_approved_final_review_still_blocks_g8_replace_on_same_g7(
+    tmp_path, client: TestClient, app, monkeypatch
+):
+    prepared = _prepare_g7_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    assert isinstance(image, dict)
+    first, _metadata, _raw, _normalized = _candidate_upload(client, prepared)
+    assert first.status_code == 200, first.text
+    _accept_cloud_candidate(client, str(image["id"]), first.json())
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: False,
+    )
+    blocked, _metadata, _raw, _normalized = _candidate_upload(
+        client, prepared, invocation_id="synthetic-cloud-call-approved-still-locked"
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["reason"] == "g8-cloud-accepted"

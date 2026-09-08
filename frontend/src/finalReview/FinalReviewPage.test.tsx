@@ -65,6 +65,7 @@ describe('final review page', () => {
     cleanup();
     resetFinalReviewStore();
     resetWorkbenchStore();
+    window.history.replaceState(null, '', window.location.pathname);
     vi.restoreAllMocks();
   });
 
@@ -78,6 +79,20 @@ describe('final review page', () => {
     expect(screen.getAllByRole('radio')).toHaveLength(3);
     expect(screen.getByRole('button', { name: '保存并下一张' })).toBeEnabled();
     expect(screen.getByRole('button', { name: '显式保存' })).toBeDisabled();
+    expect(screen.getByText(/快捷键：← → 翻页/)).toBeInTheDocument();
+  });
+
+  it('applies review shortcuts outside fields and ignores them inside feedback', () => {
+    renderPage();
+    const save = vi.spyOn(api, 'updateFinalReviewItem');
+    fireEvent.keyDown(window, { key: '2' });
+    expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');
+    fireEvent.keyDown(screen.getByLabelText('具体反馈'), { key: '3' });
+    expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');
+    fireEvent.keyDown(screen.getByRole('button', { name: '保存并下一张' }), { key: 'Enter' });
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: '3' });
+    expect(useFinalReviewStore.getState().draft?.verdict).toBe('issues');
   });
 
   it('supports multiple issue labels and other validation', async () => {
@@ -114,7 +129,7 @@ describe('final review page', () => {
     expect(screen.getByRole('main')).toHaveAttribute('data-mobile-pane', 'preview');
   });
 
-  it('enables save-and-next for clean or dirty valid drafts, but not conflicts, invalid drafts, or the last visible item', async () => {
+  it('enables save-and-next for clean or dirty valid drafts, including the last dirty item', async () => {
     const user = userEvent.setup();
     const { items } = renderPage();
     const saveNext = screen.getByRole('button', { name: '保存并下一张' });
@@ -139,6 +154,11 @@ describe('final review page', () => {
       conflict: false,
     }));
     expect(screen.getByRole('button', { name: '保存并下一张' })).toBeDisabled();
+
+    act(() => useFinalReviewStore.setState({
+      draft: { verdict: 'approved', issueCodes: [], feedback: '' },
+    }));
+    expect(screen.getByRole('button', { name: '保存并下一张' })).toBeEnabled();
   });
 
   it('locks every draft control while a deferred save is in flight and preserves the submitted draft', async () => {
@@ -558,6 +578,35 @@ describe('final review page', () => {
     expect(screen.getByRole('main')).toHaveClass('final-review');
   });
 
+  it('guards browser hash navigation when the final-review draft is dirty', async () => {
+    const user = userEvent.setup();
+    seedWorkbench();
+    const item = finalReviewItemFixture();
+    const batch = finalReviewBatchFixture([item]);
+    useFinalReviewStore.setState({
+      batches: [batch], batch, items: [item], activeItemId: item.id,
+      draft: { verdict: 'pending', issueCodes: [], feedback: '' },
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    render(<App />);
+    await user.click(screen.getByRole('button', { name: '最终验收' }));
+    await user.click(screen.getByRole('radio', { name: '完全没问题' }));
+
+    window.history.replaceState(null, '', window.location.pathname);
+    fireEvent(window, new HashChangeEvent('hashchange'));
+
+    expect(confirm).toHaveBeenCalledWith('当前终审标注尚未保存，确定离开终审页面吗？');
+    expect(screen.getByRole('main')).toHaveClass('final-review');
+    expect(window.location.hash).toBe('#final-review');
+    expect(useFinalReviewStore.getState().draft?.verdict).toBe('approved');
+
+    confirm.mockReturnValue(true);
+    window.history.replaceState(null, '', window.location.pathname);
+    fireEvent(window, new HashChangeEvent('hashchange'));
+    expect(document.querySelector('.workbench-grid')).toBeInTheDocument();
+    expect(window.location.hash).toBe('');
+  });
+
   it('releases the repair lock only after navigation and then switches App to the workbench', async () => {
     const user = userEvent.setup();
     seedWorkbench();
@@ -633,7 +682,7 @@ describe('final review page', () => {
     expect(screen.getByLabelText('选择终审批次')).toBeDisabled();
   });
 
-  it('keeps a legacy issues decision read-only but permits its repair handoff', async () => {
+  it('lets a human rejudge a legacy issues decision while keeping fresh-G0 available', async () => {
     const user = userEvent.setup();
     seedWorkbench();
     const item = finalReviewItemFixture('legacy-issue', {
@@ -653,9 +702,9 @@ describe('final review page', () => {
     const onOpenWorkbench = vi.fn();
     render(<FinalReviewPage onOpenWorkbench={onOpenWorkbench} />);
 
-    expect(screen.getByText(/旧版问题项的审核结论与反馈保持只读/)).toBeInTheDocument();
-    expect(screen.getAllByRole('radio').every((control) => control.hasAttribute('disabled'))).toBe(true);
-    expect(screen.getByLabelText('具体反馈')).toBeDisabled();
+    expect(screen.getByText(/你可以重新审核并保存这个旧版问题项/)).toBeInTheDocument();
+    expect(screen.getAllByRole('radio').every((control) => control.hasAttribute('disabled'))).toBe(false);
+    expect(screen.getByLabelText('具体反馈')).not.toBeDisabled();
     const button = screen.getByRole('button', { name: '进入修复工作台' });
     expect(button).toBeEnabled();
     await user.click(button);

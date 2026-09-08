@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -760,12 +761,6 @@ class PageCloudFullPageReview(Base):
         CheckConstraint(
             "state IN ('accepted', 'rejected')", name="ck_cloud_full_page_review_state"
         ),
-        Index(
-            "uq_cloud_full_page_accepted_generation",
-            "generation_id",
-            unique=True,
-            sqlite_where=text("state = 'accepted'"),
-        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -798,8 +793,9 @@ class RegionTranslationCandidate(Base):
         UniqueConstraint(
             "generation_id",
             "region_id",
+            "g8_checksum",
             "revision_number",
-            name="uq_translation_candidate_revision",
+            name="uq_translation_candidate_revision_g8",
         ),
         UniqueConstraint("job_item_id", "region_id", name="uq_translation_candidate_job_region"),
         CheckConstraint(
@@ -895,7 +891,11 @@ class PageTranslationReview(Base):
 
     __tablename__ = "page_translation_reviews"
     __table_args__ = (
-        UniqueConstraint("generation_id", name="uq_translation_terminal_generation"),
+        UniqueConstraint(
+            "generation_id",
+            "g8_checksum",
+            name="uq_translation_terminal_generation_g8",
+        ),
         CheckConstraint(
             "state IN ('accepted', 'not-applicable')", name="ck_translation_terminal_state"
         ),
@@ -985,8 +985,9 @@ class PageTypesetReview(Base):
         UniqueConstraint("generation_id", "sequence", name="uq_typeset_review_sequence"),
         CheckConstraint("state IN ('accepted', 'rejected')", name="ck_typeset_review_state"),
         Index(
-            "uq_typeset_terminal_generation",
+            "uq_typeset_terminal_g9",
             "generation_id",
+            "g9_terminal_checksum",
             unique=True,
             sqlite_where=text("state = 'accepted'"),
         ),
@@ -1022,6 +1023,260 @@ class PageTypesetReview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+def _quote_sqlite_identifier(value: str) -> str:
+    return f'"{value.replace(chr(34), chr(34) * 2)}"'
+
+
+def _split_sqlite_table_items(create_sql: str) -> tuple[str, list[str], str]:
+    start = create_sql.find("(")
+    if start < 0:
+        raise RuntimeError("SQLite table definition has no column list")
+    depth = 0
+    quote: str | None = None
+    item_start = start + 1
+    items: list[str] = []
+    end = -1
+    index = start
+    while index < len(create_sql):
+        character = create_sql[index]
+        if quote:
+            if character == quote:
+                if index + 1 < len(create_sql) and create_sql[index + 1] == quote:
+                    index += 1
+                else:
+                    quote = None
+        elif character in ('"', "'", "`"):
+            quote = character
+        elif character == "[":
+            quote = "]"
+        elif character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+            if depth == 0:
+                items.append(create_sql[item_start:index])
+                end = index
+                break
+        elif character == "," and depth == 1:
+            items.append(create_sql[item_start:index])
+            item_start = index + 1
+        index += 1
+    if end < 0 or quote:
+        raise RuntimeError("SQLite table definition has an unterminated column list")
+    return create_sql[: start + 1], items, create_sql[end:]
+
+
+def _sqlite_identifier(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and (
+        (value[0] == value[-1] and value[0] in ('"', "'", "`"))
+        or (value[0] == "[" and value[-1] == "]")
+    ):
+        value = value[1:-1]
+    return value.replace('""', '"').replace("''", "'").replace("``", "`").lower()
+
+
+def _sqlite_unique_item_columns(item: str) -> tuple[str, ...] | None:
+    match = re.match(
+        r"^\s*(?:CONSTRAINT\s+(?:\"(?:\"\"|[^\"])+\"|`(?:``|[^`])+`|\[[^]]+\]|\S+)\s+)?"
+        r"UNIQUE\s*\((.*)\)\s*(?:ON\s+CONFLICT\s+\w+)?\s*$",
+        item,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return None
+    return tuple(_sqlite_identifier(part) for part in match.group(1).split(","))
+
+
+def _sqlite_index_rows(cursor, table: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    index_rows = cursor.execute(f"PRAGMA index_list({_quote_sqlite_identifier(table)})").fetchall()
+    for _, name, unique, origin, partial in index_rows:
+        if not unique:
+            continue
+        columns = tuple(
+            str(row[2]).lower()
+            for row in cursor.execute(f"PRAGMA index_info({_quote_sqlite_identifier(str(name))})")
+            if row[2] is not None
+        )
+        sql_row = cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", (name,)
+        ).fetchone()
+        rows.append(
+            {
+                "name": str(name),
+                "columns": columns,
+                "origin": str(origin),
+                "partial": bool(partial),
+                "sql": str(sql_row[0]) if sql_row and sql_row[0] else "",
+            }
+        )
+    return rows
+
+
+def _sqlite_accepted_partial(index: dict[str, Any]) -> bool:
+    normalized = re.sub(r'[\s"`\[\]()]', "", str(index["sql"])).lower()
+    return bool(index["partial"] and normalized.endswith("wherestate='accepted'"))
+
+
+def _rebuild_sqlite_table_without_unique(cursor, table: str, old_columns: tuple[str, ...]) -> None:
+    table_sql_row = cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+    ).fetchone()
+    if not table_sql_row or not table_sql_row[0]:
+        raise RuntimeError(f"missing SQLite definition for {table}")
+    _, items, suffix = _split_sqlite_table_items(str(table_sql_row[0]))
+    retained_items = [item for item in items if _sqlite_unique_item_columns(item) != old_columns]
+    if len(retained_items) == len(items):
+        raise RuntimeError(f"could not locate inline legacy uniqueness on {table}")
+
+    temporary = f"{table}__epoch_migration"
+    if cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (temporary,)
+    ).fetchone():
+        raise RuntimeError(f"refusing to overwrite residual table {temporary}")
+    schema_objects = cursor.execute(
+        """
+        SELECT type, name, sql
+        FROM sqlite_master
+        WHERE sql IS NOT NULL
+          AND (
+              (tbl_name = ? AND type IN ('index', 'trigger'))
+              OR (type = 'trigger' AND sql LIKE ?)
+          )
+        ORDER BY type, name
+        """,
+        (table, f"%{table}%"),
+    ).fetchall()
+    columns = [
+        str(row[1])
+        for row in cursor.execute(f"PRAGMA table_xinfo({_quote_sqlite_identifier(table)})")
+        if int(row[6]) == 0
+    ]
+    quoted_columns = ", ".join(_quote_sqlite_identifier(column) for column in columns)
+    cursor.execute(
+        f"CREATE TABLE {_quote_sqlite_identifier(temporary)} (" + ",".join(retained_items) + suffix
+    )
+    cursor.execute(
+        f"INSERT INTO {_quote_sqlite_identifier(temporary)} ({quoted_columns}) "
+        f"SELECT {quoted_columns} FROM {_quote_sqlite_identifier(table)}"
+    )
+    for object_type, object_name, _ in schema_objects:
+        if object_type == "trigger":
+            cursor.execute(f"DROP TRIGGER {_quote_sqlite_identifier(str(object_name))}")
+    cursor.execute(f"DROP TABLE {_quote_sqlite_identifier(table)}")
+    cursor.execute(
+        f"ALTER TABLE {_quote_sqlite_identifier(temporary)} "
+        f"RENAME TO {_quote_sqlite_identifier(table)}"
+    )
+    for _, _, object_sql in schema_objects:
+        cursor.execute(str(object_sql))
+
+
+def _migrate_review_epoch_constraints(engine: Engine) -> None:
+    migrations = (
+        ("page_cloud_full_page_reviews", ("generation_id",), None, True),
+        (
+            "region_translation_candidates",
+            ("generation_id", "region_id", "revision_number"),
+            ("generation_id", "region_id", "g8_checksum", "revision_number"),
+            False,
+        ),
+        (
+            "page_translation_reviews",
+            ("generation_id",),
+            ("generation_id", "g8_checksum"),
+            False,
+        ),
+        (
+            "page_typeset_reviews",
+            ("generation_id",),
+            ("generation_id", "g9_terminal_checksum"),
+            True,
+        ),
+    )
+    raw_connection = engine.raw_connection()
+    cursor = raw_connection.cursor()
+    try:
+        cursor.execute("PRAGMA foreign_keys=OFF")
+        if cursor.execute("PRAGMA foreign_keys").fetchone()[0] != 0:
+            raise RuntimeError("could not disable SQLite foreign keys before migration")
+        cursor.execute("BEGIN IMMEDIATE")
+        changed = False
+        for table, old_columns, new_columns, accepted_partial in migrations:
+            if not cursor.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)
+            ).fetchone():
+                continue
+            indexes = _sqlite_index_rows(cursor, table)
+            legacy = [
+                index
+                for index in indexes
+                if index["columns"] == old_columns
+                and (_sqlite_accepted_partial(index) if accepted_partial else not index["partial"])
+            ]
+            inline_legacy = [index for index in legacy if index["origin"] == "u"]
+            if inline_legacy:
+                _rebuild_sqlite_table_without_unique(cursor, table, old_columns)
+                changed = True
+                indexes = _sqlite_index_rows(cursor, table)
+                legacy = [
+                    index
+                    for index in indexes
+                    if index["columns"] == old_columns
+                    and (
+                        _sqlite_accepted_partial(index)
+                        if accepted_partial
+                        else not index["partial"]
+                    )
+                ]
+            for index in legacy:
+                if index["origin"] != "c":
+                    raise RuntimeError(f"unsupported legacy uniqueness on {table}")
+                cursor.execute(f"DROP INDEX {_quote_sqlite_identifier(str(index['name']))}")
+                changed = True
+            if new_columns is None:
+                continue
+            indexes = _sqlite_index_rows(cursor, table)
+            current = any(
+                index["columns"] == new_columns
+                and (_sqlite_accepted_partial(index) if accepted_partial else not index["partial"])
+                for index in indexes
+            )
+            if not current:
+                index_name = {
+                    "region_translation_candidates": "uq_translation_candidate_revision_g8",
+                    "page_translation_reviews": "uq_translation_terminal_generation_g8",
+                    "page_typeset_reviews": "uq_typeset_terminal_g9",
+                }[table]
+                predicate = " WHERE state = 'accepted'" if accepted_partial else ""
+                cursor.execute(
+                    f"CREATE UNIQUE INDEX {_quote_sqlite_identifier(index_name)} "
+                    f"ON {_quote_sqlite_identifier(table)} "
+                    f"({', '.join(_quote_sqlite_identifier(column) for column in new_columns)})"
+                    f"{predicate}"
+                )
+                changed = True
+        if changed:
+            integrity = cursor.execute("PRAGMA integrity_check").fetchall()
+            if integrity != [("ok",)]:
+                raise RuntimeError(f"SQLite integrity check failed: {integrity!r}")
+            foreign_key_failures = cursor.execute("PRAGMA foreign_key_check").fetchall()
+            if foreign_key_failures:
+                raise RuntimeError(f"SQLite foreign key check failed: {foreign_key_failures!r}")
+        raw_connection.commit()
+    except BaseException:
+        raw_connection.rollback()
+        raise
+    finally:
+        cursor.execute("PRAGMA foreign_keys=ON")
+        foreign_keys_enabled = cursor.execute("PRAGMA foreign_keys").fetchone()[0]
+        cursor.close()
+        raw_connection.close()
+        if foreign_keys_enabled != 1:
+            raise RuntimeError("could not restore SQLite foreign keys after migration")
+
+
 def create_project_engine(database_path: Path) -> Engine:
     database_path.parent.mkdir(parents=True, exist_ok=True)
     engine = create_engine(
@@ -1039,6 +1294,11 @@ def create_project_engine(database_path: Path) -> Engine:
     with engine.connect() as connection:
         connection.exec_driver_sql("PRAGMA journal_mode=WAL")
     Base.metadata.create_all(engine)
+    # Old G8/G9/G10 uniqueness blocked same-generation replacements. SQLite
+    # represents table-inline UNIQUE constraints as undroppable autoindexes, so
+    # migrate by semantic column identity and preserve every unrelated schema
+    # object in one rollback-safe transaction.
+    _migrate_review_epoch_constraints(engine)
     # ``create_all`` intentionally does not alter an existing portable SQLite
     # project. Keep the migration small and idempotent so old projects reopen
     # without requiring a separate migration tool or destructive rebuild.

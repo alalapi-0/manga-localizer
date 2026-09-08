@@ -41,6 +41,7 @@ from manga_localizer.services.page_lineage import (
     create_final_review_repair_generation,
     final_review_repair_attempt_context,
     find_final_review_repair_generation,
+    find_final_review_repair_generation_for_item,
     require_current_no_text_quality_plate,
     require_current_page_generation_identity,
     require_current_quality_plate,
@@ -1129,16 +1130,32 @@ class FinalReviewStore:
             }
             if include_items:
                 rows = connection.execute("SELECT * FROM items ORDER BY position").fetchall()
-                result["items"] = [self._public_item(item) for item in rows]
+                result["items"] = [
+                    self._public_item(
+                        item,
+                        format_version=result["formatVersion"],
+                        compute_stale=True,
+                    )
+                    for item in rows
+                ]
             return result
 
-    def items(self) -> list[dict[str, Any]]:
+    def items(self, *, compute_stale: bool = True) -> list[dict[str, Any]]:
         with self.lock, _connect(self.database_path) as connection:
             rows = connection.execute("SELECT * FROM items ORDER BY position").fetchall()
-        return [self._public_item(row) for row in rows]
+            batch_row = connection.execute("SELECT * FROM batches LIMIT 1").fetchone()
+            format_version = (
+                batch_row["format_version"]
+                if batch_row is not None and "format_version" in batch_row.keys()
+                else 1
+            )
+        return [
+            self._public_item(row, format_version=format_version, compute_stale=compute_stale)
+            for row in rows
+        ]
 
     def item(self, item_id: str) -> dict[str, Any]:
-        return self._public_item(self._item_row(item_id))
+        return self._public_item(self._item_row(item_id), compute_stale=True)
 
     def _current_stale(self, row: sqlite3.Row) -> bool:
         try:
@@ -1183,6 +1200,17 @@ class FinalReviewStore:
                                 parameter_set_id=handoff["parameterSetId"],
                                 parameter_set_hash=handoff["parameterSetHash"],
                             )
+                            if repair is None:
+                                repair = find_final_review_repair_generation_for_item(
+                                    store,
+                                    session,
+                                    source_project_id=row["source_project_id"],
+                                    source_image_id=row["source_image_id"],
+                                    source_relative_path=handoff["sourceRelativePath"],
+                                    final_review_item_id=row["id"],
+                                    parameter_set_id=handoff["parameterSetId"],
+                                    parameter_set_hash=handoff["parameterSetHash"],
+                                )
                             if repair is None:
                                 return True
                             image, generation = repair
@@ -1263,16 +1291,23 @@ class FinalReviewStore:
         except ProjectError:
             return True
 
-    def _public_item(self, row: sqlite3.Row) -> dict[str, Any]:
-        with _connect(self.database_path) as connection:
-            batch_row = connection.execute(
-                "SELECT * FROM batches WHERE id = ?", (row["batch_id"],)
-            ).fetchone()
-        format_version = (
-            batch_row["format_version"]
-            if batch_row is not None and "format_version" in batch_row.keys()
-            else 1
-        )
+    def _public_item(
+        self,
+        row: sqlite3.Row,
+        *,
+        format_version: int | None = None,
+        compute_stale: bool = True,
+    ) -> dict[str, Any]:
+        if format_version is None:
+            with _connect(self.database_path) as connection:
+                batch_row = connection.execute(
+                    "SELECT * FROM batches WHERE id = ?", (row["batch_id"],)
+                ).fetchone()
+            format_version = (
+                batch_row["format_version"]
+                if batch_row is not None and "format_version" in batch_row.keys()
+                else 1
+            )
         artifact_revision = row["artifact_revision"] if "artifact_revision" in row.keys() else 1
         strict = bool(row["strict_evidence"]) if "strict_evidence" in row.keys() else False
         if strict:
@@ -1318,7 +1353,7 @@ class FinalReviewStore:
             "finalVariant": row["final_variant"],
             "artifactChecksum": row["artifact_checksum"],
             "thumbnailChecksum": row["thumbnail_checksum"],
-            "currentArtifactStale": self._current_stale(row),
+            "currentArtifactStale": self._current_stale(row) if compute_stale else False,
             "verdict": row["verdict"],
             "issueCodes": json.loads(row["issue_codes"]),
             "feedback": row["feedback"],
@@ -1484,23 +1519,26 @@ class FinalReviewStore:
                         or row["feedback"] != feedback
                     )
                 ):
-                    raise ProjectError(
-                        "Legacy reviewed items are immutable; repair and strict refresh first"
+                    human_rejudge = (
+                        row["verdict"] == "issues"
+                        and normalized_actor is not None
+                        and normalized_actor["actorKind"] == "human"
                     )
+                    if not human_rejudge:
+                        raise ProjectError(
+                            "Legacy reviewed items are immutable; repair and strict refresh first"
+                        )
                 if (
                     row["verdict"] == verdict
                     and sorted(json.loads(row["issue_codes"])) == normalized_codes
                     and row["feedback"] == feedback
                 ):
                     connection.rollback()
-                    item = self._public_item(row)
-                    if strict:
-                        return {
-                            "item": item,
-                            "batchRevision": batch_row["revision"],
-                            "historyCreated": False,
-                        }
-                    return item
+                    return {
+                        "item": self._public_item(row, compute_stale=False),
+                        "batchRevision": batch_row["revision"],
+                        "historyCreated": False,
+                    }
                 before = self._history_payload(row)
                 reviewed_at = None if verdict == "pending" else now
                 cursor = connection.execute(
@@ -1559,14 +1597,11 @@ class FinalReviewStore:
                 if connection.in_transaction:
                     connection.rollback()
                 raise
-        item = self.item(item_id)
-        if strict:
-            return {
-                "item": item,
-                "batchRevision": self.batch()["revision"],
-                "historyCreated": True,
-            }
-        return item
+        return {
+            "item": self._public_item(self._item_row(item_id), compute_stale=False),
+            "batchRevision": self.batch()["revision"],
+            "historyCreated": True,
+        }
 
     @staticmethod
     def _history_payload(row: sqlite3.Row) -> dict[str, Any]:
@@ -1881,27 +1916,51 @@ class FinalReviewStore:
             # the final-review CAS commit.  The global order is final review -> project.
             refresh_locks.enter_context(project_store.lock)
             with project_store.session() as session:
+                source_relative_path = _repair_source_relative_path(row)
                 repair = find_final_review_repair_generation(
                     project_store,
                     session,
                     source_project_id=source_project_id,
                     source_image_id=source_image_id,
-                    source_relative_path=_repair_source_relative_path(row),
+                    source_relative_path=source_relative_path,
                     final_review_item_id=item_id,
                     final_review_item_revision=expected_revision,
                     feedback_checksum=feedback_checksum,
                 )
+                if repair is None and row["verdict"] == "issues":
+                    repair = find_final_review_repair_generation_for_item(
+                        project_store,
+                        session,
+                        source_project_id=source_project_id,
+                        source_image_id=source_image_id,
+                        source_relative_path=source_relative_path,
+                        final_review_item_id=item_id,
+                    )
                 if repair is None:
                     raise ProjectError(
                         "Strict refresh requires the exact final-review repair handoff"
                     )
                 image, generation = repair
+                g0_rows = list(
+                    session.scalars(
+                        select(PageLineageEvent).where(
+                            PageLineageEvent.generation_id == generation.id,
+                            PageLineageEvent.gate == "G0_identity",
+                        )
+                    ).all()
+                )
+                if len(g0_rows) != 1 or not isinstance(g0_rows[0].evidence, dict):
+                    raise ProjectError("Existing repair handoff provenance is inconsistent")
+                g0_revision = g0_rows[0].evidence.get("finalReviewItemRevision")
+                g0_feedback = g0_rows[0].evidence.get("feedbackChecksum")
+                if type(g0_revision) is not int or not isinstance(g0_feedback, str):
+                    raise ProjectError("Existing repair handoff provenance is inconsistent")
                 repair_handoff_json = json.dumps(
                     {
                         "pageGenerationId": generation.id,
                         "repairImageId": image.id,
-                        "finalReviewItemRevision": expected_revision,
-                        "feedbackChecksum": feedback_checksum,
+                        "finalReviewItemRevision": g0_revision,
+                        "feedbackChecksum": g0_feedback,
                         "sourceRelativePath": generation.source_relative_path,
                         "parameterSetId": generation.parameter_set_id,
                         "parameterSetHash": generation.parameter_set_hash,

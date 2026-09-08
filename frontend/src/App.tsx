@@ -22,6 +22,20 @@ const CanvasWorkspace = lazy(async () => {
   return { default: module.CanvasWorkspace };
 });
 
+function viewFromLocation(): 'workbench' | 'final-review' {
+  return window.location.hash === '#final-review' ? 'final-review' : 'workbench';
+}
+
+function persistView(next: 'workbench' | 'final-review') {
+  if (next === 'final-review') {
+    if (window.location.hash !== '#final-review') window.location.hash = 'final-review';
+    return;
+  }
+  if (window.location.hash === '#final-review') {
+    window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+  }
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
@@ -271,7 +285,7 @@ export default function App() {
   const dirty = useWorkbenchStore(hasPendingChanges);
   const flushAutosave = useWorkbenchStore((state) => state.flushAutosave);
   const [shellPane, setShellPane] = useState<'pages' | 'canvas' | 'inspect'>('canvas');
-  const [activeView, setActiveView] = useState<'workbench' | 'final-review'>('workbench');
+  const [activeView, setActiveView] = useState<'workbench' | 'final-review'>(viewFromLocation);
   const drawerOpen = useWorkbenchStore((state) => state.drawerOpen);
   const setDrawerOpen = useWorkbenchStore((state) => state.setDrawerOpen);
   useGlobalShortcuts(activeView === 'workbench');
@@ -285,18 +299,37 @@ export default function App() {
     if (activeView === 'final-review' && finalReviewDraftDirty(useFinalReviewStore.getState())
       && !window.confirm('当前终审标注尚未保存，确定离开终审页面吗？')) return;
     setActiveView(next);
+    persistView(next);
   }
 
   async function returnToFinalReview() {
     const finalState = useFinalReviewStore.getState();
     const context = finalState.repairContext;
-    if (!context) {
-      setActiveView('final-review');
-      return;
-    }
     setActiveView('final-review');
+    persistView('final-review');
+    if (!context) return;
     await finalState.loadBatch(context.batchId, context.itemId);
   }
+
+  useEffect(() => {
+    function onHashChange() {
+      const next = viewFromLocation();
+      if (next === activeView) return;
+      if (activeView === 'final-review') {
+        const finalState = useFinalReviewStore.getState();
+        const blocked = finalState.operation || finalState.conflict
+          || (finalReviewDraftDirty(finalState)
+            && !window.confirm('当前终审标注尚未保存，确定离开终审页面吗？'));
+        if (blocked) {
+          persistView(activeView);
+          return;
+        }
+      }
+      setActiveView(next);
+    }
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [activeView]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

@@ -1052,20 +1052,24 @@ def _g8_replay(
     if after_g7 and not g8_events and after_g7[0].gate != "G8_cloudFullPage":
         invalid("A downstream gate started before G8")
 
-    rows = list(
-        session.scalars(
+    rows = [
+        row
+        for row in session.scalars(
             select(PageCleanPlateCandidate)
             .where(PageCleanPlateCandidate.generation_id == generation.id)
             .order_by(PageCleanPlateCandidate.sequence)
         ).all()
-    )
-    reviews = list(
-        session.scalars(
+        if row.parent_checksum == g7_checksum
+    ]
+    reviews = [
+        review
+        for review in session.scalars(
             select(PageCleanPlateReview)
             .where(PageCleanPlateReview.generation_id == generation.id)
             .order_by(PageCleanPlateReview.sequence)
         ).all()
-    )
+        if review.parent_checksum == g7_checksum
+    ]
     for row in rows:
         _validate_candidate_file(store, row, session=session)
     matched = clean_plate_job_items_for_generation(session, generation)

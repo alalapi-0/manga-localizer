@@ -4,7 +4,7 @@
   "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
   "lane": "GOVERNED",
   "stage": "A",
-  "status": "stage_a_source_verified_pending_independent_review",
+  "status": "stage_a_accepted_pending_main_verification",
   "baseline_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
   "governor_origin": "Native /root/hub_connection_governor inactive v2 TASK_CONTRACT plus three clarifications; not an execution grant",
   "target": {
@@ -213,8 +213,8 @@
       "result": "PASS; no v2 original mutation; all raw media/DB out of this source-only scope"
     },
     "audit_ci": {
-      "status": "repair_pending_recheck",
-      "command": "npm run audit:ci -- --base 1cb5a7ae3877c283c88fb1f43727652dee7ea458 --head <forward-metadata-head>",
+      "status": "passed",
+      "command": "npm run audit:ci -- --base 1cb5a7ae3877c283c88fb1f43727652dee7ea458 --head 9a9b2b01fec074bdd94b32559d5479423b39c078",
       "first_attempt": {
         "candidate_head": "747acc57ecc3309e1b47309300c9d1840422ba51",
         "exit": 1,
@@ -230,7 +230,18 @@
           "cursor_live_content_reads": 0
         }
       },
-      "semantic_candidate_unchanged": true
+      "semantic_candidate_unchanged": true,
+      "exit": 0,
+      "head": "9a9b2b01fec074bdd94b32559d5479423b39c078",
+      "coverage": {
+        "candidate": 241,
+        "index_blobs": 241,
+        "historical_blob_paths": 1625,
+        "live_content_reads": 238,
+        "inert_cursor_objects": 2,
+        "cursor_live_content_reads": 0
+      },
+      "meaning": "Normal CI audit passes; not release acceptance. Unchanged original check policy used; prior failure retained."
     }
   },
   "diagnosis": {
@@ -287,19 +298,53 @@
     },
     "semantic_sha256": "aa0df5b1f960f403604e1b97322ef17619b5050647eb3a8bc6f2d6a5ae1e8ddc"
   },
-  "reviews": {},
+  "reviews": {
+    "stage_a_judge": {
+      "agent": "/root/manga_v2_source_judge",
+      "role": "fresh read-only Judge",
+      "verdict": "PASS",
+      "semantic_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
+      "candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51",
+      "delivery_candidate_head": "9a9b2b01fec074bdd94b32559d5479423b39c078",
+      "state_semantic_sha256": "ad1050e7e2f067efb79075927226f1f750009ef270fca6c9d77b017b8257bcae",
+      "evidence_origin": "Native collaboration FINAL_ANSWER PASS after independent checks and registered normal audit",
+      "independent_checks": [
+        "All registered source/contract/state/candidate/prior receipt hashes reproduced",
+        "88state and9controlled tests PASS; state21fields inactive grantsfalse; Ruffcheck/format PASS",
+        "Exact6effectprofile/fulltarget/contract/priorreceipt/strictcounts andlimits; legacy10effectnon-authoritative path retained",
+        "Normal audit1cb→9a9PASS; first failure preserved and forward metadata repair does not alter source identity or audit policy"
+      ],
+      "scope": "Stage A source only; no installation/clone/actualeffects/imagequality/ownerapproval/main delivery or post-pushCI accepted"
+    },
+    "stage_a_governor": {
+      "agent": "/root/hub_connection_governor",
+      "role": "read-only Governor",
+      "decision": "APPROVE",
+      "semantic_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
+      "candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51",
+      "delivery_candidate_head": "9a9b2b01fec074bdd94b32559d5479423b39c078",
+      "state_semantic_sha256": "ad1050e7e2f067efb79075927226f1f750009ef270fca6c9d77b017b8257bcae",
+      "evidence_origin": "Native Governor FINAL_ANSWER after registered fresh Judge FINAL PASS and independent identity/evidence inspection",
+      "scope": "Stage A source and excluded decision/delivery metadata normal main delivery only; verify remote ancestry and complete CI before Stage B. No installation/clone/actual G7/native generation/ingest or real-data acceptance."
+    }
+  },
   "delivery": {
-    "status": "pending_delivery",
+    "status": "accepted_pending_main_verification",
     "target_repository": "alalapi-0/manga-localizer",
     "target_branch": "main",
-    "prior_verified_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458"
+    "prior_verified_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+    "candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51",
+    "forward_metadata_head": "9a9b2b01fec074bdd94b32559d5479423b39c078",
+    "candidate_semantic_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
+    "ci_status": "pending_after_push",
+    "receipt_identity": "Containing decision/delivery receipt head and its final audit are recorded via native output then next checkpoint, avoiding self-reference."
   },
   "budget": {
     "native_tokens": 12790605,
     "native_seconds": 49570,
     "coverage": "Cumulative native Goal snapshot at v2 Stage A verification; no explicit cap/cost; completed first250k and last health REPLAN3903214 preserved, no reset"
   },
-  "next_action": "Validate and independently review the exact v2 G7-only source profile, then deliver it to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual Page134 remains inactive at image73/next92; no new generation or ingest.",
+  "next_action": "Deliver accepted v2 Stage A source and receipt to Manga main, verify remote ancestry and complete CI, then prepare Stage B CAS installation and isolated post-v1 clone under the effective contract. Actual page134 remains inactive at image73/next92; generation/ingest prior1/1, no v2 effects.",
   "metadata_boundary": "Decision/delivery/next-action/budget metadata are excluded from semantic candidate hashes. No self-containing record hash; contract revision candidate is independently hashed.",
   "writer_release": {
     "agent": "/root/manga_v2_state_tests",
@@ -397,5 +442,6 @@
   },
   "stage_a_candidate_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
   "stage_a_candidate_hash_recipe": "SHA256 compact sorted-key ensure_ascii=False UTF8 JSON of stage_a_candidate. State hash uses same encoding after removing only listed metadata. Regular file hashes are raw bytes. Registration review/delivery metadata is outside identity.",
-  "stage_a_candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51"
+  "stage_a_candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51",
+  "stage_a_delivery_candidate_head": "9a9b2b01fec074bdd94b32559d5479423b39c078"
 }

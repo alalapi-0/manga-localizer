@@ -38,9 +38,9 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Validate and independently review the exact v2 G7-only source profile, then deliver it
-    to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual
-    Page134 remains inactive at image73/next92; no new generation or ingest.
+  next_action: Deliver accepted v2 Stage A source and receipt to Manga main, verify remote ancestry and
+    complete CI, then prepare Stage B CAS installation and isolated post-v1 clone under the effective
+    contract. Actual page134 remains inactive at image73/next92; generation/ingest prior1/1, no v2 effects.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
@@ -115,7 +115,7 @@ delivery:
   status: prior_code_main_verified_new_unit_in_progress
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: 1cb5a7ae3877c283c88fb1f43727652dee7ea458
+  commit: 747acc57ecc3309e1b47309300c9d1840422ba51
   receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
@@ -131,10 +131,10 @@ all_projects_governance:
   stage: A
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: stage_a_source_verified_pending_independent_review
-  next_action: Validate and independently review the exact v2 G7-only source profile, then deliver it
-    to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual
-    Page134 remains inactive at image73/next92; no new generation or ingest.
+  candidate_status: stage_a_source_accepted_pending_main_verification
+  next_action: Deliver accepted v2 Stage A source and receipt to Manga main, verify remote ancestry and
+    complete CI, then prepare Stage B CAS installation and isolated post-v1 clone under the effective
+    contract. Actual page134 remains inactive at image73/next92; generation/ingest prior1/1, no v2 effects.
   budget:
     native_tokens: 12790605
     native_seconds: 49570

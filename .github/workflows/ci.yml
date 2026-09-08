@@ -33,7 +33,11 @@ jobs:
       - run: uv run --project backend ruff check backend scripts/audit_release.py
       - run: uv run --project backend ruff format --check backend scripts/audit_release.py
       - run: uv run --project backend pytest backend/tests
-      - run: uv run --project backend python scripts/audit_release.py
+      - name: Audit normal Git delivery
+        env:
+          AUDIT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          AUDIT_HEAD: ${{ github.sha }}
+        run: uv run --project backend python scripts/audit_release.py --mode normal-ci --base "$AUDIT_BASE" --head "$AUDIT_HEAD"
 
   frontend:
     runs-on: ubuntu-latest

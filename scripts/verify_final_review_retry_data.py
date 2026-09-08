@@ -218,7 +218,15 @@ def main():
         after=after,
         unchanged=True,
         observed_at=datetime.now(timezone.utc).isoformat(),
-        backend_code=reviews_module.__file__,
+        backend_code={
+            "repository": "alalapi-0/manga-localizer",
+            "relative_path": str(
+                Path(reviews_module.__file__)
+                .resolve()
+                .relative_to(Path(__file__).resolve().parents[1])
+            ),
+            "role": "verified governance worktree production service",
+        },
         scope="Production repair service for selected live-data heads; read-only SQL and deny-creation guard; no full catalog/open migration, worker, or network listener",
         quality_status="Existing repair handoffs reopened; no new generated images or approvals. Original quality blockers remain.",
     )

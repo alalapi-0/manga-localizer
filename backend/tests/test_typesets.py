@@ -447,7 +447,21 @@ def test_g10_redraw_art_route_affine_pixels_and_capability_fail_closed(
     no_font_project = no_font_prepared["targetProject"]
     no_font_generation = str(no_font_prepared["generationId"])
     assert isinstance(no_font_image, dict) and isinstance(no_font_project, dict)
+    # A generic fallback can itself be display-class on another platform. It
+    # must not impersonate the explicit capability collection.
+    fallback_font = dict(typeset_service._display_fonts()[0])
+    monkeypatch.setattr(typeset_service, "_regular_font", lambda: fallback_font)
     monkeypatch.setattr(typeset_service, "_display_fonts", lambda: [])
+
+    def no_font_snapshot():
+        with no_font_prepared["store"].session() as session:
+            return [
+                session.scalar(select(func.count()).select_from(model))
+                for model in (Job, JobItem, Revision, PageLineageEvent, PageTypesetCandidate)
+            ]
+
+    before_jobs = no_font_snapshot()
+    before_lineage = _current_lineage_context(client, str(no_font_image["id"]), no_font_generation)
     blocked_font = client.post(
         f"/api/projects/{no_font_project['id']}/typeset",
         json={
@@ -460,6 +474,11 @@ def test_g10_redraw_art_route_affine_pixels_and_capability_fail_closed(
     )
     assert blocked_font.status_code == 409
     assert blocked_font.json()["detail"]["reason"] == "g10-art-lettering-capability-required"
+    assert (
+        _current_lineage_context(client, str(no_font_image["id"]), no_font_generation)
+        == before_lineage
+    )
+    assert no_font_snapshot() == before_jobs
 
 
 def _compact_display_font() -> dict:

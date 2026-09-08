@@ -22,3 +22,9 @@
 - 任一实际任务只允许一个 writer；写前现场确认没有可写当前范围的 live process/agent、句柄或 Git operation。
 - 漫画、OCR、数据库、审核结果和 Git-ignored 真实数据按普通项目数据管理，并从 storage-governance 映射解析外置权威路径；未加密、noowners 或权限状态不构成本项目门禁。移动、删除、上传或改写仍须有精确当前授权并通过完整性检查。
 - 历史实现与验证从 Git 历史和 `docs/real-data-iteration-status.md` 按需定位，不复制回当前状态。
+
+## Git delivery and release checks
+
+- Normal authorized Git delivery requires `npm run audit:ci -- --base <full-base-sha> --head <full-head-sha>` and the relevant application checks. Use the exact verified pre-change base; do not reset it to hide a failed candidate.
+- Product release additionally requires `npm run audit:release` (also the default audit mode). CI acceptance does not clear historical personal paths or grant release authority. Secret/artifact checks cover candidate, index and reachable history in both modes.
+- The all-projects governance task has owner-authorized scoped main delivery; this does not resume the paused image workflow or grant other tasks that authority.

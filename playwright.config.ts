@@ -11,8 +11,8 @@ const frontendUrl = `http://127.0.0.1:${frontendPort}`;
 const ciLocalRuntime = process.env.CI === 'true'
   && process.env.MANGA_LOCALIZER_CI_LOCAL_RUNTIME === '1';
 const backendCommand = ciLocalRuntime
-  ? `uv run --project backend --frozen --offline --no-sync uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`
-  : `node scripts/external-uv.mjs run --frozen --offline --no-sync uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`;
+  ? `uv run --project backend --frozen --offline --no-sync python -m uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`
+  : `node scripts/external-uv.mjs run --frozen --offline --no-sync python -m uvicorn manga_localizer.main:app --host 127.0.0.1 --port ${backendPort}`;
 const browserExecutable = process.env.MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE?.trim() || null;
 if (browserExecutable && (!path.isAbsolute(browserExecutable) || !existsSync(browserExecutable))) {
   throw new Error('MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE must be an existing absolute path');

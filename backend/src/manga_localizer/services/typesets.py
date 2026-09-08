@@ -354,7 +354,7 @@ def _bounded_number(
 def _base_style(route: str) -> dict[str, Any]:
     regular = _regular_font()
     displays = _display_fonts()
-    font = displays[0] if route == "art-lettering" and displays else regular
+    font = (displays[0] if displays else None) if route == "art-lettering" else regular
     if font is None:
         reason = (
             "g10-art-lettering-capability-required"

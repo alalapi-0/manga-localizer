@@ -35,3 +35,9 @@ The browser script accepts the existing `MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE`
 ## Remaining and delivery
 
 All original 56 quality blockers and 3 pending owner reviews remain. No fresh image generation or approval is claimed. Whole-project Agent/state-template onboarding is still pending in the parent execution plan. Fresh Judge review and remote-main verification are recorded separately from this semantic candidate. Preserve all unrelated original dirty work; do not merge its contents to deliver this unit.
+
+The original accepted handoff candidate is preserved at Git commit `9320e60`.
+The subsequent CI audit unit replaces current-tip machine-specific source references
+with repository/registry-relative references; recorded image identities, service
+hash, before/after fingerprints and unaccepted quality status are unchanged.
+See `../manga-ci-audit/contract.md` for the governed delivery repair and release limit.

@@ -13,9 +13,10 @@
 - Business observation at `2026-09-08T03:54:29.659797+00:00`: batch `a734c596-faae-4875-ae61-f694a3c26d4a` r485, `199 = 140 approved / 56 issues / 3 pending`. This newer observation supersedes older numeric snapshots below; all quality/owner-review constraints remain.
 - Result: exact attempt-2 issue heads at positions 134, 167, 192 reopen idempotently; repeated opens preserve the same generation. Selected review, image revision, generation and event-count fingerprints remain unchanged. No new image was generated or approved.
 - Unresolved: the 56 quality issues and 3 pending owner reviews remain; whole-project state-template onboarding and other governance checks are later units. Loopback API8000 was not listening at this observation; bounded service verification did not restart it. Browser proof uses the real review component with isolated API/navigation substitutes, not a live full-workbench session.
-- Unit review: PASS by fresh Judge /root/manga_retry_judge; semantic candidate 67beedacca295a5233a923a47838f6ab0157b86c9315adc2165ff9be895eb8ec.
-- Unit delivery: pending main.
-- Unit next action: deliver the accepted candidate to remote main and verify CI; preserve the image quality blockers and then continue unified onboarding.
+- Unit review: initial handoff Judge PASS; CI repair fresh Judge /root/manga_ci_audit_judge PASS and Governor /root/startup_governor APPROVE, semantic candidate 92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f.
+- Unit delivery: repair commits 9320e60 and b408098 observed on remote main; accepted CI repair pending_delivery until full remote CI and ancestry verification.
+- Unit next action: normally push the accepted CI repair to main, verify backend/frontend/audit/E2E and accepted ancestry, then continue unified onboarding; preserve all image quality blockers.
+- Delivery repair: GOVERNED `ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2`; contract and baseline under `docs/reports/all-projects-governance/manga-ci-audit/`. Default release audit remains strict and `release_not_ready` due protected historical personal paths. No image workflow is resumed.
 
 ## Execution control
 

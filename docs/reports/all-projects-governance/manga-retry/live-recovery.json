@@ -12,7 +12,11 @@
     }
   },
   "scope": "Production repair service for selected live-data heads; read-only SQL and deny-creation guard; no full catalog/open migration, worker, or network listener",
-  "backend_code": "/Users/alalapi/.codex/worktrees/manga-review-retry-governance/backend/src/manga_localizer/services/final_reviews.py",
+  "backend_code": {
+    "repository": "alalapi-0/manga-localizer",
+    "relative_path": "backend/src/manga_localizer/services/final_reviews.py",
+    "role": "verified governance worktree production service"
+  },
   "failed_service_probe": "127.0.0.1:8000 direct connection refused; proxy health 503; no write reached service",
   "cases": [
     {

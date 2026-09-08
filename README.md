@@ -540,8 +540,14 @@ and [Security](SECURITY.md) before enabling remote services.
 npm run dev                 # API + Vite with reload
 npm run check               # launcher + backend + frontend gates
 npm run test:e2e            # full browser flow
-npm run audit:release       # secrets, personal paths, weights, fonts, DBs, large files
+npm run audit:ci -- --base <full-base-sha> --head <full-head-sha>
+npm run audit:release       # strict product-release audit, including all history
 ```
+
+Normal main delivery requires the CI audit: secrets and prohibited artifacts are checked in the
+current candidate, index and all reachable Git history; personal paths are checked against the
+verified base plus staged, unstaged and untracked additions. Product release also requires the
+strict release audit. Passing CI does not make historical personal paths release-ready.
 
 Run `npm run setup:test` once before the first Playwright run. Backend-only and frontend-only
 commands are documented in [Development](docs/development.md).

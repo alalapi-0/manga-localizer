@@ -88,7 +88,6 @@
     }
   },
   "original": {
-    "root": "/Users/alalapi/PycharmProjects/manga-localizer",
     "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
     "branch": "main",
     "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
@@ -212,6 +211,26 @@
       "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
       "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
       "result": "PASS; no v2 original mutation; all raw media/DB out of this source-only scope"
+    },
+    "audit_ci": {
+      "status": "repair_pending_recheck",
+      "command": "npm run audit:ci -- --base 1cb5a7ae3877c283c88fb1f43727652dee7ea458 --head <forward-metadata-head>",
+      "first_attempt": {
+        "candidate_head": "747acc57ecc3309e1b47309300c9d1840422ba51",
+        "exit": 1,
+        "fingerprint": "base-to-candidate registration personal absolute path",
+        "cause": "Redundant original.root copied a local path already governed by Hub registry",
+        "repair": "Removed redundant original.root; regular forward metadata commit, no history rewrite or audit-rule change",
+        "coverage": {
+          "candidate": 241,
+          "index_blobs": 241,
+          "historical_blob_paths": 1624,
+          "live_content_reads": 238,
+          "inert_cursor_objects": 2,
+          "cursor_live_content_reads": 0
+        }
+      },
+      "semantic_candidate_unchanged": true
     }
   },
   "diagnosis": {
@@ -377,5 +396,6 @@
     }
   },
   "stage_a_candidate_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
-  "stage_a_candidate_hash_recipe": "SHA256 compact sorted-key ensure_ascii=False UTF8 JSON of stage_a_candidate. State hash uses same encoding after removing only listed metadata. Regular file hashes are raw bytes. Registration review/delivery metadata is outside identity."
+  "stage_a_candidate_hash_recipe": "SHA256 compact sorted-key ensure_ascii=False UTF8 JSON of stage_a_candidate. State hash uses same encoding after removing only listed metadata. Regular file hashes are raw bytes. Registration review/delivery metadata is outside identity.",
+  "stage_a_candidate_commit": "747acc57ecc3309e1b47309300c9d1840422ba51"
 }

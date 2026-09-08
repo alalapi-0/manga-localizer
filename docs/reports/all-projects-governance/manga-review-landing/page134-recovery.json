@@ -4,7 +4,7 @@
   "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
   "lane": "GOVERNED",
   "stage": "D",
-  "status": "actual_failure_verified_pending_independent_review",
+  "status": "accepted_failed_at_g8_receipt_pending_delivery",
   "baseline_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
   "governor_origin": "Native /root/hub_connection_governor inactive v2 TASK_CONTRACT plus three clarifications; not an execution grant",
   "target": {
@@ -418,6 +418,27 @@
       "driver_sha256": "7b7f66dfe31fc86f6f447d4ffabed71e02f2fa52e40f23b40d17d96261eee694",
       "origin": "Native FINAL APPROVE independently inspected; native list_agents result confirms exact identities and conditions",
       "scope": "Bounded C only after full read-only preflight. G7 exact mask and Root review, one remaining native generation and ingest, all10 G8 checks with formal reject/stop on any failure. Only all-pass G8 permits six G9/new G10/target strict pending. No OCR/G0-G6/worker/other pages/owner approval/export. Actual D requires fresh Judge and Governor before normal main/CI delivery."
+    },
+    "stage_d_judge": {
+      "agent": "/root/manga_v2_actual_judge",
+      "role": "fresh read-only Judge",
+      "verdict": "PASS",
+      "semantic_sha256": "5e214c03192318b126152c0847399a731f233b4413a70321830987957002f284",
+      "state_semantic_sha256": "9022c0e903e93c86a4270f46fe248e4e73f5970b8b3cd69b9149c48816bca9ec",
+      "candidate_commit": "a3a260210e451a52bf1238bb0a7eb267ec40b8fb",
+      "origin": "Native FINAL PASS after independent hashes/read-only verifier and actual-image review",
+      "scope": "Truthful bounded failed-at-G8 receipt only; not image quality/owner approval/corpus/Goal completion",
+      "checks": "All9evidence/contract/source/STATE/candidate hashes match; actual verifier/schema/FK/2627oldmedia/199reviewrows/20regions/6negative cases/CAS9273-79-102-2-485/queue0/serverstop PASS. One new nativegeneration+ingest,series2/2;5visualfailures confirmed,formalreject/noG9-G10-refresh. Exact manifest reversal and preserved first failure; final20f→a3a audit PASS."
+    },
+    "stage_d_governor": {
+      "agent": "/root/hub_connection_governor",
+      "role": "read-only Governor",
+      "decision": "APPROVE",
+      "semantic_sha256": "5e214c03192318b126152c0847399a731f233b4413a70321830987957002f284",
+      "state_semantic_sha256": "9022c0e903e93c86a4270f46fe248e4e73f5970b8b3cd69b9149c48816bca9ec",
+      "candidate_commit": "a3a260210e451a52bf1238bb0a7eb267ec40b8fb",
+      "origin": "Native FINAL APPROVE after fresh Judge PASS and independent identity/evidence review",
+      "scope": "Accept controlled failure effects and truthful receipt only. Root may add excluded decision/delivery metadata, preserve semantic identity, normal main push and remote ancestry/CI verification. No further real data/API/generation. Imagequality/ownerapproval/corpus/Goal and future199classification not accepted."
     }
   },
   "delivery": {
@@ -1114,7 +1135,7 @@
     "next_effect": "none; accepted additional generation/ingest both spent; no same-method retry or failed raw reuse"
   },
   "stage_d": {
-    "status": "pending_fresh_judge_and_governor",
+    "status": "independently_accepted_pending_main_delivery",
     "verifier": "/tmp/manga-page134-v2-actual-verify.py",
     "verifier_sha256": "e23dcfb79a7ca36a9e5208588e2462d958340d654b37ea32f355b4a6795470d1",
     "first_verifier_failure": {
@@ -1164,7 +1185,21 @@
           "cursor_live_content_reads": 0
         },
         "first_attempt": "--head HEAD rejected before comparison: full nonzero commit identities required; resolved exact full SHA, no rule change",
-        "final_candidate_audit": "pending after durable acceptance-reference wording correction; no runtime/source behavior change"
+        "final_candidate_audit": {
+          "status": "PASS",
+          "base": "20f14f73446a44aa4462735ef77ee094b5c0f45c",
+          "head": "a3a260210e451a52bf1238bb0a7eb267ec40b8fb",
+          "root_session": 15935,
+          "coverage": {
+            "candidate": 241,
+            "index_blobs": 241,
+            "historical_blob_paths": 1631,
+            "live_content_reads": 238,
+            "inert_cursor_objects": 2,
+            "cursor_live_content_reads": 0
+          },
+          "meaning": "normal CI, not release acceptance"
+        }
       }
     }
   },
@@ -1401,5 +1436,14 @@
     "scope": "Accept bounded recovery and truthful failed-at-G8 receipt only; not image quality/owner approval/corpus or all-project Goal completion. No further actual effects."
   },
   "stage_d_candidate_sha256": "5e214c03192318b126152c0847399a731f233b4413a70321830987957002f284",
-  "stage_d_candidate_hash_recipe": "SHA256 sorted-key compact ensure_ascii=False UTF8 JSON of stage_d_candidate only. STATE removes delivery,current_work.next_action,all_projects_governance candidate_status/next_action/budget. Decisions/check/delivery metadata outside candidate; no self hash."
+  "stage_d_candidate_hash_recipe": "SHA256 sorted-key compact ensure_ascii=False UTF8 JSON of stage_d_candidate only. STATE removes delivery,current_work.next_action,all_projects_governance candidate_status/next_action/budget. Decisions/check/delivery metadata outside candidate; no self hash.",
+  "stage_d_candidate_commit": "a3a260210e451a52bf1238bb0a7eb267ec40b8fb",
+  "stage_d_delivery": {
+    "status": "pending_main_push_and_ci",
+    "repository": "https://github.com/alalapi-0/manga-localizer",
+    "branch": "main",
+    "candidate_commit": "a3a260210e451a52bf1238bb0a7eb267ec40b8fb",
+    "observed_main_before_delivery": "20f14f73446a44aa4462735ef77ee094b5c0f45c",
+    "meaning": "Delivery is recorded only after remote ancestry and CI verification; this record does not claim future push success."
+  }
 }

@@ -38,9 +38,9 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Freeze the actual v2 G8-rejected receipt for fresh Judge/Governor and normal main/CI delivery.
-    Preserve image79/next102, project9273, item2/batch485, queues0 and series2/2 spent; no further native
-    generation or downstream effects.
+  next_action: Normally push the independently accepted v2 failed-at-G8 receipt to Manga main, verify
+    exact remote ancestry and complete CI. Then separately enumerate all199 review items read-only to
+    close retry-process coverage; no additional image/API effects.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
@@ -133,10 +133,10 @@ all_projects_governance:
   stage: D
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: Actual bounded failure verified; independent receipt review pending
-  next_action: Freeze the actual v2 G8-rejected receipt for fresh Judge/Governor and normal main/CI delivery.
-    Preserve image79/next102, project9273, item2/batch485, queues0 and series2/2 spent; no further native
-    generation or downstream effects.
+  candidate_status: Stage D fresh Judge PASS and Governor APPROVE; main delivery pending
+  next_action: Normally push the independently accepted v2 failed-at-G8 receipt to Manga main, verify
+    exact remote ancestry and complete CI. Then separately enumerate all199 review items read-only to
+    close retry-process coverage; no additional image/API effects.
   budget:
     native_tokens: 13830802
     native_seconds: 54282

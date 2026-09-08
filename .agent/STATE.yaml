@@ -112,7 +112,7 @@ verification:
   accepted_basis: Source v2 main20f14f7/CI34254929980 and exact Stage B independently accepted. Actual
     G7 owner-issues re-entry, deterministic remask, one new native generation/ingest and formal five-of-ten-check
     G8 rejection verified. No G0-G6/OCR/G9/G10/refresh; all199 review rows and2627 old media preserved.
-    Actual Stage D independent review pending; no image-quality acceptance.
+    Actual Stage D decisions are recorded in the current receipt; no image-quality acceptance.
 delivery:
   status: stage_a_source_main_verified_actual_receipt_pending_delivery
   remote: https://github.com/alalapi-0/manga-localizer

@@ -1151,7 +1151,21 @@
       "state_checker": "PASS inactive/grantsfalse,21fields20mapped1unknown",
       "source_tests": "Reuse unchanged Stage A97targeted tests/Ruff and source20f full backend/frontend/E2E CI34254929980 success",
       "diff_check": "PASS; only paired STATE and receipt modified",
-      "normal_audit": "pending exact candidate commit"
+      "normal_audit": {
+        "status": "PASS",
+        "base": "20f14f73446a44aa4462735ef77ee094b5c0f45c",
+        "head": "a2650cf4035b22045dc633ce96d32e7d218a5e2f",
+        "coverage": {
+          "candidate": 241,
+          "index_blobs": 241,
+          "historical_blob_paths": 1629,
+          "live_content_reads": 238,
+          "inert_cursor_objects": 2,
+          "cursor_live_content_reads": 0
+        },
+        "first_attempt": "--head HEAD rejected before comparison: full nonzero commit identities required; resolved exact full SHA, no rule change",
+        "final_candidate_audit": "pending after durable acceptance-reference wording correction; no runtime/source behavior change"
+      }
     }
   },
   "stage_d_candidate": {
@@ -1163,7 +1177,7 @@
       "status": "success"
     },
     "stage_b_candidate_sha256": "7931b3a999bfe758ec0d94b47f1d0e39c134a743c84921905419ce40f5a1a3f6",
-    "state_semantic_sha256": "3725b5e991f0193425c23069a7f2071cca6e3d4a24939c0d5568afc371eb425b",
+    "state_semantic_sha256": "9022c0e903e93c86a4270f46fe248e4e73f5970b8b3cd69b9149c48816bca9ec",
     "source_files": [
       {
         "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
@@ -1386,6 +1400,6 @@
     },
     "scope": "Accept bounded recovery and truthful failed-at-G8 receipt only; not image quality/owner approval/corpus or all-project Goal completion. No further actual effects."
   },
-  "stage_d_candidate_sha256": "a6b6a791152f8274913b01ddcf59fb8b4da9e778cb7d7ae686b1f9cfcd574f2f",
+  "stage_d_candidate_sha256": "5e214c03192318b126152c0847399a731f233b4413a70321830987957002f284",
   "stage_d_candidate_hash_recipe": "SHA256 sorted-key compact ensure_ascii=False UTF8 JSON of stage_d_candidate only. STATE removes delivery,current_work.next_action,all_projects_governance candidate_status/next_action/budget. Decisions/check/delivery metadata outside candidate; no self hash."
 }

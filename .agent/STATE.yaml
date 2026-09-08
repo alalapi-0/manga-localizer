@@ -1,4 +1,3 @@
-# Manga Localizer — sole current state (YAML)
 schema_version: '1.0'
 metadata:
   role: canonical_current_state
@@ -39,21 +38,21 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Complete source acceptance and main delivery of the controlled entry, then install by CAS
-    and prove the isolated Page134 clone flow before actual recovery. Preserve all unresolved pages and
-    the3 owner-pending verdicts.
+  next_action: Review and deliver the truthful Page134 Stage D failure receipt; then diagnose the retained
+    left-side mask/composite defects from image73/next92 before proposing a materially new recovery plan.
+    No second generation under this unit.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
   total: 199
   counting_basis: Owner-approved final-review items in batch a734c596-faae-4875-ae61-f694a3c26d4a revision485:140
-    approved,56 issues,3 pending; observed2026-09-08T03:54:29.659797+00:00. Counts are not current fresh
-    DB reads, repaired-image count or export acceptance.
+    approved,56 issues,3 pending. Actual Stage C stopped after G8 rejection; all199 review rows unchanged
+    and no synthetic progress counted.
   milestones: null
 catalog_observation:
   batch_id: a734c596-faae-4875-ae61-f694a3c26d4a
   revision: 485
-  observed_at: '2026-09-08T03:54:29.659797+00:00'
+  observed_at: '2026-09-08T15:59:07.151082+00:00'
   approved: 140
   issues: 56
   pending: 3
@@ -62,19 +61,24 @@ catalog_observation:
   - 24
   - 173
 blockers:
-- code: G4_G7_ACCEPTED_COVERAGE_INCOMPLETE
-  reason: Page134 accepted G7 excludes3339 measured long-vowel dark pixels;2474 also lie below its accepted
-    G4 box. Strict composite preserves them; the existing raw is text-free.
+- code: STRICT_G8_COMPOSITE_VISUAL_FAILURE
+  reason: Page134 actual new G8 0a0ef31a was rejected after G4/G7 long-vowel coverage repair. Strict composite
+    has left-side white cutouts, fragmented background and damaged structure. Outside-mask changed0; this
+    is not visual acceptance.
   affected_items:
   - 7975117b-c953-4ac4-847e-5249d9521a2c
-  recovery_condition: Validate exact G4 boundary correction then G7 coverage reopen, retaining upstream
-    identities/history. Real correction requires a separately reviewed effect.
-  retry_entry: POST /api/images/{image_id}/page-gates/regions/reopen, then gated G4/G7 validation with
-    current revision/lineage; candidate recovery is under test.
+  - candidate:0a0ef31a-5690-5ee5-bc00-13a90d149404
+  recovery_condition: Diagnose retained quality/mask/new raw/strict composite and register a materially
+    new method before further generation. Existing one-generation plan is spent; no unchanged retry, raw
+    reuse, source restart or automatic approval.
+  retry_entry: Current G4-G7 accepted; G8 rejected. Image73/next92, project9267, item2/batch485, queues0.
+    Existing gated G7 coverage/owner-issues reopen and native G8 routes require their real preconditions
+    and separately accepted next plan.
   waiting_for_user: false
 - code: G8_VISUAL_FAILURES
-  reason: 56 issues remain in the observed catalog; pages134/167/192 have rejected G8 candidates. Process
-    handoff is fixed, actual generation/review chain remains incomplete.
+  reason: 56 actual final-review issues remain. Page134 produced a new actual G8 and was rejected; pages167/192
+    and remaining affected-set closure are unresolved. Process re-entry is proven, whole-page visual completion
+    is not.
   affected_items:
   - batch:a734c596-faae-4875-ae61-f694a3c26d4a/verdict:issues
   - page134
@@ -96,7 +100,7 @@ blockers:
   retry_entry: Owner final-review screen; no automatic retry or regeneration.
   waiting_for_user: true
 verification:
-  status: source_prerequisites_verified_actual_recovery_pending
+  status: actual_reentry_verified_g8_visual_failed
   evidence_refs:
   - docs/reports/all-projects-governance/manga-retry/live-recovery.json
   - docs/reports/all-projects-governance/manga-ci-audit/delivery.json
@@ -104,16 +108,15 @@ verification:
   - docs/reports/all-projects-governance/manga-review-landing/validation.json
   - docs/reports/all-projects-governance/manga-review-landing/delivery.json
   - docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  accepted_basis: 'Previous maintenance main1aa3fb8 and Hub routing main4fdc5df passed their CI. Root
-    verified the new source checks; exact evidence is in page134-recovery.json. This establishes source
-    behavior only: clone acceptance, actual G4-G10 recovery and owner approval remain pending; no actual
-    page has been redone.'
+  accepted_basis: Source main bf5c713/CI34239969045 and Stage B independently accepted. Actual G4-G7/local
+    OCR/new mask, one native generation and one ingest verified; G8 formally rejected. No G9/G10/refresh.
+    Whole-table and2624 old-media preservation PASS; this does not accept image quality.
 delivery:
-  status: prior_code_main_verified_new_unit_in_progress
+  status: prior_source_main_verified_actual_receipt_pending
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: 1aa3fb8a80241bf7a533b13eeb08771a428f4839
-  receipt_ref: docs/reports/all-projects-governance/manga-review-landing/installation_delivery_review.json
+  commit: bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b
+  receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
   path: .agent/STATE.md
@@ -125,18 +128,19 @@ all_projects_governance:
   unit: manga_page134_controlled_recovery
   lane: GOVERNED
   status: ACTIVE
-  stage: A
+  stage: D
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: source_frozen_for_independent_review
-  next_action: Fresh Judge/Governor review of this exact source candidate, then normal main delivery and
-    CI verification; only then Stage B original installation and isolated clone proof.
+  candidate_status: actual_failure_receipt_frozen_for_independent_review
+  next_action: Review and deliver the truthful Page134 Stage D failure receipt; then diagnose the retained
+    left-side mask/composite defects from image73/next92 before proposing a materially new recovery plan.
+    No second generation under this unit.
   budget:
-    native_tokens: 10920063
-    native_seconds: 40687
-    coverage: Cumulative native Goal snapshot at source freeze; cost/cap unavailable; first250k rebaseline
-      completed and last health REPLAN3903214 preserved; no reset
-  failure_fingerprint: 'Source blockers repaired and locally verified: inactive-only declaration and default
-    broad startup/queue recovery. Actual Page134 G4/G7 coverage defect and real recovery remain unresolved;
-    no actual application started.'
+    native_tokens: 12110247
+    native_seconds: 46491
+    coverage: Cumulative native Goal at Stage D freeze; no explicit cap/cost; completed first250k and
+      last health REPLAN3903214 preserved, no reset
+  failure_fingerprint: 'Page134 G8 strict composite b53d87d: white cutouts/fragmented background/structure
+    despite outside0; native raw6278a800, corrected maskf06ff69. One actual generation/ingest spent; retained
+    image73/next92, no downstream effects.'
   candidate_manifest: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json

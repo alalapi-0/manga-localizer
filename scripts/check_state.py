@@ -26,6 +26,44 @@ RECOVERY_EFFECTS = {
     "g10_typeset",
     "final_review_refresh",
 }
+G7_REMASK_PROFILE = "page134_g7_material_remask_v2"
+G7_REMASK_CONTRACT = (
+    "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v2"
+)
+G7_REMASK_EFFECTS = {
+    "g7_mask",
+    "g8_native_generation",
+    "g8_native_ingest",
+    "g9_bind",
+    "g10_typeset",
+    "final_review_refresh",
+}
+G7_REMASK_TARGET = {
+    "page": 134,
+    "project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+    "batch_id": "a734c596-faae-4875-ae61-f694a3c26d4a",
+    "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+    "image_id": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+    "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
+    "run_id": "final-review-7975117b-r2-a2",
+}
+# This immutable prior receipt describes this controlled-recovery series only.
+# The declaration is a static preflight, never an image_gen call interceptor.
+G7_REMASK_BUDGET = {
+    "prior_receipt": {
+        "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+        "path": (
+            "docs/reports/all-projects-governance/"
+            "manga-review-landing/page134-recovery.json"
+        ),
+        "semantic_sha256": (
+            "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+        ),
+    },
+    "prior": {"generation": 1, "ingest": 1},
+    "additional": {"generation": 1, "ingest": 1},
+    "cumulative": {"generation": 2, "ingest": 2},
+}
 
 
 class StateError(ValueError):
@@ -87,6 +125,56 @@ def _bound_document(root: Path, relative: object) -> bytes:
     if not raw or len(raw) > 65536:
         raise StateError("Recovery document must be nonempty and compact")
     return raw
+
+
+def _exact_fields(value: object, expected: object) -> bool:
+    """Compare the complete declaration, including bool/int/float distinctions."""
+    if type(value) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return value.keys() == expected.keys() and all(
+            _exact_fields(value[key], item) for key, item in expected.items()
+        )
+    return value == expected
+
+
+def _recovery_effects(recovery: dict, registration: dict) -> set[str]:
+    profile = recovery.get("profile")
+    if registration.get("profile") != profile:
+        raise StateError("Recovery profile differs from its registration")
+    if profile is None:
+        if (
+            recovery["contract_id"] == G7_REMASK_CONTRACT
+            or "effect_budget" in recovery
+            or "effect_budget" in registration
+        ):
+            raise StateError("The G7-only contract requires its explicit named profile")
+        return RECOVERY_EFFECTS
+    if profile != G7_REMASK_PROFILE or recovery["contract_id"] != G7_REMASK_CONTRACT:
+        raise StateError("Unknown or detached recovery profile")
+    if not all(
+        _exact_fields(document.get("target"), G7_REMASK_TARGET)
+        for document in (recovery, registration)
+    ):
+        raise StateError(
+            "The G7-only profile must retain the complete Page134 identity"
+        )
+    if not all(
+        _exact_fields(document.get("effect_budget"), G7_REMASK_BUDGET)
+        for document in (recovery, registration)
+    ):
+        raise StateError(
+            "Recovery must retain its exact prior receipt and cumulative limits"
+        )
+    budget = recovery["effect_budget"]
+    for effect in ("generation", "ingest"):
+        if (
+            budget["prior"][effect] >= budget["cumulative"][effect]
+            or budget["prior"][effect] + budget["additional"][effect]
+            != budget["cumulative"][effect]
+        ):
+            raise StateError("Recovery effect allowance is exhausted or inconsistent")
+    return G7_REMASK_EFFECTS
 
 
 def _validate_execution(state: dict, root: Path) -> str:
@@ -193,14 +281,18 @@ def _validate_execution(state: dict, root: Path) -> str:
     ):
         raise StateError("Recovery must retain the exact single-page effect limits")
     effects = recovery.get("effects")
+    required_effects = _recovery_effects(recovery, registration)
     if (
         not isinstance(effects, list)
         or not all(isinstance(effect, str) for effect in effects)
-        or len(effects) != len(RECOVERY_EFFECTS)
-        or set(effects) != RECOVERY_EFFECTS
+        or len(effects) != len(required_effects)
+        or set(effects) != required_effects
     ):
         raise StateError("Recovery effects must match the bounded gate chain")
-    if registration.get("limits") != limits or registration.get("effects") != effects:
+    if (
+        not _exact_fields(registration.get("limits"), limits)
+        or registration.get("effects") != effects
+    ):
         raise StateError(
             "Recovery limits/effects differ from the accepted registration"
         )

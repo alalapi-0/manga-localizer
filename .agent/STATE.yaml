@@ -38,9 +38,9 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Deliver the accepted Stage D failure receipt to Manga main and verify remote ancestry/CI;
-    then develop a materially new G7 plan for left glyph/white-halo/internal-hole coverage from image73/next92.
-    No second generation in this unit.
+  next_action: Validate and independently review the exact v2 G7-only source profile, then deliver it
+    to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual
+    Page134 remains inactive at image73/next92; no new generation or ingest.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
@@ -112,10 +112,10 @@ verification:
     OCR/new mask, one native generation and one ingest verified; G8 formally rejected. No G9/G10/refresh.
     Whole-table and2624 old-media preservation PASS; this does not accept image quality.
 delivery:
-  status: accepted_effect_receipt_pending_main_verification
+  status: prior_code_main_verified_new_unit_in_progress
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: eeda45ad7cb658e7aecab89d468425662c085898
+  commit: 1cb5a7ae3877c283c88fb1f43727652dee7ea458
   receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
@@ -125,21 +125,21 @@ history:
     remote main57fe2ef. Historical text cannot activate execution.
 all_projects_governance:
   task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
-  unit: manga_page134_controlled_recovery
+  unit: manga_page134_controlled_recovery_v2
   lane: GOVERNED
   status: ACTIVE
-  stage: D
+  stage: A
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: stage_d_failure_receipt_accepted_pending_delivery
-  next_action: Deliver the accepted Stage D failure receipt to Manga main and verify remote ancestry/CI;
-    then develop a materially new G7 plan for left glyph/white-halo/internal-hole coverage from image73/next92.
-    No second generation in this unit.
+  candidate_status: stage_a_source_verified_pending_independent_review
+  next_action: Validate and independently review the exact v2 G7-only source profile, then deliver it
+    to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual
+    Page134 remains inactive at image73/next92; no new generation or ingest.
   budget:
-    native_tokens: 12110247
-    native_seconds: 46491
-    coverage: Cumulative native Goal at Stage D freeze; no explicit cap/cost; completed first250k and
-      last health REPLAN3903214 preserved, no reset
+    native_tokens: 12790605
+    native_seconds: 49570
+    coverage: Cumulative native Goal snapshot at v2 Stage A verification; no explicit cap/cost; completed
+      first250k and last health REPLAN3903214 preserved, no reset
   failure_fingerprint: 'Page134 G8 strict composite b53d87d: white cutouts/fragmented background/structure
     despite outside0; native raw6278a800, corrected maskf06ff69. One actual generation/ingest spent; retained
     image73/next92, no downstream effects.'

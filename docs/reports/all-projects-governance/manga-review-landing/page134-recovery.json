@@ -1,533 +1,12 @@
 {
-  "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
+  "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v2",
   "contract": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+  "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
   "lane": "GOVERNED",
-  "stage": "D",
-  "status": "stage_d_accepted_pending_main_delivery",
-  "baseline_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
-  "governor_origin": "/root/hub_connection_governor native contract decision before mutation",
-  "original": {
-    "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
-    "branch": "main",
-    "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
-    "status_excluding_cursor": [
-      " M .agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md",
-      " M .agent/FINAL_CORPUS_REBUILD_REFERENCE.md",
-      " D .agent/STATE.md",
-      " M .agents/skills/manga-final-review-loop/SKILL.md",
-      " M .github/pull_request_template.md",
-      " M .github/workflows/ci.yml",
-      " M AGENTS.md",
-      " M README.md",
-      " M backend/src/manga_localizer/cloud_image_cli.py",
-      " M backend/src/manga_localizer/database.py",
-      " M backend/src/manga_localizer/main.py",
-      " M backend/src/manga_localizer/schemas.py",
-      " M backend/src/manga_localizer/services/clean_plates.py",
-      " M backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
-      " M backend/src/manga_localizer/services/final_reviews.py",
-      " M backend/src/manga_localizer/services/masks.py",
-      " M backend/src/manga_localizer/services/page_lineage.py",
-      " M backend/src/manga_localizer/services/projects.py",
-      " M backend/src/manga_localizer/services/translations.py",
-      " M backend/src/manga_localizer/services/typesets.py",
-      " M backend/tests/test_api_projects.py",
-      " M backend/tests/test_audit_release.py",
-      " M backend/tests/test_cloud_full_page_clean_plates.py",
-      " M backend/tests/test_cloud_image_cli.py",
-      " M backend/tests/test_cloud_registration.py",
-      " M backend/tests/test_final_reviews.py",
-      " M backend/tests/test_page_lineage.py",
-      " M backend/tests/test_typesets.py",
-      " M docs/development.md",
-      " M docs/real-data-iteration-status.md",
-      " M frontend/src/App.tsx",
-      " M frontend/src/api/client.ts",
-      " M frontend/src/components/Sidebar.tsx",
-      " M frontend/src/components/Workbench.test.tsx",
-      " M frontend/src/finalReview/FinalReviewPage.test.tsx",
-      " M frontend/src/finalReview/FinalReviewPage.tsx",
-      " M frontend/src/finalReview/store.test.ts",
-      " M frontend/src/finalReview/store.ts",
-      " M frontend/src/finalReview/types.ts",
-      " M frontend/src/store/workbench.test.ts",
-      " M frontend/src/store/workbench.ts",
-      " M package.json",
-      " M playwright.config.ts",
-      " M scripts/audit_release.py",
-      " M scripts/external-uv.mjs",
-      " M scripts/storage-runtime-route.test.mjs",
-      " M tests/e2e/manga-localizer.spec.ts",
-      "?? .agent/STATE.yaml",
-      "?? backend/tests/test_database_review_epochs.py",
-      "?? backend/tests/test_final_review_responsiveness.py",
-      "?? backend/tests/test_mask_recovery_edges.py",
-      "?? backend/tests/test_state_contract.py",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/README.md",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/baseline.json",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/candidate.json",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/contract.md",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/delivery.json",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/governor.json",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/judge.json",
-      "?? docs/reports/all-projects-governance/manga-ci-audit/validation.json",
-      "?? docs/reports/all-projects-governance/manga-retry/README.md",
-      "?? docs/reports/all-projects-governance/manga-retry/baseline.json",
-      "?? docs/reports/all-projects-governance/manga-retry/candidate.json",
-      "?? docs/reports/all-projects-governance/manga-retry/delivery.json",
-      "?? docs/reports/all-projects-governance/manga-retry/judge.json",
-      "?? docs/reports/all-projects-governance/manga-retry/live-recovery.json",
-      "?? docs/reports/all-projects-governance/manga-retry/validation.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/baseline.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/candidate.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/contract.md",
-      "?? docs/reports/all-projects-governance/manga-review-landing/contract_decision.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/delivery.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/governor.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/installation.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/installation_delivery_review.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/installation_governor.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/installation_judge.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/judge.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/state_validation.json",
-      "?? docs/reports/all-projects-governance/manga-review-landing/validation.json",
-      "?? hub.connection.yaml",
-      "?? scripts/check_state.py",
-      "?? scripts/verify-final-review-retry-ui.mjs",
-      "?? scripts/verify_final_review_retry_data.py"
-    ],
-    "protected_paths_recipe": "Prior main1aa installation.json baseline_files union install_files plus delivery/installation_delivery_review/installation_governor/installation_judge; Cursor excluded without read",
-    "protected_paths_count": 236,
-    "protected_tree_sha256": "ed0f340f42643f15f759cb81919d246e8e025bcc77ad8c69c9693af89f43af09",
-    "owned_preimages": {
-      "AGENTS.md": {
-        "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
-        "mode": 420
-      },
-      ".agent/STATE.yaml": {
-        "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
-        "mode": 420
-      },
-      "scripts/check_state.py": {
-        "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
-        "mode": 420
-      },
-      "backend/tests/test_state_contract.py": {
-        "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
-        "mode": 420
-      },
-      "backend/src/manga_localizer/main.py": {
-        "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
-        "mode": 420
-      },
-      "backend/src/manga_localizer/services/projects.py": {
-        "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
-        "mode": 420
-      },
-      "backend/src/manga_localizer/queue.py": {
-        "sha256": "ac83b4e15007c6d580261dd3b969fdf488ae191ce365de51de4cc9305ce54743",
-        "mode": 420
-      }
-    }
-  },
-  "source_preimages": {
-    "AGENTS.md": {
-      "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
-      "mode": 420
-    },
-    ".agent/STATE.yaml": {
-      "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
-      "mode": 420
-    },
-    "scripts/check_state.py": {
-      "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
-      "mode": 420
-    },
-    "backend/tests/test_state_contract.py": {
-      "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
-      "mode": 420
-    },
-    "backend/src/manga_localizer/main.py": {
-      "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
-      "mode": 420
-    },
-    "backend/src/manga_localizer/services/projects.py": {
-      "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
-      "mode": 420
-    },
-    "backend/src/manga_localizer/queue.py": {
-      "sha256": "ac83b4e15007c6d580261dd3b969fdf488ae191ce365de51de4cc9305ce54743",
-      "mode": 420
-    },
-    "backend/src/manga_localizer/services/controlled_recovery.py": {
-      "sha256": null,
-      "mode": null,
-      "basis": "absent in clean baseline main1aa at unit start"
-    },
-    "backend/tests/test_controlled_recovery.py": {
-      "sha256": null,
-      "mode": null,
-      "basis": "absent in clean baseline main1aa at unit start"
-    },
-    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md": {
-      "sha256": null,
-      "mode": null,
-      "basis": "absent in clean baseline main1aa at unit start"
-    },
-    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json": {
-      "sha256": null,
-      "mode": null,
-      "basis": "absent in clean baseline main1aa at unit start"
-    }
-  },
-  "checks": {
-    "storage": "All4 guarded routes passed2026-09-08; real-data root resolved through storage:data; no runtime fallback",
-    "native_owner": "Original native task lastturn01a06f44-3cfa-7e81-9308-feae34976911 failed1788573141; not resumed",
-    "read_only_live": {
-      "project": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
-      "project_schema": 2,
-      "project_revision": 9244,
-      "image_revision": 50,
-      "region_revision": 4,
-      "generation_next_sequence": 63,
-      "historical_restart_from_source_flag": true,
-      "new_G0": false,
-      "jobs": {
-        "completed": 1113,
-        "failed": 3,
-        "queued_or_running": 0
-      },
-      "recognition_regions": 1874,
-      "stale_recognition_regions": 0,
-      "quality_sha256": "52db694e0516c2371086988a1176f1ecf59b541bdc819170290b4163a9015726",
-      "database_bytes": 43819008,
-      "actual_app_started": false
-    },
-    "root_state_targeted": {
-      "command": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B -m pytest backend/tests/test_state_contract.py -q",
-      "result": "26 passed; bounded identity, stage, limits, owner-state/authority and route failures; inactive declaration retained",
-      "exit": 0
-    },
-    "root_state_cli": {
-      "command": "npm run check:state",
-      "exit": 0,
-      "fields": 21,
-      "mapped": 20,
-      "unknown": 1,
-      "progress": 140,
-      "total": 199,
-      "history_preserved": true,
-      "execution_declaration": "not_active_in_this_governance_goal",
-      "grants_execution_authority": false
-    },
-    "root_state_style": {
-      "ruff_check": 0,
-      "ruff_format_check": 0,
-      "git_diff_check": 0
-    },
-    "frontend": {
-      "command": "npm run check:frontend",
-      "exit": 0,
-      "log_sha256": "8eb998fe0815a54d3deaa9736e1d726103c2f7a51c514bdf73613cec6cd9a85b",
-      "coverage": "Unchanged frontend/runtime source; full required check reproduced in this source unit",
-      "result": "lint/typecheck,461tests in7files and productionbuild passed; existing chunk-size advisory remains"
-    },
-    "launcher": {
-      "command": "npm run check:launcher",
-      "exit": 0,
-      "log_sha256": "6f403a95447e7a5ecb65b104f03ef5c247906c687a1b60d3bf89a3dc0dacad69",
-      "coverage": "Unchanged frontend/runtime source; full required check reproduced in this source unit",
-      "result": "40tests passed"
-    },
-    "read_only_final_review_schema": {
-      "route": "guarded storage:data --print-app-data; exact matching batch catalog entry only",
-      "manifest_relative_to_real_data": "final-review/all-199-pages/final-review/manifest.json",
-      "database_relative_to_real_data": "final-review/all-199-pages/final-review/final-review.sqlite3",
-      "required_tables_present": [
-        "batches",
-        "items",
-        "revisions",
-        "artifact_revisions"
-      ],
-      "required_protection_triggers_present": [
-        "artifact_revisions_no_delete",
-        "artifact_revisions_no_update",
-        "final_review_revisions_no_delete",
-        "final_review_revisions_no_update"
-      ],
-      "required_columns_observed": true,
-      "target_item_verdict": "issues",
-      "target_item_revision": 2,
-      "method": "Direct sqlite mode=ro and query_only; no application/preflight function/engine/startup on actual data",
-      "effects": false
-    },
-    "read_only_actual_ocr": {
-      "provider": "tesseract",
-      "model_version": "tesseract 5.5.2",
-      "parameter_hash": "0bf0306f2ac9d3f4bcecf4376902ef6f1512c69722d2ee80322c2b1fe1a840eb",
-      "language": "jpn_vert",
-      "direction": "vertical",
-      "attempt_count": 12,
-      "generation_count_for_image": 1,
-      "generation_state": "active",
-      "method": "Direct sqlite mode=ro/query_only; installed CLI version/list-languages only",
-      "actual_image_ocr_calls": 0
-    },
-    "backend": {
-      "command": "npm run check:backend",
-      "exit": 0,
-      "passed": 1035,
-      "log_sha256": "7bca726a025119ae1652fd1279135300ade35e3f14e21c4ffa79d1851fbef2a2",
-      "evidence_owner": "Root",
-      "coverage": "Full source suite collected1035tests before4additional protection cases were added; Root final controlled suite covers all9including the4newcases. No product code changed after full-suite start; final distinct test coverage1039."
-    },
-    "controlled_final": {
-      "command": "guarded uv pytest backend/tests/test_controlled_recovery.py -q",
-      "exit": 0,
-      "passed": 9,
-      "log_sha256": "4ec02f452dae5d88e1266e0b1b3dac7e3be4a5236b51611c9c479abf0896ab65",
-      "evidence_owner": "Root",
-      "coverage": "Synthetic source fixtures only; no real image generation or clone/live recovery claim. Includes recalculated digest with removed protection, missing finalreview protection, ownerpending and stalefeedback failure-before-write."
-    },
-    "e2e": {
-      "command": "npm run test:e2e with supported installed Chrome and unique temporary synthetic data",
-      "exit": 0,
-      "passed": 6,
-      "log_sha256": "0f1320a20e0e3852658637084a0f51352e64822bb7a58a99aa1796a097184157",
-      "evidence_owner": "Root"
-    },
-    "root_review": {
-      "status": "source diff inspected",
-      "protected_boundaries": "Default behavior preserved; explicit singleton API preflight/startup/route/job binding; exact item pending only; no actual app/provider start",
-      "remaining": "Normal commit audit and fresh independent acceptance"
-    },
-    "root_state_final": {
-      "command": "npm run check:state and targeted state-contract pytest after final STATE update",
-      "exit": 0,
-      "passed": 26,
-      "fields": 21,
-      "mapped": 20,
-      "unknown": 1,
-      "progress": 140,
-      "total": 199,
-      "execution_declaration": "not_active_in_this_governance_goal"
-    },
-    "final_test_style": {
-      "ruff_check": 0,
-      "ruff_format_check": 0,
-      "git_diff_check": 0,
-      "file": "backend/tests/test_controlled_recovery.py"
-    },
-    "remote_preflight": {
-      "repository": "alalapi-0/manga-localizer",
-      "default_branch": "main",
-      "observed_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
-      "push_permission": true,
-      "protected": false,
-      "effective_branch_rules": [],
-      "fetch_exit": 0
-    },
-    "audit_ci": {
-      "command": "npm run audit:ci -- --base 1aa3fb8a80241bf7a533b13eeb08771a428f4839 --head 1c163511b4825e359e55d5d49f0a432bb69b8aaa",
-      "exit": 0,
-      "candidate_files": 241,
-      "index_blobs": 241,
-      "historical_blob_paths": 1614,
-      "live_content_reads": 238,
-      "inert_cursor_objects": 2,
-      "cursor_live_content_reads": 0,
-      "log_sha256": "4eaa42f4de06c19b0dda99d8d95ff0a2aa553a386a86eb6a1f7ea5c71b6dab4b",
-      "meaning": "Normal CI audit only; no release acceptance"
-    },
-    "original_preservation_after_source_checks": {
-      "exit": 0,
-      "protected_paths": 236,
-      "protected_tree_sha256": "ed0f340f42643f15f759cb81919d246e8e025bcc77ad8c69c9693af89f43af09",
-      "head_unchanged": true,
-      "index_unchanged": true,
-      "owned7_preimages_unchanged": true,
-      "cursor_read": false,
-      "method": "Same sorted compact path/hash/mode recipe as registration; exact baseline matched"
-    },
-    "e2e_teardown": {
-      "ports": [
-        18100,
-        15173
-      ],
-      "listeners_remaining": false,
-      "method": "Root loopback socket probes after completed E2E process"
-    },
-    "stage_d_root": {
-      "state_contract_tests": "26 passed; node scripts/external-uv.mjs run --frozen --offline --no-sync python -B -m pytest backend/tests/test_state_contract.py -q",
-      "state_cli": "valid21 fields,20mapped1unknown,140/199,inactive,grants_execution_authority:false",
-      "git_diff_check": 0,
-      "actual_verification": "PASS; all expected target effects, no schema/non-target/history/oldmedia/Git changes",
-      "code_verification_reuse": "9 unchanged installed implementation files remain byte-exact accepted Stage A; source backend/frontend/E2E and CI34239969045 acceptance reused. Only canonical state and sanitized registration changed.",
-      "normal_ci_audit": {
-        "exit_code": 0,
-        "base": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
-        "head": "eeda45ad7cb658e7aecab89d468425662c085898",
-        "coverage": "candidate241,index_blobs241,historical_blob_paths1617,live_content_reads238,inert_cursor_objects2,cursor_live_content_reads0",
-        "meaning": "Audit passed for full Stage A-D series; normal CI is not release acceptance",
-        "command": "npm run audit:ci -- --base 1aa3fb8a80241bf7a533b13eeb08771a428f4839 --head eeda45ad7cb658e7aecab89d468425662c085898"
-      }
-    }
-  },
-  "preserved_limits": {
-    "cloud_excluded": 17,
-    "remaining_hub_declarations": 22,
-    "actual_remaining_issues": 56,
-    "owner_pending": [
-      112,
-      24,
-      173
-    ],
-    "other_affected_examples": [
-      167,
-      192
-    ]
-  },
-  "reviews": {
-    "stage_a_judge": {
-      "agent": "/root/manga_page134_stage_a_judge_v1",
-      "role": "fresh read-only Judge",
-      "verdict": "PASS",
-      "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
-      "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
-      "evidence_origin": "Native collaboration final response; Root transcript registration, not writer self-assessment",
-      "checks": {
-        "semantic_files": 10,
-        "preimages_match": true,
-        "controlled_tests": 9,
-        "state_tests": 26,
-        "root_log_hashes_match": true,
-        "diff_check": 0
-      },
-      "scope": "Stage A source prerequisites only; no install, clone, actual recovery, owner approval or remote acceptance"
-    },
-    "stage_a_governor": {
-      "agent": "/root/hub_connection_governor",
-      "role": "read-only Governor",
-      "decision": "APPROVE",
-      "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
-      "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
-      "evidence_origin": "Native collaboration final decision after fresh Judge PASS",
-      "scope": "Normal source-main candidate+metadata delivery, then remote ancestry and CI verification. Stage B requires those prerequisites and a separate clone/install acceptance; no live effects accepted."
-    },
-    "stage_b_judge": {
-      "agent": "/root/manga_page134_stage_b_judge_v1",
-      "role": "fresh read-only Judge",
-      "verdict": "PASS",
-      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
-      "stage": "B",
-      "semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
-      "evidence_origin": "Native collaboration FINAL_ANSWER PASS; Root faithfully registers the independent result",
-      "artifact_root": "/private/var/folders/kt/x9ylq5615_39plzj52hnyvtc0000gn/T/manga-page134-stage-b-2sd22wj3",
-      "artifact_hashes": "Candidate and all registered artifact/script hashes match; exact identities remain in stage_b_candidate",
-      "checks": {
-        "readonly_verifier": "PASS",
-        "actual_databases_schemas_manifests_catalogs_unchanged": true,
-        "actual_media_unchanged": 2624,
-        "original_head_index_unchanged": true,
-        "protected_baseline_paths": 236,
-        "clone_complete_target_only_g4_g10_strict_pending": true,
-        "queues_empty": true,
-        "clone_completed_jobs": 4,
-        "clone_new_files": 10,
-        "non_target_rows_unchanged": true,
-        "tesseract_executable_language_hashes_match": true,
-        "clone_ocr_calls": 12,
-        "g7_independent_support_added_pixels": 10774,
-        "g7_support_removed_pixels": 0,
-        "g7_full_glyph_pixels_covered": 3337,
-        "separate_roi_boundary_pixels_preserved": 2
-      },
-      "scope": "Installed source and isolated-clone proof plus CAS-bound one-generation/one-ingest actual plan. All G8/G9/G10 checks and target-only strict pending required; no actual generation, Stage C effect, or owner approval occurred."
-    },
-    "stage_b_governor_registration_repair": {
-      "agent": "/root/hub_connection_governor",
-      "decision": "REQUEST_REPAIR",
-      "semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
-      "reason": "Fresh Judge result was communicated but not yet registered in reviews.stage_b_judge; register native result before the decision. Metadata-only repair; no clone/test/source re-review needed.",
-      "resolved_by": "reviews.stage_b_judge; Stage C remains unstarted"
-    },
-    "stage_b_governor": {
-      "agent": "/root/hub_connection_governor",
-      "role": "read-only Governor",
-      "decision": "APPROVE",
-      "stage": "B",
-      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
-      "semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
-      "evidence_origin": "Native collaboration FINAL_ANSWER APPROVE after registered fresh Judge PASS",
-      "scope": "Execute only the accepted Stage C plan with fresh preimages/CAS, one bounded loopback server, local Tesseract, one native image generation and one ingest. All existing visual checks, no other pages/owner approval/export. At most10 target new media and predicted table/column/row effects. Actual result requires fresh Stage D Judge/Governor before sanitized main delivery."
-    },
-    "stage_d_judge": {
-      "agent": "/root/manga_page134_stage_d_judge_v1",
-      "role": "fresh read-only Judge",
-      "verdict": "PASS",
-      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
-      "stage": "D",
-      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
-      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
-      "evidence_origin": "Native collaboration FINAL_ANSWER PASS; Root faithful result registration",
-      "independent_checks": [
-        "Exact candidate/contract/state semantic/artifact/script hashes match; dirty registration only excluded metadata",
-        "Readonly actual verifier PASS; target-only3completedjobs,12OCRcalls,1generation,1ingest,3newmedia",
-        "Schemas/FKs,199reviewrows,2624oldmedia,non-target rows,originalHEAD/index and installed Stage A protected",
-        "G8formallyrejected; noG9/G10/refresh/ownerapproval/secondgeneration",
-        "Both visual assessments and five common failures/two label differences retained",
-        "State valid,26tests PASS,inactive,140/56/3 and materially-new-plan recovery",
-        "Later left-mask pixel diagnosis reinforces failure without changing candidate/historicalG7review"
-      ],
-      "scope": "Truthful bounded failed-at-G8 effect receipt only. Does not accept image quality, Page134/owner/all-project completion, remote delivery or CI."
-    },
-    "stage_d_governor": {
-      "agent": "/root/hub_connection_governor",
-      "role": "read-only Governor",
-      "decision": "APPROVE",
-      "stage": "D",
-      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
-      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
-      "state_semantic_sha256": "fb77bc2eec5fd9ae0c24cb276f044a6d0c24f6f308df66962284633cdc413897",
-      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
-      "evidence_origin": "Native collaboration FINAL_ANSWER APPROVE after fresh Judge FINAL PASS registered",
-      "scope": "Only truthful bounded failed-at-G8 receipt and normal source-main delivery, remote ancestry and CI verification. No image-quality/Page134/owner/project/Goal completion accepted; no new data/G7/OCR/imagegen/ingest effects authorized."
-    }
-  },
-  "delivery": {
-    "status": "main_verified",
-    "previous_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
-    "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
-    "target_repository": "alalapi-0/manga-localizer",
-    "target_branch": "main",
-    "source_delivery_commit": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
-    "observed_remote_main": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
-    "candidate_ancestor_verified": true,
-    "ci_run": 34239969045,
-    "ci_url": "https://github.com/alalapi-0/manga-localizer/actions/runs/34239969045",
-    "ci_status": "success",
-    "jobs": {
-      "backend": "success",
-      "frontend": "success",
-      "e2e": "success"
-    },
-    "stage_d": {
-      "status": "accepted_pending_main_delivery",
-      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
-      "branch": "main",
-      "remote": "https://github.com/alalapi-0/manga-localizer",
-      "last_observed_remote_main": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
-      "ci": "pending for Stage D; Stage A CI34239969045 remains verified",
-      "receipt_identity": "This record names the already-existing candidate commit; containing receipt commit is recorded through native output/Hub later, avoiding self-reference."
-    }
-  },
-  "budget": {
-    "native_tokens": 11668221,
-    "native_seconds": 44458,
-    "coverage": "Latest available cumulative native Goal snapshot; cost/cap unavailable; no reset"
-  },
-  "contract_sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
+  "stage": "A",
+  "status": "stage_a_source_verified_pending_independent_review",
+  "baseline_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+  "governor_origin": "Native /root/hub_connection_governor inactive v2 TASK_CONTRACT plus three clarifications; not an execution grant",
   "target": {
     "page": 134,
     "project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
@@ -537,655 +16,7 @@
     "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
     "run_id": "final-review-7975117b-r2-a2"
   },
-  "contract_clarification": "Native Governor same-contract clarification: all10orderedchecks G8 only; existing guarded local OCR exactpage permitted without new/download/network/fallback provider; dormant queue service permitted with no worker/recovery/claim/poll.",
-  "stage_b_preparation": {
-    "status": "read-only source plan; not a clone proof or live effect",
-    "source_reader": "/root/manga_clone_gate_reader",
-    "gate_fixture_refs": [
-      "backend/tests/test_page_lineage.py:G4 reopen9584/9681,G5:519,G6:610,G7:4791,G9:4973",
-      "backend/tests/test_cloud_registration_api.py:93",
-      "backend/tests/test_typesets.py:82/138",
-      "backend/tests/test_final_reviews.py:870"
-    ],
-    "binding_rule": "Fresh mutation lineage runId/pageGenerationId/expectedSequence/actor and revisions after every operation; exact job lineage pages singleton. Refresh reads current item and batch CAS.",
-    "retention": "G4 reopen preserves source/translation strings and immutable history; clears current background/OCR reviews and maskdraft. New G6 attempts plus reviews, new G9 candidates/reviews bound to newG8 required.",
-    "ocr_prerequisite": "Read-only actual target generation contains12 prior attempts: tesseract5.5.2,jpn_vert,vertical,parameterhash0bf0306f2ac9d3f4bcecf4376902ef6f1512c69722d2ee80322c2b1fe1a840eb. Installed engine reports5.5.2 withjpn/jpn_vert available. Exact options/input/model file preimages still require StageB freeze; no provider substitution/download/network/fallback.",
-    "remaining": "Full isolated copied-media/database clone, exact job options and actual complete gate-chain proof not yet tested.",
-    "g9_clarification": {
-      "governor": "/root/hub_connection_governor",
-      "decision": "same-contract necessary local implementation; no revision",
-      "meaning": "Root may author six new Chinese candidates from current reviewed G6 Japanese within this Codex session; no translation API/model/service call. All existing G9 bindings/checks/new reviews required. Clone first; live still awaits Stage B acceptance."
-    }
-  },
-  "writer_release": {
-    "agent": "/root/manga_controlled_api_repair",
-    "status": "completed; no active descendant writer",
-    "source_hashes": {
-      "backend/src/manga_localizer/main.py": "ac158feeeed08579f8a3b002344c54421985fd0c3441cd32a3fed7dbb4bd4cfe",
-      "backend/src/manga_localizer/queue.py": "6830096e2334e8b87372771889398ca3e0315351554339f3efc547f5b3e06e93",
-      "backend/src/manga_localizer/services/projects.py": "2f16c499cd702f9b69579db0c98dd426ab781cfa15ccc7ea48df2283dc49e059",
-      "backend/src/manga_localizer/services/controlled_recovery.py": "cfd64fc6dc0b49f0d7b66e3deebf9ec78e2cef3c0ea3acc2363809555e2e477c",
-      "backend/tests/test_controlled_recovery.py": "4ffd1ed7b656751282873b8da860bdae5903dc6464f181374ba4c710b204c6e8"
-    }
-  },
-  "semantic_files": [
-    {
-      "path": ".agent/STATE.yaml",
-      "sha256": "8a6762d191c992c8b13285a22f3bbcd3ca10386ba4d740562cb1731633dea8a0",
-      "mode": 420
-    },
-    {
-      "path": "AGENTS.md",
-      "sha256": "2874ce219e9b871b140e98a527123fe5cb2db62976c891520544d4c463ab75ba",
-      "mode": 420
-    },
-    {
-      "path": "backend/src/manga_localizer/main.py",
-      "sha256": "ac158feeeed08579f8a3b002344c54421985fd0c3441cd32a3fed7dbb4bd4cfe",
-      "mode": 420
-    },
-    {
-      "path": "backend/src/manga_localizer/queue.py",
-      "sha256": "6830096e2334e8b87372771889398ca3e0315351554339f3efc547f5b3e06e93",
-      "mode": 420
-    },
-    {
-      "path": "backend/src/manga_localizer/services/controlled_recovery.py",
-      "sha256": "cfd64fc6dc0b49f0d7b66e3deebf9ec78e2cef3c0ea3acc2363809555e2e477c",
-      "mode": 420
-    },
-    {
-      "path": "backend/src/manga_localizer/services/projects.py",
-      "sha256": "2f16c499cd702f9b69579db0c98dd426ab781cfa15ccc7ea48df2283dc49e059",
-      "mode": 420
-    },
-    {
-      "path": "backend/tests/test_controlled_recovery.py",
-      "sha256": "4ffd1ed7b656751282873b8da860bdae5903dc6464f181374ba4c710b204c6e8",
-      "mode": 420
-    },
-    {
-      "path": "backend/tests/test_state_contract.py",
-      "sha256": "0bc800a3b5528e4c641fece77c1d6d91a9ad77913616488ed37439ba0ce9aa78",
-      "mode": 420
-    },
-    {
-      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
-      "sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
-      "mode": 420
-    },
-    {
-      "path": "scripts/check_state.py",
-      "sha256": "b471830ad93b0cdd39a424232c6d11a468cfb0d6ffa7f77890ff513d8cb16ec5",
-      "mode": 420
-    }
-  ],
-  "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
-  "semantic_hash_recipe": "SHA256 of UTF-8 compact sorted-key JSON semantic_files list, ordered by path. Exact whole source/state/contract bytes; registration/check/review/delivery metadata excluded. No product/state/control semantic edits after freeze without new exact candidate acceptance.",
-  "metadata_boundary": "This page134-recovery.json record is evidence registration and review/delivery metadata, excluded to avoid self-hashing; contract is included in semantic_files. Source preimages and original preservation facts remain review inputs.",
-  "candidate_commit": "1c163511b4825e359e55d5d49f0a432bb69b8aaa",
-  "stage_b": {
-    "status": "root_verified_pending_independent_review",
-    "artifact_root": "/private/var/folders/kt/x9ylq5615_39plzj52hnyvtc0000gn/T/manga-page134-stage-b-2sd22wj3",
-    "preimages_sha256": "404b042c2dc62e40b1cd8075f4493bd48d503c0aff0e399f57ced716781faa4b",
-    "prepare_script_sha256": "207058237a17d8066cc53f62d37910d84d6e6820f8a9d37767b0a9d3a8c9f44d",
-    "original_source_preimages_verified": true,
-    "media_counts": {
-      "project": 1460,
-      "review": 1164
-    },
-    "copied_media_count": 26,
-    "expected_startup_mutations": [],
-    "actual_data_effects": false,
-    "source_installation": "exact approved10files installed; original HEAD/index/non-owned236-path set preserved",
-    "clone_proof": "complete G4-G10 and strict pending; synthetic G8 only",
-    "live_execution_plan": "pending fresh Judge/Governor",
-    "clone_proof_sha256": "81eefd31f21babb5875d9debaa69800231da557932b773182b38ddc1636add0e",
-    "clone_verification_sha256": "f9d7ef8aaf79684b28439061d7334ab7f91e12692d4c395e3ae7c8c3a9cc89ae",
-    "script_hashes": {
-      "manga-page134-stage-b-prepare.py": "207058237a17d8066cc53f62d37910d84d6e6820f8a9d37767b0a9d3a8c9f44d",
-      "manga-page134-clone.py": "e780a9464c7a90214fb921857e72d1600f857eac5ed5769f8cec2f32748526ad",
-      "manga-page134-clone-verify.py": "ac725ed210c955e222e5b7e92e358adb45e8864e0a7930dd2c7d626313fbcbc9"
-    },
-    "state_before_sha256": "8a6762d191c992c8b13285a22f3bbcd3ca10386ba4d740562cb1731633dea8a0",
-    "state_after_sha256": "8ef13d7df7452131029bcaaac18d46a50608b3836f777787ea881eef3a35436b",
-    "root_verification": {
-      "project_schema_integrity_fk_and_actual_rows_unchanged": true,
-      "non_target_project_images_unchanged": 157,
-      "new_jobs": {
-        "ocr": "completed",
-        "mask": "completed",
-        "cloud-full-page-repair": "completed",
-        "typeset": "completed"
-      },
-      "review_schema_integrity_fk_and_actual_rows_unchanged": true,
-      "non_target_review_items_unchanged": 198,
-      "project_actual_media_unchanged": 1460,
-      "review_actual_media_unchanged": 1164,
-      "original_code_installation_and_git_preserved": true,
-      "baseline_copied_media_unchanged": 26
-    },
-    "actual_corpus_counts": {
-      "approved": 140,
-      "issues": 56,
-      "pending": 3
-    },
-    "clone_only_counts": {
-      "approved": 140,
-      "issues": 55,
-      "pending": 4
-    },
-    "ocr_runtime": {
-      "provider": "tesseract",
-      "version": "tesseract 5.5.2",
-      "executable": "/opt/homebrew/Cellar/tesseract/5.5.2/bin/tesseract",
-      "executable_sha256": "6855d30ee1e9e97de11a58624973d2c7eb115a050df64fc3ba88b4077e153997",
-      "language": "jpn_vert",
-      "traineddata": "/opt/homebrew/Cellar/tesseract-lang/4.1.0/share/tessdata/jpn_vert.traineddata",
-      "traineddata_sha256": "bf1e2640954691797e2dc14f38533e601b59ee37958698ae0f0b81dc6f09c71b",
-      "clone_image_calls": 12,
-      "job_options": {
-        "concurrency": 1
-      },
-      "network_download_fallback_allowed": false
-    }
-  },
-  "stage_b_candidate": {
-    "source_main": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
-    "source_stage_a_semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
-    "source_files": [
-      {
-        "path": ".agent/STATE.yaml",
-        "sha256": "8ef13d7df7452131029bcaaac18d46a50608b3836f777787ea881eef3a35436b",
-        "mode": 420
-      },
-      {
-        "path": "AGENTS.md",
-        "sha256": "2874ce219e9b871b140e98a527123fe5cb2db62976c891520544d4c463ab75ba",
-        "mode": 420
-      },
-      {
-        "path": "backend/src/manga_localizer/main.py",
-        "sha256": "ac158feeeed08579f8a3b002344c54421985fd0c3441cd32a3fed7dbb4bd4cfe",
-        "mode": 420
-      },
-      {
-        "path": "backend/src/manga_localizer/queue.py",
-        "sha256": "6830096e2334e8b87372771889398ca3e0315351554339f3efc547f5b3e06e93",
-        "mode": 420
-      },
-      {
-        "path": "backend/src/manga_localizer/services/controlled_recovery.py",
-        "sha256": "cfd64fc6dc0b49f0d7b66e3deebf9ec78e2cef3c0ea3acc2363809555e2e477c",
-        "mode": 420
-      },
-      {
-        "path": "backend/src/manga_localizer/services/projects.py",
-        "sha256": "2f16c499cd702f9b69579db0c98dd426ab781cfa15ccc7ea48df2283dc49e059",
-        "mode": 420
-      },
-      {
-        "path": "backend/tests/test_controlled_recovery.py",
-        "sha256": "4ffd1ed7b656751282873b8da860bdae5903dc6464f181374ba4c710b204c6e8",
-        "mode": 420
-      },
-      {
-        "path": "backend/tests/test_state_contract.py",
-        "sha256": "0bc800a3b5528e4c641fece77c1d6d91a9ad77913616488ed37439ba0ce9aa78",
-        "mode": 420
-      },
-      {
-        "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
-        "sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
-        "mode": 420
-      },
-      {
-        "path": "scripts/check_state.py",
-        "sha256": "b471830ad93b0cdd39a424232c6d11a468cfb0d6ffa7f77890ff513d8cb16ec5",
-        "mode": 420
-      }
-    ],
-    "original_preimages_sha256": "404b042c2dc62e40b1cd8075f4493bd48d503c0aff0e399f57ced716781faa4b",
-    "clone_proof_sha256": "81eefd31f21babb5875d9debaa69800231da557932b773182b38ddc1636add0e",
-    "clone_verification_sha256": "f9d7ef8aaf79684b28439061d7334ab7f91e12692d4c395e3ae7c8c3a9cc89ae",
-    "scripts": {
-      "manga-page134-stage-b-prepare.py": "207058237a17d8066cc53f62d37910d84d6e6820f8a9d37767b0a9d3a8c9f44d",
-      "manga-page134-clone.py": "e780a9464c7a90214fb921857e72d1600f857eac5ed5769f8cec2f32748526ad",
-      "manga-page134-clone-verify.py": "ac725ed210c955e222e5b7e92e358adb45e8864e0a7930dd2c7d626313fbcbc9"
-    },
-    "execution_plan": {
-      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
-      "activation_ref": "owner-goal:ALL-PROJECTS-CODEX-GOVERNANCE-V1",
-      "target": {
-        "page": 134,
-        "project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
-        "batch_id": "a734c596-faae-4875-ae61-f694a3c26d4a",
-        "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
-        "image_id": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
-        "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
-        "run_id": "final-review-7975117b-r2-a2"
-      },
-      "entry": "create_controlled_recovery_app with explicit original workspace/review binding and expected schema; local loopback API only",
-      "api_base": "http://127.0.0.1:18134",
-      "expected_startup_mutations": [],
-      "initial_cas": {
-        "project_revision": 9244,
-        "image_revision": 50,
-        "region_revision": 4,
-        "next_sequence": 63,
-        "item_revision": 2,
-        "batch_revision": 485,
-        "project_queued_running": 0
-      },
-      "project_schema_sha256": "74461a8461595f18b85a02cab5841ddac5aa7cd4caae91bd7d10c50ff3ef84c5",
-      "g4": {
-        "region_id": "4f47ead4-54ed-430a-a037-981215c73004",
-        "rect": [
-          960,
-          25,
-          100,
-          365
-        ],
-        "native_reopen": "exact page with current revision/sequence; retain returned four heuristic hits and separately measured target glyph geometry"
-      },
-      "g5": "Revalidate the same6 eligible regions against the actual quality plate; current illustration/character evidence and exact source geometry, never copy old acceptance",
-      "g6": {
-        "provider": "tesseract",
-        "version": "tesseract 5.5.2",
-        "executable": "/opt/homebrew/Cellar/tesseract/5.5.2/bin/tesseract",
-        "executable_sha256": "6855d30ee1e9e97de11a58624973d2c7eb115a050df64fc3ba88b4077e153997",
-        "language": "jpn_vert",
-        "traineddata": "/opt/homebrew/Cellar/tesseract-lang/4.1.0/share/tessdata/jpn_vert.traineddata",
-        "traineddata_sha256": "bf1e2640954691797e2dc14f38533e601b59ee37958698ae0f0b81dc6f09c71b",
-        "clone_image_calls": 12,
-        "job_options": {
-          "concurrency": 1
-        },
-        "network_download_fallback_allowed": false
-      },
-      "g7": {
-        "recipe": [
-          {
-            "regionId": "10304cce-1fe3-4ac4-8119-69007d00992b",
-            "maskMode": "text",
-            "polygon": null,
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": []
-            }
-          },
-          {
-            "regionId": "4f47ead4-54ed-430a-a037-981215c73004",
-            "maskMode": "text",
-            "polygon": [
-              [
-                960,
-                25
-              ],
-              [
-                1060,
-                25
-              ],
-              [
-                1060,
-                275
-              ],
-              [
-                960,
-                275
-              ]
-            ],
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": [
-                {
-                  "mode": "add",
-                  "radius": 8,
-                  "points": [
-                    [
-                      1018,
-                      239
-                    ],
-                    [
-                      1018,
-                      374
-                    ]
-                  ]
-                }
-              ]
-            }
-          },
-          {
-            "regionId": "7bf9f4a5-ba93-4641-8621-e0a41c5f6bb1",
-            "maskMode": "text",
-            "polygon": null,
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": []
-            }
-          },
-          {
-            "regionId": "955be884-75ba-42ad-a27d-49e958c88cb5",
-            "maskMode": "text",
-            "polygon": null,
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": []
-            }
-          },
-          {
-            "regionId": "d4fbd278-52d3-4f47-a50e-c66ff54ac334",
-            "maskMode": "text",
-            "polygon": null,
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": []
-            }
-          },
-          {
-            "regionId": "f148f157-c867-4bea-8177-571fb906cd91",
-            "maskMode": "text",
-            "polygon": null,
-            "padding": 2,
-            "dilation": 1,
-            "feather": 1,
-            "polarity": "dark",
-            "maskEdits": {
-              "version": 1,
-              "strokes": []
-            }
-          }
-        ],
-        "expected_mask_sha256": "f06ff69f19dd2ef71555bcdfab0a7e851006e05eae02f12f8ebf3c057404c28f",
-        "quality_sha256": "52db694e0516c2371086988a1176f1ecf59b541bdc819170290b4163a9015726",
-        "measured_glyph_pixels": 3337,
-        "require_uncovered_glyph_pixels": 0,
-        "support_added_xywh": [
-          2018,
-          465,
-          37,
-          302
-        ],
-        "support_added_pixels": 10774,
-        "support_removed_pixels": 0,
-        "require_all_existing_coverage_collateral_checks": true
-      },
-      "g8": {
-        "route": "one built-in image_gen through native cloud:image; necessary quality/mask upload under existing owner authority",
-        "native_generations_max": 1,
-        "native_ingests_max": 1,
-        "reuse_old_raw": false,
-        "normalization_profile": "canonical-whole-frame-normalization-v1",
-        "outside_mask_changed_pixels": 0,
-        "visual_checks": "all10 existing ordered checks; actual source/quality/mask/newraw/strict composite visually reviewed",
-        "on_failure": "retain exact rejected candidate/failure; no second generation, no G9, no automatic approval or export"
-      },
-      "g9": {
-        "route": "Root local translation candidates; no translation API or additional model",
-        "candidates": [
-          {
-            "region_id": "4f47ead4-54ed-430a-a037-981215c73004",
-            "source_text": "まさかー",
-            "translation_text": "难道——"
-          },
-          {
-            "region_id": "f148f157-c867-4bea-8177-571fb906cd91",
-            "source_text": "どこだ？",
-            "translation_text": "在哪儿？"
-          },
-          {
-            "region_id": "d4fbd278-52d3-4f47-a50e-c66ff54ac334",
-            "source_text": "あそこだ",
-            "translation_text": "在那边。"
-          },
-          {
-            "region_id": "955be884-75ba-42ad-a27d-49e958c88cb5",
-            "source_text": "彼らは",
-            "translation_text": "他们是"
-          },
-          {
-            "region_id": "10304cce-1fe3-4ac4-8119-69007d00992b",
-            "source_text": "プレイヤーか！？",
-            "translation_text": "玩家吗！？"
-          },
-          {
-            "region_id": "7bf9f4a5-ba93-4641-8621-e0a41c5f6bb1",
-            "source_text": "よくみえるな",
-            "translation_text": "你看得真清楚啊。"
-          }
-        ],
-        "bind": "fresh G6/G8/source/context/region/state checksums; new candidate and all existing G9 checks/reviews/terminal"
-      },
-      "g10": {
-        "options": {},
-        "binding": "new G9 terminal, G8 clean plate, current installed font/style/layout checksums; all actual visual checks before acceptance"
-      },
-      "refresh": {
-        "only_item": "7975117b-c953-4ac4-847e-5249d9521a2c",
-        "required_verdict": "strict pending",
-        "owner_approval": false,
-        "fresh_item_batch_cas": true
-      },
-      "expected_effect_set": {
-        "project": {
-          "images": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "revision",
-              "updated_at"
-            ]
-          },
-          "job_items": {
-            "added": 4,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "jobs": {
-            "added": 4,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_cloud_full_page_candidates": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_cloud_full_page_reviews": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_generations": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "next_sequence"
-            ]
-          },
-          "page_lineage_events": {
-            "added": 46,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_mask_artifacts": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_mask_drafts": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "parent_checksum",
-              "recipe",
-              "state_checksum",
-              "updated_at"
-            ]
-          },
-          "page_mask_reviews": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_translation_reviews": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_typeset_candidates": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "page_typeset_reviews": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "projects": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "revision",
-              "updated_at"
-            ]
-          },
-          "region_ocr_attempts": {
-            "added": 12,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "region_translation_candidates": {
-            "added": 6,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "region_translation_reviews": {
-            "added": 6,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "revisions": {
-            "added": 38,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "text_regions": {
-            "added": 0,
-            "changed": 20,
-            "removed": 0,
-            "changed_columns": [
-              "background_reviewer",
-              "height",
-              "ocr_review",
-              "ocr_reviewer",
-              "recognition",
-              "revision",
-              "translation_provider",
-              "translation_text",
-              "updated_at"
-            ]
-          }
-        },
-        "review": {
-          "artifact_revisions": {
-            "added": 2,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          },
-          "batches": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "revision",
-              "updated_at"
-            ]
-          },
-          "items": {
-            "added": 0,
-            "changed": 1,
-            "removed": 0,
-            "changed_columns": [
-              "artifact_checksum",
-              "artifact_revision",
-              "evidence_digest",
-              "evidence_json",
-              "issue_codes",
-              "repair_handoff_json",
-              "reviewed_at",
-              "revision",
-              "snapshot_path",
-              "strict_evidence",
-              "thumbnail_checksum",
-              "thumbnail_path",
-              "updated_at",
-              "verdict"
-            ]
-          },
-          "revisions": {
-            "added": 1,
-            "changed": 0,
-            "removed": 0,
-            "changed_columns": []
-          }
-        }
-      },
-      "expected_new_media_count": 10,
-      "new_media_locations": "only target generation lineage masks/cloud/typesets and target item images/r000002; no old media replacement",
-      "protection": "same whole-table immutable-row/non-target comparisons and all2624 media hashes plus original source/Git CAS; no schema changes",
-      "shutdown": "stop exact Root restricted server/session; no workers, no queue remains",
-      "restoration": "only exact registered target/newmedia postimage CAS, never whole DB/checkout restore",
-      "real_status": "not_started"
-    }
-  },
-  "stage_b_candidate_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
-  "stage_b_candidate_hash_recipe": "Compact sorted-key UTF8 JSON of stage_b_candidate only; review/decision/delivery metadata excluded. Source files, preimages, clone proof, checks and exact bounded live plan included; no self-hash.",
-  "accepted_execution_plan": {
-    "judge": "PASS",
-    "governor": "APPROVE",
-    "semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f"
-  },
+  "profile": "page134_g7_material_remask_v2",
   "activation_ref": "owner-goal:ALL-PROJECTS-CODEX-GOVERNANCE-V1",
   "limits": {
     "page_slots": 1,
@@ -1196,10 +27,6 @@
     "background_worker_allowed": false
   },
   "effects": [
-    "g4_reopen",
-    "g4_regions",
-    "g5_classification",
-    "g6_source_review",
     "g7_mask",
     "g8_native_generation",
     "g8_native_ingest",
@@ -1207,22 +34,35 @@
     "g10_typeset",
     "final_review_refresh"
   ],
-  "stage_c": {
-    "status": "stopped_after_actual_g8_rejection",
-    "artifact_root": "/private/var/folders/kt/x9ylq5615_39plzj52hnyvtc0000gn/T/manga-page134-stage-b-2sd22wj3/actual",
-    "driver": "/tmp/manga-page134-live.py",
-    "driver_sha256": "bb725985e93b24d440bf4df3d2720b2d639ae845fec9f8ef2a75e8c83574b081",
-    "preflight": {
-      "readonly_full_preimage_verifier": "PASS; Root reproduced after Stage B Judge, immediately before Stage C activation",
-      "actual_db_schema_manifest_catalog_and2624media": "unchanged",
-      "original_head_index_and_nonowned_files": "unchanged",
-      "engine_traineddata_hashes": "matched",
-      "state_preimage_sha256": "8ef13d7df7452131029bcaaac18d46a50608b3836f777787ea881eef3a35436b",
-      "observed_at": "2026-09-08T15:43:04.647576+00:00"
+  "effect_budget": {
+    "prior_receipt": {
+      "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
     },
-    "actual_generation_calls": 1,
-    "actual_ingest_calls": 1,
-    "outcome": "G4-G7 corrected and accepted; new actual G8 rejected, no G9/G10/refresh",
+    "prior": {
+      "generation": 1,
+      "ingest": 1
+    },
+    "additional": {
+      "generation": 1,
+      "ingest": 1
+    },
+    "cumulative": {
+      "generation": 2,
+      "ingest": 2
+    }
+  },
+  "prior_v1": {
+    "receipt": {
+      "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+    },
+    "registration_blob_sha256": "e53e7c0bf636be6357af8947cc7f4d203b39149b698fc1556531b3101887cd08",
+    "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
+    "actual_outcome": "G8 formally rejected; noG9/G10/refresh; 1nativegeneration/1ingest/12localOCR; all199reviewrows and2624oldmedia unchanged",
+    "actual_artifact_root": "/private/var/folders/kt/x9ylq5615_39plzj52hnyvtc0000gn/T/manga-page134-stage-b-2sd22wj3/actual",
     "recovery_point": {
       "project_revision": 9267,
       "image_revision": 73,
@@ -1231,218 +71,311 @@
       "batch_revision": 485,
       "queued_running": 0
     },
-    "candidate_id": "0a0ef31a-5690-5ee5-bc00-13a90d149404",
-    "raw_sha256": "6278a800549fcae6c476b6690920fc7e92e13dd215b16f5458ca765c479353ea",
-    "normalized_sha256": "b53d87d4c7b094d655484c2159cc7061aed940ba4a4c340e14a2f6b1b4c1fbe7",
-    "actual_counts": {
-      "approved": 140,
-      "issues": 56,
-      "pending": 3
-    },
-    "new_media_count": 3,
-    "verification": "Root full immutable-row/schema/FK/non-target/media/Git verification PASS; actual image quality FAIL",
-    "next_effect": "None under exhausted one-generation Stage C plan; retain current G4-G7 and failed raw/review. After Stage D delivery, diagnose left mask/composite alignment/coverage using retained bytes before any materially new accepted plan."
-  },
-  "stage_d_candidate": {
-    "stage_b_accepted_semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
-    "source_main": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
-    "contract_sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
     "state_semantic_sha256": "fb77bc2eec5fd9ae0c24cb276f044a6d0c24f6f308df66962284633cdc413897",
-    "state_omitted_metadata": [
-      "delivery",
-      "current_work.next_action",
-      "all_projects_governance.candidate_status",
-      "all_projects_governance.next_action",
-      "all_projects_governance.budget"
+    "history": "All v1 A/B/D candidates, reviews, source installation and failure details remain in exact Git receipt; earlier a1/a2 not reset",
+    "delivery": {
+      "status": "main_verified",
+      "observed_remote_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "candidate_ancestor_verified": true,
+      "ci_run": 34249787776,
+      "ci_url": "https://github.com/alalapi-0/manga-localizer/actions/runs/34249787776",
+      "ci_status": "success",
+      "jobs": {
+        "backend": "success",
+        "frontend": "success",
+        "e2e": "success"
+      }
+    }
+  },
+  "original": {
+    "root": "/Users/alalapi/PycharmProjects/manga-localizer",
+    "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+    "branch": "main",
+    "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
+    "protected_paths_recipe": "Prior main1aa installation.json baseline_files union install_files plus delivery/installation_delivery_review/installation_governor/installation_judge; Cursor excluded without read",
+    "protected_paths_count": 236,
+    "protected_tree_sha256": "ed0f340f42643f15f759cb81919d246e8e025bcc77ad8c69c9693af89f43af09",
+    "baseline_ref": {
+      "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+    },
+    "closed_v1_state_sha256": "98e397e5d362ac675e3a777a1f0980d0e14cc675e9bd53732ac8679a83bc85db",
+    "closed_v1_registration_sha256": "c87d2d5a533d55e1a612094e259dcc9da0a180ac16eb062f77b0cc4ea4f715a3",
+    "closure_metadata_only_state_semantic_unchanged": true,
+    "git_mutation": false
+  },
+  "source_preimages": {
+    ".agent/STATE.yaml": {
+      "sha256": "b8b693e67c2150aed9dcc6db89cb6204bad3d0101b4d00195039f3d02a605ffa",
+      "mode": 420
+    },
+    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md": {
+      "sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
+      "mode": 420
+    },
+    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json": {
+      "sha256": "e53e7c0bf636be6357af8947cc7f4d203b39149b698fc1556531b3101887cd08",
+      "mode": 420
+    },
+    "scripts/check_state.py": {
+      "sha256": "b471830ad93b0cdd39a424232c6d11a468cfb0d6ffa7f77890ff513d8cb16ec5",
+      "mode": 420
+    },
+    "backend/tests/test_state_contract.py": {
+      "sha256": "0bc800a3b5528e4c641fece77c1d6d91a9ad77913616488ed37439ba0ce9aa78",
+      "mode": 420
+    }
+  },
+  "checks": {
+    "storage": {
+      "command": "npm run storage:check",
+      "exit": 0,
+      "result": "Existing guarded backend/models/frontend/project-data routes verified unchanged"
+    },
+    "native_ownership": {
+      "task_id": "01a07ef7-735b-7270-9c21-3347e1232b5a",
+      "scope": "Root owns source five files; no descendant writer, known historical Manga tasks not resumed; original source metadata closure CAS matched; preserve exact existing-file preimages"
+    },
+    "original_pending_delivery_coverage": {
+      "pending_paths": 85,
+      "installed_union_paths": 89,
+      "same_bytes_type_mode": 88,
+      "deleted_both": [
+        ".agent/STATE.md"
+      ],
+      "source_clean_head": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "source_head_blob_matches": 88,
+      "source_manifest_sha256": "0ee2ed7952b7bab3ff96c72985d1b5f2f1903f5f971cf935faaa99f31bcae29f",
+      "independent_reader": "/root/anime_state_onboarding_reader",
+      "root_verification": "Each frozen original pending and v1 installed path matched source; Root matched source file bytes to exact head blobs and verified clean tree; original Git remains unchanged",
+      "scope": "Only the frozen explicit non-Cursor list; no claim for ignored private real media or unlisted content"
+    },
+    "contract_draft_state": {
+      "command": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B scripts/check_state.py",
+      "exit": 0,
+      "fields": 21,
+      "mapped": 20,
+      "unknown": 1,
+      "progress": 140,
+      "total": 199,
+      "execution": "inactive",
+      "grants_execution_authority": false,
+      "diff_check_exit": 0
+    },
+    "root_source": {
+      "state_tests": {
+        "command": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B -m pytest backend/tests/test_state_contract.py -o addopts='' -q",
+        "exit": 0,
+        "passed": 88,
+        "warning": "Existing Starlette httpx deprecation; no dependency change"
+      },
+      "controlled_tests": {
+        "command": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B -m pytest backend/tests/test_state_contract.py backend/tests/test_controlled_recovery.py -q",
+        "exit": 0,
+        "passed": 95,
+        "coverage": "86state+9controlled before Root strengthened2additionalstatecases; finalstate88 rerun, totaldistinct97. Controlled source/tests unchanged."
+      },
+      "ruff": {
+        "check_exit": 0,
+        "format_check_exit": 0,
+        "paths": [
+          "scripts/check_state.py",
+          "backend/tests/test_state_contract.py"
+        ]
+      },
+      "state_cli": {
+        "exit": 0,
+        "fields": 21,
+        "mapped": 20,
+        "unknown": 1,
+        "progress": 140,
+        "total": 199,
+        "execution": "inactive",
+        "grants_execution_authority": false
+      },
+      "diff_check_exit": 0
+    },
+    "unchanged_evidence_reuse": {
+      "git_base": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "source_changes": "Only state validator, its synthetic tests, sole STATE, exact contract and registration. No backend application, frontend, E2E, runtime/dependency or schema changes.",
+      "full_backend": "CI34249787776 backend success at baseline; prior local full1035 + final4protection cases documented in v1 receipt. New state tests independently reproduced.",
+      "frontend": "CI34249787776 frontend success; v1 local lint/typecheck461tests/build allpass; unchanged files.",
+      "e2e": "CI34249787776 E2E success; v1 local6E2E passed. Unchanged application/launcher/fixtures.",
+      "requirement": "New source main delivery still requires complete CI; no skipped/disabled check."
+    },
+    "original_stage_a_preservation": {
+      "paths_checked": 89,
+      "unchanged_head_files": 86,
+      "registered_v1_closure_metadata": 2,
+      "deleted_state_absent": true,
+      "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+      "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
+      "result": "PASS; no v2 original mutation; all raw media/DB out of this source-only scope"
+    }
+  },
+  "diagnosis": {
+    "v1_strict_recomposition_mismatch": 0,
+    "v1_outside_mask_changed": 0,
+    "v1_three_unmasked_roi_best_shift": [
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        0,
+        0
+      ]
     ],
-    "artifact_root": "/private/var/folders/kt/x9ylq5615_39plzj52hnyvtc0000gn/T/manga-page134-stage-b-2sd22wj3/actual",
-    "artifacts": {
-      "activation.json": "31f34389068dae31165bce8c54c0d12f9d9bc58995306957417367da8403a0f6",
-      "server-proof.json": "91b72f7cab47dc16372ac937a61d615cda7171c0d6642696499ad106daf5da4c",
-      "live-proof.json": "52d71aab59f32d70c135650cf76cfba67acff332cf2775d241dbaf587d710bbe",
-      "ocr-observations.json": "a3e3351ccc7d0acca4f47b6d1d2fb4833d22fd7d024b71042aa7571030b3bcd8",
-      "g7-visual-review.json": "097b5cbad063055d0d81b90e0bf06368037f1a8d717e22f49faab6ea2ec6405d",
-      "native-generation.json": "a6d7855078b4bd5e4b22a3f1e0c12f7d09419bfe3b67e1bbc52c9f0a6f4b0894",
-      "g8-measurement.json": "da3703db18478358ea92be69c6cc71c27c0541d1d4c875afa077e3180ffc9f8b",
-      "g8-visual-review.json": "1a1c39d85170c3f3f9f02bf425685e7e390baa094b07c2f4eaaff80339f58797",
-      "independent-g8-visual-read.json": "22e9e841bd56105b9b4d396b342b70941cc578b8dade903d5ff647f699be434d",
-      "recovery-point.json": "50c2e79f38b6c17a1ed310aa928fdf5efdca6240f8667ac76b23d806639babcd",
-      "live-verification.json": "e6249f877a9c44b8ff625b6facd1c7d4acf97a8ec8e040911d47c4f83cd4ba77"
+    "meaning": "Retained original pixels in left glyph/halo/internal holes cause visible composite defects; measurements are historical diagnosis, not future raw quality predictions",
+    "method": "Existing text recipe plus exact small add strokes, no support removal or G0-G6/OCR changes",
+    "v1_visual_assessments": "Preserve root and independent reader, including five common failures and two differing labels; neither accepts G8"
+  },
+  "contract_revision": {
+    "candidate": {
+      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v2",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+      "sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
+      "prior_receipt": {
+        "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+        "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+        "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+      }
     },
-    "scripts": {
-      "/tmp/manga-page134-live.py": "bb725985e93b24d440bf4df3d2720b2d639ae845fec9f8ef2a75e8c83574b081",
-      "/tmp/manga-page134-live-verify.py": "64d8cb18a18bce9dc19140291de156e6bb37219a99585c84f3f21a3ba406e7c4",
-      "/tmp/manga-page134-measure-live-mask.py": "725132c75d61a652fd537f1f2a10b2f2e61c7fd2b042654a0cac9fda22bf1d65"
-    },
-    "effects": {
-      "project": {
-        "images": {
-          "added": 0,
-          "changed": 1,
-          "removed": 0,
-          "changed_columns": [
-            "revision",
-            "updated_at"
-          ]
-        },
-        "job_items": {
-          "added": 3,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "jobs": {
-          "added": 3,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "page_cloud_full_page_candidates": {
-          "added": 1,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "page_cloud_full_page_reviews": {
-          "added": 1,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "page_generations": {
-          "added": 0,
-          "changed": 1,
-          "removed": 0,
-          "changed_columns": [
-            "next_sequence"
-          ]
-        },
-        "page_lineage_events": {
-          "added": 29,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "page_mask_artifacts": {
-          "added": 1,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "page_mask_drafts": {
-          "added": 0,
-          "changed": 1,
-          "removed": 0,
-          "changed_columns": [
-            "parent_checksum",
-            "recipe",
-            "state_checksum",
-            "updated_at"
-          ]
-        },
-        "page_mask_reviews": {
-          "added": 1,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "projects": {
-          "added": 0,
-          "changed": 1,
-          "removed": 0,
-          "changed_columns": [
-            "revision",
-            "updated_at"
-          ]
-        },
-        "region_ocr_attempts": {
-          "added": 12,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "revisions": {
-          "added": 23,
-          "changed": 0,
-          "removed": 0,
-          "changed_columns": []
-        },
-        "text_regions": {
-          "added": 0,
-          "changed": 20,
-          "removed": 0,
-          "changed_columns": [
-            "background_reviewer",
-            "height",
-            "ocr_review",
-            "ocr_reviewer",
-            "recognition",
-            "revision",
-            "updated_at"
-          ]
-        }
+    "status": "effective_stage_a_only",
+    "reviews": {
+      "judge": {
+        "agent": "/root/manga_page134_v2_contract_judge",
+        "verdict": "REVISION_PASS",
+        "semantic_sha256": "aa0df5b1f960f403604e1b97322ef17619b5050647eb3a8bc6f2d6a5ae1e8ddc",
+        "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
+        "evidence_origin": "Native fresh independent Judge FINAL_ANSWER; hashes reproduced, bounded cumulative history/target/quality/authority preserved",
+        "scope": "Inactive contract revision only; not Stage A source acceptance or any actual effect"
       },
-      "review": {}
+      "governor": {
+        "agent": "/root/hub_connection_governor",
+        "decision": "REVISE_TASK",
+        "revision_effective": true,
+        "semantic_sha256": "aa0df5b1f960f403604e1b97322ef17619b5050647eb3a8bc6f2d6a5ae1e8ddc",
+        "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
+        "evidence_origin": "Native Governor FINAL_ANSWER after registered fresh REVISION_PASS",
+        "scope": "Effective contract permits inactive Stage A implementation/verification only; no code acceptance, install/clone or actual effects"
+      }
     },
-    "preservation": {
-      "project_schema_integrity_fk": true,
-      "non_target_project_images_unchanged": 157,
-      "new_jobs": {
-        "ocr": "completed",
-        "mask": "completed",
-        "cloud-full-page-repair": "completed"
-      },
-      "review_schema_integrity_fk": true,
-      "non_target_review_items_unchanged": 198,
-      "project_old_media_unchanged": 1460,
-      "review_old_media_unchanged": 1164,
-      "original_code_installation_and_git_preserved": true,
-      "startup_no_mutation_worker_stopped": true,
-      "actual_ocr_calls": 12,
-      "new_raw_ingests": 1,
-      "actual_native_generation_calls": 1,
-      "native_raw_immutable": true
-    },
-    "actual_counts": {
-      "approved": 140,
-      "issues": 56,
-      "pending": 3
-    },
-    "new_media": [
+    "semantic_sha256": "aa0df5b1f960f403604e1b97322ef17619b5050647eb3a8bc6f2d6a5ae1e8ddc"
+  },
+  "reviews": {},
+  "delivery": {
+    "status": "pending_delivery",
+    "target_repository": "alalapi-0/manga-localizer",
+    "target_branch": "main",
+    "prior_verified_main": "1cb5a7ae3877c283c88fb1f43727652dee7ea458"
+  },
+  "budget": {
+    "native_tokens": 12790605,
+    "native_seconds": 49570,
+    "coverage": "Cumulative native Goal snapshot at v2 Stage A verification; no explicit cap/cost; completed first250k and last health REPLAN3903214 preserved, no reset"
+  },
+  "next_action": "Validate and independently review the exact v2 G7-only source profile, then deliver it to Manga main and verify CI before original CAS installation and a post-v1 isolated clone. Actual Page134 remains inactive at image73/next92; no new generation or ingest.",
+  "metadata_boundary": "Decision/delivery/next-action/budget metadata are excluded from semantic candidate hashes. No self-containing record hash; contract revision candidate is independently hashed.",
+  "writer_release": {
+    "agent": "/root/manga_v2_state_tests",
+    "status": "PATCH_READY completed",
+    "owned_path": "backend/tests/test_state_contract.py",
+    "worker_sha256": "5d2011a0ff9c89a019a8d7e35dcc577116045c2262a684a5b825247fb66780e1",
+    "worker_tests_passed": 86,
+    "root_followup": "Strengthened wrong-contract isolated predicate, alternate Page135, numerically-equal cumulative float type, and legacy six-effect rejection; final88statecases passed"
+  },
+  "stage_a_candidate": {
+    "contract_revision_semantic_sha256": "aa0df5b1f960f403604e1b97322ef17619b5050647eb3a8bc6f2d6a5ae1e8ddc",
+    "files": [
       {
-        "scope": "project",
-        "path": "generated/lineage-cloud-full-pages/809e3762-7d11-40f8-88cf-99f6d9111691/0a0ef31a-5690-5ee5-bc00-13a90d149404/raw.bin",
-        "sha256": "6278a800549fcae6c476b6690920fc7e92e13dd215b16f5458ca765c479353ea",
-        "size": 1645634
+        "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+        "sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
+        "mode": 420
       },
       {
-        "scope": "project",
-        "path": "generated/lineage-cloud-full-pages/809e3762-7d11-40f8-88cf-99f6d9111691/0a0ef31a-5690-5ee5-bc00-13a90d149404/normalized.png",
-        "sha256": "b53d87d4c7b094d655484c2159cc7061aed940ba4a4c340e14a2f6b1b4c1fbe7",
-        "size": 1243956
+        "path": "scripts/check_state.py",
+        "sha256": "03e780aca5f099b20939c6967a2fffd45d0b4753afca617859d13ade1b7a2282",
+        "mode": 420
       },
       {
-        "scope": "project",
-        "path": "generated/lineage-masks/809e3762-7d11-40f8-88cf-99f6d9111691/15c7b72f-7c5a-5410-a648-95868907dd14.png",
-        "sha256": "f06ff69f19dd2ef71555bcdfab0a7e851006e05eae02f12f8ebf3c057404c28f",
-        "size": 67063
+        "path": "backend/tests/test_state_contract.py",
+        "sha256": "9b52d4d73fb6ab17cbf18df934aa46a80b0072c1c6fd50b22c8cf2fa8bbfc9a1",
+        "mode": 420
       }
     ],
-    "outcome": "G8 actual quality rejected; partial recovery, no strict-pending refresh, owner approval or completion",
-    "recovery_point": {
-      "project_revision": 9267,
-      "image_revision": 73,
-      "next_sequence": 92,
-      "item_revision": 2,
-      "batch_revision": 485,
-      "queued_running": 0
+    "state": {
+      "path": ".agent/STATE.yaml",
+      "semantic_sha256": "ad1050e7e2f067efb79075927226f1f750009ef270fca6c9d77b017b8257bcae",
+      "omitted_metadata": [
+        "delivery",
+        "current_work.next_action",
+        "all_projects_governance.candidate_status",
+        "all_projects_governance.next_action",
+        "all_projects_governance.budget"
+      ]
     },
-    "registered_root_review_id": "340bb699-9eb6-4fd5-9c4d-17b31a9b3a4d",
-    "generation_count": 1,
-    "ingest_count": 1,
-    "g9_g10_refresh_count": 0
+    "declaration": {
+      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v2",
+      "contract": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+      "contract_sha256": "939025171a4878c1f07e9fcdb239267452d3388bc6b5651088d14a34754f9258",
+      "target": {
+        "page": 134,
+        "project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "batch_id": "a734c596-faae-4875-ae61-f694a3c26d4a",
+        "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+        "image_id": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+        "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
+        "run_id": "final-review-7975117b-r2-a2"
+      },
+      "profile": "page134_g7_material_remask_v2",
+      "effect_budget": {
+        "prior_receipt": {
+          "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+          "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+          "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+        },
+        "prior": {
+          "generation": 1,
+          "ingest": 1
+        },
+        "additional": {
+          "generation": 1,
+          "ingest": 1
+        },
+        "cumulative": {
+          "generation": 2,
+          "ingest": 2
+        }
+      },
+      "limits": {
+        "page_slots": 1,
+        "native_generation_limit": 1,
+        "g8_ingest_concurrency": 1,
+        "automatic_owner_approval": false,
+        "export_allowed": false,
+        "background_worker_allowed": false
+      },
+      "effects": [
+        "g7_mask",
+        "g8_native_generation",
+        "g8_native_ingest",
+        "g9_bind",
+        "g10_typeset",
+        "final_review_refresh"
+      ]
+    },
+    "prior_receipt": {
+      "commit": "1cb5a7ae3877c283c88fb1f43727652dee7ea458",
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41"
+    }
   },
-  "stage_d_candidate_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
-  "stage_d_candidate_hash_recipe": "SHA256 of sorted-key compact UTF8 JSON stage_d_candidate; state hash uses same encoding after removing only state_omitted_metadata paths. Reviews/delivery/next-action metadata outside candidate identity.",
-  "stage_d_candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898"
+  "stage_a_candidate_sha256": "513d45684c95705284c188c7a1212a658fcf3878599ba550eea5a7124fb5b7b7",
+  "stage_a_candidate_hash_recipe": "SHA256 compact sorted-key ensure_ascii=False UTF8 JSON of stage_a_candidate. State hash uses same encoding after removing only listed metadata. Regular file hashes are raw bytes. Registration review/delivery metadata is outside identity."
 }

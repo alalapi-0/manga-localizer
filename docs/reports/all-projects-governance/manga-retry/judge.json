@@ -1,0 +1,23 @@
+{
+  "decision": "PASS",
+  "reviewer": "/root/manga_retry_judge",
+  "semantic_hash": "67beedacca295a5233a923a47838f6ab0157b86c9315adc2165ff9be895eb8ec",
+  "observed_at": "2026-09-08T04:07:03.395586+00:00",
+  "independent_checks": [
+    "12 candidate hashes and normalized STATE hash match",
+    "136 focused frontend tests pass",
+    "3 focused backend repair tests pass",
+    "git diff --check passes",
+    "7 original protected hashes unchanged",
+    "Backend return contract and read-only verifier inspected",
+    "UI proof boundaries and unresolved quality blockers accurately preserved"
+  ],
+  "defects": [],
+  "root_extra_checks": {
+    "exact_candidate_secret_pattern_scan": "12 files; no match",
+    "default_branch": "main",
+    "push_permission": true,
+    "protected": false,
+    "branch_rules": []
+  }
+}

@@ -5,6 +5,18 @@
 - **Purpose：**唯一当前状态；历史证据留在 Git/上层治理执行记录，本文件不扩大任何 Prompt authority。
 - **Updated：**2026-09-04T16:40:00+08:00
 
+## All-projects governance: manga retry handoff
+
+- Task: `ALL-PROJECTS-CODEX-GOVERNANCE-V1`; scoped unit `manga_retry_handoff`; lane `REVIEWED`; Root owns this unit.
+- Scope: repair the final-review UI handoff for existing retry generations. This unit does not resume the corpus-generation Goal or grant new image-generation authority.
+- Current evidence: `docs/reports/all-projects-governance/manga-retry/README.md` and `live-recovery.json` (same directory).
+- Business observation at `2026-09-08T03:54:29.659797+00:00`: batch `a734c596-faae-4875-ae61-f694a3c26d4a` r485, `199 = 140 approved / 56 issues / 3 pending`. This newer observation supersedes older numeric snapshots below; all quality/owner-review constraints remain.
+- Result: exact attempt-2 issue heads at positions 134, 167, 192 reopen idempotently; repeated opens preserve the same generation. Selected review, image revision, generation and event-count fingerprints remain unchanged. No new image was generated or approved.
+- Unresolved: the 56 quality issues and 3 pending owner reviews remain; whole-project state-template onboarding and other governance checks are later units. Loopback API8000 was not listening at this observation; bounded service verification did not restart it. Browser proof uses the real review component with isolated API/navigation substitutes, not a live full-workbench session.
+- Unit review: PASS by fresh Judge /root/manga_retry_judge; semantic candidate 67beedacca295a5233a923a47838f6ab0157b86c9315adc2165ff9be895eb8ec.
+- Unit delivery: pending main.
+- Unit next action: deliver the accepted candidate to remote main and verify CI; preserve the image quality blockers and then continue unified onboarding.
+
 ## Execution control
 
 - State: `PAUSED_BY_OWNER`。业主要求先全部停：CPU 再次打满，流程仍有多余重做，仓库有大量未整理脏数据。

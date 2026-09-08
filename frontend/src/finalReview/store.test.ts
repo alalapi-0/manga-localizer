@@ -50,6 +50,8 @@ function repairResult(
     nextSequence: 2,
     parameterSetId: 'final-review-repair-v1',
     parameterSetHash: REPAIR_PARAMETER_SET_HASH,
+    repairAttempt: 1,
+    retryFromGenerationId: null,
     idempotent: false,
     ...patch,
   };
@@ -1720,6 +1722,14 @@ describe('final review store', () => {
       () => ({ nextSequence: 3 }),
       () => ({ parameterSetId: 'forged-repair-parameters' }),
       () => ({ parameterSetHash: 'a'.repeat(64) }),
+      () => ({ repairAttempt: 0 }),
+      () => ({ repairAttempt: 1.5 }),
+      () => ({ repairAttempt: Number.MAX_SAFE_INTEGER + 1 }),
+      () => ({ repairAttempt: 1, retryFromGenerationId: 'unexpected-parent' }),
+      (item: FinalReviewItem) => ({ repairAttempt: 2, retryFromGenerationId: null, runId: `final-review-${item.id.slice(0, 8)}-r${item.revision}-a2` }),
+      (item: FinalReviewItem) => ({ repairAttempt: 2, retryFromGenerationId: `generation-${item.id}`, runId: `final-review-${item.id.slice(0, 8)}-r${item.revision}-a2` }),
+      (item: FinalReviewItem) => ({ repairAttempt: 2, retryFromGenerationId: 'parent', runId: `final-review-${item.id.slice(0, 8)}-r${item.revision}-a3` }),
+      (item: FinalReviewItem) => ({ repairAttempt: 2, retryFromGenerationId: 'parent', runId: `final-review-${item.id.slice(0, 8)}-r${item.revision}-a2-extra` }),
     ];
     const repair = vi.spyOn(api, 'beginFinalReviewRepair');
 
@@ -1767,6 +1777,37 @@ describe('final review store', () => {
       repairImageId: `repair-${issue.sourceImageId}`,
     });
     expect(useFinalReviewStore.getState()).toMatchObject({ conflict: false, operation: 'repair' });
+  });
+
+  // Metadata-only copies of the three current issue heads observed at batch r485.
+  // No page pixels, source paths, or private review text are included.
+  it.each([
+    ['7975117b-c953-4ac4-847e-5249d9521a2c', '809e3762-7d11-40f8-88cf-99f6d9111691', 'dfa64aad-96ff-463d-aaad-01a67471ed68', 63],
+    ['8db3827e-72e3-48b5-b787-98379ffc6ed7', '6212422f-14e8-403b-8b93-ebe8a95b859f', '5f221260-2c11-47bc-b33b-8f8f5450c96b', 135],
+    ['e764b906-1c88-4ac1-94ca-a870c8ed8c43', 'ff505e54-3333-40b2-94ca-7ca0828c259b', '56175812-2f23-42e9-8ea2-da4958ed6746', 118],
+  ] as const)('reopens the real attempt-2 issue head %s without changing review state', async (id, generation, parent, nextSequence) => {
+    const issue = finalReviewItemFixture(id, {
+      revision: 2, artifactRevision: 1, verdict: 'issues', issueCodes: ['mask'],
+      feedback: '', reviewedAt: '2026-09-08T00:00:00Z',
+    });
+    const batch = { ...finalReviewBatchFixture([issue]), revision: 485 };
+    useFinalReviewStore.setState({
+      batches: [batch], batch, items: [issue], activeItemId: id,
+      draft: { verdict: 'issues', issueCodes: ['mask'], feedback: '' },
+    });
+    const response = {
+      ...repairResult(issue, { batchRevision: 485, idempotent: true, nextSequence }),
+      pageGenerationId: generation, repairAttempt: 2, retryFromGenerationId: parent,
+      runId: `final-review-${id.slice(0, 8)}-r2-a2`,
+    };
+    const repair = vi.spyOn(api, 'beginFinalReviewRepair').mockResolvedValue(response);
+    await expect(useFinalReviewStore.getState().beginRepair()).resolves.toMatchObject({
+      pageGenerationId: generation, runId: response.runId, nextSequence,
+    });
+    expect(repair).toHaveBeenCalledOnce();
+    expect(repair).toHaveBeenCalledWith(id, expect.objectContaining({ expectedRevision: 2, expectedBatchRevision: 485 }));
+    expect(useFinalReviewStore.getState().items).toEqual([issue]);
+    expect(useFinalReviewStore.getState().batch?.revision).toBe(485);
   });
 
   it('keeps legacy reviewed verdicts read-only while allowing a v1 issues item to start repair', async () => {

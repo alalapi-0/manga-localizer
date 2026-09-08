@@ -44,6 +44,7 @@ function repairResult(
     pageGenerationId: 'generation-new', runId: `final-review-${itemId.slice(0, 8)}-r1`,
     finalReviewItemRevision: 1, batchRevision: 1, artifactRevision: 1, nextSequence: 2,
     parameterSetId: 'final-review-repair-v1', parameterSetHash: REPAIR_PARAMETER_SET_HASH,
+    repairAttempt: 1, retryFromGenerationId: null,
     idempotent: false,
     ...patch,
   };
@@ -296,7 +297,7 @@ describe('final review page', () => {
     expect(await screen.findByText('导出完成：3 张')).toBeInTheDocument();
   });
 
-  it('opens an issues item in its source workbench and preserves repair context', async () => {
+  it.each([1, 2, 3])('opens repair attempt %s in its source workbench and preserves repair context', async (attempt) => {
     const user = userEvent.setup();
     const { items, onOpenWorkbench } = renderPage();
     seedWorkbench();
@@ -306,12 +307,19 @@ describe('final review page', () => {
       activeItemId: issue.id,
       draft: { verdict: 'issues', issueCodes: [...issue.issueCodes], feedback: issue.feedback },
     }));
-    vi.spyOn(api, 'beginFinalReviewRepair').mockResolvedValue(repairResult(issue.id, issue.sourceImageId));
+    const baseRunId = `final-review-${issue.id.slice(0, 8)}-r1`;
+    vi.spyOn(api, 'beginFinalReviewRepair').mockResolvedValue(repairResult(issue.id, issue.sourceImageId, {
+      repairAttempt: attempt,
+      retryFromGenerationId: attempt === 1 ? null : 'parent-generation',
+      runId: attempt === 1 ? baseRunId : `${baseRunId}-a${attempt}`,
+      nextSequence: attempt === 1 ? 2 : 18,
+      idempotent: attempt !== 1,
+    }));
     const selectProject = vi.fn().mockResolvedValue(true);
     const selectImage = vi.fn().mockResolvedValue(true);
     useWorkbenchStore.setState({ selectProject, selectImage });
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     expect(onOpenWorkbench).toHaveBeenCalledOnce();
     expect(selectProject).toHaveBeenCalledWith(issue.sourceProjectId, true);
     expect(selectImage).toHaveBeenCalledWith('repair-image-new');
@@ -336,9 +344,9 @@ describe('final review page', () => {
       selectImage: vi.fn().mockResolvedValue(true),
     });
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     await waitFor(() => expect(useFinalReviewStore.getState().operation).toBe('repair'));
-    const button = screen.getByRole('button', { name: '创建新 G0 并进入修复' });
+    const button = screen.getByRole('button', { name: '进入修复工作台' });
     expect(button).toBeDisabled();
     await user.click(button);
     expect(repair).toHaveBeenCalledOnce();
@@ -366,7 +374,7 @@ describe('final review page', () => {
     const selectImage = vi.fn().mockResolvedValue(true);
     useWorkbenchStore.setState({ selectProject, selectImage });
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
 
     expect(onOpenWorkbench).not.toHaveBeenCalled();
     expect(selectProject).not.toHaveBeenCalled();
@@ -423,7 +431,7 @@ describe('final review page', () => {
     vi.spyOn(api, 'beginFinalReviewRepair').mockResolvedValue(repairResult(issue.id, issue.sourceImageId));
     useWorkbenchStore.setState({ selectProject: vi.fn().mockResolvedValue(false) });
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     expect(useFinalReviewStore.getState().repairContext).toBeNull();
     expect(useFinalReviewStore.getState().operation).toBeNull();
     expect(window.sessionStorage.getItem('manga-localizer-final-review-repair')).toBeNull();
@@ -447,7 +455,7 @@ describe('final review page', () => {
       selectImage: vi.fn().mockResolvedValue(false),
     });
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     expect(useFinalReviewStore.getState().repairContext).toBeNull();
     expect(useFinalReviewStore.getState().operation).toBeNull();
     expect(window.sessionStorage.getItem('manga-localizer-final-review-repair')).toBeNull();
@@ -569,7 +577,7 @@ describe('final review page', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: '最终验收' }));
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     await waitFor(() => expect(document.querySelector('.workbench-grid')).toBeInTheDocument());
     expect(useFinalReviewStore.getState().operation).toBeNull();
     expect(screen.getByText('正在处理终审反馈')).toBeInTheDocument();
@@ -625,7 +633,7 @@ describe('final review page', () => {
     expect(screen.getByLabelText('选择终审批次')).toBeDisabled();
   });
 
-  it('keeps a legacy issues decision read-only but permits its explicit fresh-G0 transition', async () => {
+  it('keeps a legacy issues decision read-only but permits its repair handoff', async () => {
     const user = userEvent.setup();
     seedWorkbench();
     const item = finalReviewItemFixture('legacy-issue', {
@@ -645,10 +653,10 @@ describe('final review page', () => {
     const onOpenWorkbench = vi.fn();
     render(<FinalReviewPage onOpenWorkbench={onOpenWorkbench} />);
 
-    expect(screen.getByText(/旧版问题项的既有 verdict 与反馈保持只读/)).toBeInTheDocument();
+    expect(screen.getByText(/旧版问题项的审核结论与反馈保持只读/)).toBeInTheDocument();
     expect(screen.getAllByRole('radio').every((control) => control.hasAttribute('disabled'))).toBe(true);
     expect(screen.getByLabelText('具体反馈')).toBeDisabled();
-    const button = screen.getByRole('button', { name: '创建新 G0 并进入修复' });
+    const button = screen.getByRole('button', { name: '进入修复工作台' });
     expect(button).toBeEnabled();
     await user.click(button);
     expect(repair).toHaveBeenCalledOnce();
@@ -666,7 +674,7 @@ describe('final review page', () => {
     });
     vi.spyOn(api, 'beginFinalReviewRepair').mockRejectedValue(new Error('repair unavailable'));
 
-    await user.click(screen.getByRole('button', { name: '创建新 G0 并进入修复' }));
+    await user.click(screen.getByRole('button', { name: '进入修复工作台' }));
     expect(onOpenWorkbench).not.toHaveBeenCalled();
     expect(useFinalReviewStore.getState().repairContext).toBeNull();
     expect(useFinalReviewStore.getState().operation).toBeNull();

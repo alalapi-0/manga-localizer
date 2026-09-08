@@ -709,7 +709,14 @@ function assertAuthoritativeRepairResult(
   expectedItem: FinalReviewItem,
   expectedBatchRevision: number,
 ): void {
-  const expectedRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${expectedItem.revision}`;
+  const baseRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${expectedItem.revision}`;
+  const attempt = result?.repairAttempt;
+  const lineageMatches = result && Number.isSafeInteger(attempt) && attempt >= 1 && (
+    attempt === 1
+      ? result.retryFromGenerationId === null
+      : nonEmptyString(result.retryFromGenerationId) && result.retryFromGenerationId !== result.pageGenerationId
+  );
+  const expectedRunId = attempt > 1 ? `${baseRunId}-a${attempt}` : baseRunId;
   const sequenceMatches = result && Number.isSafeInteger(result.nextSequence) && (
     result.idempotent === false
       ? result.nextSequence === 2
@@ -725,7 +732,7 @@ function assertAuthoritativeRepairResult(
     || result.repairProjectId !== expectedItem.sourceProjectId
     || !nonEmptyString(result.repairImageId) || result.repairImageId === expectedItem.sourceImageId
     || !nonEmptyString(result.pageGenerationId) || result.runId !== expectedRunId
-    || !sequenceMatches
+    || !lineageMatches || !sequenceMatches
     || result.parameterSetId !== REPAIR_PARAMETER_SET_ID
     || result.parameterSetHash !== REPAIR_PARAMETER_SET_HASH
   ) {

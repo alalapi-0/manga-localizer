@@ -1,0 +1,27 @@
+{
+  "scope": "REVIEWED; Root sole writer; no unrelated task or Cursor effects",
+  "base_commit": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+  "original_root": "/Users/alalapi/PycharmProjects/manga-localizer",
+  "original_protected_hashes": {
+    "AGENTS.md": "eda500f7880dd12e69fc1d31c0e8ba4ae3617c5e167e912afde91988e93e8533",
+    ".agent/STATE.md": "af97abd8fe7d8ccdc8447410f2d33d1c7b3abf08d999ce0e8bb0770a75bae2ca",
+    "frontend/src/finalReview/types.ts": "e79287a131ab7975c78f05abd531f578a56d89db0b9fb5b2e010b165534d0410",
+    "frontend/src/finalReview/store.ts": "5856580cefa63b7a338559b93b10a8d01cd5be94794f06d91aff6226c5aa8503",
+    "frontend/src/finalReview/store.test.ts": "a5b39d08f8e77e3b0caf2a5a03c10ac696dbcbd873047a55cdd795793bdbd3e2",
+    "frontend/src/finalReview/FinalReviewPage.tsx": "d762621fd3c3d507c12b48fe5101acf8a141c731c19774d69bb3f43363f532b7",
+    "frontend/src/finalReview/FinalReviewPage.test.tsx": "6be069aaedd0aca86967f520b3b7a3b8169ead42571b3cd0891be0e8dba8af22"
+  },
+  "owned_files": [
+    ".agent/STATE.md",
+    "frontend/src/finalReview/types.ts",
+    "frontend/src/finalReview/store.ts",
+    "frontend/src/finalReview/store.test.ts",
+    "frontend/src/finalReview/FinalReviewPage.tsx",
+    "frontend/src/finalReview/FinalReviewPage.test.tsx",
+    "scripts/verify_final_review_retry_data.py",
+    "scripts/verify-final-review-retry-ui.mjs"
+  ],
+  "preexisting_work": "Original main has dirty product/state work. Isolated candidate contains only this repair; original work remains protected.",
+  "native_ownership": "Current source STATE records writer none; most recent relevant Codex task01a06efa-fb31-75d3-8a7f-3659f3dda1ba ended failed with no live writer. No unrelated task resumed.",
+  "effects": "Existing selected heads may be reopened through supported repair service under read-only SQL and denial of newG0; normal main Git delivery after fresh Judge; no paid generation, approved mutations, worker startup, or app deployment."
+}

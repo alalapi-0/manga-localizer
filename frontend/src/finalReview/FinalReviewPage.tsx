@@ -92,14 +92,14 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
     if (!active || !state.draft) return;
     setRepairError('');
     if (dirty) {
-      setRepairError('请先显式保存终审反馈，再创建新的 G0 修复 lineage。');
+      setRepairError('请先显式保存终审反馈，再进入修复工作台。');
       return;
     }
     const context = await useFinalReviewStore.getState().beginRepair();
     if (!context) return;
     const workbench = useWorkbenchStore.getState();
     try {
-      // Repair creates a new isolated image inside the source project, so even an
+      // Repair returns an isolated image inside the source project, so even an
       // already-open source project must be reloaded before selecting that image.
       if (!await workbench.selectProject(context.repairProjectId, true)) {
         useFinalReviewStore.getState().finishRepairNavigation(true);
@@ -332,7 +332,7 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
                 value={state.draft.feedback}
               />
               {validation ? <p className="final-review__validation">{validation}</p> : null}
-              {legacyReviewed ? <div className="final-review__legacy-lock" role="status">{legacyApproved ? '旧版已通过项保持只读；缺失阶段证据如实标记为 unavailable，不允许 refresh 或改写 verdict。' : '旧版问题项的既有 verdict 与反馈保持只读；可用这些反馈创建新的 G0 修复 lineage。'}</div> : null}
+              {legacyReviewed ? <div className="final-review__legacy-lock" role="status">{legacyApproved ? '旧版已通过项保持只读；缺失阶段证据如实标记为 unavailable，不允许 refresh 或改写 verdict。' : '旧版问题项的审核结论与反馈保持只读；可进入修复工作台继续处理。'}</div> : null}
               {state.error ? <div className={`final-review__error ${state.conflict ? 'is-conflict' : ''}`} role="alert"><strong>{state.conflict ? '终审状态需要重新载入确认' : '操作失败'}</strong><span>{state.error}</span>{state.conflict ? <button className="text-button" disabled={locked} onClick={() => void state.reloadConflict()} type="button">载入最新版本并保留草稿</button> : null}</div> : null}
               {repairError ? <div className="final-review__error" role="alert"><strong>无法进入工作台修复</strong><span>{repairError}</span></div> : null}
               <div className="final-review__save-status" aria-live="polite">
@@ -348,7 +348,7 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
                 >保存并下一张</button>
               </div>
               <div className="final-review__repair-actions">
-                <button className="button" disabled={state.draft.verdict !== 'issues' || Boolean(validation) || interactionLocked || dirty} onClick={() => void openInWorkbench()} type="button">创建新 G0 并进入修复</button>
+                <button className="button" disabled={state.draft.verdict !== 'issues' || Boolean(validation) || interactionLocked || dirty} onClick={() => void openInWorkbench()} type="button">进入修复工作台</button>
                 <button
                   className="button"
                   disabled={interactionLocked || legacyApproved || dirty || !active.currentArtifactStale}

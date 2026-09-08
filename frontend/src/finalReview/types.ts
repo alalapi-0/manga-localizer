@@ -148,6 +148,8 @@ export interface FinalReviewRepairResult {
   nextSequence: number;
   parameterSetId: string;
   parameterSetHash: string;
+  repairAttempt: number;
+  retryFromGenerationId: string | null;
   idempotent: boolean;
 }
 

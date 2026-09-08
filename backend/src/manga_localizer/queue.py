@@ -172,6 +172,70 @@ class PersistentJobQueue:
             pass
         self._runner = None
 
+    async def execute_controlled_job(
+        self,
+        store: ProjectStore,
+        job_id: str,
+        *,
+        project_id: str,
+        image_id: str,
+        generation_id: str,
+        run_id: str,
+        allowed_kinds: tuple[str, ...],
+    ) -> Job:
+        """Execute one exact queued page job without starting or scanning the worker."""
+        if self.running:
+            raise JobConflict("Controlled one-off execution requires a dormant worker")
+        with store.session() as session:
+            job = session.scalar(
+                select(Job).options(selectinload(Job.items)).where(Job.id == job_id)
+            )
+            if job is None:
+                raise ProjectError("Job was not found")
+            pages = (job.lineage_context or {}).get("pages")
+            if (
+                job.project_id != project_id
+                or job.kind not in allowed_kinds
+                or job.status != JobStatus.QUEUED.value
+                or len(job.items) != 1
+                or job.items[0].image_id != image_id
+                or job.items[0].region_id is not None
+                or job.items[0].status != JobStatus.QUEUED.value
+                or (job.lineage_context or {}).get("runId") != run_id
+                or not isinstance(pages, list)
+                or len(pages) != 1
+                or pages[0].get("imageId") != image_id
+                or pages[0].get("pageGenerationId") != generation_id
+            ):
+                raise JobConflict("Job is outside the controlled recovery binding")
+            # This is deliberately before the RUNNING transition. A queued job
+            # whose generation sequence or immutable enqueue evidence is stale
+            # must remain byte-for-byte untouched for an explicit replacement.
+            require_job_lineage_for_execution(store, session, job)
+            item = job.items[0]
+            item_id = item.id
+            job.status = JobStatus.RUNNING.value
+            job.error = None
+            item.status = JobStatus.RUNNING.value
+            published_typeset = bool(
+                job.kind == "typeset"
+                and item.started_at is not None
+                and session.scalar(
+                    select(PageLineageEvent.id).where(
+                        PageLineageEvent.job_id == job.id,
+                        PageLineageEvent.job_item_id == item.id,
+                        PageLineageEvent.operation == "typeset-candidate-produced",
+                    )
+                )
+            )
+            if not published_typeset:
+                item.started_at = datetime.now(UTC)
+            item.error = None
+        await self._execute_item(store, job_id, item_id)
+        self._recompute(store, job_id)
+        store.write_snapshot()
+        return self.get_job(store, job_id)
+
     async def _loop(self) -> None:
         while not self._stopping.is_set():
             claimed = self._claim_next()

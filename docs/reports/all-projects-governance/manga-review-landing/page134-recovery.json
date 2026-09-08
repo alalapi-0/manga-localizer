@@ -1,0 +1,447 @@
+{
+  "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
+  "contract": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+  "lane": "GOVERNED",
+  "stage": "A",
+  "status": "source semantic candidate frozen; fresh independent acceptance pending",
+  "baseline_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
+  "governor_origin": "/root/hub_connection_governor native contract decision before mutation",
+  "original": {
+    "head": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+    "branch": "main",
+    "index_sha256": "df48fe3a5e945aa4c4a01bc2dcacc8b3004bd3672431b63b190e05991d536b99",
+    "status_excluding_cursor": [
+      " M .agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md",
+      " M .agent/FINAL_CORPUS_REBUILD_REFERENCE.md",
+      " D .agent/STATE.md",
+      " M .agents/skills/manga-final-review-loop/SKILL.md",
+      " M .github/pull_request_template.md",
+      " M .github/workflows/ci.yml",
+      " M AGENTS.md",
+      " M README.md",
+      " M backend/src/manga_localizer/cloud_image_cli.py",
+      " M backend/src/manga_localizer/database.py",
+      " M backend/src/manga_localizer/main.py",
+      " M backend/src/manga_localizer/schemas.py",
+      " M backend/src/manga_localizer/services/clean_plates.py",
+      " M backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
+      " M backend/src/manga_localizer/services/final_reviews.py",
+      " M backend/src/manga_localizer/services/masks.py",
+      " M backend/src/manga_localizer/services/page_lineage.py",
+      " M backend/src/manga_localizer/services/projects.py",
+      " M backend/src/manga_localizer/services/translations.py",
+      " M backend/src/manga_localizer/services/typesets.py",
+      " M backend/tests/test_api_projects.py",
+      " M backend/tests/test_audit_release.py",
+      " M backend/tests/test_cloud_full_page_clean_plates.py",
+      " M backend/tests/test_cloud_image_cli.py",
+      " M backend/tests/test_cloud_registration.py",
+      " M backend/tests/test_final_reviews.py",
+      " M backend/tests/test_page_lineage.py",
+      " M backend/tests/test_typesets.py",
+      " M docs/development.md",
+      " M docs/real-data-iteration-status.md",
+      " M frontend/src/App.tsx",
+      " M frontend/src/api/client.ts",
+      " M frontend/src/components/Sidebar.tsx",
+      " M frontend/src/components/Workbench.test.tsx",
+      " M frontend/src/finalReview/FinalReviewPage.test.tsx",
+      " M frontend/src/finalReview/FinalReviewPage.tsx",
+      " M frontend/src/finalReview/store.test.ts",
+      " M frontend/src/finalReview/store.ts",
+      " M frontend/src/finalReview/types.ts",
+      " M frontend/src/store/workbench.test.ts",
+      " M frontend/src/store/workbench.ts",
+      " M package.json",
+      " M playwright.config.ts",
+      " M scripts/audit_release.py",
+      " M scripts/external-uv.mjs",
+      " M scripts/storage-runtime-route.test.mjs",
+      " M tests/e2e/manga-localizer.spec.ts",
+      "?? .agent/STATE.yaml",
+      "?? backend/tests/test_database_review_epochs.py",
+      "?? backend/tests/test_final_review_responsiveness.py",
+      "?? backend/tests/test_mask_recovery_edges.py",
+      "?? backend/tests/test_state_contract.py",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/README.md",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/baseline.json",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/candidate.json",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/contract.md",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/delivery.json",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/governor.json",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/judge.json",
+      "?? docs/reports/all-projects-governance/manga-ci-audit/validation.json",
+      "?? docs/reports/all-projects-governance/manga-retry/README.md",
+      "?? docs/reports/all-projects-governance/manga-retry/baseline.json",
+      "?? docs/reports/all-projects-governance/manga-retry/candidate.json",
+      "?? docs/reports/all-projects-governance/manga-retry/delivery.json",
+      "?? docs/reports/all-projects-governance/manga-retry/judge.json",
+      "?? docs/reports/all-projects-governance/manga-retry/live-recovery.json",
+      "?? docs/reports/all-projects-governance/manga-retry/validation.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/baseline.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/candidate.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/contract.md",
+      "?? docs/reports/all-projects-governance/manga-review-landing/contract_decision.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/delivery.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/governor.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/installation.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/installation_delivery_review.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/installation_governor.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/installation_judge.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/judge.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/state_validation.json",
+      "?? docs/reports/all-projects-governance/manga-review-landing/validation.json",
+      "?? hub.connection.yaml",
+      "?? scripts/check_state.py",
+      "?? scripts/verify-final-review-retry-ui.mjs",
+      "?? scripts/verify_final_review_retry_data.py"
+    ],
+    "protected_paths_recipe": "Prior main1aa installation.json baseline_files union install_files plus delivery/installation_delivery_review/installation_governor/installation_judge; Cursor excluded without read",
+    "protected_paths_count": 236,
+    "protected_tree_sha256": "ed0f340f42643f15f759cb81919d246e8e025bcc77ad8c69c9693af89f43af09",
+    "owned_preimages": {
+      "AGENTS.md": {
+        "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
+        "mode": 420
+      },
+      ".agent/STATE.yaml": {
+        "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+        "mode": 420
+      },
+      "scripts/check_state.py": {
+        "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
+        "mode": 420
+      },
+      "backend/tests/test_state_contract.py": {
+        "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
+        "mode": 420
+      },
+      "backend/src/manga_localizer/main.py": {
+        "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+        "mode": 420
+      },
+      "backend/src/manga_localizer/services/projects.py": {
+        "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+        "mode": 420
+      },
+      "backend/src/manga_localizer/queue.py": {
+        "sha256": "ac83b4e15007c6d580261dd3b969fdf488ae191ce365de51de4cc9305ce54743",
+        "mode": 420
+      }
+    }
+  },
+  "source_preimages": {
+    "AGENTS.md": {
+      "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
+      "mode": 420
+    },
+    ".agent/STATE.yaml": {
+      "sha256": "1d400617e6189437fc5886419dca776f6a5c0a11b7290318fe8798ae71a01dd7",
+      "mode": 420
+    },
+    "scripts/check_state.py": {
+      "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
+      "mode": 420
+    },
+    "backend/tests/test_state_contract.py": {
+      "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
+      "mode": 420
+    },
+    "backend/src/manga_localizer/main.py": {
+      "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+      "mode": 420
+    },
+    "backend/src/manga_localizer/services/projects.py": {
+      "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+      "mode": 420
+    },
+    "backend/src/manga_localizer/queue.py": {
+      "sha256": "ac83b4e15007c6d580261dd3b969fdf488ae191ce365de51de4cc9305ce54743",
+      "mode": 420
+    },
+    "backend/src/manga_localizer/services/controlled_recovery.py": {
+      "sha256": null,
+      "mode": null,
+      "basis": "absent in clean baseline main1aa at unit start"
+    },
+    "backend/tests/test_controlled_recovery.py": {
+      "sha256": null,
+      "mode": null,
+      "basis": "absent in clean baseline main1aa at unit start"
+    },
+    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md": {
+      "sha256": null,
+      "mode": null,
+      "basis": "absent in clean baseline main1aa at unit start"
+    },
+    "docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json": {
+      "sha256": null,
+      "mode": null,
+      "basis": "absent in clean baseline main1aa at unit start"
+    }
+  },
+  "checks": {
+    "storage": "All4 guarded routes passed2026-09-08; real-data root resolved through storage:data; no runtime fallback",
+    "native_owner": "Original native task lastturn01a06f44-3cfa-7e81-9308-feae34976911 failed1788573141; not resumed",
+    "read_only_live": {
+      "project": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+      "project_schema": 2,
+      "project_revision": 9244,
+      "image_revision": 50,
+      "region_revision": 4,
+      "generation_next_sequence": 63,
+      "historical_restart_from_source_flag": true,
+      "new_G0": false,
+      "jobs": {
+        "completed": 1113,
+        "failed": 3,
+        "queued_or_running": 0
+      },
+      "recognition_regions": 1874,
+      "stale_recognition_regions": 0,
+      "quality_sha256": "52db694e0516c2371086988a1176f1ecf59b541bdc819170290b4163a9015726",
+      "database_bytes": 43819008,
+      "actual_app_started": false
+    },
+    "root_state_targeted": {
+      "command": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B -m pytest backend/tests/test_state_contract.py -q",
+      "result": "26 passed; bounded identity, stage, limits, owner-state/authority and route failures; inactive declaration retained",
+      "exit": 0
+    },
+    "root_state_cli": {
+      "command": "npm run check:state",
+      "exit": 0,
+      "fields": 21,
+      "mapped": 20,
+      "unknown": 1,
+      "progress": 140,
+      "total": 199,
+      "history_preserved": true,
+      "execution_declaration": "not_active_in_this_governance_goal",
+      "grants_execution_authority": false
+    },
+    "root_state_style": {
+      "ruff_check": 0,
+      "ruff_format_check": 0,
+      "git_diff_check": 0
+    },
+    "frontend": {
+      "command": "npm run check:frontend",
+      "exit": 0,
+      "log_sha256": "8eb998fe0815a54d3deaa9736e1d726103c2f7a51c514bdf73613cec6cd9a85b",
+      "coverage": "Unchanged frontend/runtime source; full required check reproduced in this source unit",
+      "result": "lint/typecheck,461tests in7files and productionbuild passed; existing chunk-size advisory remains"
+    },
+    "launcher": {
+      "command": "npm run check:launcher",
+      "exit": 0,
+      "log_sha256": "6f403a95447e7a5ecb65b104f03ef5c247906c687a1b60d3bf89a3dc0dacad69",
+      "coverage": "Unchanged frontend/runtime source; full required check reproduced in this source unit",
+      "result": "40tests passed"
+    },
+    "read_only_final_review_schema": {
+      "route": "guarded storage:data --print-app-data; exact matching batch catalog entry only",
+      "manifest_relative_to_real_data": "final-review/all-199-pages/final-review/manifest.json",
+      "database_relative_to_real_data": "final-review/all-199-pages/final-review/final-review.sqlite3",
+      "required_tables_present": [
+        "batches",
+        "items",
+        "revisions",
+        "artifact_revisions"
+      ],
+      "required_protection_triggers_present": [
+        "artifact_revisions_no_delete",
+        "artifact_revisions_no_update",
+        "final_review_revisions_no_delete",
+        "final_review_revisions_no_update"
+      ],
+      "required_columns_observed": true,
+      "target_item_verdict": "issues",
+      "target_item_revision": 2,
+      "method": "Direct sqlite mode=ro and query_only; no application/preflight function/engine/startup on actual data",
+      "effects": false
+    },
+    "read_only_actual_ocr": {
+      "provider": "tesseract",
+      "model_version": "tesseract 5.5.2",
+      "parameter_hash": "0bf0306f2ac9d3f4bcecf4376902ef6f1512c69722d2ee80322c2b1fe1a840eb",
+      "language": "jpn_vert",
+      "direction": "vertical",
+      "attempt_count": 12,
+      "generation_count_for_image": 1,
+      "generation_state": "active",
+      "method": "Direct sqlite mode=ro/query_only; installed CLI version/list-languages only",
+      "actual_image_ocr_calls": 0
+    },
+    "backend": {
+      "command": "npm run check:backend",
+      "exit": 0,
+      "passed": 1035,
+      "log_sha256": "7bca726a025119ae1652fd1279135300ade35e3f14e21c4ffa79d1851fbef2a2",
+      "evidence_owner": "Root",
+      "coverage": "Full source suite collected1035tests before4additional protection cases were added; Root final controlled suite covers all9including the4newcases. No product code changed after full-suite start; final distinct test coverage1039."
+    },
+    "controlled_final": {
+      "command": "guarded uv pytest backend/tests/test_controlled_recovery.py -q",
+      "exit": 0,
+      "passed": 9,
+      "log_sha256": "4ec02f452dae5d88e1266e0b1b3dac7e3be4a5236b51611c9c479abf0896ab65",
+      "evidence_owner": "Root",
+      "coverage": "Synthetic source fixtures only; no real image generation or clone/live recovery claim. Includes recalculated digest with removed protection, missing finalreview protection, ownerpending and stalefeedback failure-before-write."
+    },
+    "e2e": {
+      "command": "npm run test:e2e with supported installed Chrome and unique temporary synthetic data",
+      "exit": 0,
+      "passed": 6,
+      "log_sha256": "0f1320a20e0e3852658637084a0f51352e64822bb7a58a99aa1796a097184157",
+      "evidence_owner": "Root"
+    },
+    "root_review": {
+      "status": "source diff inspected",
+      "protected_boundaries": "Default behavior preserved; explicit singleton API preflight/startup/route/job binding; exact item pending only; no actual app/provider start",
+      "remaining": "Normal commit audit and fresh independent acceptance"
+    },
+    "root_state_final": {
+      "command": "npm run check:state and targeted state-contract pytest after final STATE update",
+      "exit": 0,
+      "passed": 26,
+      "fields": 21,
+      "mapped": 20,
+      "unknown": 1,
+      "progress": 140,
+      "total": 199,
+      "execution_declaration": "not_active_in_this_governance_goal"
+    },
+    "final_test_style": {
+      "ruff_check": 0,
+      "ruff_format_check": 0,
+      "git_diff_check": 0,
+      "file": "backend/tests/test_controlled_recovery.py"
+    },
+    "remote_preflight": {
+      "repository": "alalapi-0/manga-localizer",
+      "default_branch": "main",
+      "observed_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
+      "push_permission": true,
+      "protected": false,
+      "effective_branch_rules": [],
+      "fetch_exit": 0
+    }
+  },
+  "preserved_limits": {
+    "cloud_excluded": 17,
+    "remaining_hub_declarations": 22,
+    "actual_remaining_issues": 56,
+    "owner_pending": [
+      112,
+      24,
+      173
+    ],
+    "other_affected_examples": [
+      167,
+      192
+    ]
+  },
+  "reviews": {},
+  "delivery": {
+    "status": "pending",
+    "previous_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839"
+  },
+  "budget": {
+    "native_tokens": 10920063,
+    "native_seconds": 40687,
+    "coverage": "Latest available cumulative native Goal snapshot; cost/cap unavailable; no reset"
+  },
+  "contract_sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
+  "target": {
+    "page": 134,
+    "project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+    "batch_id": "a734c596-faae-4875-ae61-f694a3c26d4a",
+    "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+    "image_id": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+    "generation_id": "809e3762-7d11-40f8-88cf-99f6d9111691",
+    "run_id": "final-review-7975117b-r2-a2"
+  },
+  "contract_clarification": "Native Governor same-contract clarification: all10orderedchecks G8 only; existing guarded local OCR exactpage permitted without new/download/network/fallback provider; dormant queue service permitted with no worker/recovery/claim/poll.",
+  "stage_b_preparation": {
+    "status": "read-only source plan; not a clone proof or live effect",
+    "source_reader": "/root/manga_clone_gate_reader",
+    "gate_fixture_refs": [
+      "backend/tests/test_page_lineage.py:G4 reopen9584/9681,G5:519,G6:610,G7:4791,G9:4973",
+      "backend/tests/test_cloud_registration_api.py:93",
+      "backend/tests/test_typesets.py:82/138",
+      "backend/tests/test_final_reviews.py:870"
+    ],
+    "binding_rule": "Fresh mutation lineage runId/pageGenerationId/expectedSequence/actor and revisions after every operation; exact job lineage pages singleton. Refresh reads current item and batch CAS.",
+    "retention": "G4 reopen preserves source/translation strings and immutable history; clears current background/OCR reviews and maskdraft. New G6 attempts plus reviews, new G9 candidates/reviews bound to newG8 required.",
+    "ocr_prerequisite": "Read-only actual target generation contains12 prior attempts: tesseract5.5.2,jpn_vert,vertical,parameterhash0bf0306f2ac9d3f4bcecf4376902ef6f1512c69722d2ee80322c2b1fe1a840eb. Installed engine reports5.5.2 withjpn/jpn_vert available. Exact options/input/model file preimages still require StageB freeze; no provider substitution/download/network/fallback.",
+    "remaining": "Full isolated copied-media/database clone, exact job options and actual complete gate-chain proof not yet tested."
+  },
+  "writer_release": {
+    "agent": "/root/manga_controlled_api_repair",
+    "status": "completed; no active descendant writer",
+    "source_hashes": {
+      "backend/src/manga_localizer/main.py": "ac158feeeed08579f8a3b002344c54421985fd0c3441cd32a3fed7dbb4bd4cfe",
+      "backend/src/manga_localizer/queue.py": "6830096e2334e8b87372771889398ca3e0315351554339f3efc547f5b3e06e93",
+      "backend/src/manga_localizer/services/projects.py": "2f16c499cd702f9b69579db0c98dd426ab781cfa15ccc7ea48df2283dc49e059",
+      "backend/src/manga_localizer/services/controlled_recovery.py": "cfd64fc6dc0b49f0d7b66e3deebf9ec78e2cef3c0ea3acc2363809555e2e477c",
+      "backend/tests/test_controlled_recovery.py": "4ffd1ed7b656751282873b8da860bdae5903dc6464f181374ba4c710b204c6e8"
+    }
+  },
+  "semantic_files": [
+    {
+      "path": ".agent/STATE.yaml",
+      "sha256": "8a6762d191c992c8b13285a22f3bbcd3ca10386ba4d740562cb1731633dea8a0",
+      "mode": 420
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "2874ce219e9b871b140e98a527123fe5cb2db62976c891520544d4c463ab75ba",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/main.py",
+      "sha256": "ac158feeeed08579f8a3b002344c54421985fd0c3441cd32a3fed7dbb4bd4cfe",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/queue.py",
+      "sha256": "6830096e2334e8b87372771889398ca3e0315351554339f3efc547f5b3e06e93",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/controlled_recovery.py",
+      "sha256": "cfd64fc6dc0b49f0d7b66e3deebf9ec78e2cef3c0ea3acc2363809555e2e477c",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/projects.py",
+      "sha256": "2f16c499cd702f9b69579db0c98dd426ab781cfa15ccc7ea48df2283dc49e059",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_controlled_recovery.py",
+      "sha256": "4ffd1ed7b656751282873b8da860bdae5903dc6464f181374ba4c710b204c6e8",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_state_contract.py",
+      "sha256": "0bc800a3b5528e4c641fece77c1d6d91a9ad77913616488ed37439ba0ce9aa78",
+      "mode": 420
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
+      "sha256": "04aa8c396b53cc25ea30fa518165713a48af77c56177e4a5538bbdba94843bce",
+      "mode": 420
+    },
+    {
+      "path": "scripts/check_state.py",
+      "sha256": "b471830ad93b0cdd39a424232c6d11a468cfb0d6ffa7f77890ff513d8cb16ec5",
+      "mode": 420
+    }
+  ],
+  "semantic_sha256": "78f3990ba772243a10ea6e42703646e34e9f093d0730f80155c21c3f13c91d4d",
+  "semantic_hash_recipe": "SHA256 of UTF-8 compact sorted-key JSON semantic_files list, ordered by path. Exact whole source/state/contract bytes; registration/check/review/delivery metadata excluded. No product/state/control semantic edits after freeze without new exact candidate acceptance.",
+  "metadata_boundary": "This page134-recovery.json record is evidence registration and review/delivery metadata, excluded to avoid self-hashing; contract is included in semantic_files. Source preimages and original preservation facts remain review inputs."
+}

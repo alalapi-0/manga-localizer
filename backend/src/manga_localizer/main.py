@@ -7,7 +7,17 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import uvicorn
-from fastapi import APIRouter, Body, FastAPI, HTTPException, Query, Request, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Body,
+    Depends,
+    FastAPI,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -108,6 +118,11 @@ from manga_localizer.services.cloud_full_page_clean_plates import (
     g8_replace_accepted_for_linked_item,
     ingest_cloud_full_page_candidate,
     record_cloud_full_page_review,
+)
+from manga_localizer.services.controlled_recovery import (
+    ControlledRecoveryBinding,
+    open_controlled_project,
+    preflight_controlled_recovery,
 )
 from manga_localizer.services.final_reviews import (
     FINAL_REVIEW_NO_STORE_HEADERS,
@@ -557,7 +572,19 @@ def _decode_relative_paths(form: Any, files: list[UploadFile]) -> list[str]:
     return [path.as_posix() for path in resolved_paths]
 
 
-def create_app(settings: Settings | None = None, *, start_worker: bool = True) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    *,
+    start_worker: bool = True,
+    controlled_recovery: ControlledRecoveryBinding | None = None,
+) -> FastAPI:
+    if controlled_recovery is not None and start_worker:
+        raise ProjectError("Controlled recovery cannot start the background worker")
+    controlled_preflight = (
+        preflight_controlled_recovery(controlled_recovery)
+        if controlled_recovery is not None
+        else None
+    )
     resolved_settings, bundled_models = apply_model_bundle(settings or get_settings())
     registry = ProjectRegistry(resolved_settings)
     final_reviews = FinalReviewRegistry(resolved_settings, registry)
@@ -567,15 +594,25 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         configure_logging(resolved_settings.log_level)
-        registry.load_catalog()
-        final_reviews.load_catalog()
-        if start_worker:
+        if controlled_recovery is None:
+            registry.load_catalog()
+            final_reviews.load_catalog()
+        else:
+            store = open_controlled_project(controlled_recovery)
+            registry.attach_controlled(store, controlled_recovery.project_id)
+            batch = final_reviews.open(
+                controlled_recovery.final_review_manifest_path, remember=False
+            )
+            if batch["id"] != controlled_recovery.final_review_batch_id:
+                raise ProjectError("Controlled final-review batch changed after preflight")
+            final_reviews.find_item(controlled_recovery.final_review_item_id)
+        if start_worker and controlled_recovery is None:
             await queue.start()
         app.state.ready = True
         try:
             yield
         finally:
-            if start_worker:
+            if start_worker and controlled_recovery is None:
                 await queue.stop()
 
     app = FastAPI(
@@ -589,6 +626,8 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     app.state.providers = providers
     app.state.queue = queue
     app.state.bundled_models = bundled_models
+    app.state.controlled_recovery = controlled_recovery
+    app.state.controlled_preflight = controlled_preflight
     app.state.ready = False
     app.add_middleware(
         CORSMiddleware,
@@ -695,7 +734,142 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     async def bad_request_handler(_request: Request, error: Exception) -> JSONResponse:
         return JSONResponse(status_code=400, content={"detail": str(error)})
 
-    router = APIRouter(prefix="/api")
+    controlled_mutations = {
+        "page_regions_reopen",
+        "page_regions_gate",
+        "region_patch",
+        "region_background_classification",
+        "region_ocr_source_review",
+        "page_background_gate",
+        "page_ocr_gate",
+        "page_mask_reopen",
+        "page_mask_draft",
+        "page_mask_gate",
+        "page_cloud_full_page_candidate",
+        "page_cloud_full_page_review",
+        "page_translation_candidate_revision",
+        "page_translation_candidate_review",
+        "page_translation_gate",
+        "page_typeset_candidate_review",
+        "job_create",
+        "job_action",
+        "final_review_item_refresh",
+    }
+    controlled_reads = {
+        "health",
+        "project_get",
+        "page_generations_list",
+        "page_lineage_events_list",
+        "page_background_gate_context",
+        "page_ocr_gate_context",
+        "page_mask_gate_context",
+        "page_mask_artifact",
+        "page_cloud_full_page_context",
+        "page_cloud_full_page_artifact",
+        "page_cloud_full_page_raw_artifact",
+        "page_translation_gate_context",
+        "page_typeset_gate_context",
+        "page_typeset_candidate",
+        "image_content",
+        "image_thumbnail",
+        "image_generated",
+        "regions_list",
+        "job_get",
+        "final_review_item_revisions",
+        "final_review_item_content",
+        "final_review_item_thumbnail",
+        "final_review_item_artifact",
+        "controlled_recovery_preflight",
+    }
+
+    def _controlled_identity_values(value: Any) -> list[tuple[str, Any]]:
+        found: list[tuple[str, Any]] = []
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                found.append((key, nested))
+                found.extend(_controlled_identity_values(nested))
+        elif isinstance(value, list):
+            for nested in value:
+                found.extend(_controlled_identity_values(nested))
+        return found
+
+    async def controlled_route_guard(request: Request) -> None:
+        binding = controlled_recovery
+        if binding is None:
+            return
+        endpoint = request.scope.get("endpoint")
+        endpoint_name = getattr(endpoint, "__name__", "")
+        allowed = controlled_reads if request.method in {"GET", "HEAD"} else controlled_mutations
+        if endpoint_name not in allowed:
+            raise HTTPException(
+                status_code=403, detail="Endpoint is disabled in controlled recovery"
+            )
+        expected_path_ids = {
+            "project_id": binding.project_id,
+            "image_id": binding.image_id,
+            "generation_id": binding.generation_id,
+            "item_id": binding.final_review_item_id,
+            "batch_id": binding.final_review_batch_id,
+        }
+        for key, expected in expected_path_ids.items():
+            actual = request.path_params.get(key)
+            if actual is not None and actual != expected:
+                raise HTTPException(
+                    status_code=403, detail="Resource is outside controlled recovery"
+                )
+        region_id = request.path_params.get("region_id")
+        if region_id is not None:
+            store, region = registry.find_region(region_id)
+            if store is not registry.get(binding.project_id) or region.image_id != binding.image_id:
+                raise HTTPException(status_code=403, detail="Region is outside controlled recovery")
+        job_id = request.path_params.get("job_id")
+        if job_id is not None:
+            store, job = registry.find_job(job_id)
+            pages = (job.lineage_context or {}).get("pages")
+            if (
+                store is not registry.get(binding.project_id)
+                or job.project_id != binding.project_id
+                or len(job.items) != 1
+                or job.items[0].image_id != binding.image_id
+                or job.items[0].region_id is not None
+                or (job.lineage_context or {}).get("runId") != binding.run_id
+                or not isinstance(pages, list)
+                or len(pages) != 1
+                or pages[0].get("imageId") != binding.image_id
+                or pages[0].get("pageGenerationId") != binding.generation_id
+            ):
+                raise HTTPException(status_code=403, detail="Job is outside controlled recovery")
+        if request.headers.get("content-type", "").split(";", 1)[0] == "application/json":
+            try:
+                payload = await request.json()
+            except json.JSONDecodeError:
+                return
+            identities = {
+                "projectId": binding.project_id,
+                "imageId": binding.image_id,
+                "pageGenerationId": binding.generation_id,
+                "generationId": binding.generation_id,
+                "runId": binding.run_id,
+                "finalReviewItemId": binding.final_review_item_id,
+                "batchId": binding.final_review_batch_id,
+            }
+            for key, value in _controlled_identity_values(payload):
+                expected = identities.get(key)
+                if expected is not None and str(value) != expected:
+                    raise HTTPException(
+                        status_code=403, detail="Request binding is outside controlled recovery"
+                    )
+
+    router = APIRouter(
+        prefix="/api",
+        dependencies=[Depends(controlled_route_guard)] if controlled_recovery is not None else [],
+    )
+
+    @router.get("/controlled-recovery/preflight")
+    async def controlled_recovery_preflight() -> dict[str, Any]:
+        if controlled_preflight is None:
+            raise HTTPException(status_code=404, detail="Controlled recovery is not active")
+        return controlled_preflight.public()
 
     @router.get("/health", response_model=HealthOut)
     async def health() -> dict[str, Any]:
@@ -1473,6 +1647,20 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
             raise HTTPException(status_code=422, detail="metadata must be valid JSON") from error
         if not isinstance(metadata, dict):
             raise HTTPException(status_code=422, detail="metadata must be a JSON object")
+        if controlled_recovery is not None:
+            for key, expected in {
+                "imageId": controlled_recovery.image_id,
+                "pageGenerationId": controlled_recovery.generation_id,
+                "generationId": controlled_recovery.generation_id,
+                "runId": controlled_recovery.run_id,
+                "finalReviewItemId": controlled_recovery.final_review_item_id,
+            }.items():
+                for found_key, value in _controlled_identity_values(metadata):
+                    if found_key == key and str(value) != expected:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Cloud candidate binding is outside controlled recovery",
+                        )
 
         def item_verdict_lookup(item_id: str) -> str | None:
             try:
@@ -1994,6 +2182,19 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         }:
             raise HTTPException(status_code=404, detail="Unknown project operation")
         store = registry.get(project_id)
+        if controlled_recovery is not None:
+            lineage_pages = body.lineage.pages if body.lineage is not None else []
+            if (
+                kind not in controlled_recovery.executable_job_kinds
+                or body.image_ids != [controlled_recovery.image_id]
+                or bool(body.region_ids)
+                or body.lineage is None
+                or body.lineage.run_id != controlled_recovery.run_id
+                or len(lineage_pages) != 1
+                or str(lineage_pages[0].image_id) != controlled_recovery.image_id
+                or str(lineage_pages[0].page_generation_id) != controlled_recovery.generation_id
+            ):
+                raise HTTPException(status_code=403, detail="Job is outside controlled recovery")
         job = queue.create_job(
             store,
             kind=kind,
@@ -2027,6 +2228,20 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
     @router.post("/jobs/{job_id}/{action}", response_model=JobOut)
     async def job_action(job_id: str, action: str) -> dict[str, Any]:
         store, _job = registry.find_job(job_id)
+        if controlled_recovery is not None:
+            if action != "execute":
+                raise HTTPException(status_code=403, detail="Job action is disabled")
+            return _job_dict(
+                await queue.execute_controlled_job(
+                    store,
+                    job_id,
+                    project_id=controlled_recovery.project_id,
+                    image_id=controlled_recovery.image_id,
+                    generation_id=controlled_recovery.generation_id,
+                    run_id=controlled_recovery.run_id,
+                    allowed_kinds=controlled_recovery.executable_job_kinds,
+                )
+            )
         actions = {
             "pause": queue.pause,
             "resume": queue.resume,
@@ -2039,10 +2254,18 @@ def create_app(settings: Settings | None = None, *, start_worker: bool = True) -
         return _job_dict(operation(store, job_id))
 
     app.include_router(router)
-    workbench = resolve_frontend_dist(resolved_settings)
+    workbench = resolve_frontend_dist(resolved_settings) if controlled_recovery is None else None
     if workbench is not None:
         app.mount("/", StaticFiles(directory=workbench, html=True), name="workbench")
     return app
+
+
+def create_controlled_recovery_app(
+    settings: Settings,
+    binding: ControlledRecoveryBinding,
+) -> FastAPI:
+    """Create the API-only, fail-closed entry for one reviewed recovery binding."""
+    return create_app(settings, start_worker=False, controlled_recovery=binding)
 
 
 app = create_app()

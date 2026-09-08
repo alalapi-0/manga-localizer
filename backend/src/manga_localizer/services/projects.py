@@ -481,7 +481,6 @@ def add_revision(
 class ProjectRegistry:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.settings.data_dir.mkdir(parents=True, exist_ok=True)
         self._stores: dict[str, ProjectStore] = {}
         self._lock = threading.RLock()
 
@@ -493,6 +492,7 @@ class ProjectRegistry:
         return raw if isinstance(raw, list) else []
 
     def _save_catalog(self) -> None:
+        self.settings.catalog_path.parent.mkdir(parents=True, exist_ok=True)
         entries = [
             {
                 "projectId": project_id,
@@ -516,6 +516,16 @@ class ProjectRegistry:
             except (ProjectError, OSError, ValueError, json.JSONDecodeError):
                 continue
         self._save_catalog()
+
+    def attach_controlled(self, store: ProjectStore, project_id: str) -> None:
+        """Attach one preflighted store without reading or rewriting the catalog."""
+        project = store.project()
+        if project.id != project_id:
+            raise ProjectError("Controlled project id does not match the opened database")
+        with self._lock:
+            if self._stores and set(self._stores) != {project_id}:
+                raise ProjectError("Controlled registry cannot attach another project")
+            self._stores[project_id] = store
 
     def create(
         self,

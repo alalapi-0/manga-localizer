@@ -7,10 +7,25 @@ import json
 import re
 import subprocess
 from pathlib import Path
+from uuid import UUID
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+INACTIVE_EXECUTION = "not_active_in_this_governance_goal"
+BOUNDED_EXECUTION = "owner_authorized_single_page_recovery"
+RECOVERY_EFFECTS = {
+    "g4_reopen",
+    "g4_regions",
+    "g5_classification",
+    "g6_source_review",
+    "g7_mask",
+    "g8_native_generation",
+    "g8_native_ingest",
+    "g9_bind",
+    "g10_typeset",
+    "final_review_refresh",
+}
 
 
 class StateError(ValueError):
@@ -48,7 +63,151 @@ def load_document(data: bytes) -> dict:
     return result
 
 
-def validate_documents(state: dict, declaration: dict) -> dict:
+def _bound_document(root: Path, relative: object) -> bytes:
+    if not isinstance(relative, str):
+        raise StateError("Recovery document reference is missing")
+    path = Path(relative)
+    if (
+        path.is_absolute()
+        or ".." in path.parts
+        or path.parts[:3] != ("docs", "reports", "all-projects-governance")
+    ):
+        raise StateError(
+            "Recovery documents must remain in the project evidence directory"
+        )
+    target = root / path
+    current = root
+    for part in path.parts:
+        current /= part
+        if current.is_symlink():
+            raise StateError("Recovery document routes cannot use symlinks")
+    if not target.is_file() or not target.resolve().is_relative_to(root.resolve()):
+        raise StateError("Recovery document reference is unavailable")
+    raw = target.read_bytes()
+    if not raw or len(raw) > 65536:
+        raise StateError("Recovery document must be nonempty and compact")
+    return raw
+
+
+def _validate_execution(state: dict, root: Path) -> str:
+    control = state["execution_control"]
+    mode = control["project_execution"]
+    if mode == INACTIVE_EXECUTION:
+        return mode
+    if mode != BOUNDED_EXECUTION:
+        raise StateError("Unknown project execution declaration")
+    if (
+        control.get("state") != "OWNER_R2_REVIEW"
+        or control.get("authority") != "owner-r2-review"
+        or state["current_work"].get("status") != "OWNER_R2_REVIEW"
+        or state["current_work"].get("round") != "owner-r2-review"
+    ):
+        raise StateError("Bounded recovery must retain the owner final-review state")
+    recovery = control.get("recovery")
+    unit = state.get("all_projects_governance", {})
+    if not isinstance(recovery, dict) or unit.get("stage") != "C":
+        raise StateError("Bounded recovery requires the current real-effect stage")
+    activation = recovery.get("activation_ref")
+    if not isinstance(activation, str) or not re.fullmatch(
+        r"owner-(?:goal|turn):[^\s]+", activation
+    ):
+        raise StateError(
+            "Bounded recovery requires an explicit owner activation reference"
+        )
+    if recovery.get("contract") != unit.get("contract") or recovery.get(
+        "registration"
+    ) != unit.get("candidate_manifest"):
+        raise StateError("Recovery must bind the current contract and registration")
+    contract = _bound_document(root, recovery.get("contract"))
+    registration = load_document(_bound_document(root, recovery.get("registration")))
+    contract_id = recovery.get("contract_id")
+    if (
+        not isinstance(contract_id, str)
+        or not contract_id
+        or registration.get("contract_id") != contract_id
+        or registration.get("contract") != recovery["contract"]
+        or registration.get("contract_sha256") != hashlib.sha256(contract).hexdigest()
+        or contract_id not in contract.decode("utf-8")
+        or registration.get("stage") != "C"
+        or registration.get("activation_ref") != activation
+    ):
+        raise StateError("Recovery contract identity is detached from its registration")
+    plan = registration.get("accepted_execution_plan", {})
+    if (
+        not isinstance(plan, dict)
+        or plan.get("judge") != "PASS"
+        or plan.get("governor") != "APPROVE"
+        or not re.fullmatch(r"[0-9a-f]{64}", str(plan.get("semantic_sha256", "")))
+    ):
+        raise StateError("The current execution plan lacks registered acceptance")
+    target = recovery.get("target")
+    if not isinstance(target, dict) or target != registration.get("target"):
+        raise StateError("Recovery must bind one exact registered target")
+    if set(target) != {
+        "page",
+        "project_id",
+        "batch_id",
+        "item_id",
+        "image_id",
+        "generation_id",
+        "run_id",
+    }:
+        raise StateError("Recovery target identity is incomplete")
+    if (
+        type(target["page"]) is not int
+        or not 1 <= target["page"] <= state["progress"]["total"]
+    ):
+        raise StateError("Recovery page is outside the observed corpus")
+    for key in ("project_id", "batch_id", "item_id", "image_id", "generation_id"):
+        value = target[key]
+        try:
+            valid = isinstance(value, str) and str(UUID(value)) == value
+        except ValueError:
+            valid = False
+        if not valid:
+            raise StateError("Recovery identity must use canonical UUIDs")
+    if (
+        target["batch_id"] != state["catalog_observation"]["batch_id"]
+        or not isinstance(target["run_id"], str)
+        or not target["run_id"].strip()
+        or target["page"] in state["catalog_observation"].get("pending_pages", [])
+    ):
+        raise StateError(
+            "Recovery cannot target a detached batch or owner-pending page"
+        )
+    limits = recovery.get("limits", {})
+    required_limits = {
+        "page_slots": 1,
+        "native_generation_limit": 1,
+        "g8_ingest_concurrency": 1,
+        "automatic_owner_approval": False,
+        "export_allowed": False,
+        "background_worker_allowed": False,
+    }
+    if (
+        not isinstance(limits, dict)
+        or limits != required_limits
+        or any(
+            type(limits[k]) is not type(value) for k, value in required_limits.items()
+        )
+    ):
+        raise StateError("Recovery must retain the exact single-page effect limits")
+    effects = recovery.get("effects")
+    if (
+        not isinstance(effects, list)
+        or not all(isinstance(effect, str) for effect in effects)
+        or len(effects) != len(RECOVERY_EFFECTS)
+        or set(effects) != RECOVERY_EFFECTS
+    ):
+        raise StateError("Recovery effects must match the bounded gate chain")
+    if registration.get("limits") != limits or registration.get("effects") != effects:
+        raise StateError(
+            "Recovery limits/effects differ from the accepted registration"
+        )
+    return mode
+
+
+def validate_documents(state: dict, declaration: dict, *, root: Path = ROOT) -> dict:
     if state["metadata"]["sole_source"] != ".agent/STATE.yaml":
         raise StateError("The sole state path changed")
     if (
@@ -57,8 +216,7 @@ def validate_documents(state: dict, declaration: dict) -> dict:
     ):
         raise StateError("State identity/format is inconsistent")
     control = state["execution_control"]
-    if control["project_execution"] != "not_active_in_this_governance_goal":
-        raise StateError("This maintenance state cannot activate page execution")
+    execution_mode = _validate_execution(state, root)
     if state["current_work"]["status"] != control["state"]:
         raise StateError("Current business and execution states disagree")
     observation, progress = state["catalog_observation"], state["progress"]
@@ -133,6 +291,8 @@ def validate_documents(state: dict, declaration: dict) -> dict:
         "fallback_reasons": len(unknown),
         "progress": progress["completed"],
         "total": progress["total"],
+        "execution_declaration": execution_mode,
+        "grants_execution_authority": False,
     }
 
 

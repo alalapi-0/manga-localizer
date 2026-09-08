@@ -118,10 +118,15 @@
     {
       "command": "git diff --check and node --check external-uv.mjs/verify-final-review-retry-ui.mjs",
       "exit": 0
+    },
+    {
+      "command": "npm run audit:ci -- --base 0e2a03b27e15661b18d25c96d236577751b3391c --head f97852faed4cfc61cc0dca0227f0d961aa60d9e1",
+      "exit": 0,
+      "result": "Whole committed series PASS: candidate230,index230,historical1593,live227,inertCursor2,Cursor live0; normal CI is not release acceptance.",
+      "log_sha256": "6a3af70f854091a3e2466b28a6d33b7b6ec86aca5fd1b7355911ca5a56b49fc1"
     }
   ],
   "pending": [
-    "whole-series final audit",
     "fresh exact Judge/Governor",
     "main delivery and CI",
     "original Stage B",
@@ -148,6 +153,11 @@
       "target": "G7 not-applicable terminal reads",
       "fingerprint": "final_reviews exactterminal, G8zeroeligible, G7latelegacyresidual, G10keep/ignore/ruby: successful G7NA PATCH followed by409readback",
       "repair": "Current G6 epoch review-event suffix retains exact artifact-free N/A reviews; all replay/checksum/residual checks retained. Original4failures and final1012tests pass."
+    },
+    {
+      "target": "whole-series audit invocation",
+      "fingerprint": "Symbolic --head HEAD rejected because audit requires nonzero full commit identities",
+      "repair": "Resolved exact full40SHA from git rev-parse; unchanged audit ran successfully against full series."
     }
   ],
   "browser": {
@@ -163,5 +173,10 @@
       "390-save-error.png": "fd4ca9e9822960b1c21c177b452fa59198b7c62d1f102111be1ea17a702203d7",
       "1440-hash-denied.png": "9ef08b6f5becc49ef43ccd24ff9396128d9ce61ba889673a265e76fc84d6ec6b"
     }
+  },
+  "review_registration": {
+    "candidate_commit": "f97852faed4cfc61cc0dca0227f0d961aa60d9e1",
+    "semantic_sha256": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+    "original_recheck": "59 paths,HEAD,index unchanged before fresh review; latest native original turn remains failed/completed1788573141; not resumed."
   }
 }

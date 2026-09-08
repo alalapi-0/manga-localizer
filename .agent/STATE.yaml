@@ -38,9 +38,9 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Review and deliver the truthful Page134 Stage D failure receipt; then diagnose the retained
-    left-side mask/composite defects from image73/next92 before proposing a materially new recovery plan.
-    No second generation under this unit.
+  next_action: Deliver the accepted Stage D failure receipt to Manga main and verify remote ancestry/CI;
+    then develop a materially new G7 plan for left glyph/white-halo/internal-hole coverage from image73/next92.
+    No second generation in this unit.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
@@ -112,10 +112,10 @@ verification:
     OCR/new mask, one native generation and one ingest verified; G8 formally rejected. No G9/G10/refresh.
     Whole-table and2624 old-media preservation PASS; this does not accept image quality.
 delivery:
-  status: prior_source_main_verified_actual_receipt_pending
+  status: accepted_effect_receipt_pending_main_verification
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b
+  commit: eeda45ad7cb658e7aecab89d468425662c085898
   receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
@@ -131,10 +131,10 @@ all_projects_governance:
   stage: D
   contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
   baseline: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-  candidate_status: actual_failure_receipt_frozen_for_independent_review
-  next_action: Review and deliver the truthful Page134 Stage D failure receipt; then diagnose the retained
-    left-side mask/composite defects from image73/next92 before proposing a materially new recovery plan.
-    No second generation under this unit.
+  candidate_status: stage_d_failure_receipt_accepted_pending_delivery
+  next_action: Deliver the accepted Stage D failure receipt to Manga main and verify remote ancestry/CI;
+    then develop a materially new G7 plan for left glyph/white-halo/internal-hole coverage from image73/next92.
+    No second generation in this unit.
   budget:
     native_tokens: 12110247
     native_seconds: 46491

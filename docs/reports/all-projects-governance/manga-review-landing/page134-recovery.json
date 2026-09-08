@@ -3,7 +3,7 @@
   "contract": "docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md",
   "lane": "GOVERNED",
   "stage": "D",
-  "status": "actual_g8_rejected_effect_receipt_pending_review",
+  "status": "stage_d_accepted_pending_main_delivery",
   "baseline_main": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
   "governor_origin": "/root/hub_connection_governor native contract decision before mutation",
   "original": {
@@ -363,7 +363,15 @@
       "state_cli": "valid21 fields,20mapped1unknown,140/199,inactive,grants_execution_authority:false",
       "git_diff_check": 0,
       "actual_verification": "PASS; all expected target effects, no schema/non-target/history/oldmedia/Git changes",
-      "code_verification_reuse": "9 unchanged installed implementation files remain byte-exact accepted Stage A; source backend/frontend/E2E and CI34239969045 acceptance reused. Only canonical state and sanitized registration changed."
+      "code_verification_reuse": "9 unchanged installed implementation files remain byte-exact accepted Stage A; source backend/frontend/E2E and CI34239969045 acceptance reused. Only canonical state and sanitized registration changed.",
+      "normal_ci_audit": {
+        "exit_code": 0,
+        "base": "1aa3fb8a80241bf7a533b13eeb08771a428f4839",
+        "head": "eeda45ad7cb658e7aecab89d468425662c085898",
+        "coverage": "candidate241,index_blobs241,historical_blob_paths1617,live_content_reads238,inert_cursor_objects2,cursor_live_content_reads0",
+        "meaning": "Audit passed for full Stage A-D series; normal CI is not release acceptance",
+        "command": "npm run audit:ci -- --base 1aa3fb8a80241bf7a533b13eeb08771a428f4839 --head eeda45ad7cb658e7aecab89d468425662c085898"
+      }
     }
   },
   "preserved_limits": {
@@ -453,6 +461,38 @@
       "semantic_sha256": "30a7422a78ed793327da9e3dd66b2c6e09b3acc9574cd40c6fdbf664345ccd3f",
       "evidence_origin": "Native collaboration FINAL_ANSWER APPROVE after registered fresh Judge PASS",
       "scope": "Execute only the accepted Stage C plan with fresh preimages/CAS, one bounded loopback server, local Tesseract, one native image generation and one ingest. All existing visual checks, no other pages/owner approval/export. At most10 target new media and predicted table/column/row effects. Actual result requires fresh Stage D Judge/Governor before sanitized main delivery."
+    },
+    "stage_d_judge": {
+      "agent": "/root/manga_page134_stage_d_judge_v1",
+      "role": "fresh read-only Judge",
+      "verdict": "PASS",
+      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
+      "stage": "D",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
+      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
+      "evidence_origin": "Native collaboration FINAL_ANSWER PASS; Root faithful result registration",
+      "independent_checks": [
+        "Exact candidate/contract/state semantic/artifact/script hashes match; dirty registration only excluded metadata",
+        "Readonly actual verifier PASS; target-only3completedjobs,12OCRcalls,1generation,1ingest,3newmedia",
+        "Schemas/FKs,199reviewrows,2624oldmedia,non-target rows,originalHEAD/index and installed Stage A protected",
+        "G8formallyrejected; noG9/G10/refresh/ownerapproval/secondgeneration",
+        "Both visual assessments and five common failures/two label differences retained",
+        "State valid,26tests PASS,inactive,140/56/3 and materially-new-plan recovery",
+        "Later left-mask pixel diagnosis reinforces failure without changing candidate/historicalG7review"
+      ],
+      "scope": "Truthful bounded failed-at-G8 effect receipt only. Does not accept image quality, Page134/owner/all-project completion, remote delivery or CI."
+    },
+    "stage_d_governor": {
+      "agent": "/root/hub_connection_governor",
+      "role": "read-only Governor",
+      "decision": "APPROVE",
+      "stage": "D",
+      "contract_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-PAGE134-CONTROLLED-RECOVERY-v1",
+      "semantic_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
+      "state_semantic_sha256": "fb77bc2eec5fd9ae0c24cb276f044a6d0c24f6f308df66962284633cdc413897",
+      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
+      "evidence_origin": "Native collaboration FINAL_ANSWER APPROVE after fresh Judge FINAL PASS registered",
+      "scope": "Only truthful bounded failed-at-G8 receipt and normal source-main delivery, remote ancestry and CI verification. No image-quality/Page134/owner/project/Goal completion accepted; no new data/G7/OCR/imagegen/ingest effects authorized."
     }
   },
   "delivery": {
@@ -471,6 +511,15 @@
       "backend": "success",
       "frontend": "success",
       "e2e": "success"
+    },
+    "stage_d": {
+      "status": "accepted_pending_main_delivery",
+      "candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898",
+      "branch": "main",
+      "remote": "https://github.com/alalapi-0/manga-localizer",
+      "last_observed_remote_main": "bf5c7132ef8c5cc1b858a4f5ebce81272ef4025b",
+      "ci": "pending for Stage D; Stage A CI34239969045 remains verified",
+      "receipt_identity": "This record names the already-existing candidate commit; containing receipt commit is recorded through native output/Hub later, avoiding self-reference."
     }
   },
   "budget": {
@@ -1394,5 +1443,6 @@
     "g9_g10_refresh_count": 0
   },
   "stage_d_candidate_sha256": "d1c93d67aa28a4b37a8a5bb9ddd5373905b17cb1eccff5ee0cf2c0848c9ade41",
-  "stage_d_candidate_hash_recipe": "SHA256 of sorted-key compact UTF8 JSON stage_d_candidate; state hash uses same encoding after removing only state_omitted_metadata paths. Reviews/delivery/next-action metadata outside candidate identity."
+  "stage_d_candidate_hash_recipe": "SHA256 of sorted-key compact UTF8 JSON stage_d_candidate; state hash uses same encoding after removing only state_omitted_metadata paths. Reviews/delivery/next-action metadata outside candidate identity.",
+  "stage_d_candidate_commit": "eeda45ad7cb658e7aecab89d468425662c085898"
 }

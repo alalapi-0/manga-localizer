@@ -45,6 +45,7 @@ function repairResult(
     pageGenerationId: `generation-${item.id}`,
     runId: `final-review-${item.id.slice(0, 8)}-r${item.revision}`,
     finalReviewItemRevision: item.revision,
+    originFinalReviewItemRevision: item.revision,
     batchRevision: 1,
     artifactRevision: item.artifactRevision,
     nextSequence: 2,

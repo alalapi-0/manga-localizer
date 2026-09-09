@@ -1009,6 +1009,13 @@ def create_app(
     @router.post("/final-review-items/{item_id}/repair", status_code=201)
     async def final_review_item_repair(item_id: str, body: FinalReviewItemRepair) -> dict[str, Any]:
         store = final_reviews.find_item(item_id)
+        # A request that omits the parameter fields is an idempotent reopen
+        # request.  Keep explicit parameter selections strict while allowing
+        # the service to discover the immutable handoff recipe for an existing
+        # head (including a later owner-issues bounce).
+        parameter_set_explicit = bool(
+            {"parameter_set_id", "parameter_set_hash"} & body.model_fields_set
+        )
         return await asyncio.to_thread(
             store.repair,
             item_id,
@@ -1017,6 +1024,7 @@ def create_app(
             actor=body.actor,
             parameter_set_id=body.parameter_set_id,
             parameter_set_hash=body.parameter_set_hash,
+            parameter_set_explicit=parameter_set_explicit,
             retry_from_generation_id=(
                 str(body.retry_from_generation_id)
                 if body.retry_from_generation_id is not None

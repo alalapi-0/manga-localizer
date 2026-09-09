@@ -42,7 +42,7 @@ function repairResult(
     itemId, sourceProjectId: 'project-1', sourceImageId,
     repairProjectId: 'project-1', repairImageId: 'repair-image-new',
     pageGenerationId: 'generation-new', runId: `final-review-${itemId.slice(0, 8)}-r1`,
-    finalReviewItemRevision: 1, batchRevision: 1, artifactRevision: 1, nextSequence: 2,
+    finalReviewItemRevision: 1, originFinalReviewItemRevision: 1, batchRevision: 1, artifactRevision: 1, nextSequence: 2,
     parameterSetId: 'final-review-repair-v1', parameterSetHash: REPAIR_PARAMETER_SET_HASH,
     repairAttempt: 1, retryFromGenerationId: null,
     idempotent: false,
@@ -505,7 +505,7 @@ describe('final review page', () => {
         issueCodes: ['translation', 'typesetting'], feedback: '第三个气泡需要重排',
         sourceProjectId: 'project-1', sourceImageId: 'image-3', pageGenerationId: 'generation-3',
         repairProjectId: 'project-1', repairImageId: 'image-3',
-        runId: 'run-3', itemRevision: 2, batchRevision: 3, artifactRevision: 1,
+        runId: 'run-3', itemRevision: 2, originItemRevision: 2, batchRevision: 3, artifactRevision: 1,
         nextSequence: 1, parameterSetId: 'final-review-repair-v1', parameterSetHash: 'a'.repeat(64),
       },
     });

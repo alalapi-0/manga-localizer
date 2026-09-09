@@ -34,6 +34,7 @@ export interface FinalReviewRepairContext {
   pageGenerationId: string;
   runId: string;
   itemRevision: number;
+  originItemRevision: number;
   batchRevision: number;
   artifactRevision: number;
   nextSequence: number;
@@ -742,7 +743,10 @@ function assertAuthoritativeRepairResult(
   expectedItem: FinalReviewItem,
   expectedBatchRevision: number,
 ): void {
-  const baseRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${expectedItem.revision}`;
+  const originItemRevision = result?.originFinalReviewItemRevision;
+  const originRevisionValid = Number.isSafeInteger(originItemRevision)
+    && originItemRevision >= 1 && originItemRevision <= expectedItem.revision;
+  const baseRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${originItemRevision}`;
   const attempt = result?.repairAttempt;
   const lineageMatches = result && Number.isSafeInteger(attempt) && attempt >= 1 && (
     attempt === 1
@@ -750,6 +754,13 @@ function assertAuthoritativeRepairResult(
       : nonEmptyString(result.retryFromGenerationId) && result.retryFromGenerationId !== result.pageGenerationId
   );
   const expectedRunId = attempt > 1 ? `${baseRunId}-a${attempt}` : baseRunId;
+  const parameterSetIdValid = typeof result?.parameterSetId === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(result.parameterSetId);
+  const parameterSetHashValid = typeof result?.parameterSetHash === 'string'
+    && /^[a-f0-9]{64}$/.test(result.parameterSetHash);
+  const parameterIdentityValid = parameterSetIdValid && parameterSetHashValid;
+  const freshDefaultIdentity = result?.parameterSetId === REPAIR_PARAMETER_SET_ID
+    && result?.parameterSetHash === REPAIR_PARAMETER_SET_HASH;
   const sequenceMatches = result && Number.isSafeInteger(result.nextSequence) && (
     result.idempotent === false
       ? result.nextSequence === 2
@@ -760,14 +771,16 @@ function assertAuthoritativeRepairResult(
     || result.sourceProjectId !== expectedItem.sourceProjectId
     || result.sourceImageId !== expectedItem.sourceImageId
     || result.finalReviewItemRevision !== expectedItem.revision
+    || !originRevisionValid
+    || (result.idempotent === false && originItemRevision !== expectedItem.revision)
     || result.artifactRevision !== expectedItem.artifactRevision
     || result.batchRevision !== expectedBatchRevision
     || result.repairProjectId !== expectedItem.sourceProjectId
     || !nonEmptyString(result.repairImageId) || result.repairImageId === expectedItem.sourceImageId
     || !nonEmptyString(result.pageGenerationId) || result.runId !== expectedRunId
     || !lineageMatches || !sequenceMatches
-    || result.parameterSetId !== REPAIR_PARAMETER_SET_ID
-    || result.parameterSetHash !== REPAIR_PARAMETER_SET_HASH
+    || !parameterIdentityValid
+    || (result.idempotent === false ? !freshDefaultIdentity : false)
   ) {
     throw new ApiError('终审修复响应缺少匹配当前终审项的权威 handoff', 502, {
       code: 'INVALID_FINAL_REVIEW_REPAIR_RESPONSE',
@@ -1303,6 +1316,7 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
       pageGenerationId: result.pageGenerationId,
       runId: result.runId,
       itemRevision: result.finalReviewItemRevision,
+      originItemRevision: result.originFinalReviewItemRevision,
       batchRevision: result.batchRevision,
       artifactRevision: result.artifactRevision,
       nextSequence: result.nextSequence,

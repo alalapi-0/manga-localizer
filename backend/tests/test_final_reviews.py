@@ -4,6 +4,7 @@ import hashlib
 import json
 import sqlite3
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
@@ -106,6 +107,50 @@ def test_legacy_reentry_from_captured_failure_metadata(
     assert stale.status_code == 409, stale.text
     live = client.get(f"/api/final-review-batches/{batch['id']}").json()
     assert live["items"][0]["verdict"] == "pending"
+    current = live["items"][0]
+    approved = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "approved",
+            "issueCodes": [],
+            "feedback": "",
+            "expectedRevision": current["revision"],
+            "expectedBatchRevision": live["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    accepted = approved.json()
+    assert accepted["historyCreated"] is True
+    assert accepted["item"]["verdict"] == "approved"
+    assert accepted["item"]["strictEvidence"] is True
+    assert accepted["item"]["artifactRevision"] == case["artifact_revision"] + 1
+    # This project has one owner final-review stage; no second reviewer is configured.
+    # Replaying the accepted decision is therefore the terminal idempotent path.
+    repeated_approval = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "approved",
+            "issueCodes": [],
+            "feedback": "",
+            "expectedRevision": accepted["item"]["revision"],
+            "expectedBatchRevision": accepted["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert repeated_approval.status_code == 200, repeated_approval.text
+    assert repeated_approval.json()["historyCreated"] is False
+    export_root = tmp_path / "isolated-accepted-export"
+    exported = client.post(
+        f"/api/final-review-batches/{batch['id']}/export",
+        json={
+            "outputPath": str(export_root),
+            "expectedBatchRevision": accepted["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert exported.status_code == 200, exported.text
+    assert (export_root / "manifest.json").is_file()
 
 
 def _strict_project(app, client: TestClient, tmp_path: Path) -> tuple[dict, dict]:
@@ -957,6 +1002,58 @@ def test_issue_repair_isolated_g0_idempotent_and_verdict_unchanged(
     assert client.get(old_url).content == old_bytes
     missing = client.get(f"/api/final-review-items/{item['id']}/artifacts/final?artifactRevision=3")
     assert missing.status_code == 404
+
+
+def test_issue_repair_concurrent_duplicate_creates_one_handoff(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    batch = _strict_batch(app, client, tmp_path)
+    item = batch["items"][0]
+    saved = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "issues",
+            "issueCodes": ["translation"],
+            "feedback": "concurrent repair",
+            "expectedRevision": item["revision"],
+            "expectedBatchRevision": batch["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    saved_payload = saved.json()
+    request = {
+        "expectedRevision": saved_payload["item"]["revision"],
+        "expectedBatchRevision": saved_payload["batchRevision"],
+        "actor": _ACTOR,
+    }
+    barrier = threading.Barrier(3)
+
+    def begin_repair():
+        barrier.wait(timeout=5)
+        return client.post(f"/api/final-review-items/{item['id']}/repair", json=request)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(begin_repair) for _ in range(2)]
+        barrier.wait(timeout=5)
+        responses = [future.result(timeout=30) for future in futures]
+
+    assert [response.status_code for response in responses] == [201, 201]
+    payloads = [response.json() for response in responses]
+    assert sorted(payload["idempotent"] for payload in payloads) == [False, True]
+    first = {key: value for key, value in payloads[0].items() if key != "idempotent"}
+    second = {key: value for key, value in payloads[1].items() if key != "idempotent"}
+    assert first == second
+    project_store = app.state.registry.get(item["sourceProjectId"])
+    with project_store.session() as session:
+        identity_events = [
+            event
+            for event in session.scalars(
+                select(PageLineageEvent).where(PageLineageEvent.gate == "G0_identity")
+            )
+            if event.evidence.get("finalReviewItemId") == item["id"]
+        ]
+    assert len(identity_events) == 1
 
 
 def test_repair_idempotence_is_bound_to_the_persisted_parameter_set(

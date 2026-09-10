@@ -122,51 +122,46 @@ history:
     Historical text cannot activate execution.
 all_projects_governance:
   task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
-  unit: V3-05-A1
+  unit: V3-05-A3
   lane: REVIEWED
   status: ACCEPTED
-  stage: delivered
-  candidate_status: Existing a761519 implementation plus the exact test-only candidate independently accepted and
-    delivered; this closes workflow evidence only, not live image quality or corpus completion.
-  next_action: Return to Hub V3-05-A2 for read-only real-versus-copy evidence reconciliation. Do not execute the 56
-    real issue repairs or the 3 pending owner reviews.
+  stage: state_delivery_pending
+  history_ref: 80360bb64cb0936518683b12e4fd1c79f3e1e527:.agent/STATE.yaml#all_projects_governance
+  candidate_status: Read-only review snapshot accepted and code delivered; it exposes separately queryable history
+    references, review stage/state, submission/rework counts, candidate revision and explicit gaps.
+  next_action: Deliver this state-only successor and verify main/CI, then return to Hub V3-06. Do not execute the 56
+    real issue repairs or 3 pending owner reviews.
   candidate_paths:
-  - backend/tests/test_final_reviews.py
-  - backend/tests/fixtures/final_review_retry_case.json
+  - scripts/verify_final_review_retry_data.py
+  - backend/tests/test_retry_metadata.py
+  - .agent/STATE.yaml
   checks:
-    inherited: a761519 main and CI34313957940; captured real identity/version metadata with synthetic media and gates,
-      production repair service, local typeset queue claim/execute, strict pending refresh and stale verdict rejection
-    candidate: 10c99d7 test-only delta; targeted terminal/concurrent/rollback/recovery checks passed; backend1108,
-      frontend461, launcher40, state and storage checks passed
-    normal_ci_audit: base a761519, head 10c99d7, candidate243/index243/historical1583/live-content240; PASS
-    github_ci: run34494108606 backend/frontend/e2e success
+    targeted: 10 passed; path/offset/read-only, immutable refs, stage/state, counts, candidate, legacy gaps,
+      intermediate history gap, stable pagination digest and newline-inclusive 8KiB bound
+    backend: 1113 passed; ruff and format passed
+    state: valid; history_preserved=true; grants_execution_authority=false
+    normal_ci_audit: base80360bb,head530bce6,candidate243,index243,historical1588,live240,cursor_live0; PASS
+    github_ci: run34510060289 success for 530bce652f9f9a9c2f483a47add0277477149a9c
   review:
     verdict: PASS
-    judge: 3e4e297f-f998-4a6c-ae4c-42b6cbe06b12
-    candidate: 84f1bf03f3a332be2ce79736179c314a0ae4660dfc9fa8cb1b51d7851102c7e3
-    finding: Real-metadata and synthetic-media boundary, single handoff concurrency, ordered transaction recovery and
-      single configured owner-review terminal are sufficient for V3-05-A1.
-  metadata_coverage:
-    total: 199
-    issues: 56
-    classified: 56
-    existing_head_requires_gate_review: 54
-    ambiguous_or_invalid_provenance: 2
-    digest: e01690991d3edfeeb770c58b646b4d4b8cd4c679c70cf23d6630a1a6a3d4264a
-  image_effect_boundary:
-    contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
-    evidence: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
-    failure_fingerprint: Page134 v2 G8 de268616/actualrawfd0dc152/newmask6717e86a:5of10 visual checks failed (whiteholes/brokenjoins/structure).
-      Strictoutside0/recomposition0; formalreject. Actualimage79/next102/project9273/item2/batch485,queues0. Seriesgeneration2/ingest2
-      spent; no G9/G10/refresh.
-    actual_redo: incomplete; no new real image/API/queue effects or generation authorization
-  budget:
-    native_tokens: 13830802
-    native_seconds: 54282
-    coverage: Cumulative native Goal at actual verification; cost/cap unavailable; first250k completed and last
-      health REPLAN3903214 preserved without reset
+    judge: 82d4c534-24dc-4153-8f99-9ae0cea6a58f
+    candidate: 530bce652f9f9a9c2f483a47add0277477149a9c
+    predecessor_fail: 0250ca7642677d8debeb2e0de48a1a119e3d9007 / 5abfdd79-2333-4ecd-96c4-6bf379f06606
+    finding: Intermediate revision gaps and newline-inclusive output bounds were repaired; unified fields are
+      independent, read-only and legacy-unknown preserving.
+  snapshot_contract:
+    schema: manga-review-snapshot.v1
+    history: revision IDs only; no feedback/content
+    semantics: strict rows map current review stage/state; contiguous immutable artifacts count submissions; exact
+      refreshes count completed reworks; artifact_revision is the candidate version
+    gaps: legacy stage, incomplete review history and incomplete candidate history remain explicit
+    effects: mode=ro/query_only; no catalog, provider, queue, repair, submit, decision, acceptance or export
+  actual_business_boundary:
+    history_ref: 80360bb64cb0936518683b12e4fd1c79f3e1e527:.agent/STATE.yaml#all_projects_governance.image_effect_boundary
+    status: 140/199 complete; 56 issues and 3 pending remain; actual redo incomplete
+    effects: No real media/source read or write and no business/API/queue/provider effect in A3.
   delivery:
-    commit: 10c99d7ea89dfac8138ae166a6db3920a4250280
-    remote_main_contains: true
-    ci_run: 34494108606
-    ci: success
+    code_commit: 530bce652f9f9a9c2f483a47add0277477149a9c
+    code_ci_run: 34510060289
+    remote_main_contains_code: true
+    state_commit: pending

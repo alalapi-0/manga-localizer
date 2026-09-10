@@ -23,6 +23,13 @@ def digest(value):
     ).hexdigest()
 
 
+def bounded_json(value, *, max_output_bytes=8192):
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded.encode()) + 1 > max_output_bytes:
+        raise ValueError("JSON output exceeds byte limit including its newline")
+    return encoded
+
+
 def ro_connect(path):
     connection = sqlite3.connect(
         Path(path).resolve(strict=True).as_uri() + "?mode=ro",
@@ -177,10 +184,10 @@ def review_snapshot_summary(data_root, review_root, *, offset=0, limit=5):
             history_revisions = [row["item_revision"] for row in history]
             gaps = []
             history_valid = (
-                len(history_revisions) == len(set(history_revisions))
-                and operations.count("create") == 1
-                and history_revisions[:1] == [1]
-                and history_revisions[-1:] == [item["revision"]]
+                operations.count("create") == 1
+                and type(item["revision"]) is int
+                and item["revision"] >= 1
+                and history_revisions == list(range(1, item["revision"] + 1))
             )
             if not history_valid:
                 gaps.append("review_history_incomplete")
@@ -462,8 +469,9 @@ def main():
             offset=args.offset,
             limit=args.limit,
         )
-        encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-        if len(encoded.encode()) > 8192:
+        try:
+            encoded = bounded_json(result)
+        except ValueError:
             parser.error("review snapshot exceeds 8192 bytes; reduce --limit")
         print(encoded)
         return
@@ -483,8 +491,9 @@ def main():
             offset=args.offset,
             limit=args.limit,
         )
-        encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-        if len(encoded.encode()) > 8192:
+        try:
+            encoded = bounded_json(result)
+        except ValueError:
             parser.error("summary exceeds 8192 bytes; reduce --limit")
         print(encoded)
         return

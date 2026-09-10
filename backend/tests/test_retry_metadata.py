@@ -89,6 +89,16 @@ class RetryMetadataTests(unittest.TestCase):
     def snapshot(self, **kwargs):
         return module.review_snapshot_summary(self.root, self.review, **kwargs)
 
+    def test_bounded_json_counts_the_output_newline(self):
+        value = {"value": "boundary"}
+        encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        with self.assertRaises(ValueError):
+            module.bounded_json(value, max_output_bytes=len(encoded.encode()))
+        self.assertEqual(
+            module.bounded_json(value, max_output_bytes=len(encoded.encode()) + 1),
+            encoded,
+        )
+
     def test_full_denominator_paginated_and_read_only(self):
         before = [p.read_bytes() for p in (self.db, self.project)]
         result = self.collect(limit=1)
@@ -147,6 +157,12 @@ class RetryMetadataTests(unittest.TestCase):
         self.assertEqual(item["rework_count"], 1)
         self.assertEqual(item["candidate_revision"], 2)
         self.assertEqual(item["gaps"], ["review_history_incomplete"])
+
+    def test_review_snapshot_detects_an_intermediate_history_revision_gap(self):
+        self.sql(self.db, "DELETE FROM revisions WHERE id='ra-review-1'")
+        item = self.snapshot(limit=1)["items"][0]
+        self.assertEqual(item["review_history_refs"], ["ra-create", "ra-refresh", "ra-review-2"])
+        self.assertIn("review_history_incomplete", item["gaps"])
 
     def test_review_snapshot_preserves_explicit_legacy_and_history_gaps(self):
         self.sql(

@@ -37,9 +37,8 @@ current_work:
   status: OWNER_R2_REVIEW
   completed: false
   accepted: false
-  next_action: Normally push the independently accepted v2 failed-at-G8 receipt to Manga main, verify exact remote
-    ancestry and complete CI. Then separately enumerate all199 review items read-only to close retry-process coverage;
-    no additional image/API effects.
+  next_action: Preserve owner review at 140/199. Hub V3-05-A2 may compare the existing real and isolated-copy evidence
+    read-only; no additional image, API, provider, queue or approval effects are authorized.
   owner_role: Owner for final verdicts; explicitly authorized project Root for gated repairs.
 progress:
   completed: 140
@@ -110,10 +109,10 @@ verification:
     No G0-G6/OCR/G9/G10/refresh; all199 review rows and2627 old media preserved. Actual Stage D decisions are recorded
     in the current receipt; no image-quality acceptance.
 delivery:
-  status: stage_a_source_main_verified_actual_receipt_pending_delivery
+  status: main_verified
   remote: https://github.com/alalapi-0/manga-localizer
   branch: main
-  commit: 20f14f73446a44aa4462735ef77ee094b5c0f45c
+  commit: 10c99d7ea89dfac8138ae166a6db3920a4250280
   receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
 history:
   state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
@@ -123,32 +122,30 @@ history:
     Historical text cannot activate execution.
 all_projects_governance:
   task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
-  unit: manga_retry_metadata_reentry
+  unit: V3-05-A1
   lane: REVIEWED
-  status: ACTIVE
-  stage: isolated_verification
-  candidate_status: Local code and metadata checks passed; independent review and main delivery pending
-  next_action: Review the exact retry identity and read-only metadata candidate, run normal CI audit, then deliver
-    main. Actual image redo remains incomplete.
+  status: ACCEPTED
+  stage: delivered
+  candidate_status: Existing a761519 implementation plus the exact test-only candidate independently accepted and
+    delivered; this closes workflow evidence only, not live image quality or corpus completion.
+  next_action: Return to Hub V3-05-A2 for read-only real-versus-copy evidence reconciliation. Do not execute the 56
+    real issue repairs or the 3 pending owner reviews.
   candidate_paths:
-  - .agent/STATE.yaml
-  - backend/src/manga_localizer/main.py
-  - backend/src/manga_localizer/services/final_reviews.py
   - backend/tests/test_final_reviews.py
-  - frontend/src/api/client.test.ts
-  - frontend/src/finalReview/FinalReviewPage.test.tsx
-  - frontend/src/finalReview/store.test.ts
-  - frontend/src/finalReview/store.ts
-  - frontend/src/finalReview/types.ts
-  - scripts/verify_final_review_retry_data.py
   - backend/tests/fixtures/final_review_retry_case.json
-  - backend/tests/test_retry_metadata.py
   checks:
-    reused: backend1101/frontend461/launcher40 for unchanged original product diff
-    original_product_diff_sha256: 37f72b57911488855fe6253113edd0c2c6983385b4c961025bb5b65587d751c9
-    new: 7 targeted tests passed; selected real failure metadata with synthetic media/gates, local typeset queue/claim/execute,
-      new strict-pending artifact and stale verdict rejection
-    format_lint: changed Python paths passed
+    inherited: a761519 main and CI34313957940; captured real identity/version metadata with synthetic media and gates,
+      production repair service, local typeset queue claim/execute, strict pending refresh and stale verdict rejection
+    candidate: 10c99d7 test-only delta; targeted terminal/concurrent/rollback/recovery checks passed; backend1108,
+      frontend461, launcher40, state and storage checks passed
+    normal_ci_audit: base a761519, head 10c99d7, candidate243/index243/historical1583/live-content240; PASS
+    github_ci: run34494108606 backend/frontend/e2e success
+  review:
+    verdict: PASS
+    judge: 3e4e297f-f998-4a6c-ae4c-42b6cbe06b12
+    candidate: 84f1bf03f3a332be2ce79736179c314a0ae4660dfc9fa8cb1b51d7851102c7e3
+    finding: Real-metadata and synthetic-media boundary, single handoff concurrency, ordered transaction recovery and
+      single configured owner-review terminal are sufficient for V3-05-A1.
   metadata_coverage:
     total: 199
     issues: 56
@@ -168,3 +165,8 @@ all_projects_governance:
     native_seconds: 54282
     coverage: Cumulative native Goal at actual verification; cost/cap unavailable; first250k completed and last
       health REPLAN3903214 preserved without reset
+  delivery:
+    commit: 10c99d7ea89dfac8138ae166a6db3920a4250280
+    remote_main_contains: true
+    ci_run: 34494108606
+    ci: success

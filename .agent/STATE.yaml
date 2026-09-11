@@ -125,12 +125,11 @@ all_projects_governance:
   unit: V3-05-A3
   lane: REVIEWED
   status: ACCEPTED
-  stage: state_delivery_pending
+  stage: delivered
   history_ref: 80360bb64cb0936518683b12e4fd1c79f3e1e527:.agent/STATE.yaml#all_projects_governance
-  candidate_status: Read-only review snapshot accepted and code delivered; it exposes separately queryable history
+  candidate_status: Read-only review snapshot accepted and delivered; it exposes separately queryable history
     references, review stage/state, submission/rework counts, candidate revision and explicit gaps.
-  next_action: Deliver this state-only successor and verify main/CI, then return to Hub V3-06. Do not execute the 56
-    real issue repairs or 3 pending owner reviews.
+  next_action: Return to Hub V3-06. Do not execute the 56 real issue repairs or 3 pending owner reviews.
   candidate_paths:
   - scripts/verify_final_review_retry_data.py
   - backend/tests/test_retry_metadata.py
@@ -163,5 +162,6 @@ all_projects_governance:
   delivery:
     code_commit: 530bce652f9f9a9c2f483a47add0277477149a9c
     code_ci_run: 34510060289
-    remote_main_contains_code: true
-    state_commit: pending
+    state_record_commit: bfc3cddbd2b093098e021d068b79c147ea2673e7
+    state_ci_run: 34512759370
+    remote_main_contains: true

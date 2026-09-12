@@ -143,11 +143,15 @@ export interface FinalReviewRepairResult {
   pageGenerationId: string;
   runId: string;
   finalReviewItemRevision: number;
+  /** Immutable review revision that created the repair G0 handoff. */
+  originFinalReviewItemRevision: number;
   batchRevision: number;
   artifactRevision: number;
   nextSequence: number;
   parameterSetId: string;
   parameterSetHash: string;
+  repairAttempt: number;
+  retryFromGenerationId: string | null;
   idempotent: boolean;
 }
 

@@ -93,7 +93,13 @@ def test_unknown_profile_never_falls_back(profile):
 
 def test_registration_rejects_large_drift():
     (quality, raw, mask), _ = _texture_inputs(30)
-    with pytest.raises(ProjectError, match="bounds"):
+    with pytest.raises(
+        ProjectError,
+        match=(
+            r"^Cloud registration rejected: "
+            r"(?:transform exceeds global geometry bounds|held-out geometry disagrees)$"
+        ),
+    ):
         registration.register_whole_frame(quality, raw, mask)
 
 
@@ -133,7 +139,9 @@ def test_registration_does_not_fit_held_out_matches(monkeypatch):
     source = points.copy()
     source[held_out, 0] += 5
     monkeypatch.setattr(registration, "_matches", lambda *args: (source, points))
-    with pytest.raises(ProjectError, match="held-out"):
+    with pytest.raises(
+        ProjectError, match=r"^Cloud registration rejected: held-out geometry disagrees$"
+    ):
         registration.register_whole_frame(quality, raw, mask)
 
 
@@ -198,3 +206,42 @@ def test_registration_reproduces_in_independent_processes(tmp_path):
         for _ in range(2)
     ]
     assert json.loads(results[0]) == json.loads(results[1])
+
+
+@pytest.mark.parametrize(
+    "kind", ["translation-x", "translation-y", "scale", "shear", "rotation", "corner"]
+)
+@pytest.mark.parametrize("sign", [-1, 1])
+def test_registration_exact_geometry_bounds(kind, sign):
+    # Last safely representable interior and a small exterior value avoid
+    # pretending decimal limits are exactly representable as IEEE floats.
+    limits = registration._LIMITS
+    grid = (10, 10)
+    matrix = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    outside = matrix.copy()
+    if kind.startswith("translation"):
+        axis = 0 if kind.endswith("x") else 1
+        matrix[axis, 2] = sign * limits["maxTranslationPixels"]
+        outside[axis, 2] = sign * (limits["maxTranslationPixels"] + 1e-6)
+    elif kind == "scale":
+        boundary = 1 + sign * limits["maxScaleDifference"]
+        matrix[0, 0] = np.nextafter(boundary, 1.0)
+        outside[0, 0] = boundary + sign * 1e-8
+    elif kind == "shear":
+        matrix[0, 1] = sign * limits["maxShear"]
+        outside[0, 1] = sign * (limits["maxShear"] + 1e-8)
+    elif kind == "rotation":
+        for target, delta in ((matrix, -1e-12), (outside, 1e-8)):
+            angle = sign * (limits["maxRotationRadians"] + delta)
+            target[:, :2] = [[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]]
+    else:
+        grid = (3200, 10)
+        boundary = 1 + sign * limits["maxCornerDisplacementPixels"] / grid[0]
+        matrix[0, 0] = np.nextafter(boundary, 1.0)
+        outside[0, 0] = boundary + sign * 1e-8
+    registration._bound(matrix, grid)
+    with pytest.raises(
+        ProjectError,
+        match=r"^Cloud registration rejected: transform exceeds global geometry bounds$",
+    ):
+        registration._bound(outside, grid)

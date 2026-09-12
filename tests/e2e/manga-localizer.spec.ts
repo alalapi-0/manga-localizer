@@ -9,6 +9,42 @@ import path from 'node:path';
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
+function fixtureImageCommand(
+  fixtureImage: string,
+  env: NodeJS.ProcessEnv = process.env,
+): [string, string[]] {
+  const command = ['run', '--frozen', '--offline', '--no-sync',
+    'python', 'scripts/generate_test_image.py', fixtureImage];
+  if (env.CI === 'true' && env.MANGA_LOCALIZER_CI_LOCAL_RUNTIME === '1') {
+    return ['uv', [command[0], '--project', 'backend', ...command.slice(1)]];
+  }
+  return [process.execPath, ['scripts/external-uv.mjs', ...command]];
+}
+
+function generateFixtureImage(fixtureImage: string): void {
+  const [executable, args] = fixtureImageCommand(fixtureImage);
+  execFileSync(executable, args, { cwd: process.cwd(), stdio: 'inherit' });
+}
+
+for (const [ci, localRuntime, useCi] of [
+  [undefined, undefined, false],
+  ['true', undefined, false],
+  [undefined, '1', false],
+  ['true', '1', true],
+] as const) {
+  test(`fixture runtime requires both CI markers: ${ci}/${localRuntime}`, () => {
+    const [executable, args] = fixtureImageCommand('fixture.png', {
+      CI: ci, MANGA_LOCALIZER_CI_LOCAL_RUNTIME: localRuntime,
+    });
+    expect(executable).toBe(useCi ? 'uv' : process.execPath);
+    expect(args).toEqual(useCi
+      ? ['run', '--project', 'backend', '--frozen', '--offline', '--no-sync',
+        'python', 'scripts/generate_test_image.py', 'fixture.png']
+      : ['scripts/external-uv.mjs', 'run', '--frozen', '--offline', '--no-sync',
+        'python', 'scripts/generate_test_image.py', 'fixture.png']);
+  });
+}
+
 function checksum(file: string): string {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
@@ -42,7 +78,7 @@ async function runOnlyStage(
   );
   await queueButton.click();
   const response = await queuedResponse;
-  expect(response.status()).toBe(202);
+  expect(response.status(), await response.text()).toBe(202);
   const queued = await response.json() as { id: string };
   const completed = await waitForJob(page, queued.id);
   expect(completed, JSON.stringify(completed)).toMatchObject({
@@ -121,20 +157,7 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   const translatedText = '你好，世界';
 
   mkdirSync(path.dirname(fixtureImage), { recursive: true });
-  execFileSync(
-    process.execPath,
-    [
-      'scripts/external-uv.mjs',
-      'run',
-      '--frozen',
-      '--offline',
-      '--no-sync',
-      'python',
-      'scripts/generate_test_image.py',
-      fixtureImage,
-    ],
-    { cwd: process.cwd(), stdio: 'inherit' },
-  );
+  generateFixtureImage(fixtureImage);
   const originalChecksum = checksum(fixtureImage);
 
   await page.goto('/');
@@ -172,8 +195,14 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   const batchDialog = page.getByRole('dialog', { name: '批处理与导出' });
   await batchDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
   await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
+  await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
+  await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '嵌字排版', 'typeset');
   await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  // Render from an accepted plate, then withdraw its review to exercise export
+  // blocking and recovery against the same current artifacts.
+  await reviewVisualStage(page, '擦除', 'inpaint', '撤回复核', '待复核');
   const reviewResponse = page.waitForResponse(
     (response) => response.request().method() === 'PATCH'
       && response.url().includes('/api/images/')
@@ -202,6 +231,8 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   await batchDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await reviewVisualStage(page, '成品', 'typeset', '接受', '已接受');
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '擦除', exact: true }).click();
   await expect(page.getByRole('group', { name: '当前视觉阶段复核' }).getByRole('status')).toHaveText('已接受');
@@ -228,6 +259,8 @@ test('creates, edits, renders, exports, and reopens a local project', async ({ p
   await expect(page.getByRole('application', { name: '成品画布' })).toBeVisible();
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await expect(page.locator('.image-row__name')).toHaveText('001.png');
   await page.locator('.region-index button').first().click();
@@ -266,20 +299,7 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   const importedRelative = '日本語 章';
 
   mkdirSync(path.dirname(fixtureImage), { recursive: true });
-  execFileSync(
-    process.execPath,
-    [
-      'scripts/external-uv.mjs',
-      'run',
-      '--frozen',
-      '--offline',
-      '--no-sync',
-      'python',
-      'scripts/generate_test_image.py',
-      fixtureImage,
-    ],
-    { cwd: process.cwd(), stdio: 'inherit' },
-  );
+  generateFixtureImage(fixtureImage);
   const originalChecksum = checksum(fixtureImage);
 
   const configResponse = await page.request.get('/api/config');
@@ -353,6 +373,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   expect(JSON.stringify(detected)).not.toContain('"regionId"');
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const trustDialog = page.getByRole('dialog', { name: '批处理与导出' });
@@ -400,10 +422,16 @@ test('runs real local detection and Japanese OCR before review and export', asyn
   }
 
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await page.getByRole('button', { name: '批处理与导出' }).click();
   const translatedDialog = page.getByRole('dialog', { name: '批处理与导出' });
   await translatedDialog.locator('.choice-cards label').filter({ hasText: '当前页' }).getByRole('radio').check();
+  await runOnlyStage(page, project.id, '擦字修复', 'inpaint');
+  await translatedDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
+  await reviewVisualStage(page, '擦除', 'inpaint', '接受', '已接受');
+  await page.getByRole('button', { name: '批处理与导出' }).click();
   await runOnlyStage(page, project.id, '翻译', 'translate');
 
   await translatedDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
@@ -437,6 +465,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
     expect(response.ok()).toBe(true);
   }
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   await inspector.getByRole('tab', { name: '文本' }).click();
   await inspector
@@ -512,6 +542,8 @@ test('runs real local detection and Japanese OCR before review and export', asyn
 
   await renderDialog.getByRole('button', { name: '关闭批处理抽屉' }).click();
   await page.reload();
+  await expect(page.locator('.topbar__project-name')).toHaveText('未打开项目');
+  await page.getByRole('combobox', { name: '切换项目' }).selectOption(project.id);
   await expect(page.locator('.topbar__project-name')).toHaveText(projectName);
   for (const mode of ['增强', '擦除', '成品'] as const) {
     await page.getByRole('button', { name: mode, exact: true }).click();

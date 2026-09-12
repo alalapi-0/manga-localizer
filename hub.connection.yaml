@@ -1,0 +1,176 @@
+schema_version: '2.0'
+project_id: manga-localizer
+source_refs:
+- id: state
+  path: .agent/STATE.yaml
+  format: yaml
+  role: current_state
+mapping:
+  current_work.objective:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - objective
+    value_map: null
+  current_work.phase:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - phase
+    value_map: null
+  current_work.round:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - round
+    value_map: null
+  current_work.status:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - status
+    value_map:
+      OWNER_R2_REVIEW: blocked
+  current_work.completed:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - completed
+    value_map: null
+  current_work.accepted:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - accepted
+    value_map: null
+  current_work.next_action:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - next_action
+    value_map: null
+  current_work.owner_role:
+    source_ref: state
+    selector:
+      path:
+      - current_work
+      - owner_role
+    value_map: null
+  progress.completed:
+    source_ref: state
+    selector:
+      path:
+      - progress
+      - completed
+    value_map: null
+  progress.total:
+    source_ref: state
+    selector:
+      path:
+      - progress
+      - total
+    value_map: null
+  progress.counting_basis:
+    source_ref: state
+    selector:
+      path:
+      - progress
+      - counting_basis
+    value_map: null
+  blockers:
+    source_ref: state
+    selector:
+      path:
+      - blockers
+    value_map: null
+  verification.status:
+    source_ref: state
+    selector:
+      path:
+      - verification
+      - status
+    value_map: null
+  verification.evidence_refs:
+    source_ref: state
+    selector:
+      path:
+      - verification
+      - evidence_refs
+    value_map: null
+  verification.accepted_basis:
+    source_ref: state
+    selector:
+      path:
+      - verification
+      - accepted_basis
+    value_map: null
+  delivery.status:
+    source_ref: state
+    selector:
+      path:
+      - delivery
+      - status
+    value_map:
+      prior_code_main_verified_new_unit_in_progress: pending_delivery
+      main_verified: delivered
+  delivery.remote:
+    source_ref: state
+    selector:
+      path:
+      - delivery
+      - remote
+    value_map: null
+  delivery.branch:
+    source_ref: state
+    selector:
+      path:
+      - delivery
+      - branch
+    value_map: null
+  delivery.commit:
+    source_ref: state
+    selector:
+      path:
+      - delivery
+      - commit
+    value_map: null
+  delivery.receipt_ref:
+    source_ref: state
+    selector:
+      path:
+      - delivery
+      - receipt_ref
+    value_map: null
+unknown_fields:
+  progress.milestones: No canonical business milestone list is maintained; the source publishes owner-approved
+    page counts instead.
+  current_work.objective: The sole state has not published a non-null value for this field.
+  current_work.phase: The sole state has not published a non-null value for this field.
+  current_work.round: The sole state has not published a non-null value for this field.
+  current_work.status: The sole state has not published a non-null value for this field.
+  current_work.completed: The sole state has not published a non-null value for this field.
+  current_work.accepted: The sole state has not published a non-null value for this field.
+  current_work.next_action: The sole state has not published a non-null value for this field.
+  current_work.owner_role: The sole state has not published a non-null value for this field.
+  progress.completed: The sole state has not published a non-null value for this field.
+  progress.total: The sole state has not published a non-null value for this field.
+  progress.counting_basis: The sole state has not published a non-null value for this field.
+  blockers: The sole state has not published a non-null value for this field.
+  verification.status: The sole state has not published a non-null value for this field.
+  verification.evidence_refs: The sole state has not published a non-null value for this field.
+  verification.accepted_basis: The sole state has not published a non-null value for this field.
+  delivery.status: The sole state has not published a non-null value for this field.
+  delivery.remote: The sole state has not published a non-null value for this field.
+  delivery.branch: The sole state has not published a non-null value for this field.
+  delivery.commit: The sole state has not published a non-null value for this field.
+  delivery.receipt_ref: The sole state has not published a non-null value for this field.
+validation_entry:
+- node scripts/external-uv.mjs run --frozen --offline --no-sync python -B scripts/check_state.py
+max_read_age_seconds: 86400

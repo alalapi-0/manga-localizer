@@ -1,0 +1,15 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2",
+  "governor": "/root/startup_governor",
+  "decision": "APPROVE",
+  "semantic_sha256": "92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f",
+  "judge_ref": "judge.json",
+  "conditions": [
+    "Root commits the exact isolated candidate, never the original dirty checkout",
+    "Original integration requires matching preimages, exact owned patches and STATE splice, unrelated-body preservation",
+    "All backend/frontend/normal-audit/E2E jobs must run and pass remotely",
+    "Accepted commit must be an ancestor of remote manga main",
+    "Remain pending_delivery until remote verification; image quality blockers remain unresolved; strict release_not_ready"
+  ],
+  "evidence_origin": "native Governor final decision; compact registration by Root"
+}

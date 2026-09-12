@@ -1,0 +1,38 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2",
+  "reviewer": "/root/manga_ci_audit_judge",
+  "decision": "PASS",
+  "semantic_sha256": "92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f",
+  "registered_files_verified": 22,
+  "independent_checks": {
+    "focused_pytest": "65 passed, 1 existing warning in 22.67s",
+    "normal_ci": {
+      "exit": 0,
+      "candidate": 214,
+      "index": 209,
+      "history": 1511,
+      "live_reads": 211,
+      "inert_cursor_objects": 2,
+      "cursor_live_reads": 0
+    },
+    "release_default_and_explicit": "both exit 1, identical 16 personal-path findings, release_not_ready",
+    "live_recovery_preimage": "all fields except converted backend_code reference structurally identical",
+    "production_geometry_and_storage_guards": "unchanged from HEAD",
+    "diff_check": "PASS"
+  },
+  "review_scope": [
+    "exact registered semantic identity and preimages",
+    "CI/release split and complete-history hard checks",
+    "comparison fail-closed and exact event base/head",
+    "secret/artifact/raster pins preserved; no new allowlist",
+    "minimal lettering capability/no-enqueue guard",
+    "unchanged geometry thresholds and deterministic boundary tests",
+    "two E2E flows and four CI environment combinations"
+  ],
+  "limits": [
+    "963 backend, 454 frontend and 6 Playwright full-suite evidence inspected, not rerun",
+    "original checkout preservation remains a separate integration condition",
+    "remote full CI and accepted-commit ancestry required after normal push"
+  ],
+  "evidence_origin": "native fresh Judge final response; compact registration by Root"
+}

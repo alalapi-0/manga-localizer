@@ -8,8 +8,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn, TypedDict
 
+import numpy as np
 from PIL import Image
-from sqlalchemy import select, update
+from sqlalchemy import null, select, update
 from sqlalchemy.orm import Session
 
 from manga_localizer.database import (
@@ -23,6 +24,7 @@ from manga_localizer.database import (
     PageGeneration,
     PageLineageEvent,
     PageMaskArtifact,
+    PageMaskDraft,
     RegionOCRAttempt,
     Revision,
     TextRegion,
@@ -157,6 +159,15 @@ _G4_MUTATION_OPERATIONS = {
     "regions-deleted",
     "regions-reordered",
 }
+_G4_REOPEN_OPERATION = "regions-stage-reopened"
+_G4_DRAFT_OPERATIONS = _G4_MUTATION_OPERATIONS | {
+    "regions-stage-review",
+    _G4_REOPEN_OPERATION,
+}
+G4_MISSED_BOX_PIXELS = 200
+G4_DARK_INK = 80
+G4_NEAR_WHITE = 200
+G4_MISSED_BOX_BAND_PX = 24
 _BACKGROUND_RATIONALE_ANCHORS = {
     "white-solid": "uniform-near-white",
     "black-solid": "uniform-near-black",
@@ -1458,6 +1469,67 @@ def find_final_review_repair_generation(
     return target, generation
 
 
+def find_final_review_repair_generation_for_item(
+    store: ProjectStore,
+    session: Session,
+    *,
+    source_project_id: str,
+    source_image_id: str,
+    source_relative_path: str | None,
+    final_review_item_id: str,
+    parameter_set_id: str | None = None,
+    parameter_set_hash: str | None = None,
+) -> tuple[ImageAsset, PageGeneration] | None:
+    """Reuse the active repair generation bound to this item across later issues bounces.
+
+    G0 identity stays on the original item revision. An owner `issues` bounce
+    increments the item revision and may change issue codes; refresh must not
+    require a new G0 or `retryFromGenerationId`.
+    """
+    identities: list[tuple[int, str]] = []
+    seen: set[tuple[int, str]] = set()
+    for event in session.scalars(
+        select(PageLineageEvent).where(PageLineageEvent.gate == "G0_identity")
+    ):
+        evidence = event.evidence
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("finalReviewItemId") != final_review_item_id
+        ):
+            continue
+        item_revision = evidence.get("finalReviewItemRevision")
+        feedback_checksum = evidence.get("feedbackChecksum")
+        if type(item_revision) is not int or not isinstance(feedback_checksum, str):
+            raise ProjectError("Existing repair handoff provenance is inconsistent")
+        key = (item_revision, feedback_checksum)
+        if key in seen:
+            continue
+        seen.add(key)
+        identities.append(key)
+    heads: dict[str, tuple[ImageAsset, PageGeneration]] = {}
+    for item_revision, feedback_checksum in identities:
+        found = find_final_review_repair_generation(
+            store,
+            session,
+            source_project_id=source_project_id,
+            source_image_id=source_image_id,
+            source_relative_path=source_relative_path,
+            final_review_item_id=final_review_item_id,
+            final_review_item_revision=item_revision,
+            feedback_checksum=feedback_checksum,
+            parameter_set_id=parameter_set_id,
+            parameter_set_hash=parameter_set_hash,
+        )
+        if found is None:
+            continue
+        heads[found[1].id] = found
+    if not heads:
+        return None
+    if len(heads) > 1:
+        raise ProjectError("Final-review repair retry chain is ambiguous")
+    return next(iter(heads.values()))
+
+
 def create_final_review_repair_generation(
     store: ProjectStore,
     source_image_id: str,
@@ -2424,6 +2496,18 @@ def _current_accepted_preprocess(
     reviews = status.get("stageReviews")
     review = reviews.get("preprocess") if isinstance(reviews, dict) else None
     latest = _latest_gate_event(session, generation.id, "G1_baselineUpscale")
+    source_bound = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.gate == "G1_baselineUpscale",
+            PageLineageEvent.operation == "preprocess-stage-review",
+            PageLineageEvent.state == "accepted",
+            PageLineageEvent.parent_checksum == generation.source_checksum,
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
     if (
         status.get("preprocess") != "done"
         or not isinstance(review, dict)
@@ -2437,6 +2521,12 @@ def _current_accepted_preprocess(
             resource=f"page-generation:{generation.id}",
             reason="g1-not-accepted",
         )
+    if (
+        latest.parent_checksum != generation.source_checksum
+        and source_bound is not None
+        and latest.output_checksum == source_bound.output_checksum
+    ):
+        latest = source_bound
     artifact = _generated_page_artifact_path(store, image, "preprocessed")
     checksum = _generated_checksum(artifact, image_id=image.id)
     if (
@@ -3108,10 +3198,63 @@ def _g6_checksum_for_rows(
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _current_g6_attempt_job_item_ids(session: Session, generation_id: str) -> set[str] | None:
+    g5_accepted = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation_id,
+            PageLineageEvent.gate == "G5_background",
+            PageLineageEvent.operation == "background-stage-review",
+            PageLineageEvent.state.in_(("accepted", "not-applicable")),
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
+    if g5_accepted is None:
+        return None
+    later_g4_reopen = session.scalar(
+        select(PageLineageEvent.id)
+        .where(
+            PageLineageEvent.generation_id == generation_id,
+            PageLineageEvent.operation == _G4_REOPEN_OPERATION,
+            PageLineageEvent.sequence > g5_accepted.sequence,
+        )
+        .limit(1)
+    )
+    if later_g4_reopen is not None:
+        return set()
+    return {
+        item_id
+        for item_id in session.scalars(
+            select(PageLineageEvent.job_item_id).where(
+                PageLineageEvent.generation_id == generation_id,
+                PageLineageEvent.gate == "G6_ocr",
+                PageLineageEvent.operation == "ocr-job-enqueued",
+                PageLineageEvent.sequence > g5_accepted.sequence,
+                PageLineageEvent.job_item_id.is_not(None),
+            )
+        )
+        if item_id
+    }
+
+
+def _filter_current_g6_attempts(
+    session: Session,
+    generation_id: str,
+    attempts: list[RegionOCRAttempt],
+) -> list[RegionOCRAttempt]:
+    current_items = _current_g6_attempt_job_item_ids(session, generation_id)
+    if current_items is None:
+        return attempts
+    return [attempt for attempt in attempts if attempt.job_item_id in current_items]
+
+
 def g6_ocr_state_checksum(session: Session, image_id: str, generation_id: str) -> str:
     """Hash G6 eligibility, immutable attempts, trusted source, QC, and reviewer."""
     rows, attempts = _g6_rows_and_attempts(session, image_id, generation_id)
-    return _g6_checksum_for_rows(rows, attempts)
+    return _g6_checksum_for_rows(
+        rows, _filter_current_g6_attempts(session, generation_id, attempts)
+    )
 
 
 def _text_is_garbled(value: str) -> bool:
@@ -3940,9 +4083,7 @@ def _require_current_g4_draft(
                 PageLineageEvent.generation_id == generation.id,
                 PageLineageEvent.gate == "G4_regions",
                 PageLineageEvent.sequence > completed.sequence,
-                PageLineageEvent.operation.in_(
-                    tuple(_G4_MUTATION_OPERATIONS | {"regions-stage-review"})
-                ),
+                PageLineageEvent.operation.in_(tuple(_G4_DRAFT_OPERATIONS)),
             )
             .order_by(PageLineageEvent.sequence)
         ).all()
@@ -3966,6 +4107,17 @@ def _require_current_g4_draft(
                     reason="g4-lineage-mismatch",
                 )
             expected_checksum = event.output_checksum
+        elif event.operation == _G4_REOPEN_OPERATION:
+            if (
+                event.state != "pending"
+                or event.input_checksum != expected_checksum
+                or event.output_checksum != expected_checksum
+            ):
+                raise PageLineageConflict(
+                    "G4 missed-box reopen evidence is not bound to the current draft",
+                    resource=f"page-generation:{generation.id}",
+                    reason="g4-lineage-mismatch",
+                )
         elif event.output_checksum != expected_checksum:
             raise PageLineageConflict(
                 "G4 acceptance evidence does not match the current draft",
@@ -3986,7 +4138,115 @@ def _require_current_g4_draft(
     return expected_checksum, produced, completed
 
 
-def _require_g5_not_started(session: Session, generation: PageGeneration) -> None:
+def g4_amendment_open(session: Session, generation: PageGeneration) -> bool:
+    reopen = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.operation == _G4_REOPEN_OPERATION,
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
+    if reopen is None:
+        return False
+    later_accept = session.scalar(
+        select(PageLineageEvent.id)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.operation == "regions-stage-review",
+            PageLineageEvent.state == "accepted",
+            PageLineageEvent.sequence > reopen.sequence,
+        )
+        .limit(1)
+    )
+    return later_accept is None
+
+
+def missed_box_eligible_region_ids(
+    quality_path: Path,
+    image: ImageAsset,
+    eligible: list[TextRegion],
+) -> list[str]:
+    """Return eligible boxes whose exterior band still has leftover ink on quality."""
+    try:
+        with Image.open(quality_path) as handle:
+            quality_l = np.asarray(handle.convert("L"))
+    except OSError as error:
+        raise PageLineageConflict(
+            "G4 missed-box check could not read the accepted quality plate",
+            resource=f"image:{image.id}",
+            reason="g4-quality-unreadable",
+        ) from error
+    if image.width <= 0 or image.height <= 0:
+        raise PageLineageConflict(
+            "G4 missed-box check cannot use a zero-size source plate",
+            resource=f"image:{image.id}",
+            reason="g4-missed-box-invalid",
+        )
+    scale_x = quality_l.shape[1] / image.width
+    scale_y = quality_l.shape[0] / image.height
+    band_x = max(1, round(G4_MISSED_BOX_BAND_PX * scale_x))
+    band_y = max(1, round(G4_MISSED_BOX_BAND_PX * scale_y))
+    hits: list[str] = []
+    for row in eligible:
+        ix0 = max(0, round(row.x * scale_x))
+        iy0 = max(0, round(row.y * scale_y))
+        ix1 = min(quality_l.shape[1], round((row.x + row.width) * scale_x))
+        iy1 = min(quality_l.shape[0], round((row.y + row.height) * scale_y))
+        ox0 = max(0, ix0 - band_x)
+        oy0 = max(0, iy0 - band_y)
+        ox1 = min(quality_l.shape[1], ix1 + band_x)
+        oy1 = min(quality_l.shape[0], iy1 + band_y)
+        if ox1 <= ox0 or oy1 <= oy0 or ix1 <= ix0 or iy1 <= iy0:
+            continue
+        outer = np.zeros(quality_l.shape, dtype=bool)
+        outer[oy0:oy1, ox0:ox1] = True
+        outer[iy0:iy1, ix0:ix1] = False
+        if not outer.any():
+            continue
+        white_ratio = float((quality_l[outer] > G4_NEAR_WHITE).mean())
+        leftover = int(((quality_l < G4_DARK_INK) & outer).sum())
+        if white_ratio >= 0.5 and leftover >= G4_MISSED_BOX_PIXELS:
+            hits.append(row.id)
+    return hits
+
+
+def _clear_downstream_after_g4_amendment(
+    session: Session,
+    *,
+    image: ImageAsset,
+    generation: PageGeneration,
+) -> None:
+    draft = session.get(PageMaskDraft, generation.id)
+    if draft is not None:
+        session.delete(draft)
+    session.execute(
+        update(TextRegion)
+        .where(TextRegion.image_id == image.id)
+        .values(
+            background_category=None,
+            background_confidence=None,
+            background_rationale_codes=null(),
+            background_reviewer=null(),
+            background_generation_id=None,
+            ocr_review=null(),
+            ocr_reviewer=null(),
+            ocr_generation_id=None,
+        )
+    )
+    for row in session.scalars(select(TextRegion).where(TextRegion.image_id == image.id)):
+        session.expire(row)
+
+
+def _require_g5_not_started(
+    session: Session,
+    generation: PageGeneration,
+    *,
+    allow_amendment: bool = False,
+) -> None:
+    if allow_amendment and g4_amendment_open(session, generation):
+        return
     started = session.scalar(
         select(PageLineageEvent.id)
         .where(
@@ -4043,6 +4303,144 @@ def _require_current_g4_acceptance(
     return actual_checksum, accepted
 
 
+def reopen_regions_for_missed_box(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    expected_revision: int,
+    lineage: dict[str, Any],
+) -> dict[str, Any]:
+    with store.lock:
+        with store.session() as session:
+            image = session.get(ImageAsset, image_id)
+            if image is None:
+                raise ProjectError("Image was not found in this project")
+            if image.revision != expected_revision:
+                raise RevisionConflict(
+                    "Image changed before G4 missed-box reopen",
+                    expected_revision=expected_revision,
+                    actual_revision=image.revision,
+                    resource=f"image:{image.id}",
+                )
+            binding = require_image_mutation_lineage(store, session, image, lineage)
+            if binding is None:
+                raise PageLineageConflict(
+                    "G4 reopen requires an active page generation",
+                    resource=f"image:{image.id}",
+                    reason="active-generation-missing",
+                )
+            generation, actor, expected_sequence = binding
+            quality, g3_event = require_current_text_present_quality_plate(
+                store, session, image, generation
+            )
+            if g4_amendment_open(session, generation):
+                raise PageLineageConflict(
+                    "G4 missed-box amendment is already open",
+                    resource=f"image:{image.id}",
+                    reason="g4-regions-amendment-open",
+                )
+            g4_checksum, g4_accepted = _require_current_g4_acceptance(
+                store, session, image=image, generation=generation
+            )
+            detect_started = session.scalar(
+                select(PageLineageEvent.id)
+                .where(
+                    PageLineageEvent.generation_id == generation.id,
+                    PageLineageEvent.operation == "detect-job-enqueued",
+                    PageLineageEvent.sequence > g3_event.sequence,
+                )
+                .limit(1)
+            )
+            if detect_started is None:
+                raise PageLineageConflict(
+                    "G4 reopen requires an accepted region set after detector publication",
+                    resource=f"page-generation:{generation.id}",
+                    reason="g4-production-missing",
+                )
+            rows = list(
+                session.scalars(
+                    select(TextRegion)
+                    .where(TextRegion.image_id == image.id)
+                    .order_by(TextRegion.reading_order, TextRegion.id)
+                ).all()
+            )
+            eligible = [
+                row
+                for row in rows
+                if row.region_type != "ruby"
+                and row.content_disposition in {"translate", "redraw-art"}
+            ]
+            leftover_ids = missed_box_eligible_region_ids(quality["path"], image, eligible)
+            if not leftover_ids:
+                raise PageLineageConflict(
+                    "Accepted G4 already covers leftover ink around every eligible box",
+                    resource=f"image:{image.id}",
+                    reason="g4-missed-box-complete",
+                )
+            draft_checksum, _produced, _completed = _require_current_g4_draft(
+                session,
+                generation=generation,
+                quality=quality,
+                g3_event=g3_event,
+            )
+            if draft_checksum != g4_checksum:
+                raise PageLineageConflict(
+                    "G4 draft is not the current accepted region set",
+                    resource=f"page-generation:{generation.id}",
+                    reason="g4-evidence-not-current",
+                )
+            image.revision += 1
+            revision = add_revision(
+                session,
+                store.project(session),
+                entity_type="page-gate",
+                entity_id=generation.id,
+                operation="reopen",
+                before={"state": "accepted", "regionChecksum": g4_checksum},
+                after={"state": "reopened", "leftoverRegionIds": leftover_ids},
+            )
+            session.flush()
+            now = datetime.now(UTC)
+            event = _append_event(
+                session,
+                generation,
+                operation=_G4_REOPEN_OPERATION,
+                gate="G4_regions",
+                state="pending",
+                actor=actor,
+                input_checksum=g4_checksum,
+                output_checksum=g4_checksum,
+                parent_checksum=quality["checksum"],
+                stage="detection",
+                parameter_hash=generation.parameter_set_hash,
+                revision_id=revision.id,
+                decision="reopen-for-missed-box",
+                reason="leftover-outside-eligible-boxes",
+                evidence={
+                    "eventType": "regions-stage-reopened",
+                    "leftoverRegionIds": leftover_ids,
+                    "priorRegionChecksum": g4_accepted.output_checksum,
+                    "qualityChecksum": quality["checksum"],
+                    "eligibleRegionCount": len(eligible),
+                    "imageRevision": image.revision,
+                },
+                started_at=now,
+                finished_at=now,
+                expected_sequence=expected_sequence,
+            )
+            result = {
+                "imageId": image_id,
+                "imageRevision": image.revision,
+                "generationId": generation.id,
+                "nextSequence": event.sequence + 1,
+                "regionChecksum": g4_checksum,
+                "leftoverRegionIds": leftover_ids,
+                "state": "pending",
+            }
+        store.write_snapshot()
+    return result
+
+
 def _require_current_g5_draft(
     session: Session,
     *,
@@ -4073,7 +4471,9 @@ def _require_current_g5_draft(
     terminal: PageLineageEvent | None = None
     latest_reviewer_by_region: dict[str, dict[str, str | None]] = {}
     for event in events:
-        if event.sequence <= g4_accepted.sequence or event.parent_checksum != g4_checksum:
+        if event.sequence <= g4_accepted.sequence:
+            continue
+        if event.parent_checksum != g4_checksum:
             raise PageLineageConflict(
                 "G5 evidence does not descend from the current accepted G4 region set",
                 resource=f"page-generation:{generation.id}",
@@ -4323,7 +4723,9 @@ def _require_current_g6_draft(
     latest_review_by_region: dict[str, tuple[dict[str, str | None], str | None]] = {}
     terminal: PageLineageEvent | None = None
     for event in events:
-        if event.sequence <= g5_accepted.sequence or event.parent_checksum != g5_checksum:
+        if event.sequence <= g5_accepted.sequence:
+            continue
+        if event.parent_checksum != g5_checksum:
             raise PageLineageConflict(
                 "G6 evidence does not descend from the current accepted G5 state",
                 resource=f"page-generation:{generation.id}",
@@ -4478,6 +4880,7 @@ def _require_current_g6_draft(
             reason="g6-lineage-mismatch",
         )
 
+    attempts = [attempt for attempt in attempts if attempt.job_item_id in produced_by_item]
     if verify_stored and _g6_checksum_for_rows(rows, attempts) != expected_checksum:
         raise PageLineageConflict(
             "Stored OCR attempts or reviews do not match their G6 evidence",
@@ -4549,6 +4952,11 @@ def require_current_ocr_trust(
         g5_accepted=g5_accepted,
     )
     rows, attempts = _g6_rows_and_attempts(session, image.id, generation.id)
+    attempts = [
+        attempt
+        for attempt in _filter_current_g6_attempts(session, generation.id, attempts)
+        if attempt.job_item_id in completed
+    ]
     issues, eligible_count, attempted_count, reviewed_count = _g6_validation_issues(
         rows,
         attempts,
@@ -4720,7 +5128,7 @@ def record_ocr_attempts_produced(
         )
     issues, _eligible_count, _attempted_count, _reviewed_count = _g6_validation_issues(
         rows,
-        attempts,
+        _filter_current_g6_attempts(session, generation.id, attempts),
         generation_id=generation.id,
         original_checksum=generation.source_checksum,
         quality_checksum=quality["checksum"],
@@ -4815,6 +5223,7 @@ def record_ocr_source_review_mutation(
             reason="g6-review-checksum-mismatch",
         )
     rows, attempts = _g6_rows_and_attempts(session, image.id, generation.id)
+    attempts = _filter_current_g6_attempts(session, generation.id, attempts)
     issues, eligible_count, attempted_count, reviewed_count = _g6_validation_issues(
         rows,
         attempts,
@@ -4881,7 +5290,7 @@ def record_g4_region_mutation(
     if operation not in _G4_MUTATION_OPERATIONS:
         raise ProjectError("Unsupported G4 region mutation operation")
     generation, actor, expected_sequence = binding
-    _require_g5_not_started(session, generation)
+    _require_g5_not_started(session, generation, allow_amendment=True)
     quality, g3_event = require_current_text_present_quality_plate(
         store,
         session,
@@ -5220,7 +5629,8 @@ def record_regions_gate_acceptance(
                     reason="active-generation-missing",
                 )
             generation, actor, expected_sequence = binding
-            _require_g5_not_started(session, generation)
+            amendment_open = g4_amendment_open(session, generation)
+            _require_g5_not_started(session, generation, allow_amendment=True)
             quality, g3_event = require_current_text_present_quality_plate(
                 store,
                 session,
@@ -5254,6 +5664,8 @@ def record_regions_gate_acceptance(
                     resource=f"image:{image.id}",
                     reason="g4-regions-invalid:" + ",".join(issues),
                 )
+            if amendment_open:
+                _clear_downstream_after_g4_amendment(session, image=image, generation=generation)
             if (image.status or {}).get("detection") != "done":
                 raise PageLineageConflict(
                     "Detector publication is not current on the image",
@@ -5612,6 +6024,7 @@ def ocr_gate_context(store: ProjectStore, image_id: str) -> dict[str, Any]:
             g5_accepted=g5_accepted,
         )
         rows, attempts = _g6_rows_and_attempts(session, image.id, generation.id)
+        attempts = _filter_current_g6_attempts(session, generation.id, attempts)
         issues, _eligible_count, _attempted_count, _reviewed_count = _g6_validation_issues(
             rows,
             attempts,
@@ -5724,6 +6137,7 @@ def record_ocr_gate_acceptance(
                     reason="observed-ocr-checksum-mismatch",
                 )
             rows, attempts = _g6_rows_and_attempts(session, image.id, generation.id)
+            attempts = _filter_current_g6_attempts(session, generation.id, attempts)
             issues, eligible_count, attempted_count, reviewed_count = _g6_validation_issues(
                 rows,
                 attempts,
@@ -5924,6 +6338,7 @@ def record_job_enqueued_events(
                     reason="g6-ocr-job-active",
                 )
             rows, attempts = _g6_rows_and_attempts(session, image.id, generation.id)
+            attempts = _filter_current_g6_attempts(session, generation.id, attempts)
             issues, eligible_count, _attempted_count, _reviewed_count = _g6_validation_issues(
                 rows,
                 attempts,
@@ -5974,8 +6389,10 @@ def record_job_enqueued_events(
             evidence_counts = {"eligibleRegionCount": eligible_count}
         elif job.kind == "mask":
             from manga_localizer.services.masks import (
+                _current_g7_artifacts_and_reviews,
                 current_mask_state_checksum,
                 eligible_mask_regions,
+                g7_amendment_open,
                 mask_job_items_for_generation,
             )
 
@@ -5999,20 +6416,17 @@ def record_job_enqueued_events(
                     resource=f"image:{image.id}",
                     reason="g7-mask-not-applicable",
                 )
-            from manga_localizer.database import PageMaskDraft, PageMaskReview
+            from manga_localizer.database import PageMaskDraft
 
-            terminal = session.scalar(
-                select(PageMaskReview)
-                .where(PageMaskReview.generation_id == generation.id)
-                .order_by(PageMaskReview.sequence.desc())
-                .limit(1)
-            )
+            _artifacts, current_reviews = _current_g7_artifacts_and_reviews(session, generation)
+            terminal = current_reviews[-1] if current_reviews else None
             if terminal is not None and terminal.state in {"accepted", "not-applicable"}:
-                raise PageLineageConflict(
-                    "Accepted G7 evidence is immutable",
-                    resource=f"image:{image.id}",
-                    reason="g7-mask-accepted",
-                )
+                if terminal.state == "not-applicable" or not g7_amendment_open(session, generation):
+                    raise PageLineageConflict(
+                        "Accepted G7 evidence is immutable",
+                        resource=f"image:{image.id}",
+                        reason="g7-mask-accepted",
+                    )
             draft = session.get(PageMaskDraft, generation.id)
             if draft is None or draft.parent_checksum != parent_checksum:
                 raise PageLineageConflict(

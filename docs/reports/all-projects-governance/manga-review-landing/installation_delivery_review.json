@@ -1,0 +1,50 @@
+{
+  "judge": {
+    "stage": "B",
+    "scope": "Evidence representation correction only; prior product/installation acceptance reused",
+    "reviewer": "/root/manga_installation_judge_v1",
+    "decision": "REVISION_PASS",
+    "semantic_sha256": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+    "corrected_record_sha256": "6fb4e39fe0e24bc3953be409aa7c5f425c55cb75a17263f1827146734d253004",
+    "verified": [
+      "All57semantic files and inverse bytes unchanged",
+      "Portable root/module references resolve to same original checkout and installed module",
+      "No personal absolute paths remain in receipt",
+      "Source and original receipt copies identical",
+      "Failed b23a40f commit retained on local branch; current branch starts at verified57fe2efmain",
+      "Audit code and allowlists unchanged"
+    ],
+    "pending": [
+      "corrected full audit",
+      "normal main push and CI"
+    ],
+    "evidence_origin": "Native read-only Judge evidence-delta response; no new full product review"
+  },
+  "governor": {
+    "governor": "/root/hub_connection_governor",
+    "decision": "APPROVE",
+    "scope": "Stage B portable receipt evidence correction only",
+    "semantic_sha256": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+    "corrected_record_sha256": "6fb4e39fe0e24bc3953be409aa7c5f425c55cb75a17263f1827146734d253004",
+    "independent_review": "REVISION_PASS",
+    "verified": [
+      "All57semantic entries, hash recipe and inverse patch unchanged",
+      "Source/original corrected receipt byte parity",
+      "Exactly6delivery files contain no personal absolute path",
+      "Failed unpublished commit/branch preserved without history rewrite"
+    ],
+    "authorized_next": [
+      "Append only this excluded decision metadata and exact-CAS copy to original",
+      "Recheck identity and original HEAD/branch/index",
+      "Commit exactly6registered files",
+      "Full0e2base to final40SHA audit",
+      "Normal main push then remote ancestry and CI"
+    ],
+    "boundaries": [
+      "Do not push failed b23a40f commit",
+      "No real database/image/provider effects",
+      "Hub routing stays inactive until main CI succeeds"
+    ],
+    "evidence_origin": "Native Governor bounded correction decision; earlier exact-product PASS/APPROVE retained"
+  }
+}

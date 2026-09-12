@@ -1,0 +1,25 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "B",
+  "governor": "/root/hub_connection_governor",
+  "decision": "APPROVE",
+  "semantic_sha256": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+  "installation_record_sha256": "ad88007c14901adbf99693ddf27225713b34ccb27cb0a939a3970f55d12e11d2",
+  "judge_ref": "installation_judge.json",
+  "judge_sha256": "b069ea187019b375864b35018aa87c4c84b8b9a084bd8c09fec3de740c639e9b",
+  "authorized_next": [
+    "Add exactly excluded installation Judge/Governor/delivery metadata to source and original",
+    "Recheck unchanged semantic identity",
+    "Commit source STATE and installation/receipt/review metadata only",
+    "Full normal CI audit0e2base to finalHEAD",
+    "Normal pushmain and ancestry/CI verification"
+  ],
+  "protected": [
+    "Original HEAD/branch/index unchanged",
+    "No original Git commits",
+    "No real DB/page/provider effects",
+    "No live Hub registry/refresh",
+    "No product/corpus acceptance"
+  ],
+  "evidence_origin": "Native Governor Stage B decision; Root compact registration"
+}

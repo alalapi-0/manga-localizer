@@ -1,0 +1,71 @@
+{
+  "schema_version": "1",
+  "task_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1",
+  "unit": "manga_retry_handoff",
+  "lane": "REVIEWED",
+  "base_commit": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+  "semantic_hash": "67beedacca295a5233a923a47838f6ab0157b86c9315adc2165ff9be895eb8ec",
+  "algorithm": "sha256(canonical JSON of sorted path + sha256 entries); state excludes only Unit review/delivery/next action metadata lines",
+  "files": [
+    {
+      "path": ".agent/STATE.md",
+      "sha256": "49d10185b8cc6c7307158cc185ccb72d634728161e9700aeae625704db0b64f2"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/README.md",
+      "sha256": "e79d435177b3a92aa0e7989b805e8979691af9e7bcccc2f35f764a16059d74d8"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/baseline.json",
+      "sha256": "d2b56341bf2b31878e15158e78a51240eff5cf29f87acfc8935423ddf21ad2bd"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/live-recovery.json",
+      "sha256": "f794b6384b99a1b6c3873c76799ef8a1982aa7316354655293d8677c186fc18a"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/validation.json",
+      "sha256": "f05b760c0a77c1a98ab38b002d4e822e5f2b9c890729cc501240f1ee962751f5"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.test.tsx",
+      "sha256": "2bfb0458c96bdc658e68357fcaca90f0d77b2c11e1e5147440d6c995a3a4154a"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.tsx",
+      "sha256": "84d2d97494df2fbeab523e0d8af1e1b7bab7c39f1a0470ef4803581f6869a849"
+    },
+    {
+      "path": "frontend/src/finalReview/store.test.ts",
+      "sha256": "d64a2220163e92aaaf9fe88a9da16a9edaeca7e2e3138ef29c3c53551000c6ff"
+    },
+    {
+      "path": "frontend/src/finalReview/store.ts",
+      "sha256": "4e19053115a7a37957173ad18e1e7f70f0cf31246e49b16aba676268c45107c2"
+    },
+    {
+      "path": "frontend/src/finalReview/types.ts",
+      "sha256": "3e1599cc366ae7f789171fb5c6f2aad22f5772b39a5299f5f0f23782b12f686a"
+    },
+    {
+      "path": "scripts/verify-final-review-retry-ui.mjs",
+      "sha256": "04677c043c305572aed3fa068bae1c711d93ea5e21d13dc19951e1ff6e7c66cd"
+    },
+    {
+      "path": "scripts/verify_final_review_retry_data.py",
+      "sha256": "990a2b2558ff71c6ef3cc9385b7adf6351c4590a6450fd9f758bce4c4342b7fa"
+    }
+  ],
+  "excluded_review_metadata": [
+    "candidate.json",
+    "judge.json",
+    "delivery.json"
+  ],
+  "acceptance": [
+    "Three actual attempt-2 metadata regressions rejected before and accepted after while malformed lineage/revision results remain rejected",
+    "Real production repair service returns exact selected heads idempotently without selected data changes",
+    "Desktop/mobile actual review component handoff and reload verified with clearly labelled API/navigation substitutes",
+    "Protect original dirty work and remaining quality blockers; make no full-corpus or paid generation claim",
+    "Deliver accepted unit normally to verified repository main after review; remote result is separate metadata"
+  ]
+}

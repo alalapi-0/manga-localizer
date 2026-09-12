@@ -12,12 +12,14 @@ from typing import Any
 
 import numpy as np
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from manga_localizer.database import (
     ImageAsset,
     Job,
     JobItem,
+    PageCloudFullPageCandidate,
+    PageCloudFullPageReview,
     PageGeneration,
     PageLineageEvent,
     PageMaskArtifact,
@@ -38,6 +40,7 @@ from manga_localizer.services.page_lineage import (
     PageLineageConflict,
     _append_event,
     _safe_actor,
+    g4_amendment_open,
     require_current_ocr_trust,
     require_current_text_present_quality_plate,
     require_image_mutation_lineage,
@@ -62,6 +65,20 @@ COLLATERAL_CHECKS = (
     "speed-lines-protected",
     "screentone-protected",
     "nearby-art-protected",
+)
+G7_COVERAGE_HOLE_RATIO = 0.02
+G7_LEFTOVER_INK_PIXELS = 200
+G7_DARK_INK = 80
+G7_LIGHT_INK = 175
+G7_SOLID_BACKGROUNDS = frozenset({"white-solid", "black-solid", "other-solid"})
+G7_EVENT_OPERATIONS = (
+    "mask-draft-updated",
+    "mask-job-enqueued",
+    "mask-artifact-produced",
+    "mask-job-completed",
+    "mask-job-failed",
+    "mask-stage-review",
+    "mask-stage-reopened",
 )
 
 
@@ -186,6 +203,226 @@ def ruby_mapping(session, image_id: str, rows: list[TextRegion]) -> dict[str, li
         primary_id: sorted(row.id for row in ruby_rows if row.ruby_parent_id == primary_id)
         for primary_id in primary_ids
     }
+
+
+def _current_g6_terminal_event(session, generation: PageGeneration) -> PageLineageEvent | None:
+    all_events = list(
+        session.scalars(
+            select(PageLineageEvent)
+            .where(PageLineageEvent.generation_id == generation.id)
+            .order_by(PageLineageEvent.sequence)
+        ).all()
+    )
+    g5_terminal = next(
+        (
+            event
+            for event in reversed(all_events)
+            if event.gate == "G5_background" and event.state in {"accepted", "not-applicable"}
+        ),
+        None,
+    )
+    return next(
+        (
+            event
+            for event in reversed(all_events)
+            if event.gate == "G6_ocr"
+            and event.state in {"accepted", "not-applicable"}
+            and (g5_terminal is None or event.sequence > g5_terminal.sequence)
+        ),
+        None,
+    )
+
+
+def _current_g7_artifacts_and_reviews(
+    session, generation: PageGeneration
+) -> tuple[list[PageMaskArtifact], list[PageMaskReview]]:
+    artifacts = list(
+        session.scalars(
+            select(PageMaskArtifact)
+            .where(PageMaskArtifact.generation_id == generation.id)
+            .order_by(PageMaskArtifact.sequence)
+        ).all()
+    )
+    reviews = list(
+        session.scalars(
+            select(PageMaskReview)
+            .where(PageMaskReview.generation_id == generation.id)
+            .order_by(PageMaskReview.sequence)
+        ).all()
+    )
+    g6_terminal = _current_g6_terminal_event(session, generation)
+    if g6_terminal is None:
+        return [], []
+    current_review_count = (
+        session.scalar(
+            select(func.count())
+            .select_from(PageLineageEvent)
+            .where(
+                PageLineageEvent.generation_id == generation.id,
+                PageLineageEvent.gate == "G7_mask",
+                PageLineageEvent.operation == "mask-stage-review",
+                PageLineageEvent.sequence > g6_terminal.sequence,
+            )
+        )
+        or 0
+    )
+    current_item_ids = {
+        item_id
+        for item_id in session.scalars(
+            select(PageLineageEvent.job_item_id).where(
+                PageLineageEvent.generation_id == generation.id,
+                PageLineageEvent.gate == "G7_mask",
+                PageLineageEvent.sequence > g6_terminal.sequence,
+                PageLineageEvent.job_item_id.is_not(None),
+            )
+        )
+        if item_id
+    }
+    artifacts = [row for row in artifacts if row.job_item_id in current_item_ids]
+    artifact_ids = {row.id for row in artifacts}
+    current_reviews = reviews[-current_review_count:] if current_review_count else []
+    return artifacts, [
+        row
+        for row in current_reviews
+        if row.artifact_id in artifact_ids
+        or (row.state == "not-applicable" and row.artifact_id is None)
+    ]
+
+
+def g7_amendment_open(session, generation: PageGeneration) -> bool:
+    reopen = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.operation == "mask-stage-reopened",
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
+    if reopen is None:
+        return False
+    later_terminal = session.scalar(
+        select(PageLineageEvent.id)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.operation == "mask-stage-review",
+            PageLineageEvent.state.in_(("accepted", "not-applicable")),
+            PageLineageEvent.sequence > reopen.sequence,
+        )
+        .limit(1)
+    )
+    return later_terminal is None
+
+
+def _generation_has_accepted_g8(session, generation: PageGeneration) -> bool:
+    g6_terminal = _current_g6_terminal_event(session, generation)
+    current_g7 = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.gate == "G7_mask",
+            PageLineageEvent.operation == "mask-stage-review",
+            PageLineageEvent.state.in_(("accepted", "not-applicable")),
+            *(
+                (PageLineageEvent.sequence > g6_terminal.sequence,)
+                if g6_terminal is not None
+                else ()
+            ),
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
+    if current_g7 is None:
+        return False
+    accepted_ids = list(
+        session.scalars(
+            select(PageCloudFullPageReview.candidate_id).where(
+                PageCloudFullPageReview.generation_id == generation.id,
+                PageCloudFullPageReview.state == "accepted",
+            )
+        ).all()
+    )
+    if not accepted_ids:
+        return False
+    return (
+        session.scalar(
+            select(PageCloudFullPageCandidate.id)
+            .where(
+                PageCloudFullPageCandidate.id.in_(accepted_ids),
+                PageCloudFullPageCandidate.parent_checksum == current_g7.output_checksum,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def uncovered_eligible_region_ids(
+    store: ProjectStore,
+    image: ImageAsset,
+    eligible: list[TextRegion],
+    artifact: PageMaskArtifact,
+    *,
+    quality_path: Path | None = None,
+) -> list[str]:
+    path = _validate_artifact_file(store, artifact)
+    with Image.open(path) as handle:
+        array = np.asarray(handle.convert("L"))
+    if array.shape[0] != artifact.height or array.shape[1] != artifact.width:
+        raise PageLineageConflict(
+            "Accepted G7 mask raster size does not match the artifact row",
+            resource=f"mask-artifact:{artifact.id}",
+            reason="g7-mask-artifact-stale",
+        )
+    if image.width <= 0 or image.height <= 0:
+        raise PageLineageConflict(
+            "G7 coverage cannot use a zero-size source plate",
+            resource=f"image:{image.id}",
+            reason="g7-mask-replay-invalid",
+        )
+    quality_l: np.ndarray | None = None
+    if quality_path is not None:
+        try:
+            with Image.open(quality_path) as handle:
+                quality_l = np.asarray(handle.convert("L"))
+        except OSError as error:
+            raise PageLineageConflict(
+                "G7 leftover-ink check could not read the accepted quality plate",
+                resource=f"image:{image.id}",
+                reason="g7-mask-quality-unreadable",
+            ) from error
+        if quality_l.shape != array.shape:
+            quality_l = np.asarray(
+                Image.fromarray(quality_l).resize((array.shape[1], array.shape[0]), Image.NEAREST)
+            )
+    scale_x = artifact.width / image.width
+    scale_y = artifact.height / image.height
+    holes: list[str] = []
+    for row in eligible:
+        x0 = max(0, round(row.x * scale_x))
+        y0 = max(0, round(row.y * scale_y))
+        x1 = min(artifact.width, round((row.x + row.width) * scale_x))
+        y1 = min(artifact.height, round((row.y + row.height) * scale_y))
+        if x1 <= x0 or y1 <= y0:
+            holes.append(row.id)
+            continue
+        crop = array[y0:y1, x0:x1]
+        white = int((crop > 127).sum())
+        area = int(crop.size)
+        if white == 0 or white / area < G7_COVERAGE_HOLE_RATIO:
+            holes.append(row.id)
+            continue
+        if quality_l is None or row.background_category not in G7_SOLID_BACKGROUNDS:
+            continue
+        qcrop = quality_l[y0:y1, x0:x1]
+        unmasked = crop <= 127
+        if row.background_category == "black-solid":
+            leftover = int(((qcrop > G7_LIGHT_INK) & unmasked).sum())
+        else:
+            leftover = int(((qcrop < G7_DARK_INK) & unmasked).sum())
+        if leftover >= G7_LEFTOVER_INK_PIXELS:
+            holes.append(row.id)
+    return holes
 
 
 def mask_job_items_for_generation(
@@ -454,14 +691,7 @@ def _validate_g7_replay(
             reason="g7-mask-replay-invalid",
         )
 
-    allowed = {
-        "mask-draft-updated",
-        "mask-job-enqueued",
-        "mask-artifact-produced",
-        "mask-job-completed",
-        "mask-job-failed",
-        "mask-stage-review",
-    }
+    allowed = set(G7_EVENT_OPERATIONS)
     all_events = list(
         session.scalars(
             select(PageLineageEvent)
@@ -479,11 +709,21 @@ def _validate_g7_replay(
     if any(event.gate != "G7_mask" or event.operation not in allowed for event in events):
         invalid("G7 operation/gate matrix is invalid")
 
+    g5_terminal = next(
+        (
+            event
+            for event in reversed(all_events)
+            if event.gate == "G5_background" and event.state in {"accepted", "not-applicable"}
+        ),
+        None,
+    )
     g6_terminal = next(
         (
             event
             for event in reversed(all_events)
-            if event.gate == "G6_ocr" and event.state in {"accepted", "not-applicable"}
+            if event.gate == "G6_ocr"
+            and event.state in {"accepted", "not-applicable"}
+            and (g5_terminal is None or event.sequence > g5_terminal.sequence)
         ),
         None,
     )
@@ -497,17 +737,38 @@ def _validate_g7_replay(
         ),
         None,
     )
+    if g4_amendment_open(session, generation):
+        raise PageLineageConflict(
+            "G7 is stale while a G4 missed-box amendment is open",
+            resource=f"page-generation:{generation.id}",
+            reason="g4-amendment-open",
+        )
+    if g6_terminal is None:
+        events = []
+    else:
+        events = [event for event in events if event.sequence > g6_terminal.sequence]
     if events and (g6_terminal is None or quality_terminal is None):
         invalid("G7 has no exact terminal G6/quality checksum base")
     if not events and g6_terminal is not None and g6_terminal.sequence < len(all_events):
         invalid("Downstream events started before G7")
-    if events and (
-        quality_terminal.sequence >= g6_terminal.sequence
-        or [event.sequence for event in events]
-        != list(range(g6_terminal.sequence + 1, g6_terminal.sequence + len(events) + 1))
-        or all_events[g6_terminal.sequence : g6_terminal.sequence + len(events)] != events
-    ):
-        invalid("G7 events are not an exact contiguous block after terminal G6 evidence")
+    if events:
+        if quality_terminal.sequence >= g6_terminal.sequence:
+            invalid("G7 events are not an exact contiguous block after terminal G6 evidence")
+        runs: list[list[PageLineageEvent]] = [[events[0]]]
+        for event in events[1:]:
+            if event.sequence == runs[-1][-1].sequence + 1:
+                runs[-1].append(event)
+            else:
+                runs.append([event])
+        if runs[0][0].sequence != g6_terminal.sequence + 1:
+            invalid("G7 events are not an exact contiguous block after terminal G6 evidence")
+        for run in runs:
+            start = run[0].sequence
+            if all_events[start - 1 : start - 1 + len(run)] != run:
+                invalid("G7 events are not an exact contiguous block after terminal G6 evidence")
+        for extra in runs[1:]:
+            if extra[0].operation != "mask-stage-reopened":
+                invalid("G7 amendment block did not start with a mask reopen")
     if not events:
         base_checksum = g6_terminal.output_checksum if g6_terminal else None
         quality_checksum = quality_terminal.output_checksum if quality_terminal else None
@@ -525,24 +786,40 @@ def _validate_g7_replay(
     replay_mapping = ruby_mapping(session, generation.image_id, replay_eligible)
     ruby_count = sum(map(len, replay_mapping.values()))
     persisted_draft = session.get(PageMaskDraft, generation.id)
-    artifacts = list(
-        session.scalars(
+    if persisted_draft is not None and (
+        not _is_sha256(base_checksum) or persisted_draft.parent_checksum != base_checksum
+    ):
+        persisted_draft = None
+    current_item_ids = {event.job_item_id for event in events if event.job_item_id}
+    artifacts = [
+        row
+        for row in session.scalars(
             select(PageMaskArtifact)
             .where(PageMaskArtifact.generation_id == generation.id)
             .order_by(PageMaskArtifact.sequence)
         ).all()
-    )
-    reviews = list(
+        if row.job_item_id in current_item_ids
+    ]
+    artifact_ids = {row.id for row in artifacts}
+    all_reviews = list(
         session.scalars(
             select(PageMaskReview)
             .where(PageMaskReview.generation_id == generation.id)
             .order_by(PageMaskReview.sequence)
         ).all()
     )
+    current_review_count = sum(event.operation == "mask-stage-review" for event in events)
+    current_reviews = all_reviews[-current_review_count:] if current_review_count else []
+    reviews = [
+        review
+        for review in current_reviews
+        if review.artifact_id in artifact_ids
+        or (review.state == "not-applicable" and review.artifact_id is None)
+    ]
     matched_items = [
         (item, job)
         for item, job in mask_job_items_for_generation(session, generation)
-        if item.id != ignore_job_item_id
+        if item.id != ignore_job_item_id and item.id in current_item_ids
     ]
     items_by_id = {item.id: item for item, _job in matched_items}
     jobs_by_item = {item.id: job for item, job in matched_items}
@@ -584,6 +861,7 @@ def _validate_g7_replay(
     latest_review: PageMaskReview | None = None
     latest_review_event: PageLineageEvent | None = None
     last_draft_sequence: int | None = None
+    last_reopen_sequence: int | None = None
     last_state_image_revision: int | None = None
     terminal_review_seen = False
     used_revision_ids: set[str] = set()
@@ -697,14 +975,65 @@ def _validate_g7_replay(
         used_revision_ids.add(revision.id)
 
     for event in events:
-        if terminal_review_seen:
-            invalid("G7 changed after an immutable terminal review", resource=f"event:{event.id}")
         event_actor = actor_for(event)
         evidence = event.evidence if isinstance(event.evidence, dict) else {}
         recipe_checksum = evidence.get("recipeChecksum")
         if not _is_sha256(recipe_checksum):
             invalid("G7 recipe checksum evidence is invalid", resource=f"event:{event.id}")
         validate_common(event, recipe_checksum)
+        if event.operation == "mask-stage-reopened":
+            uncovered = evidence.get("uncoveredRegionIds")
+            coverage_hole_reopen = (
+                event.decision == "reopen-for-coverage-hole"
+                and event.reason == "incomplete-eligible-coverage"
+                and isinstance(uncovered, list)
+                and bool(uncovered)
+                and all(isinstance(item, str) and item for item in uncovered)
+            )
+            owner_issues_reopen = (
+                event.decision == "reopen-for-owner-issues"
+                and event.reason == "owner-issues-remask"
+                and uncovered == []
+            )
+            if (
+                not terminal_review_seen
+                or latest_review is None
+                or latest_review.state != "accepted"
+                or event.state != "pending"
+                or not (coverage_hole_reopen or owner_issues_reopen)
+                or event.job_id is not None
+                or event.job_item_id is not None
+                or event.revision_id is None
+                or event.input_checksum != current_state
+                or event.output_checksum != current_state
+                or open_item_id is not None
+            ):
+                invalid("G7 reopen event matrix is invalid", resource=f"event:{event.id}")
+            expected_reopen = {
+                "eventType": "mask-stage-reopened",
+                "uncoveredRegionIds": uncovered,
+                "priorArtifactId": latest_review.artifact_id,
+                "priorMaskChecksum": latest_review.mask_checksum,
+                "recipeChecksum": recipe_checksum,
+                "qualityChecksum": quality_checksum,
+                "eligibleRegionCount": eligible_count,
+                "rubyRegionCount": ruby_count,
+                "rubyRegionIdsByPrimary": replay_mapping,
+            }
+            validate_evidence(event, expected_reopen, image_revision=True)
+            validate_revision(
+                event,
+                entity_type="page-mask-review",
+                entity_id=generation.id,
+                operation="reopen",
+                before={"state": "accepted", "artifactId": latest_review.artifact_id},
+                after={"state": "reopened", "uncoveredRegionIds": uncovered},
+            )
+            last_reopen_sequence = event.sequence
+            terminal_review_seen = False
+            continue
+        if terminal_review_seen:
+            invalid("G7 changed after an immutable terminal review", resource=f"event:{event.id}")
 
         if event.operation == "mask-draft-updated":
             if (
@@ -820,7 +1149,8 @@ def _validate_g7_replay(
                 or event.reason != "mask-review-required"
                 or event.input_checksum != current_state
                 or event.revision_id is None
-                or artifact.sequence != len(artifact_prefix) + 1
+                or len(artifact_prefix) >= len(artifacts)
+                or artifact is not artifacts[len(artifact_prefix)]
                 or artifact.generation_id != generation.id
                 or artifact.image_id != generation.image_id
                 or artifact.job_id != event.job_id
@@ -959,7 +1289,7 @@ def _validate_g7_replay(
                 invalid("G7 review event matrix or open-item order is invalid")
             review = reviews[review_index]
             review_index += 1
-            if review.sequence != review_index:
+            if review_index > 1 and review.sequence <= reviews[review_index - 2].sequence:
                 invalid("G7 review row sequence is invalid")
             is_na = review.state == "not-applicable"
             if is_na:
@@ -1060,6 +1390,21 @@ def _validate_g7_replay(
                         or artifact.id == latest_review.artifact_id
                     ):
                         invalid("Rejected G7 evidence was accepted without revision/regeneration")
+                if (
+                    latest_review is not None
+                    and latest_review.state == "accepted"
+                    and expected_state == "accepted"
+                ):
+                    if (
+                        last_reopen_sequence is None
+                        or last_draft_sequence is None
+                        or last_draft_sequence <= last_reopen_sequence
+                        or produced.sequence <= last_draft_sequence
+                        or artifact.id == latest_review.artifact_id
+                    ):
+                        invalid(
+                            "Accepted G7 was replaced without coverage-hole reopen and regeneration"
+                        )
             if review.reviewer != event_actor:
                 invalid("G7 review actor does not match the immutable review row")
             expected_review_evidence = {
@@ -1144,12 +1489,18 @@ def _validate_g7_replay(
 def _require_latest_state_event(
     session, generation: PageGeneration, expected_checksum: str
 ) -> None:
+    g6_terminal = _current_g6_terminal_event(session, generation)
     latest = session.scalar(
         select(PageLineageEvent)
         .where(
             PageLineageEvent.generation_id == generation.id,
             PageLineageEvent.operation.in_(
                 ("mask-draft-updated", "mask-artifact-produced", "mask-stage-review")
+            ),
+            *(
+                (PageLineageEvent.sequence > g6_terminal.sequence,)
+                if g6_terminal is not None
+                else ()
             ),
         )
         .order_by(PageLineageEvent.sequence.desc())
@@ -1199,22 +1550,9 @@ def mask_gate_context(store: ProjectStore, image_id: str) -> dict[str, Any]:
                 eligible=eligible,
                 mapping=mapping,
             )
-        artifacts = list(
-            session.scalars(
-                select(PageMaskArtifact)
-                .where(PageMaskArtifact.generation_id == generation.id)
-                .order_by(PageMaskArtifact.sequence)
-            ).all()
-        )
+        artifacts, reviews = _current_g7_artifacts_and_reviews(session, generation)
         for artifact in artifacts:
             _validate_artifact_file(store, artifact)
-        reviews = list(
-            session.scalars(
-                select(PageMaskReview)
-                .where(PageMaskReview.generation_id == generation.id)
-                .order_by(PageMaskReview.sequence)
-            ).all()
-        )
         review = reviews[-1] if reviews else None
         state = review.state if review is not None else "pending"
         mask_state_checksum = _state_checksum(
@@ -1265,23 +1603,145 @@ def current_mask_state_checksum(
         eligible=eligible,
         mapping=mapping,
     )
-    artifacts = list(
-        session.scalars(
-            select(PageMaskArtifact)
-            .where(PageMaskArtifact.generation_id == generation.id)
-            .order_by(PageMaskArtifact.sequence)
-        ).all()
-    )
-    reviews = list(
-        session.scalars(
-            select(PageMaskReview)
-            .where(PageMaskReview.generation_id == generation.id)
-            .order_by(PageMaskReview.sequence)
-        ).all()
-    )
+    artifacts, reviews = _current_g7_artifacts_and_reviews(session, generation)
     checksum = _state_checksum(g6_checksum, quality_checksum, mapping, draft, artifacts, reviews)
     _require_latest_state_event(session, generation, checksum)
     return checksum
+
+
+def reopen_mask_for_coverage_hole(
+    store: ProjectStore,
+    image_id: str,
+    *,
+    expected_revision: int,
+    lineage: dict[str, Any],
+    owner_issues_remask: bool = False,
+) -> dict[str, Any]:
+    with store.lock:
+        with store.session() as session:
+            image = session.get(ImageAsset, image_id)
+            if image is None:
+                raise ProjectError("Image was not found in this project")
+            if image.revision != expected_revision:
+                raise RevisionConflict(
+                    "Image changed before mask reopen",
+                    expected_revision=expected_revision,
+                    actual_revision=image.revision,
+                    resource=f"image:{image.id}",
+                )
+            generation, actor, expected_sequence = require_image_mutation_lineage(
+                store, session, image, lineage
+            )
+            _validate_g7_replay(session, generation)
+            if _generation_has_accepted_g8(session, generation) and not owner_issues_remask:
+                raise PageLineageConflict(
+                    "An accepted G8 candidate blocks G7 reopen",
+                    resource=f"image:{image.id}",
+                    reason="g8-accepted-blocks-g7-reopen",
+                )
+            if g7_amendment_open(session, generation):
+                raise PageLineageConflict(
+                    "G7 coverage-hole amendment is already open",
+                    resource=f"image:{image.id}",
+                    reason="g7-mask-amendment-open",
+                )
+            if mask_job_items_for_generation(session, generation, statuses=("queued", "running")):
+                raise PageLineageConflict(
+                    "A mask job is active",
+                    resource=f"image:{image.id}",
+                    reason="g7-mask-job-active",
+                )
+            g6, _ = require_current_ocr_trust(store, session, image, generation)
+            quality, _ = require_current_text_present_quality_plate(
+                store, session, image, generation
+            )
+            eligible = eligible_mask_regions(session, image.id)
+            if not eligible:
+                raise PageLineageConflict(
+                    "Zero-eligible pages cannot reopen G7",
+                    resource=f"image:{image.id}",
+                    reason="g7-mask-not-applicable",
+                )
+            mapping = ruby_mapping(session, image.id, eligible)
+            state, artifact = require_current_mask_acceptance(store, session, image, generation)
+            if artifact is None:
+                raise PageLineageConflict(
+                    "G7 N/A cannot reopen for coverage",
+                    resource=f"image:{image.id}",
+                    reason="g7-mask-not-applicable",
+                )
+            holes = uncovered_eligible_region_ids(
+                store,
+                image,
+                eligible,
+                artifact,
+                quality_path=quality["path"],
+            )
+            if not holes and not owner_issues_remask:
+                raise PageLineageConflict(
+                    "Accepted G7 already covers every eligible region",
+                    resource=f"image:{image.id}",
+                    reason="g7-mask-coverage-complete",
+                )
+            draft = _require_current_draft(
+                session,
+                image=image,
+                generation=generation,
+                g6_checksum=g6,
+                quality_checksum=quality["checksum"],
+                eligible=eligible,
+                mapping=mapping,
+            )
+            reopen_ids = holes
+            reopen_decision = "reopen-for-coverage-hole" if holes else "reopen-for-owner-issues"
+            reopen_reason = "incomplete-eligible-coverage" if holes else "owner-issues-remask"
+            image.revision += 1
+            revision = add_revision(
+                session,
+                store.project(session),
+                entity_type="page-mask-review",
+                entity_id=generation.id,
+                operation="reopen",
+                before={"state": "accepted", "artifactId": artifact.id},
+                after={"state": "reopened", "uncoveredRegionIds": reopen_ids},
+            )
+            session.flush()
+            now = datetime.now(UTC)
+            _append_event(
+                session,
+                generation,
+                operation="mask-stage-reopened",
+                gate="G7_mask",
+                state="pending",
+                actor=actor,
+                input_checksum=state,
+                output_checksum=state,
+                parent_checksum=g6,
+                stage="mask",
+                provider="deterministic-mask",
+                model_version="create-mask-v1",
+                parameter_hash=draft.state_checksum,
+                revision_id=revision.id,
+                decision=reopen_decision,
+                reason=reopen_reason,
+                evidence={
+                    "eventType": "mask-stage-reopened",
+                    "uncoveredRegionIds": reopen_ids,
+                    "priorArtifactId": artifact.id,
+                    "priorMaskChecksum": artifact.mask_checksum,
+                    "recipeChecksum": draft.state_checksum,
+                    "qualityChecksum": quality["checksum"],
+                    "eligibleRegionCount": len(eligible),
+                    "rubyRegionCount": sum(map(len, mapping.values())),
+                    "rubyRegionIdsByPrimary": mapping,
+                    "imageRevision": image.revision,
+                },
+                started_at=now,
+                finished_at=now,
+                expected_sequence=expected_sequence,
+            )
+        store.write_snapshot()
+    return mask_gate_context(store, image_id)
 
 
 def update_mask_draft(
@@ -1319,18 +1779,17 @@ def update_mask_draft(
                     resource=f"image:{image.id}",
                     reason="g7-mask-not-applicable",
                 )
-            latest = session.scalar(
-                select(PageMaskReview)
-                .where(PageMaskReview.generation_id == generation.id)
-                .order_by(PageMaskReview.sequence.desc())
-                .limit(1)
+            _current_artifacts, current_reviews = _current_g7_artifacts_and_reviews(
+                session, generation
             )
+            latest = current_reviews[-1] if current_reviews else None
             if latest is not None and latest.state in {"accepted", "not-applicable"}:
-                raise PageLineageConflict(
-                    "Accepted G7 evidence is immutable",
-                    resource=f"image:{image.id}",
-                    reason="g7-mask-accepted",
-                )
+                if latest.state == "not-applicable" or not g7_amendment_open(session, generation):
+                    raise PageLineageConflict(
+                        "Accepted G7 evidence is immutable",
+                        resource=f"image:{image.id}",
+                        reason="g7-mask-accepted",
+                    )
             if mask_job_items_for_generation(session, generation, statuses=("queued", "running")):
                 raise PageLineageConflict(
                     "A mask job is active",
@@ -1352,20 +1811,7 @@ def update_mask_draft(
                     mapping=mapping,
                 )
             before = draft.state_checksum if draft else None
-            artifacts = list(
-                session.scalars(
-                    select(PageMaskArtifact)
-                    .where(PageMaskArtifact.generation_id == generation.id)
-                    .order_by(PageMaskArtifact.sequence)
-                ).all()
-            )
-            reviews = list(
-                session.scalars(
-                    select(PageMaskReview)
-                    .where(PageMaskReview.generation_id == generation.id)
-                    .order_by(PageMaskReview.sequence)
-                ).all()
-            )
+            artifacts, reviews = _current_g7_artifacts_and_reviews(session, generation)
             if draft is None:
                 virtual = PageMaskDraft(
                     generation_id=generation.id,
@@ -1658,20 +2104,7 @@ def publish_mask_artifact(
             session.add(artifact)
             session.flush()
             mapping = ruby_mapping(session, image.id, eligible)
-            artifacts = list(
-                session.scalars(
-                    select(PageMaskArtifact)
-                    .where(PageMaskArtifact.generation_id == generation.id)
-                    .order_by(PageMaskArtifact.sequence)
-                ).all()
-            )
-            reviews = list(
-                session.scalars(
-                    select(PageMaskReview)
-                    .where(PageMaskReview.generation_id == generation.id)
-                    .order_by(PageMaskReview.sequence)
-                ).all()
-            )
+            artifacts, reviews = _current_g7_artifacts_and_reviews(session, generation)
             before_state = _state_checksum(
                 g6, quality["checksum"], mapping, draft, artifacts[:-1], reviews
             )
@@ -2012,18 +2445,62 @@ def record_mask_review(
                         reason="g7-mask-review-decision-invalid",
                     )
                 state = "accepted" if decision == "accept" else "rejected"
-            latest = session.scalar(
-                select(PageMaskReview)
-                .where(PageMaskReview.generation_id == generation.id)
-                .order_by(PageMaskReview.sequence.desc())
-                .limit(1)
+            _current_artifacts, current_reviews = _current_g7_artifacts_and_reviews(
+                session, generation
             )
+            latest = current_reviews[-1] if current_reviews else None
             if latest is not None and latest.state in {"accepted", "not-applicable"}:
-                raise PageLineageConflict(
-                    "Accepted G7 evidence is immutable",
-                    resource=f"image:{image.id}",
-                    reason="g7-mask-accepted",
+                if latest.state == "not-applicable" or not g7_amendment_open(session, generation):
+                    raise PageLineageConflict(
+                        "Accepted G7 evidence is immutable",
+                        resource=f"image:{image.id}",
+                        reason="g7-mask-accepted",
+                    )
+            if (
+                state == "accepted"
+                and latest is not None
+                and latest.state == "accepted"
+                and artifact is not None
+            ):
+                reopen_event = session.scalar(
+                    select(PageLineageEvent)
+                    .where(
+                        PageLineageEvent.generation_id == generation.id,
+                        PageLineageEvent.operation == "mask-stage-reopened",
+                    )
+                    .order_by(PageLineageEvent.sequence.desc())
+                    .limit(1)
                 )
+                later_draft_event = session.scalar(
+                    select(PageLineageEvent)
+                    .where(
+                        PageLineageEvent.generation_id == generation.id,
+                        PageLineageEvent.operation == "mask-draft-updated",
+                        PageLineageEvent.sequence
+                        > (reopen_event.sequence if reopen_event is not None else 10**18),
+                    )
+                    .order_by(PageLineageEvent.sequence.desc())
+                    .limit(1)
+                )
+                produced_event = session.scalar(
+                    select(PageLineageEvent).where(
+                        PageLineageEvent.generation_id == generation.id,
+                        PageLineageEvent.job_item_id == artifact.job_item_id,
+                        PageLineageEvent.operation == "mask-artifact-produced",
+                    )
+                )
+                if (
+                    reopen_event is None
+                    or later_draft_event is None
+                    or produced_event is None
+                    or produced_event.sequence <= later_draft_event.sequence
+                    or artifact.id == latest.artifact_id
+                ):
+                    raise PageLineageConflict(
+                        "Reopened mask must be revised and regenerated before acceptance",
+                        resource=f"image:{image.id}",
+                        reason="g7-reopened-artifact-unchanged",
+                    )
             if state == "accepted" and latest is not None and latest.state == "rejected":
                 prior_review_event = session.scalar(
                     select(PageLineageEvent)
@@ -2065,20 +2542,7 @@ def record_mask_review(
                         resource=f"image:{image.id}",
                         reason="g7-rejected-artifact-unchanged",
                     )
-            artifacts = list(
-                session.scalars(
-                    select(PageMaskArtifact)
-                    .where(PageMaskArtifact.generation_id == generation.id)
-                    .order_by(PageMaskArtifact.sequence)
-                ).all()
-            )
-            prior_reviews = list(
-                session.scalars(
-                    select(PageMaskReview)
-                    .where(PageMaskReview.generation_id == generation.id)
-                    .order_by(PageMaskReview.sequence)
-                ).all()
-            )
+            artifacts, prior_reviews = _current_g7_artifacts_and_reviews(session, generation)
             if draft is None:
                 virtual_recipe = _default_recipe(eligible)
                 draft = PageMaskDraft(
@@ -2099,11 +2563,17 @@ def record_mask_review(
                     g6, quality["checksum"], mapping, draft, artifacts, prior_reviews
                 )
             )
+            persisted_review_sequence = session.scalar(
+                select(PageMaskReview.sequence)
+                .where(PageMaskReview.generation_id == generation.id)
+                .order_by(PageMaskReview.sequence.desc())
+                .limit(1)
+            )
             review = PageMaskReview(
                 generation_id=generation.id,
                 image_id=image.id,
                 artifact_id=artifact.id if artifact else None,
-                sequence=(latest.sequence + 1 if latest else 1),
+                sequence=(persisted_review_sequence or 0) + 1,
                 state=state,
                 reason=reason,
                 mask_checksum=artifact.mask_checksum if artifact else None,
@@ -2190,13 +2660,7 @@ def require_current_mask_acceptance(
     if not eligible:
         _validate_no_legacy_mask(store, image)
     mapping = ruby_mapping(session, image.id, eligible)
-    reviews = list(
-        session.scalars(
-            select(PageMaskReview)
-            .where(PageMaskReview.generation_id == generation.id)
-            .order_by(PageMaskReview.sequence)
-        ).all()
-    )
+    artifacts, reviews = _current_g7_artifacts_and_reviews(session, generation)
     review = reviews[-1] if reviews else None
     expected = "accepted" if eligible else "not-applicable"
     if review is None or review.state != expected:
@@ -2204,6 +2668,12 @@ def require_current_mask_acceptance(
             "G7 mask is not currently accepted",
             resource=f"image:{image.id}",
             reason="g7-mask-not-currently-accepted",
+        )
+    if g7_amendment_open(session, generation):
+        raise PageLineageConflict(
+            "G7 coverage-hole amendment is open",
+            resource=f"image:{image.id}",
+            reason="g7-mask-amendment-open",
         )
     if not eligible:
         if review.artifact_id or review.mask_checksum:
@@ -2271,13 +2741,6 @@ def require_current_mask_acceptance(
         eligible=eligible,
         mapping=mapping,
     )
-    artifacts = list(
-        session.scalars(
-            select(PageMaskArtifact)
-            .where(PageMaskArtifact.generation_id == generation.id)
-            .order_by(PageMaskArtifact.sequence)
-        ).all()
-    )
     for persisted_artifact in artifacts:
         _validate_artifact_file(store, persisted_artifact)
     if artifact.draft_checksum != draft.state_checksum:
@@ -2287,11 +2750,17 @@ def require_current_mask_acceptance(
             reason="g7-mask-artifact-stale",
         )
     state = _state_checksum(g6, quality["checksum"], mapping, draft, artifacts, reviews)
+    g6_terminal = _current_g6_terminal_event(session, generation)
     terminal = session.scalar(
         select(PageLineageEvent)
         .where(
             PageLineageEvent.generation_id == generation.id,
             PageLineageEvent.operation == "mask-stage-review",
+            *(
+                (PageLineageEvent.sequence > g6_terminal.sequence,)
+                if g6_terminal is not None
+                else ()
+            ),
         )
         .order_by(PageLineageEvent.sequence.desc())
         .limit(1)

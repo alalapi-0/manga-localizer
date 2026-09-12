@@ -1,0 +1,27 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "A",
+  "reviewer": "/root/manga_review_landing_judge_v1",
+  "decision": "PASS",
+  "base_commit": "0e2a03b27e15661b18d25c96d236577751b3391c",
+  "candidate_commit": "f97852faed4cfc61cc0dca0227f0d961aa60d9e1",
+  "history_checkpoint": "c130b50f1584c1ecd78d9bad9a49cc9daf103937",
+  "semantic_sha256": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+  "validation_sha256": "ee7cfb38650e2ee114c59e0c4b529762ab2afe3d210d7e43aa835f2e2982f6bf",
+  "criteria": {
+    "1": "All60original pending paths uniquely disposed:41exact/base,17forwardrepair/routes,1unreadCursor,1exacthistoricalMD checkpoint.",
+    "2-4": "Sole strictYAML OWNER_R2_REVIEW,truthful140/56/3,typed21field Hub resolver proof without liveHub mutation.",
+    "5-7": "Byte-based formats/orientation/raw integrity,registration/strictcomposite/failclosedgeometry;Page1343339/2474diagnosis preserved, actualcorrectionpending.",
+    "8-10": "LegalG4/G7recovery,CAS/history,checksum-boundG9/G10replacements;semantic safe migration and rollback.",
+    "11-14": "Empty/current/legacy/failure fixtures,compact awaitedAPI,responsiveness/conflicts,browser andlazyload evidence.",
+    "15": "Root1012backend/461frontend/40launcher/6E2E/10browser,stateHub,diff,whole-seriesauditPASS."
+  },
+  "conclusion": "No concrete Stage A defect found.",
+  "limits": [
+    "Main delivery and remote CI pending",
+    "Stage B original installation pending",
+    "Real Hub refresh pending",
+    "Actual image correction and corpus acceptance pending"
+  ],
+  "evidence_origin": "Fresh read-only Judge native final response; Root compact registration, no writer self-approval."
+}

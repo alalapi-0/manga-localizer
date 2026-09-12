@@ -1,0 +1,556 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "A",
+  "base_commit": "0e2a03b27e15661b18d25c96d236577751b3391c",
+  "history_checkpoint": "c130b50f1584c1ecd78d9bad9a49cc9daf103937",
+  "semantic_sha256": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+  "semantic_hash_recipe": "SHA256 of UTF-8 compact sorted-key JSON semantic_files list, excluding report metadata; deleted paths have null hash/mode.",
+  "semantic_files": [
+    {
+      "path": ".agent/FINAL_CORPUS_REBUILD_GOAL_PROMPT.md",
+      "sha256": "2230a16c8c07001f91a3f6642c8a7f10d4c2a80f64c7c406fcae22c0beaad9a1",
+      "mode": 420
+    },
+    {
+      "path": ".agent/FINAL_CORPUS_REBUILD_REFERENCE.md",
+      "sha256": "1b0896c69a77db57292a44eeb7a87201d9415483a4a4a9e30c11b6526cced388",
+      "mode": 420
+    },
+    {
+      "path": ".agent/STATE.md",
+      "sha256": null,
+      "mode": null
+    },
+    {
+      "path": ".agent/STATE.yaml",
+      "sha256": "b5f2931f1d6f055ec3fed8aa4e6d87a8c82abe219eee4c2a6140cb5b0d166e07",
+      "mode": 420
+    },
+    {
+      "path": ".agents/skills/manga-final-review-loop/SKILL.md",
+      "sha256": "5e69e5d1312dc2b122ba5ed7f14587973c515301c226614119d003987a985a5f",
+      "mode": 420
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "4822d7e083155567191406825364d65356944ecab1fad5d92053b6cd195d78b5",
+      "mode": 420
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "c8d4bc390d6148c8a2fc93eeb8d851682a1331a660585196b0c77c63c57e672c",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/cloud_image_cli.py",
+      "sha256": "2543e63828ceeef7bade154283e894a9dd0e16ebf0f95cea50af163ccd2c8f99",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/database.py",
+      "sha256": "7138a981cdff74c948ab2eeb309b7f387aa06c6874b6f431ffa2a2b70717f6a0",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/main.py",
+      "sha256": "1b225c5292195923aa8a6884cac5d4a24b9f3b026cf564fb27059bebf6c9e45f",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/schemas.py",
+      "sha256": "ca59ebe254d4903f52ff45d842317966fc100fe8b6905ca33d7296445e98551a",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/clean_plates.py",
+      "sha256": "89bd72a6096d858bb0070e5cc9a79eab7942eba29f81fa6575adc775f00883ff",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
+      "sha256": "75f71ca2b1a616e9ac395bded663fbaba4151d88466932796248dc8d1798d6e8",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/final_reviews.py",
+      "sha256": "2ebfe40e68729b8a489718e1a5a35f85a68e942a99d5120068ba9dd2f8e92d26",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/masks.py",
+      "sha256": "47a2c6cda7bb0613d847daed4de49c7ea97edc26bbfd672a6b258ebe41d5025a",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/page_lineage.py",
+      "sha256": "10ba6002908f2cb27a96dfd19c75e10e6b3f929fb1289afbd9b6eb174357bc9b",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/projects.py",
+      "sha256": "360b2d77481aaf6abac4096889179e993bda4755ce9accc923cf39bcbd56fe2f",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/translations.py",
+      "sha256": "24cbbd16a8ee992b1feaf4d90f06108a30d7b9dc364d16709d9252b3e2f95750",
+      "mode": 420
+    },
+    {
+      "path": "backend/src/manga_localizer/services/typesets.py",
+      "sha256": "39b98876e24b9c7789a7b8ba2b3565729d0418346b1958ec8bb30587dd5a182c",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_api_projects.py",
+      "sha256": "143d663f20fc70127e6a7e0dca16111e45ae7fe59793c4bc81e1c9b747b2dbc7",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_cloud_full_page_clean_plates.py",
+      "sha256": "43f92a49f82a25838781c971529a9b826efde986bfa1b9ecee0e5ab07fd6b2c7",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_cloud_image_cli.py",
+      "sha256": "0906be055a89f51e4b024e60622cd88cfa558f1d4c978dfc9aac9afec47a7ed9",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_database_review_epochs.py",
+      "sha256": "91b3bf8e3104a5ffc7df18128523458490e553387533d1906897588f65ba9cef",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_final_review_responsiveness.py",
+      "sha256": "8d38a772efec38ec185e8f19fefff0c6f87612ab6435bba0b3c964fe02929705",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_final_reviews.py",
+      "sha256": "1cc8f8ffe6c39e8c6ef4004d76fec25ee5254514f2e7e83406296443be939d88",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_mask_recovery_edges.py",
+      "sha256": "757af6a9c3306ec73086b2e69d0808e283ec889078ade3510d35a2df17202a1e",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_page_lineage.py",
+      "sha256": "a67a1f315920887104605af8a64ecd5a4c3cba7f7919f34ccaf1a1f22ccff13b",
+      "mode": 420
+    },
+    {
+      "path": "backend/tests/test_state_contract.py",
+      "sha256": "507fc38a7e69ce3042752910e48fbfb78cefb9474cb7423ee9575f92cc6ca792",
+      "mode": 420
+    },
+    {
+      "path": "docs/real-data-iteration-status.md",
+      "sha256": "27c8e64b8efc76256b975537b8c98a98f0a5506b9e8e16019dc170222c67d8d3",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "sha256": "74eea180f14fd4ce366c8b87d916c0cb81cbf194625fa42b6a6b558276dffe9a",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "sha256": "86ef63711e080e3b46b9b731bb12f3c5ff471cdf403b3d29eea5937bb0f217aa",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx",
+      "sha256": "330658edcd5580d0d7de9c38c7c13070eb8a534188c4314b45ef7b2ac79f4afd",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/components/Workbench.test.tsx",
+      "sha256": "1c360018b2d332d11f7c3142370ebc09f248ec5a4729abc0b7b5103c8243c673",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.test.tsx",
+      "sha256": "5936c154ac2cd827a4983b437f0a373e6fa8ea8c9a8dec9c826a67e70e42bfeb",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.tsx",
+      "sha256": "b202f9ae6bd4b8d6e02b6b6553f15cff92b3d0b63e7e6e9163c76853d6f2a148",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/store.test.ts",
+      "sha256": "a0f779530753cee04b0fe3d18216d11d17733532ebd9ed21758356a4db011cd5",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/finalReview/store.ts",
+      "sha256": "03f14a78e6d4bce6f10cb61a7118fbe3b45c0548a67526de6c548f3d55f68fc8",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/store/workbench.test.ts",
+      "sha256": "21e7c11af14c551ca2aca6e87009f6fec64ade20d92eb3fcbb63121fbe4f274a",
+      "mode": 420
+    },
+    {
+      "path": "frontend/src/store/workbench.ts",
+      "sha256": "3aff7ad98b2e2b814d2ad63707cd30092279e03e1975b1e657b92d243d2a6986",
+      "mode": 420
+    },
+    {
+      "path": "hub.connection.yaml",
+      "sha256": "a6f6baea6521056ef1b2fc52b9731f68a9a646de395fb5573f6a5743b5ba3f69",
+      "mode": 420
+    },
+    {
+      "path": "package.json",
+      "sha256": "de7909e548da7225785a5e1309e243ff0114f116d45335018b84f0f44c37d1ab",
+      "mode": 420
+    },
+    {
+      "path": "scripts/check_state.py",
+      "sha256": "96e8b663fd99dfa35e4ea5de7bdc051996f122e146a7f9aa8136abee217ad547",
+      "mode": 420
+    },
+    {
+      "path": "scripts/external-uv.mjs",
+      "sha256": "34da44e2f71269b8de91dfffb49a8981e2df739253feb5fffc186975cde0856c",
+      "mode": 420
+    },
+    {
+      "path": "scripts/storage-runtime-route.test.mjs",
+      "sha256": "8c4dfc083bc1de0065e31f90c37b85e38a37570ef1952cca8114d4928c0289cd",
+      "mode": 420
+    },
+    {
+      "path": "scripts/verify-final-review-retry-ui.mjs",
+      "sha256": "9281f05fdeafc573baec7cb1dc708896c1f4e896479450842379ffe751a2e1e8",
+      "mode": 420
+    },
+    {
+      "path": "tests/e2e/manga-localizer.spec.ts",
+      "sha256": "cd098b3446c3a46ad2e79151ee972aeb413b7162b1b7332e685203e786771113",
+      "mode": 420
+    }
+  ],
+  "input_evidence": {
+    "contract.md": "c769abe23e31fe8e38e36d6b56088a0f554d663c9e0014c6c170d054323deb0c",
+    "contract_decision.json": "f47a9a20043f8b97d990bbc51d417f2e5729cc66e4ee76c0fda34fe45d041a1d",
+    "baseline.json": "bcab5bffec2f723497b148e1d648f3b884b96efe0d081eed42f8401e9abf9072",
+    "page134-diagnosis.json": "69a0455b2765ca571e4046e7da00bf2ab933865a70f6d80860239ff3fd4dc242",
+    "state_validation.json": "f2ba5be5ad0172d9fdb3fbf7c62e108cca6eb68decadc80222541d4e67447a07"
+  },
+  "original_inventory_dispositions": [
+    {
+      "path": ".agent/CURSOR_LOOP_PROMPT.md",
+      "original_disposition": "protected",
+      "final_disposition": "protected_unread_cursor_scope"
+    },
+    {
+      "path": ".agent/STATE.md",
+      "original_disposition": "included_control",
+      "final_disposition": "exact_original_preserved_in_checkpoint_then_retired_for_sole_yaml"
+    },
+    {
+      "path": ".agents/skills/manga-final-review-loop/SKILL.md",
+      "original_disposition": "included_control",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "AGENTS.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "README.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/cloud_image_cli.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/database.py",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "backend/src/manga_localizer/main.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/schemas.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/clean_plates.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/cloud_full_page_clean_plates.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/final_reviews.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/masks.py",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/page_lineage.py",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/projects.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/translations.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/src/manga_localizer/services/typesets.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_api_projects.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_audit_release.py",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_cloud_full_page_clean_plates.py",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "backend/tests/test_cloud_image_cli.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_cloud_registration.py",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_final_reviews.py",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "backend/tests/test_page_lineage.py",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "backend/tests/test_typesets.py",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/development.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/README.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/baseline.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/candidate.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/contract.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/delivery.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/governor.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/judge.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-ci-audit/validation.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/README.md",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/baseline.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/candidate.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/delivery.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/judge.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/live-recovery.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "docs/reports/all-projects-governance/manga-retry/validation.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "frontend/src/App.tsx",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/api/client.ts",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "frontend/src/components/Sidebar.tsx",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "frontend/src/components/Workbench.test.tsx",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.test.tsx",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/finalReview/FinalReviewPage.tsx",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/finalReview/store.test.ts",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/finalReview/store.ts",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/finalReview/types.ts",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "frontend/src/store/workbench.test.ts",
+      "original_disposition": "included_product",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "frontend/src/store/workbench.ts",
+      "original_disposition": "included_product",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "package.json",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "playwright.config.ts",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "scripts/audit_release.py",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "scripts/verify-final-review-retry-ui.mjs",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    },
+    {
+      "path": "scripts/verify_final_review_retry_data.py",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "exact_original_in_candidate_or_verified_base"
+    },
+    {
+      "path": "tests/e2e/manga-localizer.spec.ts",
+      "original_disposition": "already_delivered_identical",
+      "final_disposition": "included_with_registered_forward_repair_or_control_route_update"
+    }
+  ],
+  "coverage": {
+    "original_pending_paths": 60,
+    "cursor_protected_unread": 1,
+    "other_original_paths_unchanged": 59
+  },
+  "review_metadata_boundary": "Validation, candidate registration, Judge/Governor and delivery receipts in this report directory are evidence/decision metadata outside semantic identity. Contract, baseline, source validation and real-case diagnosis are separately bound above. No product/state/control semantic edits after freeze without a new candidate review.",
+  "remaining": "StageA review/mainCI, StageB originalinstallation, realHubrouting and actualimage redo; other23 localdeclarations/global/pendingcontents remain in the overall Goal."
+}

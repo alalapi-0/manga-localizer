@@ -322,7 +322,7 @@ def _prepare_native_inputs(
             "maskSha256": _sha256(local.mask),
             "prompt": PROMPT,
             "promptSha256": _sha256(PROMPT.encode()),
-            "outputRequirement": "exactly-one-local-png",
+            "outputRequirement": "exactly-one-local-png-jpeg-or-webp",
         }
         if normalization_profile != cloud_service.NORMALIZATION_PROFILE:
             manifest["normalizationProfile"] = normalization_profile
@@ -586,7 +586,7 @@ def execute(
                 ),
                 **prepared,
             }
-        native_media_type = "image/png"
+        native_media_type = cloud_service._detect_raw_media_type(raw)
         invocation_evidence = cloud_service._digest(
             {
                 "runtime": route.runtime,
@@ -704,7 +704,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
     try:
-        with httpx.Client(timeout=30, trust_env=False) as local_client:
+        with httpx.Client(timeout=180, trust_env=False) as local_client:
             if args.mode == "gemini-api":
                 with httpx.Client(timeout=180, trust_env=False) as provider_client:
                     receipt = execute(

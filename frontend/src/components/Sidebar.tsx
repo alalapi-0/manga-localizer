@@ -207,6 +207,7 @@ export function Sidebar() {
             onChange={(event) => void selectProject(event.target.value)}
             value={project?.id ?? ''}
           >
+            {!project ? <option value="">未打开项目</option> : null}
             {!projects.length ? <option value="">暂无项目</option> : null}
             {projects.map((entry) => <option key={entry.id} value={entry.id}>{entry.name}</option>)}
           </select>

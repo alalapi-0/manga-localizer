@@ -7,13 +7,14 @@ Describe the user-visible result and the pipeline stage affected.
 - [ ] Backend lint/tests pass when relevant
 - [ ] Frontend lint/type/tests/build pass when relevant
 - [ ] Playwright flow passes when user behavior changes
-- [ ] `npm run audit:release` passes
+- [ ] `npm run audit:ci -- --base <full-base-sha> --head <full-head-sha>` passes
+- [ ] For a product release: `npm run audit:release` also passes (normal CI is not release acceptance)
 
 List exact commands and material results:
 
 ## Privacy and source safety
 
-- [ ] No secrets, `.env`, databases, model weights, fonts, user images, output images, or personal paths
+- [ ] No secrets, `.env`, databases, model weights, fonts, user images, output images, or newly introduced personal paths
 - [ ] Remote requests are opt-in, bounded, documented, and tested without a live credential
 - [ ] Filesystem changes cannot overwrite or escape source/project boundaries
 

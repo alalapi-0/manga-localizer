@@ -35,6 +35,79 @@ _ACTOR = {
 }
 
 
+def test_legacy_reentry_from_captured_failure_metadata(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    """Replay captured identity/version metadata using isolated synthetic media.
+
+    This exercises the real API/queue/renderer, not the source image or its G8
+    quality. Upstream gate helpers are synthetic; no paid generation is claimed.
+    The explicit input contains selected metadata only, never a source database.
+    """
+    source = Path(__file__).parent / "fixtures/final_review_retry_case.json"
+    assert source.is_file() and source.stat().st_size <= 8192
+    case = json.loads(source.read_text())
+    assert case["format_version"] == 1 and case["verdict"] == "issues"
+    assert case["artifact_revision"] == 1 and case["strict_evidence"] == 0
+    assert case["handoff"]["finalReviewItemId"] == case["id"]
+    assert case["handoff"]["finalReviewItemRevision"] == case["revision"]
+    project, image = _strict_project(app, client, tmp_path / "isolated-source")
+    review_root = tmp_path / "isolated-review"
+    manifest = _legacy_review_for_sources(review_root, [(project["id"], image["id"])])
+    database = review_root / "final-review/final-review.sqlite3"
+    with sqlite3.connect(database) as connection:
+        connection.execute("UPDATE batches SET id=?", (case["batch_id"],))
+        connection.execute(
+            "UPDATE items SET id=?,batch_id=?,verdict=?,revision=?",
+            (case["id"], case["batch_id"], case["verdict"], case["revision"]),
+        )
+    value = json.loads(manifest.read_text())
+    value["batch"]["id"] = case["batch_id"]
+    manifest.write_text(json.dumps(value))
+    response = client.post("/api/final-review-batches/open", json={"manifestPath": str(manifest)})
+    assert response.status_code == 200, response.text
+    batch = response.json()
+    item = batch["items"][0]
+    request = {
+        "expectedRevision": item["revision"],
+        "expectedBatchRevision": batch["revision"],
+        "actor": _ACTOR,
+    }
+    first = client.post(
+        f"/api/final-review-items/{item['id']}/repair",
+        json={
+            **request,
+            "parameterSetId": case["handoff"]["parameterSetId"],
+            "parameterSetHash": case["handoff"]["parameterSetHash"],
+        },
+    )
+    assert first.status_code == 201, first.text
+    before = _sqlite_logical_snapshot(database)
+    repeat = client.post(f"/api/final-review-items/{item['id']}/repair", json=request)
+    assert repeat.status_code == 201, repeat.text
+    assert repeat.json() == {**first.json(), "idempotent": True}
+    assert _sqlite_logical_snapshot(database) == before
+    # Existing helpers invoke the actual typeset enqueue, exact claim and execute.
+    _complete_repair_g10(app, client, tmp_path / "isolated-repair", repeat.json())
+    refreshed = client.post(f"/api/final-review-items/{item['id']}/refresh", json=request)
+    assert refreshed.status_code == 200, refreshed.text
+    current = refreshed.json()["item"]
+    assert current["artifactRevision"] == case["artifact_revision"] + 1
+    assert current["verdict"] == "pending" and current["strictEvidence"] is True
+    stale = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            **request,
+            "verdict": "approved",
+            "issueCodes": [],
+            "feedback": "old version",
+        },
+    )
+    assert stale.status_code == 409, stale.text
+    live = client.get(f"/api/final-review-batches/{batch['id']}").json()
+    assert live["items"][0]["verdict"] == "pending"
+
+
 def _strict_project(app, client: TestClient, tmp_path: Path) -> tuple[dict, dict]:
     prepared = _prepare_g9_terminal(client, app, tmp_path)
     project = prepared["targetProject"]
@@ -926,11 +999,16 @@ def test_repair_idempotence_is_bound_to_the_persisted_parameter_set(
     assert matching_retry.status_code == 201, matching_retry.text
     assert matching_retry.json() == {**handoff, "idempotent": True}
 
-    mismatched_retry = client.post(
-        f"/api/final-review-items/{item['id']}/repair", json=base_request
+    omitted_retry = client.post(f"/api/final-review-items/{item['id']}/repair", json=base_request)
+    assert omitted_retry.status_code == 201, omitted_retry.text
+    assert omitted_retry.json() == {**handoff, "idempotent": True}
+
+    explicit_default_retry = client.post(
+        f"/api/final-review-items/{item['id']}/repair",
+        json={**base_request, "parameterSetId": "final-review-repair-v1"},
     )
-    assert mismatched_retry.status_code == 400, mismatched_retry.text
-    assert mismatched_retry.json()["detail"] == (
+    assert explicit_default_retry.status_code == 400, explicit_default_retry.text
+    assert explicit_default_retry.json()["detail"] == (
         "Existing repair handoff parameter set does not match this request"
     )
 
@@ -978,6 +1056,107 @@ def _create_issue_repair(app, client: TestClient, tmp_path: Path) -> tuple[dict,
     created = client.post(f"/api/final-review-items/{item['id']}/repair", json=request)
     assert created.status_code == 201, created.text
     return batch, item, request, created.json()
+
+
+def test_owner_issues_bounce_refresh_reuses_prior_repair_g0(
+    app,
+    client: TestClient,
+    tmp_path: Path,
+) -> None:
+    from manga_localizer.services.page_lineage import (
+        find_final_review_repair_generation,
+        find_final_review_repair_generation_for_item,
+    )
+
+    _batch, item, request, handoff = _create_issue_repair(
+        app, client, tmp_path / "owner-bounce-refresh"
+    )
+    _complete_repair_g10(app, client, tmp_path / "owner-bounce-g10", handoff)
+    first = client.post(
+        f"/api/final-review-items/{item['id']}/refresh",
+        json={
+            "expectedRevision": request["expectedRevision"],
+            "expectedBatchRevision": request["expectedBatchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert first.status_code == 200, first.text
+    pending = first.json()
+    assert pending["item"]["verdict"] == "pending"
+    assert pending["item"]["currentArtifactStale"] is False
+    bounced = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "issues",
+            "issueCodes": ["ai_inpaint"],
+            "feedback": "",
+            "expectedRevision": pending["item"]["revision"],
+            "expectedBatchRevision": pending["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert bounced.status_code == 200, bounced.text
+    bounced_item = bounced.json()["item"]
+    assert bounced_item["revision"] != request["expectedRevision"]
+
+    bounce_feedback = hashlib.sha256(
+        json.dumps(
+            {"issueCodes": ["ai_inpaint"], "feedback": ""},
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    project_store = app.state.registry.get(item["sourceProjectId"])
+    with project_store.lock, project_store.session() as session:
+        exact = find_final_review_repair_generation(
+            project_store,
+            session,
+            source_project_id=item["sourceProjectId"],
+            source_image_id=item["sourceImageId"],
+            source_relative_path=None,
+            final_review_item_id=item["id"],
+            final_review_item_revision=bounced_item["revision"],
+            feedback_checksum=bounce_feedback,
+        )
+        assert exact is None
+        reused = find_final_review_repair_generation_for_item(
+            project_store,
+            session,
+            source_project_id=item["sourceProjectId"],
+            source_image_id=item["sourceImageId"],
+            source_relative_path=None,
+            final_review_item_id=item["id"],
+        )
+        assert reused is not None
+        assert reused[1].id == handoff["pageGenerationId"]
+
+    stale = client.post(
+        f"/api/final-review-items/{item['id']}/refresh",
+        json={
+            "expectedRevision": bounced_item["revision"],
+            "expectedBatchRevision": bounced.json()["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert stale.status_code == 400, stale.text
+    assert "no newer accepted strict final" in stale.json()["detail"]
+
+    reopened = client.post(
+        f"/api/final-review-items/{item['id']}/repair",
+        json={
+            "expectedRevision": bounced_item["revision"],
+            "expectedBatchRevision": bounced.json()["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert reopened.status_code == 201, reopened.text
+    reopened_payload = reopened.json()
+    assert reopened_payload["idempotent"] is True
+    assert reopened_payload["pageGenerationId"] == handoff["pageGenerationId"]
+    assert reopened_payload["repairAttempt"] == handoff["repairAttempt"]
+    assert reopened_payload["finalReviewItemRevision"] == bounced_item["revision"]
+    assert reopened_payload["originFinalReviewItemRevision"] == request["expectedRevision"]
+    assert reopened_payload["runId"] == handoff["runId"]
 
 
 def test_issue_repair_explicit_retry_is_linear_audited_and_idempotent(
@@ -1107,8 +1286,11 @@ def test_issue_repair_parameter_variant_retry_preserves_history_and_exact_replay
         assert response.status_code == 201, response.text
         assert response.json() == {**second, "idempotent": True}
         assert _sqlite_logical_snapshot(store.database_path) == before
+    omitted = client.post(endpoint, json=request)
+    assert omitted.status_code == 201, omitted.text
+    assert omitted.json() == {**second, "idempotent": True}
+    assert _sqlite_logical_snapshot(store.database_path) == before
     for mismatched in [
-        request,
         {**request, "retryFromGenerationId": first["pageGenerationId"]},
         {**variant, "parameterSetHash": "b" * 64},
         {**variant, "parameterSetId": "other-variant-v1"},
@@ -1864,6 +2046,76 @@ def test_legacy_open_and_list_are_schema_and_file_hash_stable(
     assert "artifact_revision" not in columns
 
 
+def test_human_can_rejudge_legacy_issues_but_legacy_approved_stay_immutable(
+    client: TestClient, tmp_path: Path
+) -> None:
+    manifest = _legacy_review(tmp_path / "legacy-human-rejudge", verdict="issues")
+    opened = client.post("/api/final-review-batches/open", json={"manifestPath": str(manifest)})
+    assert opened.status_code == 200, opened.text
+    batch = opened.json()
+    item = batch["items"][0]
+    assert item["formatVersion"] == 1
+    assert item["strictEvidence"] is False
+    assert item["verdict"] == "issues"
+
+    rejected_agent = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "issues",
+            "issueCodes": ["mask"],
+            "feedback": "agent rewrite",
+            "expectedRevision": item["revision"],
+            "expectedBatchRevision": batch["revision"],
+            "actor": {
+                "actorKind": "codex",
+                "actorId": "codex-agent",
+                "operationSource": "api",
+            },
+        },
+    )
+    assert rejected_agent.status_code == 400, rejected_agent.text
+    assert rejected_agent.json()["detail"] == (
+        "Legacy reviewed items are immutable; repair and strict refresh first"
+    )
+
+    approved = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "approved",
+            "issueCodes": [],
+            "feedback": "",
+            "expectedRevision": item["revision"],
+            "expectedBatchRevision": batch["revision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert approved.status_code == 200, approved.text
+    result = approved.json()
+    assert result["historyCreated"] is True
+    assert result["batchRevision"] == batch["revision"] + 1
+    assert result["item"]["verdict"] == "approved"
+    assert result["item"]["issueCodes"] == []
+    assert result["item"]["strictEvidence"] is False
+    assert result["item"]["formatVersion"] == 1
+    assert result["item"]["currentArtifactStale"] is False
+
+    locked = client.patch(
+        f"/api/final-review-items/{item['id']}",
+        json={
+            "verdict": "issues",
+            "issueCodes": ["other"],
+            "feedback": "cannot unapprove legacy",
+            "expectedRevision": result["item"]["revision"],
+            "expectedBatchRevision": result["batchRevision"],
+            "actor": _ACTOR,
+        },
+    )
+    assert locked.status_code == 400, locked.text
+    assert locked.json()["detail"] == (
+        "Legacy reviewed items are immutable; repair and strict refresh first"
+    )
+
+
 def test_two_v1_items_refresh_in_order_preserves_each_r1_and_rolls_back_second_failure(
     app,
     client: TestClient,
@@ -2286,3 +2538,30 @@ def test_repair_post_project_commit_batch_drift_conflicts_but_preserves_g0(
     assert retry.status_code == 201, retry.text
     assert retry.json()["pageGenerationId"] == generation_id
     assert retry.json()["idempotent"] is True
+
+
+def test_compact_batch_get_omits_items_and_items_list_can_skip_stale(
+    app, client: TestClient, tmp_path: Path
+) -> None:
+    batch = _strict_batch(app, client, tmp_path)
+    compact = client.get(f"/api/final-review-batches/{batch['id']}?includeItems=false")
+    assert compact.status_code == 200, compact.text
+    payload = compact.json()
+    assert payload["id"] == batch["id"]
+    assert payload["itemCount"] == 1
+    assert "items" not in payload
+    assert payload["counts"]["pending"] == 1
+
+    listed = client.get(f"/api/final-review-batches/{batch['id']}/items")
+    assert listed.status_code == 200, listed.text
+    items = listed.json()
+    assert len(items) == 1
+    assert items[0]["id"] == batch["items"][0]["id"]
+    assert items[0]["currentArtifactStale"] is False
+
+    full = client.get(f"/api/final-review-batches/{batch['id']}")
+    assert full.status_code == 200, full.text
+    assert len(full.json()["items"]) == 1
+    stale = client.get(f"/api/final-review-batches/{batch['id']}/items?computeStale=true")
+    assert stale.status_code == 200, stale.text
+    assert stale.json()[0]["id"] == batch["items"][0]["id"]

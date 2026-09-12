@@ -73,11 +73,41 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
     function keydown(event: KeyboardEvent) {
       const target = event.target;
       if (target instanceof HTMLElement
-        && target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
-      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-      event.preventDefault();
-      if (useFinalReviewStore.getState().navigate(event.key === 'ArrowLeft' ? -1 : 1)) {
-        setRepairError('');
+        && target.closest([
+          'button', 'a[href]', 'input', 'textarea', 'select', 'summary',
+          '[contenteditable="true"]', '[role="button"]', '[role="link"]',
+          '[role="menuitem"]', '[role="option"]', '[role="tab"]', '[role="textbox"]',
+        ].join(', '))) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const store = useFinalReviewStore.getState();
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+        event.preventDefault();
+        if (store.navigate(event.key === 'ArrowLeft' ? -1 : 1)) setRepairError('');
+        return;
+      }
+      if (event.key === '1' || event.key === 'p' || event.key === 'P') {
+        event.preventDefault();
+        store.updateDraft({ verdict: 'pending' });
+        return;
+      }
+      if (event.key === '2' || event.key === 'a' || event.key === 'A') {
+        event.preventDefault();
+        store.updateDraft({ verdict: 'approved' });
+        return;
+      }
+      if (event.key === '3' || event.key === 'i' || event.key === 'I') {
+        event.preventDefault();
+        store.updateDraft({ verdict: 'issues' });
+        return;
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        void store.save(true).then((moved) => {
+          if (moved) {
+            setRepairError('');
+            setMobilePane('preview');
+          }
+        });
       }
     }
     window.addEventListener('beforeunload', beforeUnload);
@@ -92,14 +122,14 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
     if (!active || !state.draft) return;
     setRepairError('');
     if (dirty) {
-      setRepairError('请先显式保存终审反馈，再创建新的 G0 修复 lineage。');
+      setRepairError('请先显式保存终审反馈，再进入修复工作台。');
       return;
     }
     const context = await useFinalReviewStore.getState().beginRepair();
     if (!context) return;
     const workbench = useWorkbenchStore.getState();
     try {
-      // Repair creates a new isolated image inside the source project, so even an
+      // Repair returns an isolated image inside the source project, so even an
       // already-open source project must be reloaded before selecting that image.
       if (!await workbench.selectProject(context.repairProjectId, true)) {
         useFinalReviewStore.getState().finishRepairNavigation(true);
@@ -304,13 +334,13 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
               <div className="final-review__verdicts" role="radiogroup" aria-label="审核结论">
                 {(['pending', 'approved', 'issues'] as const).map((verdict) => (
                   <label key={verdict}>
-                    <input checked={state.draft?.verdict === verdict} disabled={interactionLocked || legacyReviewed} name="final-verdict" onChange={() => state.updateDraft({ verdict })} type="radio" />
+                    <input checked={state.draft?.verdict === verdict} disabled={interactionLocked || legacyApproved} name="final-verdict" onChange={() => state.updateDraft({ verdict })} type="radio" />
                     <span>{VERDICT_LABELS[verdict]}</span>
                   </label>
                 ))}
               </div>
 
-              <fieldset disabled={interactionLocked || legacyReviewed || state.draft.verdict !== 'issues'}>
+              <fieldset disabled={interactionLocked || legacyApproved || state.draft.verdict !== 'issues'}>
                 <legend>问题类别（可多选）</legend>
                 <div className="final-review__issues">
                   {FINAL_REVIEW_ISSUES.map((issue) => (
@@ -324,7 +354,7 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
 
               <label className="field-label" htmlFor="final-review-feedback">具体反馈</label>
               <textarea
-                disabled={interactionLocked || legacyReviewed}
+                disabled={interactionLocked || legacyApproved}
                 id="final-review-feedback"
                 onChange={(event) => state.updateDraft({ feedback: event.target.value })}
                 placeholder="描述位置、表现和期望修复结果；选择“其他”时必填。"
@@ -332,23 +362,23 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
                 value={state.draft.feedback}
               />
               {validation ? <p className="final-review__validation">{validation}</p> : null}
-              {legacyReviewed ? <div className="final-review__legacy-lock" role="status">{legacyApproved ? '旧版已通过项保持只读；缺失阶段证据如实标记为 unavailable，不允许 refresh 或改写 verdict。' : '旧版问题项的既有 verdict 与反馈保持只读；可用这些反馈创建新的 G0 修复 lineage。'}</div> : null}
+              {legacyReviewed ? <div className="final-review__legacy-lock" role="status">{legacyApproved ? '此旧版已通过项保持只读。缺失的阶段证据会如实显示为“不可用”，不能同步或更改审核结论。' : '你可以重新审核并保存这个旧版问题项。历史反馈会保留；进入修复工作台后也不会自动开始处理。'}</div> : null}
               {state.error ? <div className={`final-review__error ${state.conflict ? 'is-conflict' : ''}`} role="alert"><strong>{state.conflict ? '终审状态需要重新载入确认' : '操作失败'}</strong><span>{state.error}</span>{state.conflict ? <button className="text-button" disabled={locked} onClick={() => void state.reloadConflict()} type="button">载入最新版本并保留草稿</button> : null}</div> : null}
               {repairError ? <div className="final-review__error" role="alert"><strong>无法进入工作台修复</strong><span>{repairError}</span></div> : null}
               <div className="final-review__save-status" aria-live="polite">
                 {state.operation ? `正在执行：${state.operation}` : dirty ? '有未保存的终审草稿' : state.lastSavedAt ? `已保存 ${new Date(state.lastSavedAt).toLocaleTimeString()}` : '当前标注已同步'}
               </div>
               <div className="final-review__actions">
-                <button className="button" disabled={locked || legacyReviewed || state.conflict || Boolean(validation) || !dirty} onClick={() => void state.save()} type="button">显式保存</button>
+                <button className="button" disabled={locked || legacyApproved || state.conflict || Boolean(validation) || !dirty} onClick={() => void state.save()} type="button">显式保存</button>
                 <button
                   className="button button--accent"
-                  disabled={locked || legacyReviewed || state.conflict || Boolean(validation) || !hasNextFilteredItem}
+                  disabled={locked || legacyApproved || state.conflict || Boolean(validation) || (!hasNextFilteredItem && !dirty)}
                   onClick={() => void saveAndNext()}
                   type="button"
                 >保存并下一张</button>
               </div>
               <div className="final-review__repair-actions">
-                <button className="button" disabled={state.draft.verdict !== 'issues' || Boolean(validation) || interactionLocked || dirty} onClick={() => void openInWorkbench()} type="button">创建新 G0 并进入修复</button>
+                <button className="button" disabled={state.draft.verdict !== 'issues' || Boolean(validation) || interactionLocked || dirty} onClick={() => void openInWorkbench()} type="button">进入修复工作台</button>
                 <button
                   className="button"
                   disabled={interactionLocked || legacyApproved || dirty || !active.currentArtifactStale}
@@ -359,7 +389,7 @@ export function FinalReviewPage({ onOpenWorkbench }: FinalReviewPageProps) {
                   {state.refreshing ? '正在同步…' : '同步修复后的成品'}
                 </button>
               </div>
-              <p className="final-review__hint">同步会保留旧快照历史，并把本项重置为未审核，供你重新验收。</p>
+              <p className="final-review__hint">快捷键：← → 翻页，2 通过，3 有问题，Enter 保存并下一张。最后一张未保存草稿仍可保存。同步会保留旧快照历史，并把本项重置为未审核，供你重新验收。</p>
             </section>
 
             <section className="final-review__export">

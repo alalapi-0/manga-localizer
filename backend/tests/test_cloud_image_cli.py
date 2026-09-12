@@ -22,10 +22,25 @@ def _png(color: str, size: tuple[int, int] = (4, 6)) -> bytes:
     return buffer.getvalue()
 
 
-def _jpeg(color: str) -> bytes:
-    image = Image.new("RGB", (4, 6), color)
+def _jpeg(color: str, size: tuple[int, int] = (4, 6)) -> bytes:
+    image = Image.new("RGB", size, color)
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def _gif(color: str) -> bytes:
+    image = Image.new("RGB", (4, 6), color)
+    buffer = io.BytesIO()
+    image.save(buffer, format="GIF")
+    return buffer.getvalue()
+
+
+def _jpeg_with_inside_change(quality: bytes) -> bytes:
+    provider_image = Image.open(io.BytesIO(quality)).convert("RGB")
+    provider_image.putpixel((1, 2), (1, 2, 3))
+    buffer = io.BytesIO()
+    provider_image.save(buffer, format="JPEG")
     return buffer.getvalue()
 
 
@@ -272,6 +287,7 @@ def test_native_prepare_exports_checksum_bound_inputs_and_nonsecret_manifest(tmp
     assert manifest["claimStatus"] == cloud_service.CLAIM_STATUS
     assert manifest["sessionId"] == "session-1"
     assert manifest["prompt"] == cloud_image_cli.PROMPT
+    assert manifest["outputRequirement"] == "exactly-one-local-png-jpeg-or-webp"
     assert "must-not-be-exported" not in manifest_text
 
 
@@ -573,23 +589,92 @@ def test_native_rejects_symlink_before_loopback(tmp_path: Path):
         )
 
 
-def test_native_rejects_non_png_raw(tmp_path: Path):
+def test_native_imports_jpeg_raw_even_when_filename_says_png(tmp_path: Path):
     quality = _png("white")
     mask = _mask()
-    raw_path = tmp_path / "native.jpg"
-    raw_path.write_bytes(_jpeg("white"))
+    raw = _jpeg_with_inside_change(quality)
+    assert raw.startswith(b"\xff\xd8\xff")
+    raw_path = tmp_path / "native.png"
+    raw_path.write_bytes(raw)
+    observed: dict[str, object] = {"localCalls": 0, "ingestCalls": 0}
+    with httpx.Client(
+        transport=_local_handler(quality=quality, mask=mask, observed=observed)
+    ) as local_client:
+        receipt = cloud_image_cli.execute(
+            _args(runtime="cursor", raw_image=str(raw_path)),
+            environ={},
+            local_client=local_client,
+        )
+    body = str(observed["ingestBody"])
+    assert observed["ingestCalls"] == 1
+    assert '"rawMediaType":"image/jpeg"' in body
+    assert "Content-Type: image/jpeg" in body
+    assert receipt["rawSha256"] == hashlib.sha256(raw).hexdigest()
+    assert receipt["outsideMaskChangedPixelCount"] == 0
+    assert raw_path.read_bytes() == raw
+
+
+def test_native_rejects_unsupported_raw_format(tmp_path: Path):
+    quality = _png("white")
+    mask = _mask()
+    raw_path = tmp_path / "native.gif"
+    raw_path.write_bytes(_gif("white"))
     observed: dict[str, object] = {"localCalls": 0, "ingestCalls": 0}
     with (
         httpx.Client(
             transport=_local_handler(quality=quality, mask=mask, observed=observed)
         ) as local_client,
-        pytest.raises(cloud_image_cli.CloudImageCLIError, match="media type"),
+        pytest.raises(cloud_service.ProjectError, match="media type"),
     ):
         cloud_image_cli.execute(
             _args(raw_image=str(raw_path)),
             environ={},
             local_client=local_client,
         )
+    assert observed["ingestCalls"] == 0
+
+
+def test_direct_gemini_rejects_claimed_png_when_bytes_are_jpeg():
+    quality = _png("white")
+    mask = _mask()
+    jpeg_raw = _jpeg_with_inside_change(quality)
+    observed: dict[str, object] = {"localCalls": 0, "ingestCalls": 0, "providerCalls": 0}
+
+    def provider_handler(request: httpx.Request) -> httpx.Response:
+        observed["providerCalls"] = int(observed["providerCalls"]) + 1
+        return httpx.Response(
+            200,
+            json={
+                "id": "provider-interaction-jpeg",
+                "steps": [
+                    {
+                        "type": "model_output",
+                        "content": [
+                            {
+                                "type": "image",
+                                "mime_type": "image/png",
+                                "data": base64.b64encode(jpeg_raw).decode(),
+                            }
+                        ],
+                    }
+                ],
+            },
+        )
+
+    with (
+        httpx.Client(
+            transport=_local_handler(quality=quality, mask=mask, observed=observed)
+        ) as local_client,
+        httpx.Client(transport=httpx.MockTransport(provider_handler)) as provider_client,
+        pytest.raises(cloud_image_cli.CloudImageCLIError, match="media type"),
+    ):
+        cloud_image_cli.execute(
+            _args(mode="gemini-api", runtime="cursor", quota_class="included"),
+            environ={"MANGA_LOCALIZER_GEMINI_API_KEY": "test-api-key"},
+            local_client=local_client,
+            provider_client=provider_client,
+        )
+    assert observed["providerCalls"] == 1
     assert observed["ingestCalls"] == 0
 
 

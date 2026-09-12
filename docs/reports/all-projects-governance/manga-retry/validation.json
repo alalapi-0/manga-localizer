@@ -1,0 +1,183 @@
+{
+  "task_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1",
+  "unit": "manga_retry_handoff",
+  "lane": "REVIEWED",
+  "registered_at": "2026-09-08T04:03:20.581193+00:00",
+  "root_reproduced_checks": [
+    {
+      "command": "npm run storage:check",
+      "exit": 0,
+      "scope": "original and isolated worktree"
+    },
+    {
+      "command": "npm run check:frontend",
+      "exit": 0,
+      "result": "lint, typecheck, 454 tests in 7 files, production build passed; before final legacy hint copy adjustment"
+    },
+    {
+      "command": "npm --prefix frontend run test -- --run src/finalReview/store.test.ts src/finalReview/FinalReviewPage.test.tsx",
+      "result": "store 104 passed; one stale UI copy assertion failed, then corrected; final FinalReviewPage.test.tsx 32 passed",
+      "exit_after_repair": 0
+    },
+    {
+      "command": "npm --prefix frontend run build",
+      "exit": 0,
+      "scope": "final candidate frontend"
+    },
+    {
+      "command": "PYTHONPATH=backend/src node scripts/external-uv.mjs run --frozen --offline --no-sync python -m pytest backend/tests/test_final_reviews.py -q -k 'issue_repair_isolated_g0_idempotent_and_verdict_unchanged or issue_repair_explicit_retry_is_linear_audited_and_idempotent or issue_repair_parameter_variant_retry_preserves_history_and_exact_replay'",
+      "exit": 0,
+      "result": "3 passed; isolated candidate module path verified"
+    },
+    {
+      "command": "PYTHONPATH=backend/src node scripts/external-uv.mjs run --frozen --offline --no-sync python scripts/verify_final_review_retry_data.py (exact roots and receipt in README)",
+      "exit": 0,
+      "result": "3 current real retry heads reopened twice each; unchanged selected data fingerprints"
+    },
+    {
+      "command": "ruff check and ruff format --check scripts/verify_final_review_retry_data.py through supported external Python runtime",
+      "exit": 0
+    },
+    {
+      "command": "MANGA_LOCALIZER_E2E_BROWSER_EXECUTABLE=<existing supported local browser> node scripts/verify-final-review-retry-ui.mjs",
+      "exit": 0,
+      "result": "6 browser paths passed; actual component, isolated API/navigation substitutes"
+    },
+    {
+      "command": "git diff --check",
+      "exit": 0
+    }
+  ],
+  "before_fix_regression": "3 real attempt-2 metadata copies rejected by original validator; all pass after fix",
+  "browser": {
+    "kind": "isolated real-component browser proof; API and navigation substitutes; no actual workbench or image generation claim",
+    "results": [
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "index": 0,
+        "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      },
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "index": 1,
+        "item_id": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      },
+      {
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        },
+        "index": 2,
+        "item_id": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      },
+      {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "index": 0,
+        "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      },
+      {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "index": 1,
+        "item_id": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      },
+      {
+        "viewport": {
+          "width": 390,
+          "height": 844
+        },
+        "index": 2,
+        "item_id": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+        "keyboard_handoff": true,
+        "session_reload": true,
+        "verdict_unchanged": true,
+        "console_errors": [],
+        "unexpected_network": []
+      }
+    ]
+  },
+  "visual_qa": {
+    "reviewer": "Root",
+    "result": "Representative desktop and mobile before/resumed screenshots inspected; readable repair entry and persisted context, no horizontal overflow",
+    "screenshots": {
+      "1440-0-before.png": "3354937e6a8b8634a130d7bc84e04e40930e900915f1e93e3e927e3cd0699b84",
+      "1440-0-resumed.png": "6baf2d2a7f072013119775c3b4915308b77e81cc8b15ebe6be90b514636ca337",
+      "1440-1-before.png": "983aeb3f4653253d1d579425f3a8cf590aa7204a52dcc86c70fc4ad95de9949d",
+      "1440-1-resumed.png": "6baf2d2a7f072013119775c3b4915308b77e81cc8b15ebe6be90b514636ca337",
+      "1440-2-before.png": "0bddf7c5239dfacb5b3a83408d7c5e5b9a08036a3596ec9dd012d1ca7efeb0ca",
+      "1440-2-resumed.png": "6baf2d2a7f072013119775c3b4915308b77e81cc8b15ebe6be90b514636ca337",
+      "390-0-before.png": "e3f749772cbf30f683355f7b36e1362635ae05b0b701e6bb7918c0866447ae39",
+      "390-0-resumed.png": "f0806c175f5e0b33428a1883463cc86eea41e7880d00b094d38c6ad2191b8097",
+      "390-1-before.png": "e3f749772cbf30f683355f7b36e1362635ae05b0b701e6bb7918c0866447ae39",
+      "390-1-resumed.png": "f0806c175f5e0b33428a1883463cc86eea41e7880d00b094d38c6ad2191b8097",
+      "390-2-before.png": "e3f749772cbf30f683355f7b36e1362635ae05b0b701e6bb7918c0866447ae39",
+      "390-2-resumed.png": "f0806c175f5e0b33428a1883463cc86eea41e7880d00b094d38c6ad2191b8097",
+      "failure.png": "99db2a93b06fa1bf617f5c495e02dcf6c0b76961108491217e2cf4fed8699d35"
+    }
+  },
+  "original_protected_hashes_unchanged": {
+    "AGENTS.md": true,
+    ".agent/STATE.md": true,
+    "frontend/src/finalReview/types.ts": true,
+    "frontend/src/finalReview/store.ts": true,
+    "frontend/src/finalReview/store.test.ts": true,
+    "frontend/src/finalReview/FinalReviewPage.tsx": true,
+    "frontend/src/finalReview/FinalReviewPage.test.tsx": true
+  },
+  "excluded_failed_routes": [
+    "First backend run resolved original editable package; interrupted and excluded from candidate evidence; explicit PYTHONPATH corrected module binding",
+    "Proxy POST returned 503 and direct API connection refused; no completed HTTP case",
+    "Full TestClient startup interrupted before completed case; selected fingerprints unchanged, no unselected catalog restoration claim",
+    "First two browser runs intercepted /src/api/client.ts; interceptor restricted to /api/ root and six paths passed"
+  ],
+  "warnings": [
+    "Existing production bundle chunk exceeds 500 kB",
+    "Existing Starlette/httpx deprecation warning"
+  ],
+  "limits": [
+    "No fresh real image generation, approval or full live-workbench claim",
+    "Existing 56 issues and 3 pending owner reviews remain",
+    "Whole-project Agent/state-template onboarding remains pending"
+  ],
+  "remote_before_delivery": {
+    "main": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+    "check_runs": 0,
+    "delivery": "pending"
+  }
+}

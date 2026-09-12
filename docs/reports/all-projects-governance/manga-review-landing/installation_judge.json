@@ -1,0 +1,24 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "B",
+  "reviewer": "/root/manga_installation_judge_v1",
+  "decision": "PASS",
+  "semantic_sha256": "3fd5a8fec77dd36f039e9e4cc5364996863efa8c191faf50f3c0ab73175c81d0",
+  "installation_record_sha256": "ad88007c14901adbf99693ddf27225713b34ccb27cb0a939a3970f55d12e11d2",
+  "findings": [
+    "All57semantic entries match; original/source copies agree",
+    "Original HEAD,branch,index and83path accounting preserved",
+    "All176untouched baseline files match accepted source",
+    "Replacement/addition/retirement/checkpoint/inverse evidence complete and consistent",
+    "State/launcher checks pass; Python resolves to original checkout",
+    "Stage A accepted code and CI evidence applies byte-for-byte",
+    "Hub validation isolated; no real Hub/database/media/provider/app effects"
+  ],
+  "limits": [
+    "Stage B receipt delivery and CI pending",
+    "Real Hub routing pending",
+    "Actual image correction pending"
+  ],
+  "conclusion": "No concrete installation defect found",
+  "evidence_origin": "Native fresh read-only Judge final response; Root compact registration"
+}

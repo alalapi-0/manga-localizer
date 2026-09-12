@@ -1,0 +1,25 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-REVIEW-REPLACEMENT-LANDING-v3",
+  "stage": "A",
+  "governor": "/root/hub_connection_governor",
+  "decision": "APPROVE",
+  "candidate_commit": "f97852faed4cfc61cc0dca0227f0d961aa60d9e1",
+  "semantic_sha256": "b1f25292eb4a2d0aebe0c36caa2a03eeb21dcd5d0f2932babb0934238050ab60",
+  "judge_ref": "judge.json",
+  "judge_sha256": "449dc4b78065518c65c5c34d8603c118b7efdee39c22369c66a6a484bcc25518",
+  "authorized_next": [
+    "Add excluded Judge/Governor/delivery metadata only",
+    "Recheck unchanged semantic candidate",
+    "Audit exact final base-to-HEAD series",
+    "Normal push to real main",
+    "Verify remote ancestry and all CI before Stage B"
+  ],
+  "not_covered": [
+    "Stage B acceptance",
+    "Real DB migration or Page134 correction",
+    "Old final-review Goal activation",
+    "Live Hub registry/refresh",
+    "Product release"
+  ],
+  "evidence_origin": "Native read-only Governor final decision; Root compact registration."
+}

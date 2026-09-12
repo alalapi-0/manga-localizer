@@ -189,6 +189,7 @@ def _accept_g1_preprocess(
     target_project: dict[str, object],
     target_image: dict[str, object],
     generation_id: str,
+    profile: str = "off",
 ) -> tuple[str, dict[str, object]]:
     project_id = str(target_project["id"])
     image_id = str(target_image["id"])
@@ -196,7 +197,7 @@ def _accept_g1_preprocess(
         f"/api/projects/{project_id}/preprocess",
         json={
             "imageIds": [image_id],
-            "options": {"profile": "off"},
+            "options": {"profile": profile},
             "lineage": _lineage_context(image_id, generation_id),
         },
     )
@@ -326,6 +327,7 @@ def _prepare_g3_yes_page(
     tmp_path: Path,
     *,
     prepared: dict[str, object] | None = None,
+    preprocess_profile: str = "off",
 ) -> dict[str, object]:
     if prepared is None:
         data, source_project, source_image, target_project, target_image = _source_and_target(
@@ -357,6 +359,7 @@ def _prepare_g3_yes_page(
         target_project=target_project,
         target_image=target_image,
         generation_id=generation_id,
+        profile=preprocess_profile,
     )
     generation = client.get(f"/api/images/{target_image['id']}/page-generations").json()[0]
     accepted_g2 = _accept_g2_without_reconstruction(
@@ -1716,6 +1719,53 @@ def test_detect_enqueue_requires_current_g3_yes_and_is_zero_write_when_blocked(
     assert events[-1]["inputChecksum"] == quality_checksum
     assert events[-1]["parentChecksum"] == quality_checksum
     assert events[-1]["sequence"] == present["nextSequence"]
+
+
+def test_detect_enqueue_survives_duplicate_g1_accept_after_g3(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g3_yes_page(client, app, tmp_path, preprocess_profile="ocr-friendly")
+    target_project = prepared["targetProject"]
+    target_image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    quality_checksum = str(prepared["qualityChecksum"])
+    source_checksum = hashlib.sha256(prepared["data"]).hexdigest()
+    accepted_g3 = prepared["acceptedG3"]
+    assert isinstance(target_project, dict) and isinstance(target_image, dict)
+    assert isinstance(accepted_g3, dict)
+    assert quality_checksum != source_checksum
+
+    duplicate = client.patch(
+        f"/api/images/{target_image['id']}/stage-reviews/preprocess",
+        json={
+            "state": "accepted",
+            "expectedRevision": accepted_g3["imageRevision"],
+            "observedArtifactChecksum": quality_checksum,
+            "lineage": _mutation_lineage(generation_id, accepted_g3["nextSequence"]),
+        },
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    events = client.get(f"/api/page-generations/{generation_id}/events").json()
+    g1_reviews = [
+        event
+        for event in events
+        if event["operation"] == "preprocess-stage-review" and event["state"] == "accepted"
+    ]
+    assert len(g1_reviews) >= 2
+    assert g1_reviews[0]["parentChecksum"] == source_checksum
+    assert g1_reviews[-1]["parentChecksum"] == quality_checksum
+
+    queued = client.post(
+        f"/api/projects/{target_project['id']}/detect",
+        json={
+            "imageIds": [target_image["id"]],
+            "lineage": _current_lineage_context(client, target_image["id"], generation_id),
+        },
+    )
+    assert queued.status_code == 202, queued.text
+    enqueued = client.get(f"/api/page-generations/{generation_id}/events").json()[-1]
+    assert enqueued["operation"] == "detect-job-enqueued"
+    assert enqueued["parentChecksum"] == quality_checksum
 
 
 def test_detect_enqueue_rejects_a_replayed_sequence_without_any_partial_write(
@@ -9096,3 +9146,627 @@ def test_g7_page_wide_stroke_order_can_erase_an_overlapping_region(
     protected_y = round((first_region["y"] + 4) * scale)
     assert pixels[center_y, center_x] == 0
     assert pixels[protected_y, protected_x] == 255
+
+
+def _accept_current_g7_artifact(
+    client: TestClient, prepared: dict[str, object]
+) -> dict[str, object]:
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    assert isinstance(image, dict)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    artifact = context["artifacts"][-1]
+    accepted = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask",
+        json={
+            "decision": "accept",
+            "reason": "complete-and-no-collateral",
+            "selectedArtifactId": artifact["artifactId"],
+            "observedMaskChecksum": artifact["maskChecksum"],
+            "coverageChecks": _MASK_COVERAGE,
+            "collateralChecks": _MASK_COLLATERAL,
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()
+
+
+def test_g7_complete_mask_cannot_reopen_after_accept(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    _save_g7_default_draft(client, prepared)
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    _accept_current_g7_artifact(client, prepared)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    blocked = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["reason"] == "g7-mask-coverage-complete"
+    draft = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": context["draft"]["regions"],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert draft.status_code == 409, draft.text
+    assert draft.json()["detail"]["reason"] == "g7-mask-accepted"
+
+
+def test_g7_complete_mask_can_reopen_for_owner_issues_remask(
+    client: TestClient, app, tmp_path: Path, monkeypatch
+) -> None:
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    _save_g7_default_draft(client, prepared)
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    first = _accept_current_g7_artifact(client, prepared)
+    first_artifact_id = first["event"]["evidence"]["artifactId"]
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: True,
+    )
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    tightened = [
+        {**_mask_recipe(region_id), "padding": 1, "dilation": 0}
+        for region_id in reopened.json()["eligibleRegionIds"]
+    ]
+    revised = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": tightened,
+            "expectedRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    second_job = _enqueue_g7(client, prepared)
+    assert second_job.status_code == 202, second_job.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, second_job.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    second = _accept_current_g7_artifact(client, prepared)
+    second_artifact_id = second["event"]["evidence"]["artifactId"]
+    assert second_artifact_id != first_artifact_id
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        checksum, selected = require_current_mask_acceptance(store, session, image_row, generation)
+        assert selected is not None and selected.id == second_artifact_id
+        assert checksum == second["event"]["outputChecksum"]
+
+
+@historical_local_g8()
+def test_owner_issues_g7_remask_starts_new_g8_epoch_after_local_g8(
+    client: TestClient, app, tmp_path: Path, monkeypatch
+) -> None:
+    prepared = _prepare_g8_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    before = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert before.status_code == 200, before.text
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    monkeypatch.setattr(
+        "manga_localizer.main.g8_replace_accepted_for_linked_item",
+        lambda _store, _lineage, item_verdict_lookup=None: True,
+    )
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    revised = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [
+                {**_mask_recipe(region_id), "padding": 1, "dilation": 0}
+                for region_id in reopened.json()["eligibleRegionIds"]
+            ],
+            "expectedRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    second_job = _enqueue_g7(client, prepared)
+    assert second_job.status_code == 202, second_job.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, second_job.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    second = _accept_current_g7_artifact(client, prepared)
+    assert second["event"]["evidence"]["artifactId"] != prepared["maskArtifact"]["artifactId"]
+    cloud = client.get(f"/api/images/{image['id']}/page-gates/cloud-full-page")
+    assert cloud.status_code == 200, cloud.text
+    assert cloud.json()["acceptedCandidateId"] is None
+
+
+def test_g7_coverage_hole_can_reopen_without_restarting_source(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    hole_recipe = {
+        "regionId": context["eligibleRegionIds"][0],
+        "maskMode": "manual",
+        "polygon": None,
+        "padding": 0,
+        "dilation": 0,
+        "feather": 0,
+        "polarity": "auto",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [{"mode": "add", "radius": 1.0, "points": [[2.0, 2.0], [3.0, 3.0]]}],
+        },
+    }
+    saved = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [hole_recipe],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    first = _accept_current_g7_artifact(client, prepared)
+    first_artifact_id = first["event"]["evidence"]["artifactId"]
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    assert reopened.json()["draft"]["regions"][0]["maskMode"] == "manual"
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        with pytest.raises(page_lineage.PageLineageConflict, match="amendment is open"):
+            require_current_mask_acceptance(store, session, image_row, generation)
+    revised = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [_mask_recipe(context["eligibleRegionIds"][0])],
+            "expectedRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        with pytest.raises(page_lineage.PageLineageConflict, match="amendment is open"):
+            require_current_mask_acceptance(store, session, image_row, generation)
+    second_job = _enqueue_g7(client, prepared)
+    assert second_job.status_code == 202, second_job.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, second_job.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    second = _accept_current_g7_artifact(client, prepared)
+    second_artifact_id = second["event"]["evidence"]["artifactId"]
+    assert second_artifact_id != first_artifact_id
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        checksum, selected = require_current_mask_acceptance(store, session, image_row, generation)
+        assert selected is not None and selected.id == second_artifact_id
+        assert checksum == second["event"]["outputChecksum"]
+
+
+def test_g7_coverage_hole_can_reopen_after_later_non_g7_events(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    saved = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [
+                {
+                    "regionId": context["eligibleRegionIds"][0],
+                    "maskMode": "manual",
+                    "polygon": None,
+                    "padding": 0,
+                    "dilation": 0,
+                    "feather": 0,
+                    "polarity": "auto",
+                    "maskEdits": {
+                        "version": 1,
+                        "strokes": [
+                            {
+                                "mode": "add",
+                                "radius": 1.0,
+                                "points": [[2.0, 2.0], [3.0, 3.0]],
+                            }
+                        ],
+                    },
+                }
+            ],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    _accept_current_g7_artifact(client, prepared)
+    with store.session() as session:
+        generation = session.get(PageGeneration, generation_id)
+        assert generation is not None
+        session.add(
+            PageLineageEvent(
+                generation_id=generation.id,
+                sequence=generation.next_sequence,
+                operation="cloud-full-page-stage-review",
+                gate="G8_cloudFullPage",
+                state="rejected",
+                actor_kind="cursor",
+                actor_id="cursor-agent",
+                operation_source="api",
+                evidence={},
+            )
+        )
+        generation.next_sequence += 1
+    still_accepted = client.get(f"/api/images/{image['id']}/page-gates/mask")
+    assert still_accepted.status_code == 200, still_accepted.text
+    context = still_accepted.json()
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        with pytest.raises(page_lineage.PageLineageConflict, match="amendment is open"):
+            require_current_mask_acceptance(store, session, image_row, generation)
+
+
+def test_g7_leftover_ink_on_solid_background_can_reopen_without_restarting_source(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g6_accepted_page(client, app, tmp_path)
+    image = prepared["targetImage"]
+    generation_id = str(prepared["generationId"])
+    store = prepared["store"]
+    assert isinstance(image, dict)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    leftover_recipe = {
+        "regionId": context["eligibleRegionIds"][0],
+        "maskMode": "manual",
+        "polygon": None,
+        "padding": 0,
+        "dilation": 0,
+        "feather": 0,
+        "polarity": "auto",
+        "maskEdits": {
+            "version": 1,
+            "strokes": [
+                {
+                    "mode": "add",
+                    "radius": 6.0,
+                    "points": [[28.0, 34.0], [40.0, 34.0], [40.0, 44.0], [28.0, 44.0]],
+                }
+            ],
+        },
+    }
+    saved = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [leftover_recipe],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert saved.status_code == 200, saved.text
+    queued = _enqueue_g7(client, prepared)
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, queued.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    first = _accept_current_g7_artifact(client, prepared)
+    context = client.get(f"/api/images/{image['id']}/page-gates/mask").json()
+    artifact = context["artifacts"][-1]
+    response = client.get(
+        f"/api/images/{image['id']}/page-gates/mask/artifacts/{artifact['artifactId']}"
+    )
+    assert response.status_code == 200, response.text
+    with Image.open(io.BytesIO(response.content)) as opened:
+        pixels = np.asarray(opened.convert("L"))
+    region = next(
+        row
+        for row in client.get(f"/api/images/{image['id']}/regions").json()
+        if row["id"] == context["eligibleRegionIds"][0]
+    )
+    scale = artifact["renderScale"]
+    x0 = round(region["x"] * scale)
+    y0 = round(region["y"] * scale)
+    x1 = round((region["x"] + region["width"]) * scale)
+    y1 = round((region["y"] + region["height"]) * scale)
+    crop = pixels[y0:y1, x0:x1]
+    white = int((crop > 127).sum())
+    assert white / crop.size >= mask_service.G7_COVERAGE_HOLE_RATIO
+    reopened = client.post(
+        f"/api/images/{image['id']}/page-gates/mask/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        with pytest.raises(page_lineage.PageLineageConflict, match="amendment is open"):
+            require_current_mask_acceptance(store, session, image_row, generation)
+    revised = client.patch(
+        f"/api/images/{image['id']}/page-gates/mask/draft",
+        json={
+            "regions": [_mask_recipe(context["eligibleRegionIds"][0])],
+            "expectedRevision": reopened.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, reopened.json()["nextSequence"]),
+        },
+    )
+    assert revised.status_code == 200, revised.text
+    second_job = _enqueue_g7(client, prepared)
+    assert second_job.status_code == 202, second_job.text
+    claimed = app.state.queue._claim_next()
+    assert claimed == (store, second_job.json()["id"])
+    asyncio.run(app.state.queue._execute(*claimed))
+    second = _accept_current_g7_artifact(client, prepared)
+    assert second["event"]["evidence"]["artifactId"] != first["event"]["evidence"]["artifactId"]
+    with store.session() as session:
+        image_row = session.get(ImageAsset, image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        checksum, selected = require_current_mask_acceptance(store, session, image_row, generation)
+        assert selected is not None and selected.id == second["event"]["evidence"]["artifactId"]
+        assert checksum == second["event"]["outputChecksum"]
+
+
+def _accept_g4_from_latest_mutation(
+    client: TestClient,
+    *,
+    image_id: str,
+    project_id: str,
+    generation_id: str,
+) -> dict[str, object]:
+    mutation_event = client.get(f"/api/page-generations/{generation_id}/events").json()[-1]
+    current_image = _project_image(client, project_id, image_id)
+    generation = client.get(f"/api/images/{image_id}/page-generations").json()[0]
+    accepted = client.patch(
+        f"/api/images/{image_id}/page-gates/regions",
+        json={
+            "decision": "accept",
+            "reason": "all-region-decisions-reviewed",
+            "observedRegionChecksum": mutation_event["outputChecksum"],
+            "expectedRevision": current_image["revision"],
+            "lineage": _mutation_lineage(generation_id, generation["nextSequence"]),
+        },
+    )
+    assert accepted.status_code == 200, accepted.text
+    return accepted.json()
+
+
+def test_g4_complete_box_cannot_reopen_after_g5(client: TestClient, app, tmp_path: Path) -> None:
+    prepared = _prepare_g4_accepted_page(client, app, tmp_path, accept_g4=False)
+    target_image = prepared["targetImage"]
+    target_project = prepared["targetProject"]
+    generation_id = str(prepared["generationId"])
+    region = prepared["region"]
+    assert isinstance(target_image, dict) and isinstance(target_project, dict)
+    assert isinstance(region, dict)
+    current_image = _project_image(client, str(target_project["id"]), str(target_image["id"]))
+    generation = client.get(f"/api/images/{target_image['id']}/page-generations").json()[0]
+    covered = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "x": 20,
+            "y": 20,
+            "width": 80,
+            "height": 60,
+            "expectedRevision": region["revision"],
+            "expectedImageRevision": current_image["revision"],
+            "lineage": _mutation_lineage(generation_id, generation["nextSequence"]),
+        },
+    )
+    assert covered.status_code == 200, covered.text
+    _accept_g4_from_latest_mutation(
+        client,
+        image_id=str(target_image["id"]),
+        project_id=str(target_project["id"]),
+        generation_id=generation_id,
+    )
+    region = covered.json()
+    context = client.get(f"/api/images/{target_image['id']}/page-gates/background").json()
+    classified = client.patch(
+        f"/api/regions/{region['id']}/background-classification",
+        json={
+            "category": "white-solid",
+            "confidence": 0,
+            "rationaleCodes": ["uniform-near-white"],
+            "expectedRevision": region["revision"],
+            "expectedImageRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert classified.status_code == 200, classified.text
+    context = client.get(f"/api/images/{target_image['id']}/page-gates/background").json()
+    accepted_g5 = client.patch(
+        f"/api/images/{target_image['id']}/page-gates/background",
+        json={
+            "decision": "accept",
+            "reason": "all-eligible-backgrounds-reviewed",
+            "observedBackgroundChecksum": context["backgroundChecksum"],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert accepted_g5.status_code == 200, accepted_g5.text
+    context = client.get(f"/api/images/{target_image['id']}/page-gates/background").json()
+    blocked = client.post(
+        f"/api/images/{target_image['id']}/page-gates/regions/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["detail"]["reason"] == "g4-missed-box-complete"
+
+
+def test_g4_missed_box_can_reopen_after_g5_without_restarting_source(
+    client: TestClient, app, tmp_path: Path
+) -> None:
+    prepared = _prepare_g5_accepted_page(client, app, tmp_path)
+    target_image = prepared["targetImage"]
+    target_project = prepared["targetProject"]
+    generation_id = str(prepared["generationId"])
+    region = prepared["region"]
+    store = prepared["store"]
+    assert isinstance(target_image, dict) and isinstance(target_project, dict)
+    assert isinstance(region, dict)
+    context = client.get(f"/api/images/{target_image['id']}/page-gates/background").json()
+    locked = client.patch(
+        f"/api/regions/{region['id']}",
+        json={
+            "height": region["height"] + 20,
+            "expectedRevision": region["revision"],
+            "expectedImageRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert locked.status_code == 409, locked.text
+    assert locked.json()["detail"]["reason"] == "g5-started-g4-locked"
+    reopened = client.post(
+        f"/api/images/{target_image['id']}/page-gates/regions/reopen",
+        json={
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert reopened.status_code == 200, reopened.text
+    body = reopened.json()
+    assert body["state"] == "pending"
+    assert region["id"] in body["leftoverRegionIds"]
+    current = client.get(f"/api/images/{target_image['id']}/regions").json()[0]
+    expanded = client.patch(
+        f"/api/regions/{current['id']}",
+        json={
+            "x": 20,
+            "y": 20,
+            "width": 80,
+            "height": 60,
+            "expectedRevision": current["revision"],
+            "expectedImageRevision": body["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, body["nextSequence"]),
+        },
+    )
+    assert expanded.status_code == 200, expanded.text
+    accepted = _accept_g4_from_latest_mutation(
+        client,
+        image_id=str(target_image["id"]),
+        project_id=str(target_project["id"]),
+        generation_id=generation_id,
+    )
+    background = client.get(f"/api/images/{target_image['id']}/page-gates/background")
+    assert background.status_code == 200, background.text
+    assert background.json()["state"] == "pending"
+    assert background.json()["classifiedRegionIds"] == []
+    with store.session() as session:
+        image_row = session.get(ImageAsset, target_image["id"])
+        generation = session.get(PageGeneration, generation_id)
+        assert image_row is not None and generation is not None
+        with pytest.raises(page_lineage.PageLineageConflict, match="not current"):
+            require_current_background_classifications(store, session, image_row, generation)
+    classified = client.patch(
+        f"/api/regions/{current['id']}/background-classification",
+        json={
+            "category": "white-solid",
+            "confidence": 0,
+            "rationaleCodes": ["uniform-near-white"],
+            "expectedRevision": expanded.json()["revision"],
+            "expectedImageRevision": background.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, background.json()["nextSequence"]),
+        },
+    )
+    assert classified.status_code == 200, classified.text
+    context = client.get(f"/api/images/{target_image['id']}/page-gates/background").json()
+    accepted_g5 = client.patch(
+        f"/api/images/{target_image['id']}/page-gates/background",
+        json={
+            "decision": "accept",
+            "reason": "all-eligible-backgrounds-reviewed",
+            "observedBackgroundChecksum": context["backgroundChecksum"],
+            "expectedRevision": context["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, context["nextSequence"]),
+        },
+    )
+    assert accepted_g5.status_code == 200, accepted_g5.text
+    complete = client.post(
+        f"/api/images/{target_image['id']}/page-gates/regions/reopen",
+        json={
+            "expectedRevision": accepted_g5.json()["imageRevision"],
+            "lineage": _mutation_lineage(generation_id, accepted_g5.json()["nextSequence"]),
+        },
+    )
+    assert complete.status_code == 409, complete.text
+    assert complete.json()["detail"]["reason"] == "g4-missed-box-complete"
+    assert accepted["event"]["gate"] == "G4_regions"

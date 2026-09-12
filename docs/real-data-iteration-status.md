@@ -1,6 +1,6 @@
 # Real-data iteration status
 
-This is the sanitized public real-data summary and round log routed from `.agent/STATE.md`, the compact
+This is the sanitized public real-data summary and round log routed from `.agent/STATE.yaml`, the compact
 current-state authority. It is updated after each completed round. Private images, OCR text,
 machine-specific paths, model weights, and generated artwork are deliberately excluded.
 

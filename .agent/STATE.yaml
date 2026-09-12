@@ -1,0 +1,192 @@
+schema_version: '1.0'
+metadata:
+  role: canonical_current_state
+  format: yaml
+  sole_source: .agent/STATE.yaml
+  reader: Project Agents and Hub2; strict YAML current authority. Historical checkpoints
+    are read from Git only when needed.
+  update_triggers:
+  - owner_decision
+  - verified_checkpoint
+  - blocker_change
+  - accepted_delivery
+project:
+  id: manga-localizer
+  name: Manga Localizer
+execution_control:
+  state: OWNER_R2_REVIEW
+  authority: owner-r2-review
+  project_execution: not_active_in_this_governance_goal
+  checkpoint: BATCHED_HUMAN_REVIEW
+  protocol_revision: final-corpus-rebuild/2026-09-04.2
+  activation: Current owner instructions and accepted exact contract are required.
+    Stage A/B stay inactive; only Stage C may declare owner_authorized_single_page_recovery.
+    Static validation never grants authority.
+  owner_constraints:
+  - Only the owner may mark final-review items approved.
+  - Do not process the 3 pending pages112/24/173 or reopen approved pages.
+  - Do not create G0 or restart from source to evade downstream failures.
+  - 'Page52: no G2 redo; Page190: NO_A2; Page91 r4-r11: no unchanged remask/generation
+    retries.'
+  - Preserve every remaining page-specific prohibition/checkpoint in the exact historical
+    state; consult its matching page before any future authorized page effect.
+  - No real effects before the exact Stage B plan is accepted. Stage C is limited
+    to the registered single page; no unscoped worker, provider fallback, approval
+    or export.
+current_work:
+  objective: Complete owner-reviewed localization of all199 pages, then rebuild/export
+    and validate the corpus.
+  phase: owner_final_review
+  round: owner-r2-review
+  status: OWNER_R2_REVIEW
+  completed: false
+  accepted: false
+  next_action: Normally push the independently accepted v2 failed-at-G8 receipt to
+    Manga main, verify exact remote ancestry and complete CI. Then separately enumerate
+    all199 review items read-only to close retry-process coverage; no additional image/API
+    effects.
+  owner_role: Owner for final verdicts; explicitly authorized project Root for gated
+    repairs.
+progress:
+  completed: 140
+  total: 199
+  counting_basis: Owner-approved final-review items in batch a734c596-faae-4875-ae61-f694a3c26d4a
+    revision485:140 approved,56 issues,3 pending. Actual v2 stopped after formal G8
+    rejection; all199 review rows unchanged. No clone/synthetic progress counted.
+  milestones: null
+catalog_observation:
+  batch_id: a734c596-faae-4875-ae61-f694a3c26d4a
+  revision: 485
+  observed_at: '2026-09-08T18:13:07.474515+00:00'
+  approved: 140
+  issues: 56
+  pending: 3
+  pending_pages:
+  - 112
+  - 24
+  - 173
+blockers:
+- code: STRICT_G8_COMPOSITE_VISUAL_FAILURE
+  reason: Page134 actual v2 G8 eeca6620 rejected after precise left glyph/internal-hole
+    G7 remask. Strict composite still has white cutouts in left black limb, fragmented
+    ground and broken sleeve/clothing contours. Outside-mask changed0 and strict recomposition
+    mismatch0 are preservation checks, not visual acceptance.
+  affected_items:
+  - 7975117b-c953-4ac4-847e-5249d9521a2c
+  - candidate:eeca6620-1655-5dfc-89f6-34aacc8b802d
+  recovery_condition: Preserve both v1/v2 failed raw/mask/normalized/reviews. Accepted
+    controlled-recovery series is spent at2 generation/2 ingest; further image effects
+    require a materially different evidenced method and separately accepted exact
+    plan. No unchanged retry, failed raw reuse, source restart or automatic approval.
+  retry_entry: Current G7 accepted; new G8 rejected. Project9273/image79/next102,
+    item2/batch485, queues0. Existing gated owner-issues G7/native G8 routes retain
+    actual preconditions; no active execution declaration.
+  waiting_for_user: false
+- code: G8_VISUAL_FAILURES
+  reason: 56 actual final-review issues remain. Page134 v1 and v2 each produced one
+    actual new G8 and formal rejection; pages167/192 and remaining affected-set closure
+    remain unresolved. Actual re-entry/failure handling is proven; image quality/corpus
+    completion is not.
+  affected_items:
+  - batch:a734c596-faae-4875-ae61-f694a3c26d4a/verdict:issues
+  - page134
+  - page167
+  - page192
+  recovery_condition: Resolve each exact blocker with a materially new authorized
+    method; retain immutable raw/mask/reviews and all10 visual checks. No unchanged
+    retries or automatic approval.
+  retry_entry: Existing final-review repair handoff and gated G4/G7/cloud:image workflow;
+    no automatic execution from Hub.
+  waiting_for_user: false
+- code: OWNER_REVIEW_PENDING
+  reason: 3 pending items require owner verdicts; they cannot be regenerated or approved
+    by this maintenance Goal.
+  affected_items:
+  - page112
+  - page24
+  - page173
+  recovery_condition: Owner reviews the exact current artifacts.
+  retry_entry: Owner final-review screen; no automatic retry or regeneration.
+  waiting_for_user: true
+verification:
+  status: actual_v2_reentry_verified_g8_visual_failed
+  evidence_refs:
+  - docs/reports/all-projects-governance/manga-retry/live-recovery.json
+  - docs/reports/all-projects-governance/manga-ci-audit/delivery.json
+  - docs/reports/all-projects-governance/manga-review-landing/page134-diagnosis.json
+  - docs/reports/all-projects-governance/manga-review-landing/validation.json
+  - docs/reports/all-projects-governance/manga-review-landing/delivery.json
+  - docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
+  accepted_basis: Source v2 main20f14f7/CI34254929980 and exact Stage B independently
+    accepted. Actual G7 owner-issues re-entry, deterministic remask, one new native
+    generation/ingest and formal five-of-ten-check G8 rejection verified. No G0-G6/OCR/G9/G10/refresh;
+    all199 review rows and2627 old media preserved. Actual Stage D decisions are recorded
+    in the current receipt; no image-quality acceptance.
+delivery:
+  status: stage_a_source_main_verified_actual_receipt_pending_delivery
+  remote: https://github.com/alalapi-0/manga-localizer
+  branch: main
+  commit: 20f14f73446a44aa4462735ef77ee094b5c0f45c
+  receipt_ref: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
+history:
+  state_checkpoint_commit: c130b50f1584c1ecd78d9bad9a49cc9daf103937
+  path: .agent/STATE.md
+  sha256: d7c5bfe73e1da0607af966932e1ad9189bd3d4854663e51b682d8b499049127c
+  meaning: Exact original current-state bytes preserved in the checkpoint, verified
+    as an ancestor of remote main57fe2ef. Historical text cannot activate execution.
+all_projects_governance:
+  task_id: ALL-PROJECTS-CODEX-GOVERNANCE-V1
+  unit: manga_retry_metadata_reentry
+  lane: REVIEWED
+  status: ACTIVE
+  stage: delivered
+  candidate_status: Local code and metadata checks passed; independent review and
+    main delivery pending
+  next_action: Return to Hub v2 data integration; real image redo remains unauthorized
+    and incomplete.
+  candidate_paths:
+  - .agent/STATE.yaml
+  - backend/src/manga_localizer/main.py
+  - backend/src/manga_localizer/services/final_reviews.py
+  - backend/tests/test_final_reviews.py
+  - frontend/src/api/client.test.ts
+  - frontend/src/finalReview/FinalReviewPage.test.tsx
+  - frontend/src/finalReview/store.test.ts
+  - frontend/src/finalReview/store.ts
+  - frontend/src/finalReview/types.ts
+  - scripts/verify_final_review_retry_data.py
+  - backend/tests/fixtures/final_review_retry_case.json
+  - backend/tests/test_retry_metadata.py
+  checks:
+    reused: backend1101/frontend461/launcher40 for unchanged original product diff
+    original_product_diff_sha256: 37f72b57911488855fe6253113edd0c2c6983385b4c961025bb5b65587d751c9
+    new: 7 targeted tests passed; selected real failure metadata with synthetic media/gates,
+      local typeset queue/claim/execute, new strict-pending artifact and stale verdict
+      rejection
+    format_lint: changed Python paths passed
+  metadata_coverage:
+    total: 199
+    issues: 56
+    classified: 56
+    existing_head_requires_gate_review: 54
+    ambiguous_or_invalid_provenance: 2
+    digest: e01690991d3edfeeb770c58b646b4d4b8cd4c679c70cf23d6630a1a6a3d4264a
+  image_effect_boundary:
+    contract: docs/reports/all-projects-governance/manga-review-landing/page134-recovery-contract.md
+    evidence: docs/reports/all-projects-governance/manga-review-landing/page134-recovery.json
+    failure_fingerprint: Page134 v2 G8 de268616/actualrawfd0dc152/newmask6717e86a:5of10
+      visual checks failed (whiteholes/brokenjoins/structure). Strictoutside0/recomposition0;
+      formalreject. Actualimage79/next102/project9273/item2/batch485,queues0. Seriesgeneration2/ingest2
+      spent; no G9/G10/refresh.
+    actual_redo: incomplete; no new real image/API/queue effects or generation authorization
+  budget:
+    native_tokens: 13830802
+    native_seconds: 54282
+    coverage: Cumulative native Goal at actual verification; cost/cap unavailable;
+      first250k completed and last health REPLAN3903214 preserved without reset
+  delivery:
+    commit: a761519b806736f016d8b71877b89a53d4fcdf3e
+    remote_main_contains: true
+    ci_run: 34313957940
+    ci: success
+    primary_code_installed: true

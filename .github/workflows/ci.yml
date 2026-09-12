@@ -15,9 +15,9 @@ concurrency:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    env:
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/manga-localizer-backend-venv
     steps:
+      - name: Configure external Python environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/manga-localizer-backend-venv" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -30,10 +30,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fonts-noto-cjk tesseract-ocr tesseract-ocr-jpn tesseract-ocr-jpn-vert
       - run: uv sync --project backend --group dev --locked
-      - run: uv run --project backend ruff check backend scripts/audit_release.py
-      - run: uv run --project backend ruff format --check backend scripts/audit_release.py
+      - run: uv run --project backend ruff check backend scripts/audit_release.py scripts/check_state.py
+      - run: uv run --project backend ruff format --check backend scripts/audit_release.py scripts/check_state.py
       - run: uv run --project backend pytest backend/tests
-      - run: uv run --project backend python scripts/audit_release.py
+      - name: Validate sole project state
+        run: uv run --project backend python -B scripts/check_state.py
+      - name: Audit normal Git delivery
+        env:
+          AUDIT_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          AUDIT_HEAD: ${{ github.sha }}
+        run: uv run --project backend python scripts/audit_release.py --mode normal-ci --base "$AUDIT_BASE" --head "$AUDIT_HEAD"
 
   frontend:
     runs-on: ubuntu-latest
@@ -60,8 +66,9 @@ jobs:
     env:
       CI: "true"
       MANGA_LOCALIZER_CI_LOCAL_RUNTIME: "1"
-      UV_PROJECT_ENVIRONMENT: ${{ runner.temp }}/manga-localizer-backend-venv
     steps:
+      - name: Configure external Python environment
+        run: echo "UV_PROJECT_ENVIRONMENT=$RUNNER_TEMP/manga-localizer-backend-venv" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v9.0.0
         with:

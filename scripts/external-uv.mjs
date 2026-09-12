@@ -104,6 +104,15 @@ export function modelRoutedEnvironment({
   };
 }
 
+export function projectSourceEnvironment(env) {
+  // The guarded venv can be shared by checkouts and retain another checkout's
+  // editable install. Commands must import the source selected by this wrapper.
+  return {
+    ...env,
+    PYTHONPATH: [path.join(backendRoot, 'src'), env.PYTHONPATH].filter(Boolean).join(path.delimiter),
+  };
+}
+
 export function runExternalUv(argv, {
   env = process.env,
   runUv = spawnSync,
@@ -129,7 +138,7 @@ export function runExternalUv(argv, {
   });
   const result = runUv(canonicalUv, parsed.uvArgs, {
     cwd: projectRoot,
-    env: route.environment,
+    env: parsed.action === 'run' ? projectSourceEnvironment(route.environment) : route.environment,
     stdio: 'inherit',
   });
   if (result.error) throw result.error;

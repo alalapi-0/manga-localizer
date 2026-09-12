@@ -107,6 +107,7 @@ describe('desktop workbench interactions', () => {
   afterEach(() => {
     cleanup();
     resetWorkbenchStore();
+    window.history.replaceState(null, '', window.location.pathname);
     vi.restoreAllMocks();
   });
 

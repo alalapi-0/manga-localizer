@@ -1,16 +1,16 @@
 # 199 张真实数据终审、溯源与重做参考规范
 
 - **Reader：**已由用户当前消息显式激活 Manga Localizer 项目 Goal 的 Root 与审查者。
-- **Update trigger：**领域门禁、受治理存储路由、验收标准或按需读取协议发生持久变化。当前计数、checkpoint、blocker 和 next action 只更新 `.agent/STATE.md`。
+- **Update trigger：**领域门禁、受治理存储路由、验收标准或按需读取协议发生持久变化。当前计数、checkpoint、blocker 和 next action 只更新 `.agent/STATE.yaml`。
 - **Purpose：**保存稳定领域规范与事实底稿，由 repo skill 按当前 checkpoint 渐进式读取，不作为第二套当前状态。
 - **Protocol revision：**`final-corpus-rebuild/2026-09-04.2`
 
-本文档、repo skill、静态 Prompt、历史记录或文件存在本身都不授权启动服务、导出图片、改写审核结果或重做页面。只有用户在当前消息中显式激活配套 Goal 后，才按 `.agent/STATE.md` 进入执行。
+本文档、repo skill、静态 Prompt、历史记录或文件存在本身都不授权启动服务、导出图片、改写审核结果或重做页面。只有用户在当前消息中显式激活配套 Goal 后，才按 `.agent/STATE.yaml` 进入执行。
 
 ## 0. 渐进式读取路由
 
 - 首次激活、protocol revision 变化或上下文压缩丢失必要协议时，先读章节标题，再只读当前 checkpoint 需要的章节。
-- 普通续轮只重读 `AGENTS.md`、`.agent/STATE.md` 和 next action 的直接证据；不整份重读本文档，不把它复制进 Prompt、STATE 或进度消息。
+- 普通续轮只重读 `AGENTS.md`、`.agent/STATE.yaml` 和 next action 的直接证据；不整份重读本文档，不把它复制进 Prompt、STATE 或进度消息。
 - 启动、权限、事实优先级与存储前置：第 1–3 节。
 - 历史归因或具体问题族：第 4–5 节及 `.agent/PAGE_PROBLEM_REPORT.md`。
 - 单页重做门禁：第 6 节；产品能力核验：第 7 节；多轮 checkpoint：第 8 节。
@@ -31,7 +31,7 @@
 - 不允许 Codex、Cursor、后台批处理器或其他会话同时写同一个源项目、审核库或导出目录。开始写入前必须确认唯一写入者。
 - 用户发出暂停、停止或取消时，立即停止新任务派发，保存当前页面和审计 ledger，停止服务，并保持 Goal 未完成状态供以后恢复。
 
-控制 authority 与产品事实分开：`.agent/STATE.md` 是唯一当前控制权威，决定 activation、authority、automation 状态和 next action；其中的产品计数只是需由现场数据库覆盖的快照，不能代替数据证据。
+控制 authority 与产品事实分开：`.agent/STATE.yaml` 是唯一当前控制权威，决定 activation、authority、automation 状态和 next action；其中的产品计数只是需由现场数据库覆盖的快照，不能代替数据证据。
 
 产品事实优先级如下：
 
@@ -41,7 +41,7 @@
 4. 当前代码、测试和文档描述的行为。
 5. Git、Codex/Cursor 任务记录和历史日志。
 
-执行时必须重新查询审核库；不得用 `STATE.md` 的快照、Git/Codex/Cursor 历史或旧日志覆盖当前数据库与用户 verdict。
+执行时必须重新查询审核库；不得用 `STATE.yaml` 的快照、Git/Codex/Cursor 历史或旧日志覆盖当前数据库与用户 verdict。
 
 ## 2. 数据路径和固定输出约定
 
@@ -128,7 +128,7 @@
 
 ## 3. 2026-08-25 历史审核基线
 
-本节只是历史 cohort 与根因比较证据，不是当前 checkpoint。当前计数只由 `.agent/STATE.md` 保存为待现场数据库覆盖的快照。当时的只读检查点：
+本节只是历史 cohort 与根因比较证据，不是当前 checkpoint。当前计数只由 `.agent/STATE.yaml` 保存为待现场数据库覆盖的快照。当时的只读检查点：
 
 - 199 items。
 - 41 `approved`（20.6%）。
@@ -464,22 +464,22 @@
 
 实现时优先使用现有数据模型和 UI 交互，不建立与项目工具竞争的第二套审核系统。
 
-## 8. `STATE.md` 驱动的多轮迭代协议
+## 8. `STATE.yaml` 驱动的多轮迭代协议
 
-本 Goal 不维护一套与 `STATE.md` 并行的固定 Round 0–6，也不在每轮重放启动流程。历史轮次只是证据；当前 `checkpoint` 和 `next action` 只存于 `.agent/STATE.md`。
+本 Goal 不维护一套与 `STATE.yaml` 并行的固定 Round 0–6，也不在每轮重放启动流程。历史轮次只是证据；当前 `checkpoint` 和 `next action` 只存于 `.agent/STATE.yaml`。
 
 ### 首次激活或协议变化
 
 - 确认用户当前消息已显式激活 Goal；未激活时保持 waiting，不产生执行效果。
 - 只读核对唯一 writer、live process/agent、句柄、Git operation、dirty worktree、受治理存储健康、三个 SQLite、manifest/checksum、revision/counts、source mapping 和用户最新 verdict。
-- 将现场事实、已加载 protocol revision、当前 checkpoint、证据位置和精确 next action 写入 `STATE.md`。不把本文档、完整历史或大段日志复制进 STATE。
+- 将现场事实、已加载 protocol revision、当前 checkpoint、证据位置和精确 next action 写入 `STATE.yaml`。不把本文档、完整历史或大段日志复制进 STATE。
 
 ### 普通续轮
 
-1. 只读 `AGENTS.md`、`STATE.md` 和 next action 的直接证据。只有 loaded revision 不匹配或必要协议已丢失时，才按第 0 节重新选读。
+1. 只读 `AGENTS.md`、`STATE.yaml` 和 next action 的直接证据。只有 loaded revision 不匹配或必要协议已丢失时，才按第 0 节重新选读。
 2. 选择一个能产生可验证证据的最小闭环。在该 checkpoint 内连续处理所有可安全推进的独立页或 cohort，不默认每页等一次用户 verdict。
 3. 单页遇到可复现 blocker 时，登记证据、假设与恢复条件，然后继续其他独立工作。连续两次同质无进展后禁止原样重试，必须先诊断并改变方法。
-4. 只在 material change 时更新 `STATE.md`：保留当前计数、checkpoint、blocker/证据、loaded revision 和精确 next action。计划、首个失败、单页完成或进度汇报不是停止条件；仍有可安全推进的独立工作就继续。
+4. 只在 material change 时更新 `STATE.yaml`：保留当前计数、checkpoint、blocker/证据、loaded revision 和精确 next action。计划、首个失败、单页完成或进度汇报不是停止条件；仍有可安全推进的独立工作就继续。
 
 ### 统一人工终审 checkpoint
 
@@ -598,7 +598,7 @@ Goal Prompt 不携带这些参数。执行 Agent 只在当前 checkpoint 需要�
 
 ## 12. 相关仓库文档和代码入口
 
-项目 Goal 显式激活后，始终只读 `AGENTS.md` 与 `.agent/STATE.md`；其余入口只在当前 checkpoint 直接需要时选读：
+项目 Goal 显式激活后，始终只读 `AGENTS.md` 与 `.agent/STATE.yaml`；其余入口只在当前 checkpoint 直接需要时选读：
 
 - 具体问题族或恢复证据：`.agent/PAGE_PROBLEM_REPORT.md`。
 - 历史 pipeline 证据：`docs/real-data-iteration-status.md` 和必要的 Git 历史。已删除的旧入口只作证据，不产生 authority。
@@ -607,4 +607,4 @@ Goal Prompt 不携带这些参数。执行 Agent 只在当前 checkpoint 需要�
 - 后端阶段、最终审核或页面修复：`backend/src/manga_localizer/queue.py`、`backend/src/manga_localizer/services/final_reviews.py` 以及当前动作直接调用的 service/provider。
 - 前端批处理或人工终审：`frontend/src/store/workbench.ts` 或 `frontend/src/finalReview/` 中当前动作直接涉及的文件。
 
-本文档中的 2026-08-25 数字只是历史基线。执行 Agent 启动或恢复时必须以现场数据库覆盖当前快照；只把新快照写入 `STATE.md` 或 Git-ignored 项目进度证据，不悄改历史 cohort。
+本文档中的 2026-08-25 数字只是历史基线。执行 Agent 启动或恢复时必须以现场数据库覆盖当前快照；只把新快照写入 `STATE.yaml` 或 Git-ignored 项目进度证据，不悄改历史 cohort。

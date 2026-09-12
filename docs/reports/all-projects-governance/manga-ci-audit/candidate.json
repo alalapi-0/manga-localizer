@@ -1,0 +1,50 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2",
+  "base_commit": "b408098a85992ecacd9f026b5dc17b6a00c2a5d1",
+  "semantic_sha256": "92ba1cf5315a8a52509a4a0cabcff181b14713ecf04d5920e7094e475f401e2f",
+  "files": {
+    ".agent/STATE.md": "d85c84c70834870e61486532146d730bb1f1a3f93836ef8edcc5668c50854ed8",
+    ".github/pull_request_template.md": "5a2ffc3d980012464d6149c085b90e710ead7d53a51f3bb60e25959bf1986f2c",
+    ".github/workflows/ci.yml": "0add8b875793bad5affd748c12756391ff3a03a60d9df2d982b03d22b8dff48c",
+    "AGENTS.md": "e053500b0217cac97d373e0257f9e758c054aaa57c430dd187cf3d5e622bbb8e",
+    "README.md": "d5044319154b3fafa44bba024aca595ac87f1649a0a167c3a71ccbfc510a2b3a",
+    "backend/src/manga_localizer/services/typesets.py": "2b463da99d067409e6883d4550709fe9f3d4dd8b598330d3fe328284277382e6",
+    "backend/tests/test_audit_release.py": "b069a081cb4e6ca8ac3f654ed0abc4971447d76f1b7dc49c95388d691e349f3d",
+    "backend/tests/test_cloud_registration.py": "12c4f346d51e17fb76a6921fdc9d18b7787e799198fe92184d57c19a6392aca6",
+    "backend/tests/test_typesets.py": "75469f4fd261bbcd4e7895c62d127dd3451860efa431337c4fadb69cd2eefa1b",
+    "docs/development.md": "f6e0f207f9a120c6116c02fe9d77a31d54000719b72ac0ea72645722f14f9373",
+    "docs/reports/all-projects-governance/manga-ci-audit/README.md": "f9f64ff1c99a8e9f83402f501ee519fab8b3c0f91fa40c255436ded1058b10e7",
+    "docs/reports/all-projects-governance/manga-ci-audit/baseline.json": "f5f5bf046b4b2d4a24851456802bd68f1a4dabc94ead7f5a3093e6284f71351f",
+    "docs/reports/all-projects-governance/manga-ci-audit/contract.md": "2c5a5a4f1ed579c8879bad972fbb7bffa8efc7d31507acc87bead5ca955720ca",
+    "docs/reports/all-projects-governance/manga-ci-audit/validation.json": "8cc3fa86d57fe544b5cc6696b2cac039010c1cc3fdbf8e7401bd5085f74ad82a",
+    "docs/reports/all-projects-governance/manga-retry/README.md": "cc640fc8ef743731f7bfd5d2bb84f9aff34f0919e353819de03aa5a8b5cc33f2",
+    "docs/reports/all-projects-governance/manga-retry/baseline.json": "9c0f97b9398fd03e035f2c53db889c566b2782d418547c6d19e064c011a8deef",
+    "docs/reports/all-projects-governance/manga-retry/live-recovery.json": "c86299fa1eab2406664e731ec6f51cab91c15eae5fb97831ee5360b081027965",
+    "package.json": "aeec7bc10f4bf84c6a0612ae661a3b83667362e2d037a7a154bc304b9ff299df",
+    "playwright.config.ts": "2f4a7314890d6413b450f331c61b1778f3fa2ee851aa24bfc81a0dd5b3d82ef7",
+    "scripts/audit_release.py": "6954a06982f584e145ce8a35472b38748d3eea55bc59417d2c0376a59da4ea6e",
+    "scripts/verify_final_review_retry_data.py": "e06dbfc7572795281842b223a178f903912fe2edde2d3807eb85218f03c94232",
+    "tests/e2e/manga-localizer.spec.ts": "f507184e8512b1c3025d0481fe5dfb574a2589b97ae30686eb1a8c3ff3d5e4ee"
+  },
+  "identity_rule": "SHA256 of sorted compact JSON path-to-SHA256 map (UTF-8). Hash each file bytes verbatim except .agent/STATE.md: replace exactly the three complete lines matching bytes regex (?m)^- Unit (review|delivery|next action):[^\\n]* with - Unit \\1: <decision-metadata>, preserving newline bytes. No other STATE content is excluded. Candidate registration and Judge/Governor/delivery metadata files are excluded.",
+  "excluded_metadata": [
+    "docs/reports/all-projects-governance/manga-ci-audit/candidate.json",
+    "docs/reports/all-projects-governance/manga-ci-audit/delivery.json",
+    "docs/reports/all-projects-governance/manga-ci-audit/governor.json",
+    "docs/reports/all-projects-governance/manga-ci-audit/judge.json"
+  ],
+  "status": "fresh Judge PASS; Governor APPROVE; accepted code delivered to main with full remote CI success",
+  "state_raw_sha256_at_registration": "f4279c02e5c0a5929fc554b09ce56b40e1b2ef07472906e211802de11a3fd055",
+  "final_normal_ci_audit": {
+    "exit": 0,
+    "base": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+    "head": "b408098a85992ecacd9f026b5dc17b6a00c2a5d1",
+    "candidate": 214,
+    "index_blobs": 209,
+    "historical_blob_paths": 1511,
+    "live_content_reads": 211,
+    "inert_cursor_objects": 2,
+    "cursor_live_content_reads": 0,
+    "native_session": 72496
+  }
+}

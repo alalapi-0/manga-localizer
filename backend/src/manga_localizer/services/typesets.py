@@ -354,7 +354,7 @@ def _bounded_number(
 def _base_style(route: str) -> dict[str, Any]:
     regular = _regular_font()
     displays = _display_fonts()
-    font = displays[0] if route == "art-lettering" and displays else regular
+    font = (displays[0] if displays else None) if route == "art-lettering" else regular
     if font is None:
         reason = (
             "g10-art-lettering-capability-required"
@@ -2460,20 +2460,25 @@ def _validate_persisted_typeset_publication(
         invalid("Recovered G10 candidate row is inconsistent", f"typeset-candidate:{row.id}")
     _validate_candidate_file(store, row)
 
-    candidates = list(
-        session.scalars(
+    current_g9 = str(bindings["g9TerminalChecksum"])
+    candidates = [
+        candidate
+        for candidate in session.scalars(
             select(PageTypesetCandidate)
             .where(PageTypesetCandidate.generation_id == generation.id)
             .order_by(PageTypesetCandidate.sequence, PageTypesetCandidate.id)
         ).all()
-    )
-    reviews = list(
-        session.scalars(
+        if candidate.g9_terminal_checksum == current_g9
+    ]
+    reviews = [
+        review
+        for review in session.scalars(
             select(PageTypesetReview)
             .where(PageTypesetReview.generation_id == generation.id)
             .order_by(PageTypesetReview.sequence, PageTypesetReview.id)
         ).all()
-    )
+        if review.g9_terminal_checksum == current_g9
+    ]
     if (
         not candidates
         or candidates[-1].id != row.id
@@ -2643,8 +2648,20 @@ def validate_typeset_replay(
 
     g9_checksum = str(bindings["g9TerminalChecksum"])
     validate_g10_prefix_after_g9(session, generation, g9_terminal_checksum=g9_checksum)
-    events = list(
-        session.scalars(
+    g9_terminal_event = session.scalar(
+        select(PageLineageEvent)
+        .where(
+            PageLineageEvent.generation_id == generation.id,
+            PageLineageEvent.operation == "translation-stage-review",
+            PageLineageEvent.output_checksum == g9_checksum,
+        )
+        .order_by(PageLineageEvent.sequence.desc())
+        .limit(1)
+    )
+    g9_sequence = g9_terminal_event.sequence if g9_terminal_event is not None else 0
+    events = [
+        event
+        for event in session.scalars(
             select(PageLineageEvent)
             .where(
                 PageLineageEvent.generation_id == generation.id,
@@ -2652,21 +2669,26 @@ def validate_typeset_replay(
             )
             .order_by(PageLineageEvent.sequence)
         ).all()
-    )
-    candidates = list(
-        session.scalars(
+        if event.sequence > g9_sequence and event.parent_checksum == g9_checksum
+    ]
+    candidates = [
+        row
+        for row in session.scalars(
             select(PageTypesetCandidate)
             .where(PageTypesetCandidate.generation_id == generation.id)
             .order_by(PageTypesetCandidate.sequence, PageTypesetCandidate.id)
         ).all()
-    )
-    reviews = list(
-        session.scalars(
+        if row.g9_terminal_checksum == g9_checksum and row.sequence > g9_sequence
+    ]
+    reviews = [
+        row
+        for row in session.scalars(
             select(PageTypesetReview)
             .where(PageTypesetReview.generation_id == generation.id)
             .order_by(PageTypesetReview.sequence, PageTypesetReview.id)
         ).all()
-    )
+        if row.g9_terminal_checksum == g9_checksum and row.sequence > g9_sequence
+    ]
     if any(row.image_id != image.id for row in [*candidates, *reviews]):
         invalid("G10 row ownership is invalid")
     candidate_by_sequence = {row.sequence: row for row in candidates}
@@ -2689,6 +2711,16 @@ def validate_typeset_replay(
             for page in pages
         )
         if not belongs:
+            continue
+        expected_sequence = next(
+            (
+                page.get("expectedSequence")
+                for page in pages
+                if isinstance(page, dict) and page.get("pageGenerationId") == generation.id
+            ),
+            None,
+        )
+        if type(expected_sequence) is int and expected_sequence <= g9_sequence:
             continue
         if item.region_id is not None or job.project_id != generation.project_id:
             invalid("G10 job ownership is invalid", f"job:{job.id}")

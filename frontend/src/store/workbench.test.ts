@@ -19,6 +19,7 @@ import {
   TYPESET_CHECKS,
 } from '../types';
 import {
+  capabilitiesFixture,
   imageFixture,
   jobFixture,
   projectFixture,
@@ -441,9 +442,36 @@ describe('workbench store', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     resetWorkbenchStore();
     vi.useRealTimers();
-    vi.restoreAllMocks();
+  });
+
+  it('lists catalog projects without auto-opening the first one', async () => {
+    const listed = [projectFixture(), projectFixture({ id: 'project-2', name: '第二个' })];
+    vi.spyOn(api, 'getCapabilities').mockResolvedValue(capabilitiesFixture());
+    vi.spyOn(api, 'listProjects').mockResolvedValue(listed);
+    await useWorkbenchStore.getState().initialize();
+    expect(useWorkbenchStore.getState().loadState).toBe('ready');
+    expect(useWorkbenchStore.getState().currentProject).toBeNull();
+    expect(useWorkbenchStore.getState().projects.map((project) => project.id)).toEqual([
+      'project-1',
+      'project-2',
+    ]);
+    expect(api.listPageGenerations).not.toHaveBeenCalled();
+  });
+
+  it('loads G4 context only for the first image when opening a project', async () => {
+    vi.spyOn(api, 'getProject').mockResolvedValue(projectFixture());
+    vi.spyOn(api, 'listImages').mockResolvedValue([
+      imageFixture('image-1', { relativePath: 'a/image-1.png' }),
+      imageFixture('image-2', { relativePath: 'b/image-2.png' }),
+    ]);
+    vi.spyOn(api, 'listJobs').mockResolvedValue([]);
+    vi.spyOn(api, 'listRegions').mockResolvedValue([]);
+    await expect(useWorkbenchStore.getState().selectProject('project-1')).resolves.toBe(true);
+    expect(api.listPageGenerations).toHaveBeenCalledWith('image-1');
+    expect(vi.mocked(api.listPageGenerations).mock.calls.some((call) => call[0] === 'image-2')).toBe(false);
   });
 
   it('creates a region in canonical image pixels and autosaves it after the debounce', async () => {

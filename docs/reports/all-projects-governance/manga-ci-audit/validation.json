@@ -1,0 +1,124 @@
+{
+  "contract": "ALL-PROJECTS-CODEX-GOVERNANCE-V1-MANGA-CI-AUDIT-SCOPE-v2",
+  "head": "b408098a85992ecacd9f026b5dc17b6a00c2a5d1",
+  "comparison_base": "9196143d45fc29a18edcf65139134ebcdcb567e7",
+  "root_checks": [
+    {
+      "command": "PYTHONPATH=backend/src node scripts/external-uv.mjs run --frozen --offline --no-sync python -m ruff check backend scripts/audit_release.py scripts/verify_final_review_retry_data.py",
+      "exit": 0
+    },
+    {
+      "command": "same runtime: python -m ruff format --check backend scripts/audit_release.py scripts/verify_final_review_retry_data.py",
+      "exit": 0,
+      "files": 84
+    },
+    {
+      "command": "same runtime: python -m pytest backend/tests/test_audit_release.py --maxfail=1 --tb=short --show-capture=no",
+      "exit": 0,
+      "passed": 50,
+      "seconds": 18.64
+    },
+    {
+      "command": "same runtime, fresh temporary MANGA_LOCALIZER_DATA_DIR: python -m pytest backend/tests --tb=short --show-capture=no",
+      "exit": 0,
+      "passed": 963,
+      "seconds": 394.48,
+      "warnings": [
+        "existing Starlette TestClient/httpx deprecation"
+      ]
+    },
+    {
+      "command": "npm run test:e2e; normal guarded local runtime; temporary data/generated roots and existing headless Chromium",
+      "exit": 0,
+      "passed": 6,
+      "seconds": 56.9,
+      "coverage": "4 CI-environment combinations plus original 2 complete application/OCR/review/export/reopen flows",
+      "servers_closed": true
+    },
+    {
+      "command": "workflow YAML/context preservation assertions and git diff --check",
+      "exit": 0
+    }
+  ],
+  "frontend_reuse": {
+    "run": 34186203803,
+    "result": "lint/typecheck/454 tests/build passed",
+    "reason": "frontend production/test files unchanged in this unit"
+  },
+  "font_counterexample": {
+    "method": "temporary pytest plugin reinstates exact previous assignment in process only",
+    "result": "expected failure: old logic returns 202 instead of 409",
+    "failed": 1,
+    "seconds": 5.89,
+    "repository_files_changed": false
+  },
+  "failure_history": [
+    {
+      "target": "new Git nonancestor fixture",
+      "version": "v2 initial fixture, same-second identical root trees",
+      "failure": "unexpected shared commit identity",
+      "action": "distinct orphan tree; 50 targeted and 963 full tests subsequently pass",
+      "interrupted_full_run": "not counted as passing"
+    },
+    {
+      "target": "local CI-mode E2E startup",
+      "failure": "relocated uvicorn console script interpreted as shell; exit 2",
+      "action": "test config now uses python -m uvicorn, matching existing production launcher"
+    },
+    {
+      "target": "local CI-mode E2E frontend startup",
+      "failure": "CI correctly rejects local symlink node_modules",
+      "action": "local run uses its guarded external runtime; CI branch to be exercised by actual GitHub runner; guard unchanged"
+    },
+    {
+      "target": "original E2E workflow order",
+      "failure": "typeset review-required and translate stage-not-done, both for inpaint",
+      "action": "explicit current inpaint acceptance before downstream steps; first flow withdraws review afterward to preserve export-blocking/recovery assertions"
+    }
+  ],
+  "preservation": {
+    "registration_production": "identical to HEAD; thresholds/order unchanged",
+    "storage_guards": "identical to HEAD",
+    "original_checkout": "all registered preimages still unchanged; task integration pending",
+    "real_data": "no access or mutation by this unit; prior accepted handoff receipt body unchanged except portable backend_code reference"
+  },
+  "release_status": "release_not_ready",
+  "remote_delivery": "pending fresh review, normal main push, required CI and ancestry verification",
+  "real_audit_before_final_documentation_registration": {
+    "normal-ci": {
+      "sha256": "7a339ce6b99e47619da898e1dd88e1185295580d7aa61f98448698d6c8e67bab",
+      "summary": [
+        "Audit mode=normal-ci; base=9196143d45fc29a18edcf65139134ebcdcb567e7; head=b408098a85992ecacd9f026b5dc17b6a00c2a5d1",
+        "Coverage: candidate=211 index_blobs=209 historical_blob_paths=1511 live_content_reads=208 inert_cursor_objects=2 cursor_live_content_reads=0",
+        "Audit passed; normal CI is not release acceptance"
+      ],
+      "finding_categories": [],
+      "finding_count": 0
+    },
+    "release-default": {
+      "sha256": "459d8fba8c2a1ecd37bc0b2241144071f943656198e90ba9e6ddc3cff1fba81e",
+      "summary": [
+        "Audit mode=release; base=not-applicable; head=not-applicable",
+        "Coverage: candidate=211 index_blobs=209 historical_blob_paths=1511 live_content_reads=208 inert_cursor_objects=2 cursor_live_content_reads=0",
+        "Audit failed; release_not_ready"
+      ],
+      "finding_categories": [
+        "personal absolute path"
+      ],
+      "finding_count": 16
+    },
+    "release-explicit": {
+      "sha256": "459d8fba8c2a1ecd37bc0b2241144071f943656198e90ba9e6ddc3cff1fba81e",
+      "summary": [
+        "Audit mode=release; base=not-applicable; head=not-applicable",
+        "Coverage: candidate=211 index_blobs=209 historical_blob_paths=1511 live_content_reads=208 inert_cursor_objects=2 cursor_live_content_reads=0",
+        "Audit failed; release_not_ready"
+      ],
+      "finding_categories": [
+        "personal absolute path"
+      ],
+      "finding_count": 16
+    }
+  },
+  "final_candidate_audit": "Root reruns normal-ci after candidate registration; native output and ignored audit log are evidence, avoiding a record hashing itself."
+}

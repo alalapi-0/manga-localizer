@@ -1,0 +1,190 @@
+{
+  "task_id": "ALL-PROJECTS-CODEX-GOVERNANCE-V1",
+  "before": {
+    "reviews": "d548a5d794ac782e155a29e1dd999597e1a48ccfbf78edd8b1ca42b48f33f205",
+    "generations": "e3085e0a25fe43683b3784c458d202a60b2a47bb4d1ff4e4299085395a54191d",
+    "images": "0c3ac5ca49a56b62cb3c6ed74c16358f5fa8fa1095929d192b4000958f9ccf99",
+    "lineage_event_count": 5318,
+    "counts": {
+      "approved": 140,
+      "issues": 56,
+      "pending": 3
+    }
+  },
+  "scope": "Production repair service for selected live-data heads; read-only SQL and deny-creation guard; no full catalog/open migration, worker, or network listener",
+  "backend_code": {
+    "repository": "alalapi-0/manga-localizer",
+    "relative_path": "backend/src/manga_localizer/services/final_reviews.py",
+    "role": "verified governance worktree production service"
+  },
+  "failed_service_probe": "127.0.0.1:8000 direct connection refused; proxy health 503; no write reached service",
+  "cases": [
+    {
+      "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+      "handoff": {
+        "itemId": "7975117b-c953-4ac4-847e-5249d9521a2c",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "e78e54e5-7489-4386-a106-73d4e8a0fdca",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+        "runId": "final-review-7975117b-r2-a2",
+        "pageGenerationId": "809e3762-7d11-40f8-88cf-99f6d9111691",
+        "nextSequence": 63,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "dfa64aad-96ff-463d-aaad-01a67471ed68",
+        "idempotent": true
+      },
+      "duplicate_reopen_identical": true
+    },
+    {
+      "item_id": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+      "handoff": {
+        "itemId": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "0ea010d0-5b13-44c5-b93a-0ea4ced4192d",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "8a37af3d-d381-4645-a7bd-09d6d00d12b4",
+        "runId": "final-review-8db3827e-r2-a2",
+        "pageGenerationId": "6212422f-14e8-403b-8b93-ebe8a95b859f",
+        "nextSequence": 135,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "5f221260-2c11-47bc-b33b-8f8f5450c96b",
+        "idempotent": true
+      },
+      "duplicate_reopen_identical": true
+    },
+    {
+      "item_id": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+      "handoff": {
+        "itemId": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "06930d40-0138-4b2d-9f29-0a9d1b27194f",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "e56d73c6-ba64-4277-9d37-38775f6e5849",
+        "runId": "final-review-e764b906-r2-a2",
+        "pageGenerationId": "ff505e54-3333-40b2-94ca-7ca0828c259b",
+        "nextSequence": 118,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "56175812-2f23-42e9-8ea2-da4958ed6746",
+        "idempotent": true
+      },
+      "duplicate_reopen_identical": true
+    }
+  ],
+  "status": "passed",
+  "after": {
+    "reviews": "d548a5d794ac782e155a29e1dd999597e1a48ccfbf78edd8b1ca42b48f33f205",
+    "generations": "e3085e0a25fe43683b3784c458d202a60b2a47bb4d1ff4e4299085395a54191d",
+    "images": "0c3ac5ca49a56b62cb3c6ed74c16358f5fa8fa1095929d192b4000958f9ccf99",
+    "lineage_event_count": 5318,
+    "counts": {
+      "approved": 140,
+      "issues": 56,
+      "pending": 3
+    }
+  },
+  "unchanged": true,
+  "observed_handoffs": [
+    {
+      "item_id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+      "position": 134,
+      "strict_evidence": false,
+      "handoff": {
+        "itemId": "7975117b-c953-4ac4-847e-5249d9521a2c",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "e78e54e5-7489-4386-a106-73d4e8a0fdca",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "71a0fad1-5fb2-4e14-8bd8-7624f1cd2cc9",
+        "runId": "final-review-7975117b-r2-a2",
+        "pageGenerationId": "809e3762-7d11-40f8-88cf-99f6d9111691",
+        "nextSequence": 63,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "dfa64aad-96ff-463d-aaad-01a67471ed68",
+        "idempotent": true
+      },
+      "provenance": "read-only DB metadata mapped to documented backend response; not an observed API response yet"
+    },
+    {
+      "item_id": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+      "position": 167,
+      "strict_evidence": false,
+      "handoff": {
+        "itemId": "8db3827e-72e3-48b5-b787-98379ffc6ed7",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "0ea010d0-5b13-44c5-b93a-0ea4ced4192d",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "8a37af3d-d381-4645-a7bd-09d6d00d12b4",
+        "runId": "final-review-8db3827e-r2-a2",
+        "pageGenerationId": "6212422f-14e8-403b-8b93-ebe8a95b859f",
+        "nextSequence": 135,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "5f221260-2c11-47bc-b33b-8f8f5450c96b",
+        "idempotent": true
+      },
+      "provenance": "read-only DB metadata mapped to documented backend response; not an observed API response yet"
+    },
+    {
+      "item_id": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+      "position": 192,
+      "strict_evidence": false,
+      "handoff": {
+        "itemId": "e764b906-1c88-4ac1-94ca-a870c8ed8c43",
+        "finalReviewItemRevision": 2,
+        "artifactRevision": 1,
+        "batchRevision": 485,
+        "sourceProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "sourceImageId": "06930d40-0138-4b2d-9f29-0a9d1b27194f",
+        "repairProjectId": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+        "repairImageId": "e56d73c6-ba64-4277-9d37-38775f6e5849",
+        "runId": "final-review-e764b906-r2-a2",
+        "pageGenerationId": "ff505e54-3333-40b2-94ca-7ca0828c259b",
+        "nextSequence": 118,
+        "parameterSetId": "final-review-repair-v1",
+        "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+        "repairAttempt": 2,
+        "retryFromGenerationId": "56175812-2f23-42e9-8ea2-da4958ed6746",
+        "idempotent": true
+      },
+      "provenance": "read-only DB metadata mapped to documented backend response; not an observed API response yet"
+    }
+  ],
+  "observed_at": "2026-09-08T03:54:29.659797+00:00",
+  "quality_status": "Existing repair handoffs reopened; no new generated images or approvals. Original quality blockers remain.",
+  "backend_service_sha256": "42580af1658ad4f8b1eff417b067d47c3561603070ee308cad6a37e1ae28475a",
+  "prior_failed_routes": [
+    {
+      "method": "loopback HTTP",
+      "result": "proxy 503; direct 127.0.0.1:8000 connection refused; no successful response"
+    },
+    {
+      "method": "TestClient full lifespan on preserved runtime",
+      "result": "eager catalog startup did not finish; own exec interrupted with exit130; zero completed cases; selected review/project fingerprints unchanged",
+      "coverage_limit": "No preimage or restoration claim for unselected catalog metadata"
+    }
+  ]
+}

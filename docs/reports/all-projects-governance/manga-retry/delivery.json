@@ -1,0 +1,48 @@
+{
+  "candidate_commit": "9320e602b695266b805caadf53b0fbdded88b0e4",
+  "remote_status": "main observed at candidate; CI failure under diagnosis",
+  "local_integration": {
+    "status": "accepted repair applied to original dirty checkout; existing work preserved",
+    "files": {
+      "frontend/src/finalReview/types.ts": {
+        "before": "e79287a131ab7975c78f05abd531f578a56d89db0b9fb5b2e010b165534d0410",
+        "after": "3e1599cc366ae7f789171fb5c6f2aad22f5772b39a5299f5f0f23782b12f686a"
+      },
+      "frontend/src/finalReview/store.ts": {
+        "before": "5856580cefa63b7a338559b93b10a8d01cd5be94794f06d91aff6226c5aa8503",
+        "after": "a654a6f18523ddb03d9906a273cfd489293e123ada4dcb2d5d4aa9c79552c217"
+      },
+      "frontend/src/finalReview/store.test.ts": {
+        "before": "a5b39d08f8e77e3b0caf2a5a03c10ac696dbcbd873047a55cdd795793bdbd3e2",
+        "after": "e993f735d44d31718d2906c439d8ab25c3ba31ab9885d1d2eaeae067e02983cc"
+      },
+      "frontend/src/finalReview/FinalReviewPage.tsx": {
+        "before": "d762621fd3c3d507c12b48fe5101acf8a141c731c19774d69bb3f43363f532b7",
+        "after": "a226aed9b11714742578aeb446817c33f54f659e17c943087d0c9e84b58fb83f"
+      },
+      "frontend/src/finalReview/FinalReviewPage.test.tsx": {
+        "before": "6be069aaedd0aca86967f520b3b7a3b8169ead42571b3cd0891be0e8dba8af22",
+        "after": "c0e5be684f2c8c23ad16192de99bbc7a90bdbe35de530ef0fb7b950088076a1e"
+      }
+    },
+    "preservation_proof": "Inverse task patch in temporary scratch directory reproduced every exact original preimage",
+    "excluded_preexisting_legacy_review_behavior": "Preserved human-rejudge code and tests; applied only accepted repair metadata, validator, tests and entry label",
+    "server": "Not restarted; no worker started",
+    "validation": "139 targeted original-checkout frontend tests and typecheck passed"
+  },
+  "ci_repair": {
+    "lane": "DIRECT",
+    "scope": "Existing workflow environment-context syntax repair only; every quality step preserved",
+    "failure_run": "https://github.com/alalapi-0/manga-localizer/actions/runs/34185861004",
+    "failure": "Invalid workflow: runner.temp unavailable in jobs.<job_id>.env, lines19/63; zero jobs",
+    "official_reference": "https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#context-availability",
+    "preimage_sha256": "e2fc70539770bbe463493618b34349c0472eca0752af8ae78c17cc95d3b5ade1",
+    "candidate_sha256": "c364bf13fcaffad99beb7c39a1ed9de3545eb31754a4abcce791b3642a10b61e",
+    "validation": [
+      "YAML parsed",
+      "All original quality steps and unrelated job configuration preserved",
+      "Bash setup step writes exact expected external environment including a path with spaces"
+    ],
+    "remote_ci": "pending"
+  }
+}

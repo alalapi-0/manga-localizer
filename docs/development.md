@@ -134,8 +134,21 @@ npm --prefix frontend run typecheck
 npm --prefix frontend run test -- --run
 npm --prefix frontend run build
 npm run test:e2e
-npm run audit:release
+npm run audit:ci -- --base <full-base-sha> --head <full-head-sha>
 ```
+
+Use the exact pre-change main commit as base and the checked-out full HEAD SHA as head.
+The audit includes the effective working candidate, staged additions and untracked text.
+Missing, shallow, sparse, partial or conflicting comparisons fail closed; it never fetches
+or guesses a baseline. CI uses push `before` or the PR base SHA with checkout `github.sha`.
+
+Before a product release also run `npm run audit:release`. Default audit invocation is
+strict release mode: all reachable personal-path history still fails, even after a normal-CI
+pass. Secret/artifact history always fails both modes. Current governance delivery is
+`release_not_ready` because protected historical personal paths remain.
+
+Committed Git objects are inert audit input. Live paths naming Cursor are never opened;
+changed or untracked such paths stop the audit from metadata before content inspection.
 
 Tests create temporary Unicode directories and generated images; they never depend on network calls,
 credentials, model downloads, or commercial manga.

@@ -1,0 +1,20 @@
+{
+  "id": "7975117b-c953-4ac4-847e-5249d9521a2c",
+  "batch_id": "a734c596-faae-4875-ae61-f694a3c26d4a",
+  "source_project_id": "b1b85f3e-4d72-4956-b519-6b30fee02fcc",
+  "source_image_id": "e78e54e5-7489-4386-a106-73d4e8a0fdca",
+  "verdict": "issues",
+  "revision": 2,
+  "artifact_revision": 1,
+  "strict_evidence": 0,
+  "format_version": 1,
+  "handoff": {
+    "finalReviewItemId": "7975117b-c953-4ac4-847e-5249d9521a2c",
+    "finalReviewItemRevision": 2,
+    "parameterSetId": "final-review-repair-v1",
+    "parameterSetHash": "9ede4cd795967a3ec5e3de3ba544b677aabb589b4490c2f8cecc655808bab338",
+    "repairAttempt": 2,
+    "retryFromGenerationId": "dfa64aad-96ff-463d-aaad-01a67471ed68"
+  },
+  "evidence_scope": "Selected real failure identity/version metadata captured 2026-09-09; no original media, feedback or quality evidence. Runtime media and upstream gates in the regression are synthetic."
+}

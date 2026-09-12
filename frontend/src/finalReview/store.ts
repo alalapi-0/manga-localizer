@@ -34,6 +34,7 @@ export interface FinalReviewRepairContext {
   pageGenerationId: string;
   runId: string;
   itemRevision: number;
+  originItemRevision: number;
   batchRevision: number;
   artifactRevision: number;
   nextSequence: number;
@@ -558,6 +559,39 @@ function unchangedFrozenEvidenceMatches(current: FinalReviewItem, loaded: FinalR
   });
 }
 
+function batchMetadataSignature(batch: FinalReviewBatch): string {
+  return stableSerialize({
+    id: batch.id,
+    name: batch.name,
+    itemCount: batch.itemCount,
+    counts: batch.counts,
+    rootPath: batch.rootPath,
+    manifestPath: batch.manifestPath,
+    revision: batch.revision,
+    formatVersion: batch.formatVersion,
+    createdAt: batch.createdAt,
+    updatedAt: batch.updatedAt,
+  });
+}
+
+async function loadBatchSnapshot(batchId: string): Promise<FinalReviewBatch> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const before = await api.getFinalReviewBatch(batchId);
+    if (Array.isArray(before.items) && before.items.length > 0) return before;
+    const items = await api.listFinalReviewItems(batchId);
+    const after = await api.getFinalReviewBatch(batchId);
+    if (batchMetadataSignature(before) === batchMetadataSignature(after)) {
+      return {
+        ...after,
+        items: Array.isArray(after.items) && after.items.length > 0 ? after.items : items,
+      };
+    }
+  }
+  throw new ApiError('终审批次在加载期间持续变化；请重新载入后再继续。', 409, {
+    code: 'FINAL_REVIEW_BATCH_SNAPSHOT_DRIFT',
+  });
+}
+
 function assertAuthoritativeReloadBatch(
   loaded: FinalReviewBatch,
   expectedBatch: FinalReviewBatch,
@@ -709,7 +743,24 @@ function assertAuthoritativeRepairResult(
   expectedItem: FinalReviewItem,
   expectedBatchRevision: number,
 ): void {
-  const expectedRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${expectedItem.revision}`;
+  const originItemRevision = result?.originFinalReviewItemRevision;
+  const originRevisionValid = Number.isSafeInteger(originItemRevision)
+    && originItemRevision >= 1 && originItemRevision <= expectedItem.revision;
+  const baseRunId = `final-review-${expectedItem.id.slice(0, 8)}-r${originItemRevision}`;
+  const attempt = result?.repairAttempt;
+  const lineageMatches = result && Number.isSafeInteger(attempt) && attempt >= 1 && (
+    attempt === 1
+      ? result.retryFromGenerationId === null
+      : nonEmptyString(result.retryFromGenerationId) && result.retryFromGenerationId !== result.pageGenerationId
+  );
+  const expectedRunId = attempt > 1 ? `${baseRunId}-a${attempt}` : baseRunId;
+  const parameterSetIdValid = typeof result?.parameterSetId === 'string'
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(result.parameterSetId);
+  const parameterSetHashValid = typeof result?.parameterSetHash === 'string'
+    && /^[a-f0-9]{64}$/.test(result.parameterSetHash);
+  const parameterIdentityValid = parameterSetIdValid && parameterSetHashValid;
+  const freshDefaultIdentity = result?.parameterSetId === REPAIR_PARAMETER_SET_ID
+    && result?.parameterSetHash === REPAIR_PARAMETER_SET_HASH;
   const sequenceMatches = result && Number.isSafeInteger(result.nextSequence) && (
     result.idempotent === false
       ? result.nextSequence === 2
@@ -720,14 +771,16 @@ function assertAuthoritativeRepairResult(
     || result.sourceProjectId !== expectedItem.sourceProjectId
     || result.sourceImageId !== expectedItem.sourceImageId
     || result.finalReviewItemRevision !== expectedItem.revision
+    || !originRevisionValid
+    || (result.idempotent === false && originItemRevision !== expectedItem.revision)
     || result.artifactRevision !== expectedItem.artifactRevision
     || result.batchRevision !== expectedBatchRevision
     || result.repairProjectId !== expectedItem.sourceProjectId
     || !nonEmptyString(result.repairImageId) || result.repairImageId === expectedItem.sourceImageId
     || !nonEmptyString(result.pageGenerationId) || result.runId !== expectedRunId
-    || !sequenceMatches
-    || result.parameterSetId !== REPAIR_PARAMETER_SET_ID
-    || result.parameterSetHash !== REPAIR_PARAMETER_SET_HASH
+    || !lineageMatches || !sequenceMatches
+    || !parameterIdentityValid
+    || (result.idempotent === false ? !freshDefaultIdentity : false)
   ) {
     throw new ApiError('终审修复响应缺少匹配当前终审项的权威 handoff', 502, {
       code: 'INVALID_FINAL_REVIEW_REPAIR_RESPONSE',
@@ -889,12 +942,14 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
     if (finalReviewDraftDirty(get()) && !window.confirm('当前终审标注尚未保存，确定放弃并切换批次吗？')) return false;
     set({ loading: true, operation: 'load', error: '', conflict: false, conflictDraft: null });
     try {
-      const loaded = await api.getFinalReviewBatch(batchId);
-      const items = Array.isArray(loaded.items) && loaded.items.length
-        ? loaded.items
-        : await api.listFinalReviewItems(batchId);
+      const loaded = await loadBatchSnapshot(batchId);
+      const items = loaded.items;
       const batch = { ...loaded, items, counts: loaded.counts ?? statsFor(items) };
-      const active = items.find((item) => item.id === preferredItemId) ?? items[0] ?? null;
+      const active = items.find((item) => item.id === preferredItemId)
+        ?? items.find((item) => item.verdict === 'pending')
+        ?? items.find((item) => item.verdict === 'issues')
+        ?? items[0]
+        ?? null;
       set({
         batch,
         items,
@@ -937,7 +992,7 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
     return next ? state.selectItem(next.id) : false;
   },
 
-  updateDraft: (patch) => set((state) => state.operation || state.conflict || finalReviewLegacyReviewed(
+  updateDraft: (patch) => set((state) => state.operation || state.conflict || finalReviewLegacyApproved(
     state.items.find((entry) => entry.id === state.activeItemId),
   ) ? state : ({
     draft: state.draft ? { ...state.draft, ...patch } : null,
@@ -946,7 +1001,7 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
   })),
 
   toggleIssue: (code) => set((state) => {
-    if (state.operation || state.conflict || !state.draft || finalReviewLegacyReviewed(
+    if (state.operation || state.conflict || !state.draft || finalReviewLegacyApproved(
       state.items.find((entry) => entry.id === state.activeItemId),
     )) return state;
     const issueCodes = state.draft.issueCodes.includes(code)
@@ -962,13 +1017,18 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
     const filtered = moveNext ? filteredFinalReviewItems(state) : [];
     const activeIndex = moveNext ? filtered.findIndex((entry) => entry.id === item?.id) : -1;
     const nextItemId = moveNext && activeIndex >= 0 ? filtered[activeIndex + 1]?.id : undefined;
-    if (state.operation || state.conflict || finalReviewLegacyReviewed(item)) return false;
-    if (!item || !state.batch || !state.draft || validation || (moveNext && !nextItemId)) {
+    const canAdvance = Boolean(nextItemId);
+    if (state.operation || state.conflict || finalReviewLegacyApproved(item)) return false;
+    if (!item || !state.batch || !state.draft || validation) {
       set({ error: validation || '没有选中的终审项目' });
-      if (moveNext && item && state.draft && !validation && !nextItemId) {
-        set({ error: '当前筛选结果中已经没有下一张成品' });
-      }
       return false;
+    }
+    if (moveNext && !canAdvance && !finalReviewDraftDirty(state)) {
+      if (activeIndex < 0) {
+        set({ error: '当前筛选结果中已经没有下一张成品' });
+        return false;
+      }
+      return true;
     }
 
     if (moveNext && !finalReviewDraftDirty(state)) {
@@ -1256,6 +1316,7 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
       pageGenerationId: result.pageGenerationId,
       runId: result.runId,
       itemRevision: result.finalReviewItemRevision,
+      originItemRevision: result.originFinalReviewItemRevision,
       batchRevision: result.batchRevision,
       artifactRevision: result.artifactRevision,
       nextSequence: result.nextSequence,
@@ -1280,7 +1341,7 @@ export const useFinalReviewStore = create<FinalReviewState>((set, get) => ({
     const activeItemId = state.activeItemId;
     set({ operation: 'load', loading: true, error: '' });
     try {
-      const loaded = await api.getFinalReviewBatch(state.batch.id);
+      const loaded = await loadBatchSnapshot(state.batch.id);
       const items = assertAuthoritativeReloadBatch(loaded, state.batch, state.items, activeItemId);
       const current = get();
       if (current.operation !== 'load' || !current.conflict

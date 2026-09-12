@@ -23,6 +23,13 @@ def digest(value):
     ).hexdigest()
 
 
+def bounded_json(value, *, max_output_bytes=8192):
+    encoded = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded.encode()) + 1 > max_output_bytes:
+        raise ValueError("JSON output exceeds byte limit including its newline")
+    return encoded
+
+
 def ro_connect(path):
     connection = sqlite3.connect(
         Path(path).resolve(strict=True).as_uri() + "?mode=ro",
@@ -63,6 +70,202 @@ def selected_projects(store, expected_id):
 
 def deny_creation(*args, **kwargs):
     raise RuntimeError("Existing-head proof forbids new repair generations")
+
+
+def review_snapshot_summary(data_root, review_root, *, offset=0, limit=5):
+    """Project immutable review history into bounded, read-only query fields."""
+    import re
+    from contextlib import closing
+
+    if (
+        type(offset) is not int
+        or offset < 0
+        or type(limit) is not int
+        or not 1 <= limit <= 10
+    ):
+        raise ValueError("offset must be nonnegative; limit must be 1..10")
+    root = canonical(Path(data_root))
+    review_db = canonical(Path(review_root) / "final-review/final-review.sqlite3")
+    if not review_db.is_relative_to(root):
+        raise ValueError("Database is outside the explicitly selected data root")
+
+    with closing(ro_connect(review_db)) as connection:
+        calls = 0
+
+        def progress():
+            nonlocal calls
+            calls += 1
+            return int(calls > 5000)
+
+        def read(query, args=()):
+            rows = connection.execute(query, args).fetchmany(10001)
+            if len(rows) > 10000:
+                raise ValueError("Review snapshot row limit exceeded")
+            return rows
+
+        connection.set_progress_handler(progress, 1000)
+        connection.execute("BEGIN")
+        batch_columns = {row["name"] for row in read("PRAGMA table_info(batches)")}
+        item_columns = {row["name"] for row in read("PRAGMA table_info(items)")}
+        format_expression = (
+            "format_version" if "format_version" in batch_columns else "1"
+        )
+        artifact_expression = (
+            "artifact_revision" if "artifact_revision" in item_columns else "NULL"
+        )
+        strict_expression = (
+            "strict_evidence" if "strict_evidence" in item_columns else "NULL"
+        )
+        batches = read(
+            f"SELECT id,item_count,revision,{format_expression} AS format_version FROM batches"
+        )
+        items = read(
+            f"""SELECT id,batch_id,source_project_id,revision,verdict,
+            {artifact_expression} AS artifact_revision,
+            {strict_expression} AS strict_evidence
+            FROM items ORDER BY id"""
+        )
+        if len(batches) != 1 or batches[0]["item_count"] != len(items):
+            raise ValueError("Review batch identity/count mismatch")
+        batch = batches[0]
+        if batch["format_version"] not in (1, 2):
+            raise ValueError("Unsupported review batch format")
+        item_ids = {row["id"] for row in items}
+        if len(item_ids) != len(items) or any(
+            row["batch_id"] != batch["id"]
+            or not isinstance(row["id"], str)
+            or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["id"]) is None
+            for row in items
+        ):
+            raise ValueError("Invalid review item identity")
+
+        revisions = read(
+            """SELECT id,batch_id,item_id,operation,item_revision
+            FROM revisions ORDER BY item_id,item_revision,created_at,id"""
+        )
+        history_by_item = {item_id: [] for item_id in item_ids}
+        for row in revisions:
+            if (
+                row["batch_id"] != batch["id"]
+                or row["item_id"] not in item_ids
+                or not isinstance(row["id"], str)
+                or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,127}", row["id"]) is None
+                or not isinstance(row["operation"], str)
+                or type(row["item_revision"]) is not int
+                or row["item_revision"] < 1
+            ):
+                raise ValueError("Invalid review history reference")
+            history_by_item[row["item_id"]].append(row)
+
+        tables = {
+            row["name"]
+            for row in read("SELECT name FROM sqlite_master WHERE type='table'")
+        }
+        artifact_by_item = {item_id: [] for item_id in item_ids}
+        if "artifact_revisions" in tables:
+            for row in read(
+                """SELECT item_id,artifact_revision FROM artifact_revisions
+                ORDER BY item_id,artifact_revision"""
+            ):
+                if (
+                    row["item_id"] not in item_ids
+                    or type(row["artifact_revision"]) is not int
+                    or row["artifact_revision"] < 1
+                ):
+                    raise ValueError("Invalid candidate history reference")
+                artifact_by_item[row["item_id"]].append(row["artifact_revision"])
+
+        details = []
+        gap_counts = {}
+        known_operations = {"create", "review", "refresh"}
+        for item in items:
+            history = history_by_item[item["id"]]
+            operations = [row["operation"] for row in history]
+            history_revisions = [row["item_revision"] for row in history]
+            gaps = []
+            history_valid = (
+                operations.count("create") == 1
+                and type(item["revision"]) is int
+                and item["revision"] >= 1
+                and history_revisions == list(range(1, item["revision"] + 1))
+            )
+            if not history_valid:
+                gaps.append("review_history_incomplete")
+            if any(operation not in known_operations for operation in operations):
+                gaps.append("review_history_operation_unknown")
+
+            candidate_revision = item["artifact_revision"]
+            if type(candidate_revision) is not int or candidate_revision < 1:
+                candidate_revision = None
+                gaps.append("candidate_revision_unknown")
+            artifact_revisions = artifact_by_item[item["id"]]
+            candidate_history_valid = (
+                candidate_revision is not None
+                and artifact_revisions == list(range(1, candidate_revision + 1))
+            )
+            submission_attempt = (
+                len(artifact_revisions) if candidate_history_valid else None
+            )
+            if submission_attempt is None:
+                gaps.append("submission_attempt_unknown")
+
+            refresh_count = operations.count("refresh")
+            rework_count = (
+                refresh_count
+                if candidate_history_valid and refresh_count == candidate_revision - 1
+                else None
+            )
+            if rework_count is None:
+                gaps.append("rework_count_unknown")
+
+            verdict = item["verdict"]
+            review_stage = None
+            review_state = None
+            if item["strict_evidence"] == 1:
+                if verdict == "pending":
+                    review_stage, review_state = "first_review", "under_review"
+                elif verdict == "issues":
+                    review_stage, review_state = "first_review", "pending_rework"
+                elif verdict == "approved":
+                    review_state = "awaiting_acceptance"
+                else:
+                    gaps.append("review_stage_unknown")
+            else:
+                gaps.append("review_stage_legacy_unknown")
+            for gap in gaps:
+                gap_counts[gap] = gap_counts.get(gap, 0) + 1
+            details.append(
+                {
+                    "item_id": item["id"],
+                    "source_project_id": item["source_project_id"],
+                    "review_history_refs": [row["id"] for row in history],
+                    "review_stage": review_stage,
+                    "review_state": review_state,
+                    "submission_attempt": submission_attempt,
+                    "rework_count": rework_count,
+                    "candidate_revision": candidate_revision,
+                    "gaps": gaps,
+                }
+            )
+        return {
+            "mode": "read_only_review_snapshot",
+            "schema_version": "manga-review-snapshot.v1",
+            "batch_id": batch["id"],
+            "batch_revision": batch["revision"],
+            "format_version": batch["format_version"],
+            "total_items": len(items),
+            "offset": offset,
+            "limit": limit,
+            "next_offset": offset + limit if offset + limit < len(details) else None,
+            "gap_counts": gap_counts,
+            "items": details[offset : offset + limit],
+            "snapshot_digest": digest(details),
+            "limits": (
+                "Review history references exclude feedback/content. Legacy stage and "
+                "incomplete immutable candidate history remain explicit gaps; this "
+                "query does not enqueue, repair, submit, decide, accept or export."
+            ),
+        }
 
 
 def metadata_summary(data_root, review_root, project_databases, *, offset=0, limit=5):
@@ -249,12 +452,29 @@ def main():
     parser.add_argument("--project-root", type=Path)
     parser.add_argument("--review-root", type=Path, required=True)
     parser.add_argument("--receipt", type=Path)
-    parser.add_argument("--summary", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--summary", action="store_true")
+    mode.add_argument("--review-snapshot", action="store_true")
     parser.add_argument("--data-root", type=Path)
     parser.add_argument("--project-database", action="append", default=[])
     parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--limit", type=int, default=5)
     args = parser.parse_args()
+    if args.review_snapshot:
+        if args.data_root is None:
+            parser.error("--review-snapshot requires --data-root")
+        result = review_snapshot_summary(
+            args.data_root,
+            args.review_root,
+            offset=args.offset,
+            limit=args.limit,
+        )
+        try:
+            encoded = bounded_json(result)
+        except ValueError:
+            parser.error("review snapshot exceeds 8192 bytes; reduce --limit")
+        print(encoded)
+        return
     if args.summary:
         if args.data_root is None:
             parser.error("--summary requires --data-root")
@@ -271,8 +491,9 @@ def main():
             offset=args.offset,
             limit=args.limit,
         )
-        encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":"))
-        if len(encoded.encode()) > 8192:
+        try:
+            encoded = bounded_json(result)
+        except ValueError:
             parser.error("summary exceeds 8192 bytes; reduce --limit")
         print(encoded)
         return

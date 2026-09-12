@@ -119,6 +119,7 @@ describe('api client contract', () => {
       itemId: 'item-1', sourceProjectId: 'project-1', sourceImageId: 'image-1',
       repairProjectId: 'project-1', repairImageId: 'image-1',
       pageGenerationId: 'generation-2', runId: 'run-2', finalReviewItemRevision: 4,
+      originFinalReviewItemRevision: 4,
       batchRevision: 9, artifactRevision: 3, nextSequence: 1,
       parameterSetId: 'final-review-repair-v1', parameterSetHash: 'a'.repeat(64), idempotent: false,
     }));

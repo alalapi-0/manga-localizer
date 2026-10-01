@@ -27,7 +27,7 @@
     "check:state": "node scripts/external-uv.mjs run --frozen --offline --no-sync python -B scripts/check_state.py"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0"
+    "@playwright/test": "^1.63.0"
   },
   "engines": {
     "node": ">=22.22.2"
